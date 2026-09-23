@@ -31,7 +31,7 @@ source in this document's PR, upstream `Textualize/textual` changes, or an
 authority to stage all dirty paths.
 
 Owner-reported development evidence: a 60-second active multitab/focus profile
-sampled 5,164 frames with no recorded errors and found app-focus restyling a
+recorded 5,164 samples with no reported errors and found app-focus restyling a
 large inclusive cost. Interleaved same-scene **headless** focus transitions
 were reported to improve ~245.46 ms median / 271.3 ms worst to 14.05 ms median
 / **17.61 ms worst** after candidate focus/dependency changes; 3,035 Textual
