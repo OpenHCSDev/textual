@@ -396,6 +396,7 @@ class Compositor:
 
         # Replace map and widgets
         self._full_map = map
+        self._full_map_invalidated = False
         self.widgets = widgets
 
         # Contains widgets + geometry for every widget that changed (added, removed, or updated)
@@ -544,6 +545,21 @@ class Compositor:
         layer_order: int = 0
 
         no_clip = size.region
+        # Layer names normally inherit from the outermost declaring ancestor.
+        # Resolve that once per node for this reflow, instead of rebuilding an
+        # ancestors list and a layer dictionary for every nested widget.
+        inherited_layers: dict[Widget, dict[str, int] | None] = {}
+        default_layers = {"default": 0}
+
+        def get_layers(widget: Widget) -> dict[str, int] | None:
+            if widget in inherited_layers:
+                return inherited_layers[widget]
+            parent = widget.parent
+            layers = get_layers(parent) if isinstance(parent, Widget) else None  # noqa: F821 -- closure cleared only after traversal
+            if layers is None and widget.styles.has_rule("layers"):
+                layers = {name: index for index, name in enumerate(widget.styles.layers)}
+            inherited_layers[widget] = layers
+            return layers
 
         def add_widget(
             widget: Widget,
@@ -635,10 +651,15 @@ class Compositor:
                         for placement in placements
                     ]
 
-                    layers_to_index = {
-                        layer_name: index
-                        for index, layer_name in enumerate(widget.layers)
-                    }
+                    if type(widget).layers is Widget.layers:
+                        resolved_layers = get_layers(widget)  # noqa: F821 -- closure cleared only after traversal
+                        layers_to_index = default_layers if resolved_layers is None else resolved_layers
+                    else:
+                        # Preserve custom widget layer policies.
+                        layers_to_index = {
+                            layer_name: index
+                            for index, layer_name in enumerate(widget.layers)
+                        }
 
                     get_layer_index = layers_to_index.get
 
@@ -678,7 +699,7 @@ class Compositor:
                         widget_order = order + ((layer_index, z, layer_order),)
 
                         if widget._cover_widget is None:
-                            add_widget(
+                            add_widget(  # noqa: F821 -- closure cleared only after traversal
                                 sub_widget,
                                 sub_region,
                                 widget_region,
@@ -741,16 +762,23 @@ class Compositor:
                 )
 
         # Add top level (root) widget
-        add_widget(
-            root,
-            size.region,
-            size.region,
-            ((0, 0, 0),),
-            layer_order,
-            size.region,
-            True,
-            NULL_SPACING,
-        )
+        try:
+            add_widget(
+                root,
+                size.region,
+                size.region,
+                ((0, 0, 0),),
+                layer_order,
+                size.region,
+                True,
+                NULL_SPACING,
+            )
+        finally:
+            # Both recursive closures otherwise retain themselves through
+            # their closure cells, keeping old maps and entire widget trees
+            # alive until cyclic GC. Reflow is finished, so break those local
+            # recursion links before returning the authoritative scene map.
+            del add_widget, get_layers
         widgets -= invisible_widgets
         return map, widgets
 
@@ -1029,12 +1057,14 @@ class Compositor:
         return self._cuts
 
     def _get_renders(
-        self, crop: Region | None = None
+        self, crop: Region | None = None,
+        render_regions: Callable[[Region], Iterable[Region]] | None = None,
     ) -> Iterable[tuple[Region, Region, list[Strip]]]:
         """Get rendered widgets (lists of segments) in the composition.
 
         Args:
             crop: Region to crop to, or `None` for entire screen.
+            render_regions: Select still-exposed damaged rows within each widget.
 
         Returns:
             An iterable of <region>, <clip region>, and <strips>
@@ -1061,28 +1091,23 @@ class Compositor:
             ]
 
         intersection = _Region.intersection
-        contains_region = _Region.contains_region
-
         for widget, region, clip in widget_regions:
-            if contains_region(clip, region):
-                yield (
-                    region,
-                    clip,
-                    widget.render_lines(
-                        _Region(
-                            0,
-                            0,
-                            region.width,
-                            region.height,
-                        )
-                    ),
+            if crop is not None:
+                # Partial updates only need the damaged rows. Keep horizontal
+                # clip boundaries intact: compositor chops are aligned to those
+                # cuts and may extend past the narrower dirty x span.
+                clip = intersection(clip, _Region(clip.x, crop.y, clip.width, crop.height))
+            visible_region = intersection(region, clip)
+            if visible_region:
+                regions = (
+                    (visible_region,) if render_regions is None
+                    else render_regions(visible_region)
                 )
-            else:
-                new_x, new_y, new_width, new_height = intersection(region, clip)
-                if new_width and new_height:
+                for render_region in regions:
+                    new_x, new_y, new_width, new_height = render_region
                     yield (
                         region,
-                        clip,
+                        render_region,
                         widget.render_lines(
                             _Region(
                                 new_x - region.x,
@@ -1215,11 +1240,36 @@ class Compositor:
         fromkeys = cast("Callable[[list[int]], dict[int, Strip | None]]", dict.fromkeys)
         chops: list[dict[int, Strip | None]]
         chops = [fromkeys(cut_set[:-1]) for cut_set in cuts]
+        remaining = [len(line) for line in chops]
+
+        def render_regions(region: Region) -> Iterable[Region]:
+            """Render runs of damaged rows still exposed below higher layers.
+
+            A bounding damage rectangle can span an entire transcript for two
+            small updates at its ends. Do not ask widgets to render the clean
+            rows between them, or rows already covered by a foreground widget.
+            Retain horizontal chop boundaries when selecting vertical runs.
+            """
+            first, last = region.column_span
+            start: int | None = None
+            for y in region.line_range:
+                exposed = (
+                    remaining[y] and is_rendered_line(y)
+                    and any(value is None and first <= x < last for x, value in chops[y].items())
+                )
+                if exposed:
+                    if start is None:
+                        start = y
+                elif start is not None:
+                    yield Region(first, start, region.width, y - start)
+                    start = None
+            if start is not None:
+                yield Region(first, start, region.width, region.bottom - start)
 
         cut_strips: Iterable[Strip]
 
         # Go through all the renders in reverse order and fill buckets with no render
-        renders = self._get_renders(crop)
+        renders = self._get_renders(crop, render_regions)
         intersection = Region.intersection
 
         for region, clip, strips in renders:
@@ -1240,6 +1290,7 @@ class Compositor:
                 for cut, strip in zip(final_cuts, cut_strips):
                     if get_chops_line(cut) is None:
                         chops_line[cut] = strip
+                        remaining[y] -= 1
         return cast("Sequence[Mapping[int, Strip]]", chops)
 
     def __rich__(self) -> StripRenderable:

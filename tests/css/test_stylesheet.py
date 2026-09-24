@@ -1,13 +1,183 @@
 from contextlib import nullcontext as does_not_raise
+from unittest.mock import patch
+import gc
+import weakref
 
 import pytest
 
+from textual.app import App, ComposeResult
 from textual.color import Color
+from textual.containers import Container
 from textual.css.stylesheet import CssSource, Stylesheet, StylesheetParseError
 from textual.css.tokenizer import TokenError
 from textual.dom import DOMNode
 from textual.geometry import Spacing
 from textual.widget import Widget
+from textual.widgets import Static
+
+
+def test_component_styles_own_node_without_a_collection_cycle():
+    from textual.css.stylesheet import _ComponentStyles
+
+    enabled = gc.isenabled()
+    gc.disable()
+    try:
+        node = DOMNode(classes="detail")
+        styles = _ComponentStyles(node)
+        reference = weakref.ref(node)
+        styles.color = "red"
+        del node
+        assert reference() is not None, "Live component styles lost their virtual node"
+        assert styles.node is reference()
+        assert styles.node.styles.color == Color.parse("red")
+        del styles
+        assert reference() is None, "Discarded component node requires cyclic GC"
+    finally:
+        if enabled:
+            gc.enable()
+
+
+def test_styles_do_not_keep_retired_node_alive():
+    enabled = gc.isenabled()
+    gc.disable()
+    try:
+        node = DOMNode()
+        reference = weakref.ref(node)
+        styles = node.styles.base
+        styles.color = "blue"
+        copied = styles.copy()
+        assert copied.node is node and styles.node is node
+        del node
+        assert reference() is None, "Node/styles ownership still requires cyclic GC"
+        assert styles.node is None and copied.node is None
+        # Detached rules remain usable without an owner to notify.
+        assert styles.color == Color.parse("blue")
+        copied.color = "green"
+        copied.refresh()
+    finally:
+        if enabled:
+            gc.enable()
+
+
+async def test_css_path_cache_reuses_equivalent_rows_without_crossing_hover():
+    class RowsApp(App):
+        CSS = """
+        Container.row > Static.item { color: red; }
+        Container.row:hover > Static.item { color: blue; }
+        #one > Static.item { color: green; }
+        """
+
+        def compose(self) -> ComposeResult:
+            with Container(classes="row", id="one"):
+                yield Static("first", classes="item")
+            with Container(classes="row", id="two"):
+                yield Static("second", classes="item")
+
+    app = RowsApp()
+    async with app.run_test(size=(80, 20)) as pilot:
+        await pilot.pause()
+        first = app.query_one("#one Static", Static)
+        second = app.query_one("#two Static", Static)
+        # The first result may be parent-id specific; distinct ids must not
+        # share an ancestry cache key even when their classes look identical.
+        cache = {}
+        app.stylesheet._path_rules_cache.clear()
+        with patch.object(app.stylesheet, "_check_rule", wraps=app.stylesheet._check_rule) as check:
+            app.stylesheet.apply(first, cache=cache)
+            called = check.call_count
+            assert called
+            app.stylesheet.apply(second, cache=cache)
+            assert check.call_count > called
+        assert first.styles.color == Color.parse("green")
+        assert second.styles.color == Color.parse("red")
+
+        await pilot.hover(app.query_one("#two", Container))
+        await pilot.pause()
+        app.query_one("#two", Container).mouse_hover = True
+        with patch.object(app.stylesheet, "_check_rule", wraps=app.stylesheet._check_rule) as check:
+            app.stylesheet.apply(second, cache=cache)
+            assert check.call_count > 0, "Ancestor hover must invalidate the path key"
+        assert second.styles.color == Color.parse("blue")
+        assert first.styles.color == Color.parse("green")
+
+
+async def test_css_path_cache_hits_across_equivalent_parent_instances():
+    class RowsApp(App):
+        CSS = "Container.row > Static.item { color: red; }"
+
+        def compose(self) -> ComposeResult:
+            for _ in range(2):
+                with Container(classes="row"):
+                    yield Static("member", classes="item")
+
+    app = RowsApp()
+    async with app.run_test(size=(80, 20)) as pilot:
+        await pilot.pause()
+        first, second = tuple(app.query("Static.item"))
+        assert first.parent is not second.parent
+        cache = {}
+        app.stylesheet._path_rules_cache.clear()
+        with patch.object(app.stylesheet, "_check_rule", wraps=app.stylesheet._check_rule) as check:
+            app.stylesheet.apply(first, cache=cache)
+            called = check.call_count
+            assert called
+            app.stylesheet.apply(second, cache={})
+            assert check.call_count == called, "Equivalent rows still rematched CSS rules"
+        assert first.styles.color == second.styles.color == Color.parse("red")
+
+
+async def test_component_style_reuses_unchanged_node_but_tracks_css_and_ancestry():
+    class Badge(Static):
+        COMPONENT_CLASSES = {"badge--label"}
+
+    class BadgeApp(App):
+        CSS = """
+        Badge > .badge--label { color: red; }
+        Badge.alert > .badge--label { color: blue; }
+        """
+
+        def compose(self) -> ComposeResult:
+            yield Badge("first")
+
+    app = BadgeApp()
+    async with app.run_test(size=(80, 20)) as pilot:
+        await pilot.pause()
+        badge = app.query_one(Badge)
+        stylesheet = app.stylesheet
+        original = badge._component_styles["badge--label"]
+        stylesheet.apply(badge)
+        assert badge._component_styles["badge--label"] is original
+        badge.add_class("alert")
+        await pilot.pause()
+        assert badge.get_component_styles("badge--label").color == Color.parse("blue")
+        assert badge._component_styles["badge--label"] is not original
+        updated = badge._component_styles["badge--label"]
+        stylesheet.add_source("Badge.alert > .badge--label { color: green; }",
+                              read_from=("badge-test", "override"))
+        stylesheet.parse()
+        stylesheet.apply(badge)
+        assert badge.get_component_styles("badge--label").color == Color.parse("green")
+        assert badge._component_styles["badge--label"] is not updated
+
+
+async def test_component_style_keeps_focus_within_on_uncached_path():
+    class Badge(Static):
+        COMPONENT_CLASSES = {"badge--label"}
+
+    class BadgeApp(App):
+        CSS = "Badge:focus-within > .badge--label { color: blue; }"
+
+        def compose(self) -> ComposeResult:
+            yield Badge("first")
+
+    app = BadgeApp()
+    async with app.run_test(size=(80, 20)) as pilot:
+        await pilot.pause()
+        badge = app.query_one(Badge)
+        previous = badge._component_styles["badge--label"]
+        app.stylesheet.apply(badge)
+        assert badge._component_styles["badge--label"] is not previous
+        assert badge._component_css_signature is None
 
 
 def _make_user_stylesheet(css: str) -> Stylesheet:

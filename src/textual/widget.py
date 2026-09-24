@@ -4085,7 +4085,10 @@ class Widget(DOMNode):
 
     def watch_has_focus(self, _has_focus: bool) -> None:
         """Update from CSS if has focus state changes."""
-        self.update_node_styles()
+        try:
+            self.app.stylesheet.update_widget_focus(self)
+        except NoActiveAppError:
+            pass
 
     def watch_disabled(self, disabled: bool) -> None:
         """Update the styles of the widget and its children when disabled is toggled."""
@@ -4533,6 +4536,7 @@ class Widget(DOMNode):
         self._render_cache = _RenderCache(NULL_SIZE, [])
         self._component_styles.clear()
         self._query_one_cache.clear()
+        self._box_model_cache.clear()
 
     async def _on_idle(self, event: events.Idle) -> None:
         """Called when there are no more events on the queue.

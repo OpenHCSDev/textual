@@ -55,6 +55,7 @@ from textual.errors import NoWidget
 from textual.geometry import Offset, Region, Shape, Size
 from textual.keys import key_to_character
 from textual.layout import DockArrangeResult
+from textual.message_pump import MessagePumpClosed
 from textual.reactive import Reactive, var
 from textual.renderables.background_screen import BackgroundScreen
 from textual.renderables.blank import Blank
@@ -257,7 +258,10 @@ class Screen(Generic[ScreenResultType], Widget):
     _selecting = var(False)
     """Indicates mouse selection is in progress."""
 
-    _select_state: Reactive[SelectState | None] = Reactive(None)
+    # Selection paints through the changed widgets' own refreshes. Repainting
+    # the entire screen whenever the pointer moves makes transcript drags
+    # scale with every mounted history pane and forces a full compositor pass.
+    _select_state: Reactive[SelectState | None] = Reactive(None, repaint=False)
     """Current select state, if selecting."""
 
     _mouse_down_offset: var[Offset | None] = var(None)
@@ -290,6 +294,7 @@ class Screen(Generic[ScreenResultType], Widget):
         super().__init__(name=name, id=id, classes=classes)
         self._compositor = Compositor()
         self._dirty_widgets: set[Widget] = set()
+        self._selection_update_pending = False
         self.__update_timer: Timer | None = None
         self._callbacks: list[tuple[CallbackType, MessagePump]] = []
         self._result_callbacks: list[ResultCallback[ScreenResultType | None]] = []
@@ -386,8 +391,22 @@ class Screen(Generic[ScreenResultType], Widget):
         old_selections: dict[Widget, Selection],
         selections: dict[Widget, Selection],
     ):
+        painted = self._compositor.visible_widgets
         for widget in old_selections.keys() | selections.keys():
-            widget.selection_updated(selections.get(widget, None))
+            previous = old_selections.get(widget)
+            current = selections.get(widget)
+            if previous != current:
+                if widget in painted or type(widget).selection_updated is not Widget.selection_updated:
+                    widget.selection_updated(current)
+                else:
+                    # Dragging across old messages must preserve their full
+                    # selection/copy state, but scheduling an off-screen
+                    # repaint invalidates the compositor's whole layout map.
+                    # Clear only this widget's render caches. Its next exposed
+                    # scroll frame will render the current selection then.
+                    widget._layout_cache.clear()
+                    widget._rich_style_cache.clear()
+                    widget._set_dirty()
 
     def refresh_bindings(self) -> None:
         """Call to request a refresh of bindings."""
@@ -966,6 +985,7 @@ class Screen(Generic[ScreenResultType], Widget):
         Returns:
             Selected text, or `None` if no text was selected.
         """
+        self._flush_pending_selection()
         if not self.selections:
             return None
 
@@ -1237,6 +1257,7 @@ class Screen(Generic[ScreenResultType], Widget):
         """Called by the _update_timer."""
         self._update_timer.pause()
         if self.is_current and not self.app._batch_count:
+            self._flush_pending_selection()
             if self._layout_required:
                 self._refresh_layout(scroll=self._scroll_required)
                 self._layout_required = False
@@ -1724,10 +1745,15 @@ class Screen(Generic[ScreenResultType], Widget):
             """
             if self._select_state is not None:
                 # Update scroll position
+                previous_offset = widget.scroll_offset
                 widget.scroll_y += direction
                 widget.scroll_target_y = widget.scroll_y
-                # Update selection highlights which may have changed due to the scroll
-                self._update_select()
+                # Mouse moves have already updated selection. Fractional
+                # auto-scroll ticks often leave the painted row unchanged;
+                # traversing the entire selected transcript a second time
+                # cannot change its highlights until the cell offset moves.
+                if widget.scroll_offset != previous_offset:
+                    self._update_select()
 
         # Replace current timer
         self._stop_auto_scroll()
@@ -1738,10 +1764,10 @@ class Screen(Generic[ScreenResultType], Widget):
         )
         # Callable to perform scroll
         scroll_callback = partial(_auto_scroll_y, widget, lines_to_scroll)
-        # Perform initial scroll
-        scroll_callback()
-        # Start a timer to perform future scrolling
-        # This is so the user doesn't have to move the mouse to keep scrolling
+        # The mouse move has already calculated its selection. An immediate
+        # scroll_callback also recomputes the same (potentially large) range
+        # before the first frame can paint. Begin on the next timer tick: it
+        # is one frame away, and continuing to hold at the edge still scrolls.
         self._auto_select_scroll_timer = self.set_interval(
             1 / constants.MAX_FPS, scroll_callback
         )
@@ -1864,6 +1890,7 @@ class Screen(Generic[ScreenResultType], Widget):
 
         elif isinstance(event, events.MouseEvent):
             if isinstance(event, events.MouseUp):
+                self._flush_pending_selection()
                 if (
                     self._mouse_down_offset is not None
                     and self._mouse_down_offset == event.screen_offset
@@ -2006,10 +2033,44 @@ class Screen(Generic[ScreenResultType], Widget):
         Args:
             select_state: Current selection state.
         """
+        if (
+            select_state is not None
+            and select_state.end is not None
+            and self is self.app.screen
+        ):
+            # The application may already have another raw drag position
+            # queued. Deliver all mouse events, but don't repeatedly traverse
+            # thousands of selected widgets for positions superseded before
+            # painting. A callback, copy, mouse-up or paint flushes the latest
+            # state even if the following event doesn't update this screen.
+            try:
+                pending = self.app._peek_message()
+            except MessagePumpClosed:
+                pending = None
+            if (
+                type(pending) is events.MouseMove
+                and pending.button == 1
+                and not pending.is_forwarded
+            ):
+                if not self._selection_update_pending:
+                    self._selection_update_pending = True
+                    self.call_next(self._flush_pending_selection)
+                return
+
+        self._selection_update_pending = False
+        self._apply_selection_state(select_state)
+
+    def _flush_pending_selection(self) -> None:
+        """Resolve deferred drag selection before an observable boundary."""
+        if self._selection_update_pending:
+            self._selection_update_pending = False
+            self._apply_selection_state(self._select_state)
+
+    def _apply_selection_state(self, select_state: SelectState | None) -> None:
+        """Calculate widget selections from the current pointer state."""
         if select_state is None:
             # Nothing selected so nothing todo
             self._selecting = False
-            self.refresh()
             return
         else:
             self._selecting = True

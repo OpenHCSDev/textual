@@ -1,8 +1,35 @@
 from __future__ import annotations, unicode_literals
 
 import pytest
+import gc
+import weakref
 
 from textual.cache import FIFOCache, LRUCache
+
+
+@pytest.mark.parametrize("operation", ["clear", "discard"])
+def test_removed_cache_values_do_not_wait_for_gc(operation):
+    class Payload:
+        pass
+
+    enabled = gc.isenabled()
+    gc.disable()
+    try:
+        cache = LRUCache(3)
+        value = Payload()
+        reference = weakref.ref(value)
+        cache["payload"] = value
+        del value
+        if operation == "clear":
+            cache.clear()
+        else:
+            cache.discard("payload")
+        assert reference() is None
+        cache["after"] = 1
+        assert cache["after"] == 1
+    finally:
+        if enabled:
+            gc.enable()
 
 
 def test_lru_cache():
