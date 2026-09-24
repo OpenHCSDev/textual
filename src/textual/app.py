@@ -4417,7 +4417,7 @@ class App(Generic[ReturnType], DOMNode):
 
     def _watch_app_focus(self, focus: bool) -> None:
         """Respond to changes in app focus."""
-        self.screen.update_node_styles()
+        self.stylesheet.update_app_focus(self.screen)
         if focus:
             # If we've got a last-focused widget, if it still has a screen,
             # and if the screen is still the current screen and if nothing
@@ -4446,6 +4446,12 @@ class App(Generic[ReturnType], DOMNode):
             self._last_focused_on_app_blur = self.screen.focused
             # Remove focus for now.
             self.screen.set_focus(None)
+
+    @property
+    def _pseudo_classes_cache_key(self) -> tuple[int, ...]:
+        # App:focus/App:blur selectors affect descendant rule matches even
+        # when their own hover/focus/disabled state has not changed.
+        return (self.app_focus,)
 
     async def action_simulate_key(self, key: str) -> None:
         """An [action](/guide/actions) to simulate a key press.

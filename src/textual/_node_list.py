@@ -46,7 +46,7 @@ class NodeList(Sequence["Widget"]):
         self._nodes: list[Widget] = []
         self._nodes_set: set[Widget] = set()
         self._displayed_nodes: tuple[int, list[Widget]] = (-1, [])
-        self._displayed_visible_nodes: tuple[int, list[Widget]] = (-1, [])
+        self._displayed_visible_nodes: tuple[int, bool, list[Widget]] = (-1, True, [])
 
         # We cache widgets by their IDs too for a quick lookup
         # Note that only widgets with IDs are cached like this, so
@@ -75,8 +75,11 @@ class NodeList(Sequence["Widget"]):
         """Mark the nodes as having been updated."""
         self._updates += 1
         node = None if self._parent is None else self._parent()
+        if node is not None:
+            node._query_one_cache.clear()
         while node is not None and (node := node._parent) is not None:
             node._nodes._updates += 1
+            node._query_one_cache.clear()
 
     def _sort(
         self,
@@ -203,12 +206,27 @@ class NodeList(Sequence["Widget"]):
     @property
     def displayed_and_visible(self) -> Sequence[Widget]:
         """Nodes with both `display==True` and `visible==True`."""
-        if self._displayed_visible_nodes[0] != self._updates:
-            self._displayed_nodes = (
+        if not self._nodes:
+            return ()
+        parent = None if self._parent is None else self._parent()
+        parent_visible = parent is None or parent.visible
+        return self._get_displayed_and_visible(parent_visible)
+
+    def _get_displayed_and_visible(self, parent_visible: bool) -> Sequence[Widget]:
+        """Get visible children when a traversal already knows parent visibility."""
+        if not self._nodes:
+            return ()
+        updates, inherited_visibility, nodes = self._displayed_visible_nodes
+        if updates != self._updates or inherited_visibility != parent_visible:
+            nodes = list(filter(_visible_getter, self.displayed))
+            # Visibility is inherited, but descendants may explicitly override
+            # it. Track the parent's effective value as well as local mutations.
+            self._displayed_visible_nodes = (
                 self._updates,
-                list(filter(_visible_getter, self.displayed)),
+                parent_visible,
+                nodes,
             )
-        return self._displayed_nodes[1]
+        return nodes
 
     @property
     def displayed_reverse(self) -> Iterator[Widget]:

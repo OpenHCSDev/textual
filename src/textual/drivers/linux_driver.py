@@ -9,7 +9,7 @@ import termios
 import tty
 from codecs import getincrementaldecoder
 from threading import Event, Thread
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, Callable, Final
 
 import rich.repr
 
@@ -192,6 +192,11 @@ class LinuxDriver(Driver):
         """
         assert self._writer_thread is not None, "Driver must be in application mode"
         self._writer_thread.write(data)
+
+    def call_after_flush(self, callback: Callable[[], None]) -> None:
+        """Observe a flush of all terminal writes queued before this call."""
+        assert self._writer_thread is not None, "Driver must be in application mode"
+        self._writer_thread.call_after_flush(callback)
 
     def start_application_mode(self):
         """Start application mode."""
