@@ -286,6 +286,8 @@ class Compositor:
         # A mapping of Widget on to its "render location" (absolute position / depth)
         self._full_map: CompositorMap = {}
         self._full_map_invalidated = True
+        self._arranging = False
+        """Geometry reads during measurement observe the last committed map."""
         self._visible_map: CompositorMap | None = None
         self._layers: list[tuple[Widget, MapGeometry]] | None = None
 
@@ -397,6 +399,12 @@ class Compositor:
         # Replace map and widgets
         self._full_map = map
         self._full_map_invalidated = False
+        # Measuring widgets may inspect geometry and populate presentation
+        # caches from the previous committed map. Publish only the new map.
+        self._visible_widgets = None
+        self._layers = None
+        self._layers_visible = None
+        self._cuts = None
         self.widgets = widgets
 
         # Contains widgets + geometry for every widget that changed (added, removed, or updated)
@@ -455,6 +463,10 @@ class Compositor:
 
         # Replace map and widgets
         self._visible_map = map
+        self._visible_widgets = None
+        self._layers = None
+        self._layers_visible = None
+        self._cuts = None
         self.widgets = widgets
 
         exposed_widgets = map.keys() - old_map.keys()
@@ -483,13 +495,16 @@ class Compositor:
 
         if self.root is None:
             return {}
-        if self._full_map_invalidated:
-            self._full_map_invalidated = False
+        if self._full_map_invalidated and not self._arranging:
             map, _widgets = self._arrange_root(self.root, self.size, visible_only=False)
             # Update any widgets which became visible in the interim
             self._full_map = map
+            self._full_map_invalidated = False
             self._visible_widgets = None
             self._visible_map = None
+            self._layers = None
+            self._layers_visible = None
+            self._cuts = None
 
         return self._full_map
 
@@ -762,6 +777,7 @@ class Compositor:
                 )
 
         # Add top level (root) widget
+        self._arranging = True
         try:
             add_widget(
                 root,
@@ -774,6 +790,7 @@ class Compositor:
                 NULL_SPACING,
             )
         finally:
+            self._arranging = False
             # Both recursive closures otherwise retain themselves through
             # their closure cells, keeping old maps and entire widget trees
             # alive until cyclic GC. Reflow is finished, so break those local

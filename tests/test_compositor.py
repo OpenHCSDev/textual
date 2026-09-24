@@ -82,6 +82,49 @@ async def test_full_reflow_replaces_invalidated_scroll_map():
             arrange.assert_not_called()
 
 
+async def test_layout_geometry_reads_do_not_recursively_rebuild_scene():
+    from textual.geometry import Size
+
+    class GeometryReader(Static):
+        def get_content_height(self, container, viewport, width):
+            # Layouts/widgets can consult their last committed geometry while
+            # measuring. That read must not recursively start the same layout.
+            self.parent.region
+            return super().get_content_height(container, viewport, width)
+
+    class GeometryApp(App):
+        CSS = "Container { height: auto; } GeometryReader { height: auto; }"
+
+        def compose(self):
+            with Container():
+                yield GeometryReader("Word " * 30)
+
+    app = GeometryApp()
+    async with app.run_test(size=(60, 20)) as pilot:
+        await pilot.pause()
+        compositor = app.screen._compositor
+        # Scrolling invalidates the full map; a later width change needs one
+        # full arrangement, not a second one from measurement's geometry read.
+        compositor.reflow_visible(app.screen, app.screen.size)
+        assert compositor._full_map_invalidated
+        with patch.object(compositor, "_arrange_root", wraps=compositor._arrange_root) as arrange:
+            compositor.reflow(app.screen, Size(45, 20))
+            assert arrange.call_count == 1
+        actual = compositor.full_map.copy()
+        # Force a fresh native pass over the same complete tree for comparison.
+        compositor.reflow(app.screen, Size(45, 20))
+        assert compositor.full_map == actual
+
+        # A failed lazy measurement must retain its invalidation so the next
+        # geometry lookup retries, instead of treating the old map as current.
+        compositor._full_map_invalidated = True
+        with patch.object(app.screen, "arrange", side_effect=ValueError("measure failed")):
+            with pytest.raises(ValueError, match="measure failed"):
+                compositor.full_map
+        assert not compositor._arranging and compositor._full_map_invalidated
+        assert compositor.full_map == actual
+
+
 async def test_layer_inheritance_updates_between_reflows():
     class LayersApp(App):
         CSS = """

@@ -53,6 +53,19 @@ layout/rendering. Timings include composition and terminal escape serialization,
 exclude actual I/O/pixels, and are not evidence of meeting the <16 ms gate.
 Local fixture: `/tmp/opencode/benchmark-sparse-diff-paint.py`.
 
+### Follow-up: nonrecursive layout measurement
+
+Geometry queries made from a widget's measurement now observe the last committed
+map rather than triggering a nested whole-scene rebuild. Presentation caches are
+invalidated when the completed new geometry is published. A failed lazy layout
+retains its invalidation for a later retry. The focused regression reproduced two
+arrangements before the fix and one afterward, with unchanged final geometry.
+
+The profiled sidebar opening removed one nested traversal (566→283 `add_widget`
+calls). A larger interleaved sidebar-roundtrip fixture did **not** establish a
+general latency improvement, so no whole-sidebar speedup is claimed for this
+change. Final complete non-snapshot suite: **3066 passed, 1 skipped, 4 xfailed**.
+
 ## Historical September 23 owner intent (before source import)
 
 The Toad terminal UI is expensive under busy streaming conversations, focus
