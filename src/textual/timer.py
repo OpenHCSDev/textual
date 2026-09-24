@@ -160,7 +160,9 @@ class Timer:
             next_timer = start + ((count + 1) * _interval)
             now = _time.get_time()
             if self._skip and next_timer < now:
-                count = int((now - start) / _interval + 1)
+                # Count elapsed deadlines only. The next iteration already
+                # adds one interval; adding it here also skips a future tick.
+                count = max(count + 1, int((now - start) / _interval))
                 continue
             now = _time.get_time()
             wait_time = max(0, next_timer - now)

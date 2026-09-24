@@ -87,9 +87,15 @@ class LRUCache(Generic[CacheKey, CacheValue]):
 
     def clear(self) -> None:
         """Clear the cache."""
+        links = list(self._cache.values())
         self._cache.clear()
         self._full = False
         self._head = []
+        # Each linked entry is circular even after its dictionary is cleared.
+        # Release keys/values now rather than retaining their object graphs
+        # until a later cyclic collection on an unrelated UI frame.
+        for link in links:
+            link.clear()
 
     def keys(self) -> KeysView[CacheKey]:
         """Get cache keys."""
@@ -205,6 +211,7 @@ class LRUCache(Generic[CacheKey, CacheValue]):
 
         del self._cache[key]
         self._full = False
+        link.clear()
 
 
 class FIFOCache(Generic[CacheKey, CacheValue]):

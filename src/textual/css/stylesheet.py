@@ -6,6 +6,7 @@ from itertools import chain
 from operator import itemgetter
 from pathlib import Path, PurePath
 from typing import Final, Iterable, NamedTuple, Sequence, cast
+from weakref import proxy
 
 import rich.repr
 from rich.console import Console, ConsoleOptions, RenderableType, RenderResult
@@ -14,12 +15,12 @@ from rich.padding import Padding
 from rich.panel import Panel
 from rich.text import Text
 
-from textual.cache import LRUCache
+from textual.cache import FIFOCache, LRUCache
 from textual.css.errors import StylesheetError
 from textual.css.match import _check_selectors
-from textual.css.model import RuleSet
+from textual.css.model import RuleSet, SelectorType
 from textual.css.parse import parse
-from textual.css.styles import RulesMap, Styles
+from textual.css.styles import RenderStyles, RulesMap, Styles
 from textual.css.tokenize import Token, tokenize_values
 from textual.css.tokenizer import TokenError
 from textual.css.types import CSSLocation, Specificity3, Specificity6
@@ -29,6 +30,21 @@ from textual.style import Style
 from textual.widget import Widget
 
 _DEFAULT_STYLES = Styles()
+
+
+class _ComponentStyles(RenderStyles):
+    """Own an unmounted style node without a node/styles reference cycle.
+
+    Ordinary widgets own their styles. Components invert that ownership: the
+    parent's component mapping owns these styles, and these styles keep their
+    virtual node alive. Links back from that node are non-owning, so replacing
+    a component doesn't strand its whole DOM scaffolding until a GC cycle.
+    """
+
+    def __init__(self, node: DOMNode) -> None:
+        super().__init__(node, node.styles.base, node.styles.inline)
+        self._component_node = node
+        node.styles = proxy(self)
 
 
 class StylesheetParseError(StylesheetError):
@@ -151,7 +167,16 @@ class Stylesheet:
         self._require_parse = False
         self._invalid_css: set[str] = set()
         self._parse_cache: LRUCache[tuple, list[RuleSet]] = LRUCache(64)
+        self._source_rules: dict[CSSLocation, tuple[CssSource, list[RuleSet]]] = {}
         self._style_parse_cache: LRUCache[str, Style] = LRUCache(1024 * 4)
+        self._path_rules_cache: FIFOCache[tuple, RulesMap] = FIFOCache(4096)
+        self._ids_in_rules: set[str] = set()
+        self._component_cache_safe: dict[str, bool] = {}
+        self._component_rule_classes: dict[str, frozenset[str]] = {}
+        self._component_rule_keys: dict[str, tuple[RuleSet, ...]] = {}
+        self._candidate_rules: FIFOCache[
+            frozenset[str], tuple[list[RuleSet], frozenset[str], frozenset[str], tuple[RuleSet, ...]]
+        ] = FIFOCache(1024)
 
     def __rich_repr__(self) -> rich.repr.Result:
         yield list(self.source.keys())
@@ -218,7 +243,9 @@ class Stylesheet:
         self.__variable_tokens = None
         self._invalid_css = set()
         self._parse_cache.clear()
+        self._source_rules.clear()
         self._style_parse_cache.clear()
+        self._path_rules_cache.clear()
 
     def parse_style(self, style_text: str | Style) -> Style:
         """Parse a (visual) Style.
@@ -375,34 +402,48 @@ class Stylesheet:
         Raises:
             StylesheetParseError: If there are any CSS related errors.
         """
+        self._component_cache_safe.clear()
+        self._component_rule_classes.clear()
+        self._component_rule_keys.clear()
+        self._candidate_rules.clear()
         rules: list[RuleSet] = []
         add_rules = rules.extend
+        source_rules: dict[CSSLocation, tuple[CssSource, list[RuleSet]]] = {}
 
-        for read_from, (
-            css,
-            is_default_rules,
-            tie_breaker,
-            scope,
-        ) in self.source.items():
+        for read_from, source in self.source.items():
+            css, is_default_rules, tie_breaker, scope = source
             if css in self._invalid_css:
                 continue
-            try:
-                css_rules = self._parse_rules(
-                    css,
-                    read_from=read_from,
-                    is_default_rules=is_default_rules,
-                    tie_breaker=tie_breaker,
-                    scope=scope,
-                )
-            except Exception:
-                self._invalid_css.add(css)
-                raise
+            previous = self._source_rules.get(read_from)
+            if previous is not None and previous[0] == source:
+                css_rules = previous[1]
+            else:
+                try:
+                    css_rules = self._parse_rules(
+                        css,
+                        read_from=read_from,
+                        is_default_rules=is_default_rules,
+                        tie_breaker=tie_breaker,
+                        scope=scope,
+                    )
+                except Exception:
+                    self._invalid_css.add(css)
+                    raise
             if any(rule.errors for rule in css_rules):
                 error_renderable = StylesheetErrors(css_rules)
                 self._invalid_css.add(css)
                 raise StylesheetParseError(error_renderable)
             add_rules(css_rules)
+            source_rules[read_from] = (source, css_rules)
+        # Retain only the current declaration for each registered source. Unlike
+        # the small historical parse LRU, this cannot thrash when an app mounts
+        # more widget types than the LRU can hold, nor accumulate edited versions.
+        self._source_rules = source_rules
         self._rules = rules
+        self._ids_in_rules = {
+            selector.name for rule in rules for group in rule.selector_set
+            for selector in group.selectors if selector.type == SelectorType.ID
+        }
         self._require_parse = False
         self._rules_map = None
 
@@ -415,6 +456,11 @@ class Stylesheet:
         """
         # Do this in a fresh Stylesheet so if there are errors we don't break self.
         stylesheet = Stylesheet(variables=self._variables)
+        self._path_rules_cache.clear()
+        self._component_cache_safe.clear()
+        self._component_rule_classes.clear()
+        self._component_rule_keys.clear()
+        self._candidate_rules.clear()
         for read_from, (css, is_defaults, tie_breaker, scope) in self.source.items():
             stylesheet.add_source(
                 css,
@@ -433,6 +479,8 @@ class Stylesheet:
             raise
         else:
             self._rules = stylesheet.rules
+            self._source_rules = stylesheet._source_rules
+            self._ids_in_rules = stylesheet._ids_in_rules
             self._rules_map = None
             self.source = stylesheet.source
             self._require_parse = False
@@ -467,6 +515,53 @@ class Stylesheet:
         "empty",
     }
 
+    def _css_path_key(
+        self,
+        nodes: list[DOMNode],
+        relevant_classes: frozenset[str],
+        *,
+        all_ids: bool = False,
+    ) -> tuple:
+        """Build an ancestry key without repeatedly walking disabled ancestors.
+
+        The ordinary widget key inherits disabled state along the same path.
+        Fold that state once from root to leaf rather than re-walking each
+        prefix. Custom pseudo-class/disabled implementations keep their own
+        behavior; no values are retained beyond this key construction.
+        """
+        result = []
+        previous: DOMNode | None = None
+        inherited_disabled = False
+        for node in nodes:
+            node_type = type(node)
+            if isinstance(node, Widget):
+                if node._parent is previous:
+                    inherited_disabled = bool(node.disabled) or inherited_disabled
+                else:
+                    # A custom CSS path can differ from the physical ancestry.
+                    inherited_disabled = Widget.is_disabled.fget(node)
+                if (
+                    node_type._pseudo_classes_cache_key is Widget._pseudo_classes_cache_key
+                    and node_type.is_disabled is Widget.is_disabled
+                ):
+                    pseudo_key = (node.mouse_hover, node.has_focus, inherited_disabled)
+                else:
+                    pseudo_key = node._pseudo_classes_cache_key
+            else:
+                inherited_disabled = False
+                pseudo_key = node._pseudo_classes_cache_key
+            result.append(
+                (
+                    node._id if all_ids or node._id in self._ids_in_rules else None,
+                    node.classes & relevant_classes,
+                    node._css_type_name,
+                    pseudo_key,
+                    node.name,
+                )
+            )
+            previous = node
+        return tuple(result)
+
     def apply(
         self,
         node: DOMNode,
@@ -492,17 +587,32 @@ class Stylesheet:
         # same attribute, then we can choose the most specific rule and use that.
         rule_attributes: defaultdict[str, list[tuple[Specificity6, object]]]
         rule_attributes = defaultdict(list)
+        if cache is None:
+            # Initial mounts apply one node at a time. They should still use
+            # the stylesheet's retained path cache; a missing batch dictionary
+            # must not force identical newly mounted rows to rematch all rules.
+            cache = {}
 
+        # Compile candidate lists once per selector signature, rather than
+        # scanning the entire stylesheet for every node on each update. This
+        # caches no match result: ancestry and live pseudo-classes are still
+        # evaluated below. Parsing a new stylesheet retires these lists.
+        all_rules = self.rules
         rules_map = self.rules_map
-
-        # Discard rules which are not applicable early
-        limit_rules = {
-            rule
-            for name in rules_map.keys() & node._selector_names
-            for rule in rules_map[name]
-        }
-        rules = list(filter(limit_rules.__contains__, reversed(self.rules)))
-        all_pseudo_classes = set().union(*[rule.pseudo_classes for rule in rules])
+        selectors = frozenset(rules_map.keys() & node._selector_names)
+        candidates = self._candidate_rules.get(selectors)
+        if candidates is None:
+            limit_rules = {rule for name in selectors for rule in rules_map[name]}
+            rules = list(filter(limit_rules.__contains__, reversed(all_rules)))
+            all_pseudo_classes = frozenset().union(*(rule.pseudo_classes for rule in rules))
+            rule_classes = frozenset(
+                selector.name for rule in rules for group in rule.selector_set
+                for selector in group.selectors if selector.type == SelectorType.CLASS
+            )
+            rule_key = tuple(rules)
+            self._candidate_rules[selectors] = (rules, all_pseudo_classes, rule_classes, rule_key)
+        else:
+            rules, all_pseudo_classes, rule_classes, rule_key = candidates
         node._has_hover_style = "hover" in all_pseudo_classes
         node._has_focus_within = "focus-within" in all_pseudo_classes
         node._has_order_style = not all_pseudo_classes.isdisjoint(
@@ -513,11 +623,14 @@ class Stylesheet:
         )
 
         cache_key: tuple | None = None
+        path_key: tuple | None = None
+        css_path_nodes: list[DOMNode] | None = None
 
         if cache is not None and all_pseudo_classes.isdisjoint(
             self._EXCLUDE_PSEUDO_CLASSES_FROM_CACHE
         ):
             cache_key = (
+                rule_key,
                 node._parent,
                 (
                     None
@@ -534,8 +647,30 @@ class Stylesheet:
                 self._process_component_classes(node)
                 return
 
+            # Widgets in repeated rows have distinct parent *instances* but
+            # frequently the same selector/pseudo-class ancestry. A CSS rule
+            # cannot distinguish these paths when positional/focus-within
+            # selectors were excluded above. Share resolved rules within this
+            # update batch rather than matching every one from scratch.
+            css_path_nodes = node.css_path_nodes
+            path_key = (
+                "css_path",
+                rule_key,
+                self._css_path_key(css_path_nodes, rule_classes),
+            )
+            cached_result = cache.get(path_key)
+            if cached_result is None:
+                cached_result = self._path_rules_cache.get(path_key)
+            if cached_result is not None:
+                cache[cache_key] = cached_result
+                cache[path_key] = cached_result
+                self.replace_rules(node, cached_result, animate=animate)
+                self._process_component_classes(node)
+                return
+
         _check_rule = self._check_rule
-        css_path_nodes = node.css_path_nodes
+        if css_path_nodes is None:
+            css_path_nodes = node.css_path_nodes
 
         # Rules that may be set to the special value `initial`
         initial: set[str] = set()
@@ -603,6 +738,9 @@ class Stylesheet:
 
             if cache_key is not None:
                 cache[cache_key] = node_rules
+                if path_key is not None:
+                    cache[path_key] = node_rules
+                    self._path_rules_cache[path_key] = node_rules
             self.replace_rules(node, node_rules, animate=animate)
         self._process_component_classes(node)
 
@@ -614,6 +752,49 @@ class Stylesheet:
         """
         component_classes = node._get_component_classes()
         if component_classes:
+            # A node's virtual components are often restyled multiple times
+            # during one mount/resize cycle even though neither their selector
+            # ancestry nor the rules changed. Preserve the attached virtual
+            # RenderStyles in that case: each remains linked to this node, so
+            # inherited values still follow its current styles. Positional,
+            # focus-within and empty selectors need a fresh match because a
+            # sibling/descendant can change without changing this path key.
+            rules = self.rules
+            safe = self._component_cache_safe
+            for component in component_classes:
+                if component not in safe:
+                    names = {"*", "DOMNode", f".{component}"}
+                    component_rules = {
+                        rule for name in self.rules_map.keys() & names
+                        for rule in self.rules_map[name]
+                    }
+                    safe[component] = not any(
+                        rule.pseudo_classes & self._EXCLUDE_PSEUDO_CLASSES_FROM_CACHE
+                        for rule in component_rules
+                    )
+                    self._component_rule_classes[component] = frozenset(
+                        selector.name for rule in component_rules for group in rule.selector_set
+                        for selector in group.selectors if selector.type == SelectorType.CLASS
+                    )
+                    self._component_rule_keys[component] = tuple(
+                        rule for rule in reversed(rules) if rule in component_rules
+                    )
+            if all(safe[component] for component in component_classes):
+                relevant_classes = frozenset().union(*(
+                    self._component_rule_classes[component] for component in component_classes
+                ))
+                signature = (
+                    tuple((component, self._component_rule_keys[component])
+                          for component in sorted(component_classes)),
+                    frozenset(component_classes),
+                    self._css_path_key(node.css_path_nodes, relevant_classes, all_ids=True),
+                )
+                previous = getattr(node, "_component_css_signature", None)
+                if (node._component_styles and previous is not None
+                        and previous == signature):
+                    return
+            else:
+                signature = None
             # Create virtual nodes that exist to extract styles
             refresh_node = False
             old_component_styles = node._component_styles.copy()
@@ -622,15 +803,17 @@ class Stylesheet:
                 virtual_node = DOMNode(classes=component)
                 virtual_node._attach(node)
                 self.apply(virtual_node, animate=False)
+                component_styles = _ComponentStyles(virtual_node)
                 if (
                     not refresh_node
-                    and old_component_styles.get(component) != virtual_node.styles
+                    and old_component_styles.get(component) != component_styles
                 ):
                     # If the styles have changed we want to refresh the node
                     refresh_node = True
-                node._component_styles[component] = virtual_node.styles
+                node._component_styles[component] = component_styles
             if refresh_node:
                 node.refresh()
+            node._component_css_signature = signature
 
     @classmethod
     def replace_rules(
@@ -695,9 +878,12 @@ class Stylesheet:
         else:
             # Not animated, so we apply the rules directly
             get_rule = rules.get
+            get_current_rule = base_styles.get_rule
 
             for key in modified_rule_keys:
-                setattr(base_styles, key, get_rule(key))
+                value = get_rule(key)
+                if get_current_rule(key) != value:
+                    setattr(base_styles, key, value)
         node.notify_style_update()
 
     def update(self, root: DOMNode, animate: bool = False) -> None:
@@ -709,6 +895,49 @@ class Stylesheet:
         """
 
         self.update_nodes(root.walk_children(with_self=True), animate=animate)
+
+    def update_app_focus(self, root: DOMNode) -> None:
+        """Restyle only subtrees whose rules can depend on application focus.
+
+        Preserve descendant updates when an affected container changes an
+        inherited style. Ordinary widget focus/blur events still update the
+        focused controls separately through their existing handlers.
+        """
+        self._update_focus_dependencies(root, root.app)
+
+    def update_widget_focus(self, root: DOMNode) -> None:
+        """Update declarations affected by this widget's focus or blur change.
+
+        A focusable transcript container need not reapply every message's CSS
+        just because it received keyboard focus. Ancestor ``focus-within``
+        changes are still handled by the screen's focus transition.
+        """
+        self._update_focus_dependencies(root, root)
+
+    def _update_focus_dependencies(self, root: DOMNode, focus_node: DOMNode) -> None:
+        """Restyle matching targets and their potentially inheriting children."""
+        affected_names = {
+            name
+            for rule in self.rules
+            if any(
+                selector.pseudo_classes & {"focus", "blur"}
+                and selector._check(focus_node)
+                for group in rule.selector_set for selector in group.selectors
+            )
+            for name in rule.selector_names
+        }
+        if not affected_names:
+            return
+        pending = [root]
+        while pending:
+            node = pending.pop()
+            component_names = {f".{name}" for name in node._get_component_classes()}
+            if affected_names & (node._selector_names | component_names):
+                self.update(node, animate=True)
+            else:
+                pending.extend(node.children)
+                if isinstance(node, Widget):
+                    pending.extend(node._get_virtual_dom())
 
     def update_nodes(self, nodes: Iterable[DOMNode], animate: bool = False) -> None:
         """Update styles for nodes.

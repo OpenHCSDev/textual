@@ -1,12 +1,51 @@
+import gc
+import weakref
+from unittest.mock import patch
+
 import pytest
 from rich.console import Console
 from rich.segment import Segment
 from rich.style import Style
 
 from textual._segment_tools import NoCellPositionForIndex
+from textual.cache import FIFOCache
 from textual.color import Color
 from textual.filter import Monochrome
 from textual.strip import Strip
+
+
+@pytest.mark.parametrize("operation", ["divide", "crop_extend"])
+def test_identity_transform_does_not_require_cyclic_gc(operation):
+    """Discarded compositor lines should die immediately, not in a GC pause."""
+
+    class WeakStrip(Strip):
+        __slots__ = ("__weakref__",)
+
+    enabled = gc.isenabled()
+    gc.disable()
+    try:
+        strip = WeakStrip([Segment("text")])
+        reference = weakref.ref(strip)
+        if operation == "divide":
+            assert strip.divide([4]) == [strip]
+        else:
+            assert strip.crop_extend(0, 4, None) is strip
+        del strip
+        assert reference() is None
+    finally:
+        if enabled:
+            gc.enable()
+
+
+def test_transient_strips_only_allocate_caches_they_use():
+    """Rendering one-use lines must not allocate seven unused caches apiece."""
+    with patch("textual.strip.FIFOCache", wraps=FIFOCache) as cache:
+        strips = [Strip([Segment("line")]) for _ in range(1000)]
+        assert cache.call_count == 0
+        cropped = strips[0].crop(1, 3)
+        assert cropped.text == "in"
+        assert strips[0].crop(1, 3) is cropped
+        assert cache.call_count == 1
 
 
 def test_cell_length() -> None:

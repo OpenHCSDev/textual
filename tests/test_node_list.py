@@ -1,7 +1,10 @@
 import pytest
 
 from textual._node_list import NodeList
+from textual.app import App, ComposeResult
+from textual.containers import Container
 from textual.widget import Widget
+from textual.widgets import Static
 
 
 def test_empty_list():
@@ -111,3 +114,66 @@ async def test_listy():
     assert nodes[0] == widget1
     assert nodes[1] == widget2
     assert nodes[0:2] == [widget1, widget2]
+
+
+async def test_visible_children_do_not_replace_displayed_children():
+    """Invisible children still occupy layout space after selection queries."""
+    visible = Widget()
+    invisible = Widget()
+    invisible.styles.visibility = "hidden"
+    nodes = NodeList()
+    nodes._append(visible)
+    nodes._append(invisible)
+    assert list(nodes.displayed_and_visible) == [visible]
+    assert list(nodes.displayed) == [visible, invisible]
+
+
+async def test_visible_child_cache_tracks_inheritance_overrides_and_remount():
+    class Counted(Static):
+        visibility_reads = 0
+
+        @property
+        def visible(self) -> bool:
+            self.visibility_reads += 1
+            return super().visible
+
+    class VisibilityApp(App):
+        def compose(self) -> ComposeResult:
+            with Container(id="outer"):
+                with Container(id="inner"):
+                    yield Counted("inherited", id="inherited")
+                    yield Counted("explicit", id="explicit")
+
+    app = VisibilityApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        outer = app.query_one("#outer")
+        inner = app.query_one("#inner")
+        inherited = app.query_one("#inherited", Counted)
+        explicit = app.query_one("#explicit", Counted)
+        explicit.styles.visibility = "visible"
+
+        def check(expected):
+            assert list(inner.displayed_and_visible_children) == expected
+            assert list(inner.displayed_children) == list(inner.children)
+
+        check([inherited, explicit])
+        reads = inherited.visibility_reads, explicit.visibility_reads
+        check([inherited, explicit])
+        assert (inherited.visibility_reads, explicit.visibility_reads) == reads
+        outer.styles.visibility = "hidden"
+        check([explicit])
+        outer.styles.visibility = None
+        check([inherited, explicit])
+        inherited.styles.visibility = "hidden"
+        check([explicit])
+        inherited.styles.visibility = None
+        check([inherited, explicit])
+        await inherited.remove()
+        check([explicit])
+        await inner.mount(inherited)
+        check([explicit, inherited])
+        explicit.display = False
+        assert list(inner.displayed_and_visible_children) == [inherited]
+        explicit.display = True
+        check([explicit, inherited])

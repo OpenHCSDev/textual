@@ -6,6 +6,7 @@ import weakref
 from contextlib import suppress
 from functools import partial
 from pathlib import Path, PurePath
+from types import MethodType
 from typing import Callable, Iterable, Optional
 from urllib.parse import unquote
 
@@ -894,25 +895,30 @@ class MarkdownFence(MarkdownBlock):
         super().__init__(markdown, token)
         self.code = code
         self.lexer = token.info
-        self._highlighted_code = self.highlight(
-            self.code,
-            self.lexer,
-            ansi=self.app.native_ansi_color,
-            dark=self.app.current_theme.dark,
-        )
+        self._highlighted_key: tuple[str, str, bool, bool] | None = None
+        self._highlighted_code = Content()
+        self._refresh_highlight()
         # No links required in code
         self.auto_links = False
 
     def notify_style_update(self) -> None:
         """Update highlight theme when App theme changes."""
-        self._highlighted_code = self.highlight(
-            self.code,
-            self.lexer,
-            ansi=self.app.native_ansi_color,
-            dark=self.app.current_theme.dark,
-        )
+        self._refresh_highlight()
         self.set_content(self._highlighted_code)
         return super().notify_style_update()
+
+    def _refresh_highlight(self) -> None:
+        key = (self.code, self.lexer, self.app.native_ansi_color, self.app.current_theme.dark)
+        highlighter = self.highlight
+        native = isinstance(highlighter, MethodType) and highlighter.__func__ is MarkdownFence.highlight.__func__
+        if native and self._highlighted_key == key:
+            return
+        prepared = self._markdown._get_prepared_fence(*key) if native else None
+        self._highlighted_code = (
+            prepared if prepared is not None else
+            self.highlight(self.code, self.lexer, ansi=key[2], dark=key[3])
+        )
+        self._highlighted_key = key
 
     @property
     def allow_horizontal_scroll(self) -> bool:
@@ -938,6 +944,7 @@ class MarkdownFence(MarkdownBlock):
             self.code = block.code
             self.lexer = block.lexer
             self._highlighted_code = block._highlighted_code
+            self._highlighted_key = block._highlighted_key
         super()._copy_context(block)
 
     async def _update_from_block(self, block: MarkdownBlock):
@@ -950,7 +957,10 @@ class MarkdownFence(MarkdownBlock):
     def set_content(self, content: Content) -> None:
         self._content = content
         with suppress(NoMatches):
-            self.query_one("#code-content", Label).update(content)
+            label = self.query_one("#code-content", Label)
+            if label.content is not content:
+                layout = not (isinstance(label.content, Content) and label.content.plain == content.plain)
+                label.update(content, layout=layout)
 
     def compose(self) -> ComposeResult:
         yield Label(self._highlighted_code, id="code-content", expand=True)
@@ -1373,6 +1383,20 @@ class Markdown(Widget):
         tokens = parser.parse(markdown)
         return list(self._parse_markdown(tokens))
 
+    async def _parse_tokens(
+        self, parser: MarkdownIt, markdown: str, *, use_thread: bool
+    ) -> list[Token] | None:
+        """Parse before constructing widgets; None discards a superseded request."""
+        if use_thread:
+            return await asyncio.get_running_loop().run_in_executor(None, parser.parse, markdown)
+        return parser.parse(markdown)
+
+    def _get_prepared_fence(
+        self, code: str, language: str, ansi: bool, dark: bool
+    ) -> Content | None:
+        """Optional data-only highlighting prepared by the document parser."""
+        return None
+
     def update(self, markdown: str) -> AwaitComplete:
         """Update the document with new Markdown.
 
@@ -1400,9 +1424,9 @@ class Markdown(Widget):
 
             # Lock so that you can't update with more than one document simultaneously
             async with self.lock:
-                tokens = await asyncio.get_running_loop().run_in_executor(
-                    None, parser.parse, markdown
-                )
+                tokens = await self._parse_tokens(parser, markdown, use_thread=True)
+                if tokens is None:
+                    return
 
                 # Remove existing blocks for the first batch only
                 removed: bool = False
@@ -1432,8 +1456,14 @@ class Markdown(Widget):
                 if not removed:
                     await markdown_block.remove()
 
-            lines = markdown.splitlines()
-            self._last_parsed_line = len(lines) - (1 if lines and lines[-1] else 0)
+            # append() replaces the final block, not merely the final physical
+            # line. Keep its opening token so partial fences/paragraphs survive
+            # an initial update followed by streamed chunks.
+            self._last_parsed_line = next(
+                (token.map[0] for token in reversed(tokens)
+                 if token.map is not None and token.level == 0),
+                0,
+            )
             self.post_message(
                 Markdown.TableOfContentsUpdated(
                     self, self.table_of_contents
@@ -1465,7 +1495,9 @@ class Markdown(Widget):
         async def await_append() -> None:
             """Append new markdown widgets."""
             async with self.lock:
-                tokens = parser.parse(updated_source)
+                tokens = await self._parse_tokens(parser, updated_source, use_thread=False)
+                if tokens is None:
+                    return
                 existing_blocks = [
                     child for child in self.children if isinstance(child, MarkdownBlock)
                 ]

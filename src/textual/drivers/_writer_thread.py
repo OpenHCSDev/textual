@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 import threading
+from dataclasses import dataclass
 from queue import Queue
-from typing import IO
+from typing import IO, Callable
 
 from typing_extensions import Final
 
 MAX_QUEUED_WRITES: Final[int] = 30
+
+
+@dataclass(frozen=True)
+class _FlushSignal:
+    callback: Callable[[], None]
 
 
 class WriterThread(threading.Thread):
@@ -14,7 +20,7 @@ class WriterThread(threading.Thread):
 
     def __init__(self, file: IO[str]) -> None:
         super().__init__(daemon=True, name="textual-output")
-        self._queue: Queue[str | None] = Queue(MAX_QUEUED_WRITES)
+        self._queue: Queue[str | _FlushSignal | None] = Queue(MAX_QUEUED_WRITES)
         self._file = file
 
     def write(self, text: str) -> None:
@@ -24,6 +30,10 @@ class WriterThread(threading.Thread):
             text: Text to write to the file.
         """
         self._queue.put(text)
+
+    def call_after_flush(self, callback: Callable[[], None]) -> None:
+        """Call back after all earlier queued terminal writes are flushed."""
+        self._queue.put(_FlushSignal(callback))
 
     def isatty(self) -> bool:
         """Pretend to be a terminal.
@@ -54,9 +64,13 @@ class WriterThread(threading.Thread):
         # Read from the queue, write to the file.
         # Flush when there is a break.
         while True:
-            text: str | None = get()
+            text: str | _FlushSignal | None = get()
             if text is None:
                 break
+            if isinstance(text, _FlushSignal):
+                flush()
+                text.callback()
+                continue
             write(text)
             if qsize() == 0:
                 flush()

@@ -3,7 +3,7 @@ from __future__ import annotations
 from operator import attrgetter
 from typing import TYPE_CHECKING, Iterable, Iterator, NamedTuple
 
-from textual.geometry import Offset, Shape
+from textual.geometry import NULL_REGION, Offset, Region, Shape
 
 if TYPE_CHECKING:
     from textual.widget import Widget
@@ -294,10 +294,74 @@ class SelectState(NamedTuple):
         if end_widget is not None and end_content_offset is not None:
             selections[end_widget] = Selection(None, end_content_offset)
 
+    def _walk_viewport_widgets(self) -> list[Widget] | None:
+        """Select painted widgets when both endpoints fit in one viewport.
+
+        Dragging within an existing transcript should depend on the viewport,
+        not on how many previous messages remain mounted. Off-screen drags,
+        nested scroll regions and gap endpoints use the general selection
+        walker, which includes their otherwise hidden text for copying.
+        """
+        from textual.screen import Screen
+        from textual.widget import Widget
+
+        start = self.start.content_widget
+        end = self.end.content_widget if self.end is not None else None
+        if start is None or end is None or not start.is_attached or not end.is_attached:
+            return None
+        root = self.select_container
+        if isinstance(root, Screen) or not isinstance(root, Widget):
+            return None
+        screen = start.screen
+        if end.screen is not screen:
+            return None
+        end_ancestors = set(end.ancestors_with_self)
+        viewport = next(
+            (ancestor for ancestor in start.ancestors
+             if isinstance(ancestor, Widget) and ancestor.is_scrollable
+             and ancestor in end_ancestors
+             and screen.size.region.contains_region(ancestor.content_region)),
+            None,
+        )
+        if viewport is None:
+            return None
+        region = viewport.content_region
+        if (not region.contains_region(start.region)
+                or not region.contains_region(end.region)
+                or not region.contains_point(self.start.pointer_start_offset)
+                or not region.contains_point(self.screen_offset)):
+            return None
+
+        visible = screen._compositor.visible_widgets
+        if start not in visible or end not in visible:
+            return None
+        bounds = self.selection_bounds
+        for widget in visible:
+            if (widget is not viewport and widget.is_scrollable
+                    and (widget.max_scroll_y > 0 or widget.max_scroll_x > 0)
+                    and bounds.overlaps(widget.region)):
+                return None
+        result = sorted(
+            (widget for widget in visible
+             if not widget.is_container and widget.allow_select
+             and root in widget.ancestors
+             and bounds.overlaps(widget.content_region)),
+            key=attrgetter("_selection_order"),
+        )
+        return result
+
     def _walk_selected_widgets(self) -> list[Widget]:
         assert (
             self.end is not None
         ), "Unavailable until there is an end point to the selection"
+
+        from textual import errors
+        from textual.dom import DOMNode, NoScreen
+        from textual.widget import Widget
+
+        viewport_widgets = self._walk_viewport_widgets()
+        if viewport_widgets is not None:
+            return viewport_widgets
 
         selection_bounds = self.selection_bounds
         select_container = self.select_container
@@ -317,35 +381,140 @@ class SelectState(NamedTuple):
             first_content_widget = self.end.content_widget
             last_content_widget = self.start.content_widget
 
-        get_selection_order = attrgetter("_selection_order")
+        # Every descendant belongs to this selection's screen. Re-discovering
+        # that screen by walking the ancestry for every sort/region lookup is
+        # costly in nested message widgets. Resolve geometry through its owner
+        # once, retaining values only for this synchronous traversal (not across
+        # scrolling, layout or DOM changes).
+        try:
+            find_widget = select_container.screen.find_widget
+        except NoScreen:
+            find_widget = None
+        regions: dict[Widget, Region] = {}
+
+        def layout_region(widget: Widget) -> Region:
+            if find_widget is None:
+                return widget.region
+            try:
+                return regions[widget]
+            except KeyError:
+                try:
+                    region = find_widget(widget).region
+                except errors.NoWidget:
+                    region = NULL_REGION
+                regions[widget] = region
+                return region
+
+        def get_region(widget: Widget) -> Region:
+            if type(widget).region is not Widget.region:
+                return widget.region
+            return layout_region(widget)
+
+        def get_content_region(widget: Widget) -> Region:
+            if type(widget).content_region is not Widget.content_region:
+                return widget.content_region
+            return get_region(widget).shrink(widget.styles.gutter)
+
+        def get_selection_order(widget: Widget) -> tuple[int, int]:
+            if type(widget)._selection_order is not Widget._selection_order:
+                return widget._selection_order
+            region = layout_region(widget)
+            return region.y, region.x
+
         selected: list[Widget] = []
 
-        def walk_in_select_order(root: Widget) -> Iterable[Widget]:
-            """Walk descendants of `root` depth-first in selection order."""
-            stack: list[Iterator[Widget]] = [
-                iter(
-                    sorted(
-                        root.displayed_and_visible_children,
-                        key=get_selection_order,
-                    )
+        def visible_children(root: Widget, root_visible: bool = True) -> Iterable[Widget]:
+            if type(root).displayed_and_visible_children is not DOMNode.displayed_and_visible_children:
+                return root.displayed_and_visible_children
+            # Descendants yielded by this traversal were already checked for
+            # visibility by their parent's child list. Don't walk their ancestry
+            # again just to rediscover that same inherited value.
+            return root._nodes._get_displayed_and_visible(root_visible)
+
+        def ordered_children(root: Widget, root_visible: bool = True) -> Iterable[Widget]:
+            """Prune unrelated siblings for a vertical, endpoint-bound range.
+
+            Off-screen drag selections still include every widget *between*
+            their actual endpoints, unlike the viewport-only paint shortcut.
+            A transcript with thousands of earlier siblings need not check
+            their visibility and geometry on every pointer movement.
+            """
+            if (root is select_container and first_content_widget is not None
+                    and last_content_widget is not None
+                    and type(root.layout).__name__ in {"VerticalLayout", "StreamLayout"}):
+                def branch(widget: Widget) -> Widget | None:
+                    while widget.parent is not root:
+                        if not isinstance(widget.parent, Widget):
+                            return None
+                        widget = widget.parent
+                    return widget
+
+                first_branch = branch(first_content_widget)
+                last_branch = branch(last_content_widget)
+                if first_branch is not None and last_branch is not None:
+                    siblings = root.children
+                    try:
+                        first_index = siblings.index(first_branch)
+                        last_index = siblings.index(last_branch)
+                    except ValueError:
+                        pass
+                    else:
+                        # Only ordinary flow children can be bounded by their
+                        # DOM order. Positioned/layered children may be drawn
+                        # elsewhere and fall back to the general walker.
+                        if all(child.styles.position == "relative" and not child.styles.layer
+                               for child in siblings):
+                            low, high = sorted((first_index, last_index))
+                            visible = set(visible_children(root, root_visible))
+                            return sorted(
+                                (child for child in siblings[low : high + 1]
+                                 if child in visible),
+                                key=get_selection_order,
+                            )
+            return sorted(visible_children(root, root_visible), key=get_selection_order)
+
+        def walk_in_select_order(
+            root: Widget, from_widget: Widget | None = None
+        ) -> Iterable[Widget]:
+            """Walk depth-first, skipping subtrees preceding a known endpoint.
+
+            Entering/exiting a scroll region may select hidden text, so the
+            viewport shortcut cannot handle it. The exact starting widget still
+            tells us which earlier branches cannot contribute to the selection.
+            Keep the original spatial ordering within every sibling list.
+            """
+            start_branches: dict[Widget, Widget] = {}
+            if from_widget is not None:
+                branch = from_widget
+                while branch is not root:
+                    parent = branch.parent
+                    if not isinstance(parent, Widget):
+                        return
+                    start_branches[parent] = branch
+                    branch = parent
+
+            def children_from_start(node: Widget) -> Iterable[Widget]:
+                children = sorted(
+                    visible_children(node), key=get_selection_order
                 )
-            ]
+                first_branch = start_branches.get(node)
+                if first_branch is not None:
+                    try:
+                        return children[children.index(first_branch) :]
+                    except ValueError:
+                        # The endpoint is in a non-displayed/hidden branch.
+                        return ()
+                return children
+
+            stack: list[Iterator[Widget]] = [iter(children_from_start(root))]
             while stack:
                 widget = next(stack[-1], None)
                 if widget is None:
                     stack.pop()
                     continue
                 yield widget
-                children = widget.displayed_and_visible_children
-                if children:
-                    stack.append(
-                        iter(
-                            sorted(
-                                children,
-                                key=get_selection_order,
-                            )
-                        )
-                    )
+                if widget.children:
+                    stack.append(iter(children_from_start(widget)))
 
         def collect_range(
             container: Widget,
@@ -374,10 +543,10 @@ class SelectState(NamedTuple):
                 to_y: End `y` of selection, or `None` for end.
             """
             started = from_widget is None and from_y is None
-            for descendant in walk_in_select_order(container):
+            for descendant in walk_in_select_order(container, from_widget):
                 if descendant.is_container or not descendant.allow_select:
                     continue
-                widget_y = descendant.content_region.y
+                widget_y = get_content_region(descendant).y
                 if not started:
                     if from_widget is not None:
                         if descendant is from_widget:
@@ -398,17 +567,15 @@ class SelectState(NamedTuple):
                     return
 
         def visit(root: Widget) -> None:
-            """Walk children of `parent`, deciding inclusion per child.
-
-            Args:
-                root: Initial node to walk from.
-            """
-            for child in sorted(
-                root.displayed_and_visible_children,
-                key=get_selection_order,
-            ):
+            """Walk in depth-first order without a recursive closure cycle."""
+            stack = [iter(ordered_children(root, root.visible))]
+            while stack:
+                child = next(stack[-1], None)
+                if child is None:
+                    stack.pop()
+                    continue
                 if child.is_container:
-                    child_region = child.region
+                    child_region = get_region(child)
                     if not child_region:
                         continue
                     if not selection_bounds.overlaps(child_region):
@@ -450,10 +617,10 @@ class SelectState(NamedTuple):
 
                     # Both endpoints inside this child, or nothing scrolled
                     # out; fall back to the standard visual walk.
-                    visit(child)
+                    stack.append(iter(ordered_children(child)))
                 else:
                     if child.allow_select and selection_bounds.overlaps(
-                        child.content_region
+                        get_content_region(child)
                     ):
                         selected.append(child)
 

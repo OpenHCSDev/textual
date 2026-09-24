@@ -70,6 +70,7 @@ from textual.css.types import (
     Overlay,
     PointerShape,
     ScrollbarGutter,
+    ScrollbarVisibility,
     Specificity3,
     Specificity6,
     TextAlign,
@@ -270,7 +271,9 @@ class StylesBase:
         StyleValueError: If an invalid display is specified.
     """
 
-    visibility = StringEnumProperty(VALID_VISIBILITY, "visible", layout=True)
+    visibility = StringEnumProperty(
+        VALID_VISIBILITY, "visible", layout=True, display=True
+    )
     """Set the visibility of the widget.
     
     Valid values are "visible" or "hidden".
@@ -881,10 +884,23 @@ class StylesBase:
         return style
 
 
+class _StyleNodeReference:
+    """A style observes its widget; it must not keep a retired widget alive."""
+
+    def __get__(self, styles: Styles | None, owner: type | None = None) -> DOMNode | None:
+        if styles is None:
+            return None
+        reference = styles._node_reference
+        return None if reference is None else reference()
+
+    def __set__(self, styles: Styles, node: DOMNode | None) -> None:
+        styles._node_reference = None if node is None else weakref.ref(node)
+
+
 @rich.repr.auto
 @dataclass
 class Styles(StylesBase):
-    node: DOMNode | None = None
+    node: DOMNode | None = cast("DOMNode | None", _StyleNodeReference())
     _rules: RulesMap = field(default_factory=RulesMap)
     _updates: int = 0
 

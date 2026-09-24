@@ -1,7 +1,24 @@
+from unittest.mock import patch
+
 import pytest
 from rich.color import Color as RichColor
 
-from textual.color import Color, Gradient, Lab, lab_to_rgb, rgb_to_lab
+from textual.color import Color, ColorParseError, Gradient, Lab, _color_suggestion, lab_to_rgb, rgb_to_lab
+from textual.suggestions import get_suggestion
+
+
+def test_repeated_unknown_colors_preserve_suggestions_without_fuzzy_rescans():
+    _color_suggestion.cache_clear()
+    Color.parse.cache_clear()
+    messages = []
+    with patch("textual.color.get_suggestion", wraps=get_suggestion) as suggestion:
+        for _ in range(8):
+            with pytest.raises(ColorParseError) as error:
+                Color.parse("redu")
+            messages.append(str(error.value))
+        assert suggestion.call_count == 1
+    assert len(set(messages)) == 1
+    assert "did you mean 'red'?" in messages[0]
 
 
 def test_rich_color():

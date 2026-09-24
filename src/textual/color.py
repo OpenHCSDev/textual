@@ -50,6 +50,19 @@ from textual.geometry import clamp
 from textual.suggestions import get_suggestion
 
 _TRUECOLOR = ColorType.TRUECOLOR
+_COLOR_NAMES = tuple(COLOR_NAME_TO_RGB)
+
+
+@lru_cache(maxsize=1024)
+def _color_suggestion(color_text: str) -> str | None:
+    """Share costly typo suggestions for repeated invalid style colors.
+
+    Rich diff lines can request the same unrecognized style thousands of
+    times while highlighting. Color.parse only caches successful results;
+    retaining this deterministic suggestion avoids rescanning every named
+    color for each failed attempt without changing the parsing error.
+    """
+    return get_suggestion(color_text, _COLOR_NAMES)
 
 
 class HSL(NamedTuple):
@@ -570,9 +583,7 @@ class Color(NamedTuple):
             suggested_color = None
             if not color_text.startswith(("#", "rgb", "hsl")):
                 # Seems like we tried to use a color name: let's try to find one that is close enough:
-                suggested_color = get_suggestion(
-                    color_text, list(COLOR_NAME_TO_RGB.keys())
-                )
+                suggested_color = _color_suggestion(color_text)
                 if suggested_color:
                     error_message += f"; did you mean '{suggested_color}'?"
             raise ColorParseError(error_message, suggested_color)
