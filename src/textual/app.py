@@ -288,10 +288,8 @@ class _PrintCapture:
         return True
 
     def fileno(self) -> int:
-        """Captured output has no OS descriptor, like an in-memory stream."""
-        from io import UnsupportedOperation
-
-        raise UnsupportedOperation("Textual's print capture has no file descriptor")
+        """Return invalid fileno."""
+        return -1
 
 
 @rich.repr.auto
