@@ -364,16 +364,19 @@ class Compositor:
         yield "size", self.size
         yield "widgets", self.widgets
 
-    def reflow(self, parent: Widget, size: Size) -> ReflowResult:
+    def reflow(self, parent: Widget, size: Size, *, visible_only: bool = False) -> ReflowResult:
         """Reflow (layout) widget and its children.
 
         Args:
             parent: The root widget.
             size: Size of the area to be filled.
+            visible_only: Commit viewport geometry and defer offscreen geometry
+                until it is queried. Show/hide notifications become viewport-local.
 
         Returns:
             Hidden, shown, and resized widgets.
         """
+        previous_map = self._visible_map if visible_only and self._visible_map is not None else self._full_map
         self._cuts = None
         self._layers = None
         self._layers_visible = None
@@ -383,10 +386,10 @@ class Compositor:
         self.size = size
 
         # Keep a copy of the old map because we're going to compare it with the update
-        old_map = self._full_map
+        old_map = previous_map
         old_widgets = old_map.keys()
 
-        map, widgets = self._arrange_root(parent, size, visible_only=False)
+        map, widgets = self._arrange_root(parent, size, visible_only=visible_only)
 
         new_widgets = map.keys()
 
@@ -394,11 +397,14 @@ class Compositor:
         shown_widgets = new_widgets - old_widgets
 
         # Newly hidden widgets
-        hidden_widgets = self.widgets - widgets
+        hidden_widgets = old_widgets - new_widgets if visible_only else self.widgets - widgets
 
         # Replace map and widgets
-        self._full_map = map
-        self._full_map_invalidated = False
+        if visible_only:
+            self._visible_map = map
+        else:
+            self._full_map = map
+        self._full_map_invalidated = visible_only
         # Measuring widgets may inspect geometry and populate presentation
         # caches from the previous committed map. Publish only the new map.
         self._visible_widgets = None

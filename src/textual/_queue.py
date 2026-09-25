@@ -33,12 +33,22 @@ class Queue(Generic[QueueType]):
         pass
 
     async def get(self) -> QueueType:
-        if not self.ready_event.is_set():
+        # An Event wakes every waiter; a synchronous consumer may also drain
+        # the item before an awakened task resumes. Notification is not a
+        # reservation, so recheck the queue after each wait.
+        while not self.values:
+            self.ready_event.clear()
             await self.ready_event.wait()
         value = self.values.popleft()
         if not self.values:
             self.ready_event.clear()
         return value
+
+    def peek_nowait(self) -> QueueType:
+        """Read the next value without taking it from a waiting consumer."""
+        if not self.values:
+            raise asyncio.QueueEmpty()
+        return self.values[0]
 
     def get_nowait(self) -> QueueType:
         if not self.values:

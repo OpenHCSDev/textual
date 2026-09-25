@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import enum
 import inspect
+from contextlib import contextmanager
 from contextvars import ContextVar
 from threading import Event
 from time import monotonic
@@ -19,6 +20,7 @@ from typing import (
     Callable,
     Coroutine,
     Generic,
+    Iterator,
     TypeVar,
     Union,
     cast,
@@ -281,6 +283,21 @@ class Worker(Generic[ResultType]):
         """
         self._completed_steps += steps
 
+    @contextmanager
+    def _context(self) -> Iterator[None]:
+        """Expose this worker only while its work is executing.
+
+        A completed task retains its context. Leaving this binding behind
+        creates a Worker -> Task -> Context -> Worker cycle, keeping the
+        worker's widget tree alive until cyclic collection. Executor threads
+        also retain their context between unrelated jobs.
+        """
+        token = active_worker.set(self)
+        try:
+            yield
+        finally:
+            active_worker.reset(token)
+
     async def _run_threaded(self) -> ResultType:
         """Run a threaded worker.
 
@@ -292,8 +309,8 @@ class Worker(Generic[ResultType]):
             """Set the active worker and await the awaitable."""
 
             async def do_work() -> ResultType:
-                active_worker.set(self)
-                return await work
+                with self._context():
+                    return await work
 
             return asyncio.run(do_work())
 
@@ -305,8 +322,8 @@ class Worker(Generic[ResultType]):
 
         def run_callable(work: Callable[[], ResultType]) -> ResultType:
             """Set the active worker, and call the callable."""
-            active_worker.set(self)
-            return work()
+            with self._context():
+                return work()
 
         if (
             inspect.iscoroutinefunction(self._work)
@@ -361,9 +378,7 @@ class Worker(Generic[ResultType]):
         Args:
             app: App instance.
         """
-        with app._context():
-            active_worker.set(self)
-
+        with app._context(), self._context():
             self.state = WorkerState.RUNNING
             app.log.worker(self)
             try:

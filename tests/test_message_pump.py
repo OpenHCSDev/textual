@@ -1,3 +1,4 @@
+import asyncio
 import threading
 
 import pytest
@@ -7,6 +8,7 @@ from textual.app import App, ComposeResult
 from textual.errors import DuplicateKeyHandlers
 from textual.events import Key
 from textual.message import Message
+from textual.message_pump import MessagePump
 from textual.widget import Widget
 from textual.widgets import Button, Input, Label
 
@@ -91,6 +93,24 @@ async def test_message_queue_size():
         # A pause will process all the messages
         await pilot.pause()
         assert app.message_queue_size == 0
+
+
+async def test_peeking_does_not_steal_from_a_waking_message_pump():
+    """Selection may inspect the app's next event while its pump is awaiting it."""
+    pump = MessagePump()
+    waiting = asyncio.create_task(pump._get_message())
+    try:
+        await asyncio.sleep(0)
+        message = Key("x", "x")
+        pump._message_queue.put_nowait(message)
+        assert pump._peek_message() is message
+        assert pump._peek_message() is message
+        assert await asyncio.wait_for(waiting, 1) is message
+        assert pump._message_queue.empty()
+        assert pump._peek_message() is None
+    finally:
+        waiting.cancel()
+        await asyncio.gather(waiting, return_exceptions=True)
 
 
 async def test_prevent() -> None:

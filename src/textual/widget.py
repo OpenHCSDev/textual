@@ -5,7 +5,7 @@ This module contains the `Widget` class, the base class for all widgets.
 
 from __future__ import annotations
 
-from asyncio import create_task, gather, wait
+from asyncio import Lock, create_task, gather, wait
 from collections import Counter
 from contextlib import asynccontextmanager
 from fractions import Fraction
@@ -138,6 +138,8 @@ class AwaitMount:
         self._parent = parent
         self._widgets = widgets
         self._caller = get_caller_file_and_line()
+        self._completion_lock = Lock()
+        self._completed = False
 
     def __rich_repr__(self) -> rich.repr.Result:
         yield "parent", self._parent
@@ -150,18 +152,31 @@ class AwaitMount:
 
     def __await__(self) -> Generator[None, None, None]:
         async def await_mount() -> None:
-            if self._widgets:
-                aws = [
-                    create_task(widget._mounted_event.wait(), name="await mount")
-                    for widget in self._widgets
-                ]
-                if aws:
-                    await wait(aws)
+            # mount() schedules this same object with call_next, and the caller
+            # may await it explicitly too. Complete one mount transaction, not
+            # a second set of waiters and layout invalidations for each await.
+            async with self._completion_lock:
+                if self._completed:
+                    return
+                if self._widgets:
+                    aws = [
+                        create_task(widget._mounted_event.wait(), name="await mount")
+                        for widget in self._widgets
+                    ]
+                    try:
+                        await wait(aws)
+                    finally:
+                        pending = [task for task in aws if not task.done()]
+                        if pending:
+                            for task in pending:
+                                task.cancel()
+                            await gather(*pending, return_exceptions=True)
                     self._parent.refresh(layout=True)
                     try:
                         self._parent.app._update_mouse_over(self._parent.screen)
                     except NoScreen:
                         pass
+                self._completed = True
 
         return await_mount().__await__()
 
@@ -474,7 +489,7 @@ class Widget(DOMNode):
         self._content_height_cache: tuple[object, int] = (None, 0)
 
         self._arrangement_cache: FIFOCache[
-            tuple[Size, int, bool], DockArrangeResult
+            tuple[Size, Size, int, int, bool], DockArrangeResult
         ] = FIFOCache(4)
 
         self._styles_cache = StylesCache()
@@ -1344,13 +1359,14 @@ class Widget(DOMNode):
         Returns:
             Widget locations.
         """
-        cache_key = (size, self._nodes._updates, optimal)
+        viewport = self.screen.size
+        cache_key = (size, viewport, self._nodes._updates, self._layout_updates, optimal)
         cached_result = self._arrangement_cache.get(cache_key)
         if cached_result is not None:
             return cached_result
 
         arrangement = self._arrangement_cache[cache_key] = arrange(
-            self, self._nodes, size, self.screen.size, optimal=optimal
+            self, self._nodes, size, viewport, optimal=optimal
         )
 
         return arrangement
@@ -2699,7 +2715,10 @@ class Widget(DOMNode):
             self._dirty_regions.clear()
             self._repaint_regions.clear()
             self._styles_cache.clear()
-            self._styles_cache.set_dirty(self.size.region)
+            # Invalidation must not measure a lazily invalidated compositor.
+            # Mark the last committed local content bounds; the next geometry
+            # commit dirties its new bounds independently.
+            self._styles_cache.set_dirty(self._size.region.shrink(self.styles.gutter).reset_offset)
             outer_size = self.outer_size
             self._dirty_regions.add(outer_size.region)
             if outer_size:
@@ -4125,17 +4144,25 @@ class Widget(DOMNode):
             True if a resize event should be sent, otherwise False.
         """
 
-        self._layout_cache.clear()
         if (
             self._size != size
             or self.virtual_size != virtual_size
             or self._container_size != container_size
         ):
+            self._layout_cache.clear()
             if self._size != size:
+                self._size = size
                 self._set_dirty()
             self._size = size
             if layout:
-                self.virtual_size = virtual_size
+                if self.is_scrollable:
+                    # Containers/virtual views retain extent-driven feedback.
+                    self.virtual_size = virtual_size
+                else:
+                    # Notify watches without remeasuring parents for a leaf's
+                    # just-committed measurement. Real watcher changes still
+                    # request their own layout.
+                    self._reactives["virtual_size"]._set(self, virtual_size, layout=False)
             else:
                 self.set_reactive(Widget.virtual_size, virtual_size)
             self._container_size = container_size
@@ -4548,6 +4575,9 @@ class Widget(DOMNode):
 
     def _check_refresh(self) -> None:
         """Check if a refresh was requested."""
+        if not (self._refresh_styles_required or self._scroll_required
+                or self._repaint_required or self._layout_required):
+            return
         if self._parent is not None and not self._closing:
             try:
                 screen = self.screen

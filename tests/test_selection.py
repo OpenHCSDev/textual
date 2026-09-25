@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 import gc
 from unittest.mock import patch
@@ -5,7 +7,7 @@ from weakref import ref
 
 from textual.app import App, ComposeResult
 from textual.containers import VerticalGroup, VerticalScroll
-from textual.events import MouseMove, MouseUp
+from textual.events import MouseMove, MouseScrollDown, MouseUp
 from textual.geometry import Offset, Region
 from textual.selection import Selection, SelectState
 from textual.widgets import Static
@@ -73,6 +75,28 @@ class _ScrollableSelectApp(App):
             for i in range(10):
                 yield Static(f"item-{i:02d}", classes="item", id=f"item-{i}")
         yield Static("AFTER", id="after")
+
+
+async def test_scroll_and_drag_selection_share_app_input_queue():
+    app = _ScrollableSelectApp()
+    async with app.run_test(size=(20, 10)) as pilot:
+        await pilot.pause()
+        scroller = app.query_one("#scroller", VerticalScroll)
+        assert await pilot.mouse_down(offset=(1, 1))
+        with patch.object(app, "_peek_message", wraps=app._peek_message) as peek:
+            # Raw wheel and held-button movement reach the app before being
+            # forwarded to the screen. Yield while both pumps have input so the
+            # selection observer can inspect the app's next pending event.
+            for _ in range(20):
+                app.post_message(MouseMove(None, 5, 4, 1, 1, 1, False, False, False))
+                app.post_message(MouseScrollDown(None, 5, 4, 0, 1, 0, False, False, False))
+                await asyncio.sleep(0)
+            await pilot.pause()
+            assert await pilot.mouse_up(offset=(5, 4))
+            assert peek.call_count > 0
+        assert scroller.scroll_y > 0
+        assert app.screen.get_selected_text()
+        assert app._exception is None
 
 
 async def test_select_into_scrollable_container():
