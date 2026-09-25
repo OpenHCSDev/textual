@@ -4140,17 +4140,26 @@ class Widget(DOMNode):
             True if a resize event should be sent, otherwise False.
         """
 
-        self._layout_cache.clear()
         if (
             self._size != size
             or self.virtual_size != virtual_size
             or self._container_size != container_size
         ):
+            self._layout_cache.clear()
             if self._size != size:
                 self._set_dirty()
             self._size = size
             if layout:
-                self.virtual_size = virtual_size
+                if self.is_scrollable:
+                    # Containers/virtual views retain their extent-driven
+                    # layout feedback (scroll ranges, anchoring and children).
+                    self.virtual_size = virtual_size
+                else:
+                    # A leaf's measured extent is a layout result, not a new
+                    # size input. Notify watchers and repaint without making
+                    # every ancestor measure the same leaf again. A watcher's
+                    # own content/style mutation still invalidates normally.
+                    self._reactives["virtual_size"]._set(self, virtual_size, layout=False)
             else:
                 self.set_reactive(Widget.virtual_size, virtual_size)
             self._container_size = container_size
