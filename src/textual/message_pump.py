@@ -51,6 +51,7 @@ if TYPE_CHECKING:
 
     from textual.app import App
     from textual.css.model import SelectorSet
+    from textual.dom import DOMNode
 
 
 Callback: TypeAlias = "Callable[..., Any] | Callable[..., Awaitable[Any]]"
@@ -141,6 +142,23 @@ class MessagePump(metaclass=_MessagePumpMeta):
         This is a fairly low-level mechanism, and shouldn't replace regular message handling.
         
         """
+        self._subscribed_signals: WeakSet[Signal[Any]] | None = None
+
+    def _register_signal_subscription(self, signal: Signal[Any]) -> None:
+        """Own subscription cleanup without retaining the publisher."""
+        if self._subscribed_signals is None:
+            self._subscribed_signals = WeakSet()
+        self._subscribed_signals.add(signal)
+
+    def _unregister_signal_subscription(self, signal: Signal[Any]) -> None:
+        if self._subscribed_signals is not None:
+            self._subscribed_signals.discard(signal)
+
+    def _clear_signal_subscriptions(self) -> None:
+        signals, self._subscribed_signals = self._subscribed_signals, None
+        if signals is not None:
+            for signal in tuple(signals):
+                signal.unsubscribe(cast("DOMNode", self))
 
     @property
     def _parent(self) -> MessagePump | None:
@@ -520,6 +538,7 @@ class MessagePump(metaclass=_MessagePumpMeta):
         if self._closed or self._closing:
             return
         self._closing = True
+        self._clear_signal_subscriptions()
         if self._timers:
             await Timer._stop_all(self._timers)
             self._timers.clear()
@@ -551,26 +570,30 @@ class MessagePump(metaclass=_MessagePumpMeta):
 
     async def _process_messages(self) -> None:
         self._running = True
-
-        with self._context():
-            if not await self._pre_process():
-                self._running = False
-                return
-
-            try:
-                await self._process_messages_loop()
-            except CancelledError:
-                pass
-            finally:
-                self._running = False
+        try:
+            with self._context():
+                if not await self._pre_process():
+                    return
                 try:
-                    if self._timers:
-                        await Timer._stop_all(self._timers)
-                        self._timers.clear()
-                    Reactive._clear_watchers(self)
+                    await self._process_messages_loop()
+                except CancelledError:
+                    pass
                 finally:
-                    await self._message_loop_exit()
-        self._task = None
+                    self._running = False
+                    try:
+                        if self._timers:
+                            await Timer._stop_all(self._timers)
+                            self._timers.clear()
+                        Reactive._clear_watchers(self)
+                    finally:
+                        await self._message_loop_exit()
+        finally:
+            # Bound methods and closures in a quiet publisher may retain this
+            # node despite its weak subscriber key. Teardown owns their removal,
+            # including cancellation and failed pre-processing.
+            self._running = False
+            self._clear_signal_subscriptions()
+            self._task = None
 
     async def _message_loop_exit(self) -> None:
         """Called when the message loop has completed."""

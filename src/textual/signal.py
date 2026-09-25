@@ -74,7 +74,7 @@ class Signal(Generic[SignalT]):
         Raises:
             SignalError: Raised when subscribing a non-mounted widget.
         """
-        if not node.is_running:
+        if not node.is_running or node._closing or node._closed:
             raise SignalError(
                 f"Node must be running to subscribe to a signal (has {node} been mounted)?"
             )
@@ -93,6 +93,7 @@ class Signal(Generic[SignalT]):
 
         callbacks = self._subscriptions.setdefault(node, [])
         callbacks.append(signal_callback)
+        node._register_signal_subscription(self)
 
     def unsubscribe(self, node: DOMNode) -> None:
         """Unsubscribe a node from this signal.
@@ -101,6 +102,7 @@ class Signal(Generic[SignalT]):
             node: Node to unsubscribe,
         """
         self._subscriptions.pop(node, None)
+        node._unregister_signal_subscription(self)
 
     def publish(self, data: SignalT) -> None:
         """Publish the signal (invoke subscribed callbacks).
@@ -125,7 +127,7 @@ class Signal(Generic[SignalT]):
         for node, callbacks in list(self._subscriptions.items()):
             if not (node.is_running and node.is_attached) or node._pruning:
                 # Removed nodes that are no longer running
-                self._subscriptions.pop(node)
+                self.unsubscribe(node)
             else:
                 # Call callbacks
                 for callback in callbacks:
