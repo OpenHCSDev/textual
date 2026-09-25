@@ -313,7 +313,10 @@ class Reactive(Generic[ReactiveType]):
         else:
             return getattr(obj, internal_name)
 
-    def _set(self, obj: Reactable, value: ReactiveType, always: bool = False) -> None:
+    def _set(
+        self, obj: Reactable, value: ReactiveType, always: bool = False,
+        *, layout: bool | None = None,
+    ) -> None:
         _rich_traceback_omit = True
 
         if not hasattr(obj, "_id"):
@@ -361,10 +364,11 @@ class Reactive(Generic[ReactiveType]):
                 obj.refresh_bindings()
 
             # Refresh according to descriptor flags
-            if self._layout or self._repaint or self._recompose:
+            request_layout = self._layout if layout is None else layout
+            if request_layout or self._repaint or self._recompose:
                 obj.refresh(
                     repaint=self._repaint,
-                    layout=self._layout,
+                    layout=request_layout,
                     recompose=self._recompose,
                 )
 

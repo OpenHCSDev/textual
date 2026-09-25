@@ -1334,6 +1334,10 @@ class Screen(Generic[ScreenResultType], Widget):
         """Remove the latest result callback from the stack."""
         self._result_callbacks.pop()
 
+    def _use_viewport_layout(self) -> bool:
+        """Opt in to viewport-local geometry/lifecycle with lazy full-map lookup."""
+        return False
+
     def _refresh_layout(self, size: Size | None = None, scroll: bool = False) -> None:
         """Refresh the layout (can change size and positions of widgets)."""
         size = self.outer_size if size is None else size
@@ -1370,7 +1374,11 @@ class Screen(Generic[ScreenResultType], Widget):
                                 )
 
             else:
-                hidden, shown, resized = self._compositor.reflow(self, size)
+                viewport_layout = self._use_viewport_layout()
+                if viewport_layout:
+                    hidden, shown, resized = self._compositor.reflow(self, size, visible_only=True)
+                else:
+                    hidden, shown, resized = self._compositor.reflow(self, size)
                 self._layout_widgets.clear()
                 Hide = events.Hide
                 Show = events.Show
@@ -1391,8 +1399,8 @@ class Screen(Generic[ScreenResultType], Widget):
                     _,
                     _,
                 ) in layers:
-                    widget._size_updated(region.size, virtual_size, container_size)
-                    if widget in send_resize:
+                    size_changed = widget._size_updated(region.size, virtual_size, container_size)
+                    if widget in send_resize or (viewport_layout and size_changed):
                         widget.post_message(
                             ResizeEvent(region.size, virtual_size, container_size)
                         )

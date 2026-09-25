@@ -121,7 +121,6 @@ class MessagePump(metaclass=_MessagePumpMeta):
         self._closing: bool = False
         self._closed: bool = False
         self._disabled_messages: set[type[Message]] = set()
-        self._pending_message: Message | None = None
         self._task: Task | None = None
         self._timers: WeakSet[Timer] = WeakSet()
         self._last_idle: float = time()
@@ -340,12 +339,6 @@ class MessagePump(metaclass=_MessagePumpMeta):
         """
         if self._closed:
             raise MessagePumpClosed("The message pump is closed")
-        if self._pending_message is not None:
-            try:
-                return self._pending_message
-            finally:
-                self._pending_message = None
-
         message = await self._message_queue.get()
 
         if message is None:
@@ -360,20 +353,17 @@ class MessagePump(metaclass=_MessagePumpMeta):
         Returns:
             The message or None.
         """
-        if self._pending_message is None:
-            try:
-                message = self._message_queue.get_nowait()
-            except QueueEmpty:
-                pass
-            else:
-                if message is None:
-                    self._closed = True
-                    raise MessagePumpClosed("The message pump is now closed")
-                self._pending_message = message
-
-        if self._pending_message is not None:
-            return self._pending_message
-        return None
+        # A screen's selection handler can inspect the app's queue while the
+        # app pump is blocked in get(). Moving the head into a separate pending
+        # slot would steal that waiter's wakeup and leave its deque empty.
+        try:
+            message = self._message_queue.peek_nowait()
+        except QueueEmpty:
+            return None
+        if message is None:
+            self._closed = True
+            raise MessagePumpClosed("The message pump is now closed")
+        return message
 
     def set_timer(
         self,
