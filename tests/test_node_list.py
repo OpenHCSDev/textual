@@ -1,3 +1,6 @@
+import gc
+from weakref import ref
+
 import pytest
 
 from textual._node_list import NodeList
@@ -85,6 +88,25 @@ async def test_remove():
     assert widget in nodes
     nodes._remove(widget)
     assert widget not in nodes
+
+
+@pytest.mark.parametrize("clear", [False, True])
+async def test_removed_nodes_are_not_retained_by_unread_projection_caches(clear):
+    nodes = NodeList()
+    widget = Widget()
+    weak_widget = ref(widget)
+    nodes._append(widget)
+    assert list(nodes.displayed) == [widget]
+    assert list(nodes.displayed_and_visible) == [widget]
+    if clear:
+        nodes._clear()
+    else:
+        nodes._remove(widget)
+    # Never read the projections again: invalidation must release their values,
+    # not merely promise to replace them if a future traversal occurs.
+    del widget
+    gc.collect()
+    assert weak_widget() is None
 
 
 async def test_clear():

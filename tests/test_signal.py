@@ -1,3 +1,7 @@
+import asyncio
+import gc
+from weakref import ref
+
 import pytest
 
 from textual.app import App, ComposeResult
@@ -108,3 +112,71 @@ async def test_signal_parameters():
         await pilot.press("space")
         assert str_result == "foo"
         assert int_result == 3
+
+
+@pytest.mark.parametrize("immediate", [False, True])
+@pytest.mark.parametrize("closure", [False, True])
+async def test_removed_subscriber_releases_quiet_publishers(immediate, closure):
+    """A publisher must not need another publication to release a removed tree."""
+    app = App()
+    first = Signal[str](app, "rare-setting")
+    second = Signal[str](app, "rare-layout-change")
+
+    class Subscriber(Label):
+        def on_mount(self):
+            callback = (lambda value: self.update(value)) if closure else self.update
+            first.subscribe(self, callback, immediate=immediate)
+            second.subscribe(self, callback, immediate=immediate)
+
+    async with app.run_test() as pilot:
+        subscriber = Subscriber("subscriber")
+        await app.mount(subscriber)
+        weak_subscriber = ref(subscriber)
+        assert len(first._subscriptions) == len(second._subscriptions) == 1
+        await subscriber.remove()
+        await pilot.pause()
+        # No subsequent publish, forced collection or widget-specific teardown.
+        assert not first._subscriptions and not second._subscriptions
+        del subscriber
+        gc.collect()
+        assert weak_subscriber() is None
+
+
+async def test_explicit_unsubscribe_and_multiple_callbacks_remain_independent():
+    app = App()
+    signal = Signal[int](app, "updates")
+    called = []
+    async with app.run_test() as pilot:
+        first, second = Label("first"), Label("second")
+        await app.mount(first, second)
+        signal.subscribe(
+            first, lambda value: called.append(("first", value)), immediate=True
+        )
+        signal.subscribe(second, lambda value: called.append(("second", value)))
+        signal.subscribe(
+            second, lambda value: called.append(("second-extra", value)), immediate=True
+        )
+        signal.unsubscribe(first)
+        signal.unsubscribe(first)
+        signal.publish(1)
+        await pilot.pause()
+        assert sorted(called) == [("second", 1), ("second-extra", 1)]
+        await second.remove()
+        assert not signal._subscriptions
+
+
+async def test_cancelled_message_pump_releases_subscriptions():
+    app = App()
+    signal = Signal[str](app, "quiet")
+    async with app.run_test():
+        node = Label("cancelled")
+        await app.mount(node)
+        signal.subscribe(node, node.update)
+        task = node.task
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        assert not signal._subscriptions
+        assert node._task is None
+        with pytest.raises(SignalError):
+            signal.subscribe(node, node.update)
+        await node.remove()
