@@ -177,6 +177,7 @@ class NodeList(Sequence["Widget"]):
             widget_id = widget.id
             if widget_id in self._nodes_by_id:
                 del self._nodes_by_id[widget_id]
+            self._release_cached_nodes()
             self.updated()
 
     def _clear(self) -> None:
@@ -185,7 +186,13 @@ class NodeList(Sequence["Widget"]):
             self._nodes.clear()
             self._nodes_set.clear()
             self._nodes_by_id.clear()
+            self._release_cached_nodes()
             self.updated()
+
+    def _release_cached_nodes(self) -> None:
+        """Release removed children even if the projections are never read again."""
+        self._displayed_nodes = (-1, [])
+        self._displayed_visible_nodes = (-1, True, [])
 
     def __iter__(self) -> Iterator[Widget]:
         return iter(self._nodes)
