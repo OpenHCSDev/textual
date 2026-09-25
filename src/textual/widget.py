@@ -5,7 +5,7 @@ This module contains the `Widget` class, the base class for all widgets.
 
 from __future__ import annotations
 
-from asyncio import create_task, gather, wait
+from asyncio import Lock, create_task, gather, wait
 from collections import Counter
 from contextlib import asynccontextmanager
 from fractions import Fraction
@@ -138,6 +138,8 @@ class AwaitMount:
         self._parent = parent
         self._widgets = widgets
         self._caller = get_caller_file_and_line()
+        self._completion_lock = Lock()
+        self._completed = False
 
     def __rich_repr__(self) -> rich.repr.Result:
         yield "parent", self._parent
@@ -150,18 +152,31 @@ class AwaitMount:
 
     def __await__(self) -> Generator[None, None, None]:
         async def await_mount() -> None:
-            if self._widgets:
-                aws = [
-                    create_task(widget._mounted_event.wait(), name="await mount")
-                    for widget in self._widgets
-                ]
-                if aws:
-                    await wait(aws)
+            # mount() schedules this same object with call_next, and the caller
+            # may await it explicitly too. Complete one mount transaction, not
+            # a second set of waiters and layout invalidations for each await.
+            async with self._completion_lock:
+                if self._completed:
+                    return
+                if self._widgets:
+                    aws = [
+                        create_task(widget._mounted_event.wait(), name="await mount")
+                        for widget in self._widgets
+                    ]
+                    try:
+                        await wait(aws)
+                    finally:
+                        pending = [task for task in aws if not task.done()]
+                        if pending:
+                            for task in pending:
+                                task.cancel()
+                            await gather(*pending, return_exceptions=True)
                     self._parent.refresh(layout=True)
                     try:
                         self._parent.app._update_mouse_over(self._parent.screen)
                     except NoScreen:
                         pass
+                self._completed = True
 
         return await_mount().__await__()
 
