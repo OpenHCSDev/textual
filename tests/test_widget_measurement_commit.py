@@ -76,3 +76,17 @@ async def test_unchanged_geometry_retains_visual_until_content_refresh():
             widget.update("changed")
             assert widget._render() is not visual
             assert render.call_count == 1
+
+
+async def test_dirty_mark_does_not_materialize_invalidated_compositor():
+    app = App()
+    async with app.run_test() as pilot:
+        widget = Static("original")
+        await app.mount(widget)
+        await pilot.pause()
+        compositor = app.screen._compositor
+        compositor._full_map_invalidated = True
+        with patch.object(compositor, "_arrange_root", side_effect=AssertionError("Invalidation performed layout")):
+            widget.refresh(layout=True)
+            widget._size_updated(Size(35, 5), Size(35, 5), Size(35, 5))
+        assert widget._size.region in widget._dirty_regions
