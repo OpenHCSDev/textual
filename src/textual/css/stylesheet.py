@@ -174,6 +174,7 @@ class Stylesheet:
         self._component_cache_safe: dict[str, bool] = {}
         self._component_rule_classes: dict[str, frozenset[str]] = {}
         self._component_rule_keys: dict[str, tuple[RuleSet, ...]] = {}
+        self._local_display_classes: dict[str, bool] = {}
         self._candidate_rules: FIFOCache[
             frozenset[str], tuple[list[RuleSet], frozenset[str], frozenset[str], tuple[RuleSet, ...]]
         ] = FIFOCache(1024)
@@ -405,6 +406,7 @@ class Stylesheet:
         self._component_cache_safe.clear()
         self._component_rule_classes.clear()
         self._component_rule_keys.clear()
+        self._local_display_classes.clear()
         self._candidate_rules.clear()
         rules: list[RuleSet] = []
         add_rules = rules.extend
@@ -460,6 +462,7 @@ class Stylesheet:
         self._component_cache_safe.clear()
         self._component_rule_classes.clear()
         self._component_rule_keys.clear()
+        self._local_display_classes.clear()
         self._candidate_rules.clear()
         for read_from, (css, is_defaults, tie_breaker, scope) in self.source.items():
             stylesheet.add_source(
@@ -885,6 +888,30 @@ class Stylesheet:
                 if get_current_rule(key) != value:
                     setattr(base_styles, key, value)
         node.notify_style_update()
+
+    def is_local_display_class(self, class_name: str) -> bool:
+        """Whether every rule mentioning a class changes only its node's display.
+
+        This is an opt-in invalidation query, not a change to ordinary class
+        updates. Descendant selectors, inherited properties and custom rules
+        conservatively require the normal subtree update.
+        """
+        rules = self.rules  # Parse pending edits before consulting the plan.
+        if class_name in self._local_display_classes:
+            return self._local_display_classes[class_name]
+        mentioned = False
+        for rule in rules:
+            for group in rule.selector_set:
+                for index, selector in enumerate(group.selectors):
+                    if selector.type != SelectorType.CLASS or selector.name != class_name:
+                        continue
+                    mentioned = True
+                    if (rule.styles.get_rules().keys() - {"display"}
+                            or any(part.advance for part in group.selectors[index:-1])):
+                        self._local_display_classes[class_name] = False
+                        return False
+        self._local_display_classes[class_name] = mentioned
+        return mentioned
 
     def update(self, root: DOMNode, animate: bool = False) -> None:
         """Update styles on node and its children.

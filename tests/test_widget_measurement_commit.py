@@ -20,6 +20,35 @@ class Measured(Widget):
             self.styles.height = value.height
 
 
+class ContentDerived(Measured):
+    def _measured_virtual_size_requires_layout(self) -> bool:
+        return False
+
+
+async def test_content_derived_extent_keeps_scrollbar_and_authored_invalidation():
+    app = App()
+    async with app.run_test() as pilot:
+        widget = ContentDerived(Static("child"))
+        widget.styles.overflow_y = "auto"
+        await app.mount(widget)
+        await pilot.pause()
+        with patch.object(widget, "refresh", wraps=widget.refresh) as refresh:
+            widget._size_updated(Size(10, 4), Size(10, 12), Size(10, 4))
+            assert widget.show_vertical_scrollbar
+            assert any(call.kwargs.get("layout") for call in refresh.call_args_list)
+            refresh.reset_mock()
+            widget._size_updated(Size(10, 4), Size(10, 16), Size(10, 4))
+            assert widget.observed[-1] == Size(10, 16)
+            assert not any(call.kwargs.get("layout") for call in refresh.call_args_list)
+            widget.virtual_size = Size(10, 20)
+            assert any(call.kwargs.get("layout") for call in refresh.call_args_list)
+            refresh.reset_mock()
+            widget.resize_from_watch = True
+            widget._size_updated(Size(10, 4), Size(10, 24), Size(10, 4))
+            assert widget.styles.height.value == 24
+            assert any(call.kwargs.get("layout") for call in refresh.call_args_list)
+
+
 async def test_committed_extent_notifies_watchers_without_remeasuring_parent():
     app = App()
     async with app.run_test() as pilot:
@@ -90,3 +119,17 @@ async def test_dirty_mark_does_not_materialize_invalidated_compositor():
             widget.refresh(layout=True)
             widget._size_updated(Size(35, 5), Size(35, 5), Size(35, 5))
         assert widget._size.region in widget._dirty_regions
+
+
+async def test_non_scrolling_group_commits_extent_without_remeasuring_ancestors():
+    app = App()
+    async with app.run_test() as pilot:
+        group = Measured(Static("child"))
+        await app.mount(group)
+        await pilot.pause()
+        with patch.object(group, "refresh", wraps=group.refresh) as refresh:
+            group._size_updated(Size(10, 4), Size(10, 30), Size(10, 4))
+            assert group.observed[-1] == Size(10, 30)
+            assert not any(call.kwargs.get("layout") for call in refresh.call_args_list)
+            group.virtual_size = Size(10, 40)
+            assert any(call.kwargs.get("layout") for call in refresh.call_args_list)
