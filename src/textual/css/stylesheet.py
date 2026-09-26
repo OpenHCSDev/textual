@@ -171,6 +171,7 @@ class Stylesheet:
         self._style_parse_cache: LRUCache[str, Style] = LRUCache(1024 * 4)
         self._path_rules_cache: FIFOCache[tuple, RulesMap] = FIFOCache(4096)
         self._ids_in_rules: set[str] = set()
+        self._classes_in_rules: set[str] = set()
         self._component_cache_safe: dict[str, bool] = {}
         self._component_rule_classes: dict[str, frozenset[str]] = {}
         self._component_rule_keys: dict[str, tuple[RuleSet, ...]] = {}
@@ -446,6 +447,13 @@ class Stylesheet:
             selector.name for rule in rules for group in rule.selector_set
             for selector in group.selectors if selector.type == SelectorType.ID
         }
+        self._classes_in_rules = {
+            selector.name
+            for rule in rules
+            for group in rule.selector_set
+            for selector in group.selectors
+            if selector.type == SelectorType.CLASS
+        }
         self._require_parse = False
         self._rules_map = None
 
@@ -484,6 +492,7 @@ class Stylesheet:
             self._rules = stylesheet.rules
             self._source_rules = stylesheet._source_rules
             self._ids_in_rules = stylesheet._ids_in_rules
+            self._classes_in_rules = stylesheet._classes_in_rules
             self._rules_map = None
             self.source = stylesheet.source
             self._require_parse = False
@@ -888,6 +897,11 @@ class Stylesheet:
                 if get_current_rule(key) != value:
                     setattr(base_styles, key, value)
         node.notify_style_update()
+
+    def references_class(self, class_name: str) -> bool:
+        """Check parsed declarations, including ancestor/compound selectors."""
+        self.rules  # Resolve pending source changes before querying the index.
+        return class_name in self._classes_in_rules
 
     def is_local_display_class(self, class_name: str) -> bool:
         """Whether every rule mentioning a class changes only its node's display.

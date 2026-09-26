@@ -222,6 +222,7 @@ class DOMNode(MessagePump):
             dict[str, tuple[MessagePump, Reactive[object] | object]] | None
         ) = None
         self._pruning = False
+        self._display_constraints: set[str] | None = None
         self._trap_focus = False
 
         super().__init__()
@@ -923,7 +924,7 @@ class DOMNode(MessagePump):
             my_widget.display = False  # Hide my_widget
             ```
         """
-        return self.styles.display != "none" and not (
+        return not self._display_constraints and self.styles.display != "none" and not (
             self._closing or self._closed or self._pruning
         )
 
@@ -947,6 +948,32 @@ class DOMNode(MessagePump):
                 f"invalid value for display (received {new_val!r}, "
                 f"expected {friendly_list(VALID_DISPLAY)})",
             )
+
+    def set_display_constraint(self, reason: str, allowed: bool) -> None:
+        """Restrict display without overwriting authored CSS or restyling children.
+
+        Independent model owners use stable reason names. Removing a constraint
+        exposes the current CSS display value, including changes made while the
+        node was constrained. Normal layout and show/hide handling still apply.
+        """
+        constraints = self._display_constraints
+        blocked = constraints is not None and reason in constraints
+        if blocked == (not allowed):
+            return
+        was_displayed = self.display
+        if allowed:
+            assert constraints is not None
+            constraints.discard(reason)
+            if not constraints:
+                self._display_constraints = None
+        else:
+            if constraints is None:
+                constraints = self._display_constraints = set()
+            constraints.add(reason)
+        if self._parent is not None:
+            self._nodes.updated()
+        if self.display != was_displayed:
+            self.refresh(layout=True)
 
     @property
     def visible(self) -> bool:

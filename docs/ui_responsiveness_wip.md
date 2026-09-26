@@ -30,16 +30,24 @@ Draft companion to the OpenHCSDev Toad responsiveness investigation.
    scope from parsed rules. Ordinary class mutation is unchanged; an application
    may opt into a node-local display update only when the declaration proves it
    safe. Descendant/custom/inherited rules force the normal subtree path.
+8. `DOMNode.set_display_constraint(reason, allowed)` composes independent model
+   visibility restrictions with the current authored CSS display value. Native
+   displayed-child projections and layout are invalidated without restyling the
+   subtree. Relative-child measurement observes the same effective display.
+   `Stylesheet.references_class()` derives marker dependencies from parsed rules,
+   including compound/ancestor selectors and source replacement/reparse.
 
 ## Verification
 
-Full suite excluding snapshot tests: **3,128 passed, 1 skipped, 4 xfailed** with
+Full suite excluding snapshot tests: **3,132 passed, 1 skipped, 4 xfailed** with
 `pytest tests --ignore=tests/snapshot_tests -q -n 2`.
 The reactive lifetime fixture was also rerun after correcting its callback
 closure construction: all five cases passed. Scoped Ruff and whitespace checks
 pass. Tests cover weak publisher lifetime, live-watch preservation, real Footer
 churn, lazy-storage independence, timer lifetime, cache generations, viewport
 geometry/render parity, and class-scope invalidation after CSS edits.
+Display-constraint tests cover independent reasons, CSS changes while hidden,
+pre-mount restrictions, relative measurement, and native layout without CSS work.
 
 The Toad branch contains the interaction runners, live profiler/DTO capture,
 headless replay, source receipts, and evidence audit. Raw real-session captures

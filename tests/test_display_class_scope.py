@@ -29,3 +29,16 @@ def test_class_scope_is_invalidated_by_source_replacement_and_reparse():
     stylesheet.add_source(".hide { display: none; }", read_from=location)
     stylesheet.reparse()
     assert stylesheet.is_local_display_class("hide")
+
+
+def test_class_reference_index_includes_ancestor_and_compound_selectors():
+    stylesheet = Stylesheet()
+    location = ("fixture", "references")
+    stylesheet.add_source(".ancestor.compound > Label { color: red; }", read_from=location)
+    assert stylesheet.references_class("ancestor")
+    assert stylesheet.references_class("compound")
+    assert not stylesheet.references_class("missing")
+    stylesheet.add_source("Label { color: blue; }", read_from=location)
+    assert not stylesheet.references_class("ancestor")
+    stylesheet.reparse()
+    assert not stylesheet.references_class("compound")

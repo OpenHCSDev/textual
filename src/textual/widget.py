@@ -2439,7 +2439,7 @@ class Widget(DOMNode):
             if child.styles.expand == "optimal":
                 continue
             styles = child.styles
-            if styles.display == "none":
+            if not child.display:
                 continue
             width = styles.width
             if width is None:
@@ -2458,7 +2458,7 @@ class Widget(DOMNode):
             return False
         for child in self.children:
             styles = child.styles
-            if styles.display == "none":
+            if not child.display:
                 continue
             height = styles.height
             if height is None:
