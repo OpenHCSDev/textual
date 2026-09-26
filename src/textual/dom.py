@@ -32,6 +32,7 @@ from rich.text import Text
 from rich.tree import Tree
 
 from textual._context import NoActiveAppError, active_message_pump
+from textual._compat import cached_property
 from textual._node_list import NodeList
 from textual._types import WatchCallbackType
 from textual.binding import Binding, BindingsMap, BindingType
@@ -203,23 +204,14 @@ class DOMNode(MessagePump):
         check_identifiers("class name", *_classes)
         self._classes.update(_classes)
 
-        self._nodes: NodeList = NodeList(self)
         self._css_styles: Styles = Styles(self)
         self._inline_styles: Styles = Styles(self)
         self.styles: RenderStyles = RenderStyles(
             self, self._css_styles, self._inline_styles
         )
-        # A mapping of class names to Styles set in COMPONENT_CLASSES
-        self._component_styles: dict[str, RenderStyles] = {}
-
         self._auto_refresh: float | None = None
         self._auto_refresh_timer: Timer | None = None
-        self._css_types = {cls.__name__ for cls in self._css_bases(self.__class__)}
-        self._bindings = (
-            BindingsMap()
-            if self._merged_bindings is None
-            else self._merged_bindings.copy()
-        )
+        self._css_types = self._selector_type_names()
         self._has_hover_style: bool = False
         self._has_focus_within: bool = False
         self._has_order_style: bool = False
@@ -230,10 +222,32 @@ class DOMNode(MessagePump):
             dict[str, tuple[MessagePump, Reactive[object] | object]] | None
         ) = None
         self._pruning = False
-        self._query_one_cache: LRUCache[QueryOneCacheKey, DOMNode] = LRUCache(1024)
+        self._display_constraints: set[str] | None = None
         self._trap_focus = False
 
         super().__init__()
+
+    @classmethod
+    @lru_cache(maxsize=None)
+    def _selector_type_names(cls) -> frozenset[str]:
+        """Selector type names are class metadata, shared by every instance."""
+        return frozenset(base.__name__ for base in cls._css_bases(cls))
+
+    @cached_property
+    def _nodes(self) -> NodeList:
+        return NodeList(self)
+
+    @cached_property
+    def _component_styles(self) -> dict[str, RenderStyles]:
+        return {}
+
+    @cached_property
+    def _bindings(self) -> BindingsMap:
+        return BindingsMap() if self._merged_bindings is None else self._merged_bindings.copy()
+
+    @cached_property
+    def _query_one_cache(self) -> LRUCache[QueryOneCacheKey, DOMNode]:
+        return LRUCache(1024)
 
     def _get_dom_base(self) -> DOMNode:
         """Get the DOM base node (typically self).
@@ -910,7 +924,7 @@ class DOMNode(MessagePump):
             my_widget.display = False  # Hide my_widget
             ```
         """
-        return self.styles.display != "none" and not (
+        return not self._display_constraints and self.styles.display != "none" and not (
             self._closing or self._closed or self._pruning
         )
 
@@ -934,6 +948,32 @@ class DOMNode(MessagePump):
                 f"invalid value for display (received {new_val!r}, "
                 f"expected {friendly_list(VALID_DISPLAY)})",
             )
+
+    def set_display_constraint(self, reason: str, allowed: bool) -> None:
+        """Restrict display without overwriting authored CSS or restyling children.
+
+        Independent model owners use stable reason names. Removing a constraint
+        exposes the current CSS display value, including changes made while the
+        node was constrained. Normal layout and show/hide handling still apply.
+        """
+        constraints = self._display_constraints
+        blocked = constraints is not None and reason in constraints
+        if blocked == (not allowed):
+            return
+        was_displayed = self.display
+        if allowed:
+            assert constraints is not None
+            constraints.discard(reason)
+            if not constraints:
+                self._display_constraints = None
+        else:
+            if constraints is None:
+                constraints = self._display_constraints = set()
+            constraints.add(reason)
+        if self._parent is not None:
+            self._nodes.updated()
+        if self.display != was_displayed:
+            self.refresh(layout=True)
 
     @property
     def visible(self) -> bool:

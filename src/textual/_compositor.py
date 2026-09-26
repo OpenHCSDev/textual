@@ -315,12 +315,16 @@ class Compositor:
 
     def clear(self) -> None:
         """Remove all references to widgets (used when the screen closes)."""
+        self.root = None
         self._full_map.clear()
+        self._full_map_invalidated = True
         self._visible_map = None
         self._layers = None
         self.widgets.clear()
         self._visible_widgets = None
         self._layers_visible = None
+        self._cuts = None
+        self._dirty_regions.clear()
 
     @classmethod
     def _regions_to_spans(
@@ -364,7 +368,10 @@ class Compositor:
         yield "size", self.size
         yield "widgets", self.widgets
 
-    def reflow(self, parent: Widget, size: Size, *, visible_only: bool = False) -> ReflowResult:
+    def reflow(
+        self, parent: Widget, size: Size, *, visible_only: bool = False,
+        retain_geometry: Iterable[Widget] = (),
+    ) -> ReflowResult:
         """Reflow (layout) widget and its children.
 
         Args:
@@ -372,6 +379,8 @@ class Compositor:
             size: Size of the area to be filled.
             visible_only: Commit viewport geometry and defer offscreen geometry
                 until it is queried. Show/hide notifications become viewport-local.
+            retain_geometry: Also calculate these widgets' ancestry paths when
+                using viewport layout, without traversing unrelated descendants.
 
         Returns:
             Hidden, shown, and resized widgets.
@@ -389,7 +398,9 @@ class Compositor:
         old_map = previous_map
         old_widgets = old_map.keys()
 
-        map, widgets = self._arrange_root(parent, size, visible_only=visible_only)
+        map, widgets = self._arrange_root(
+            parent, size, visible_only=visible_only, retain_geometry=retain_geometry,
+        )
 
         new_widgets = map.keys()
 
@@ -545,7 +556,8 @@ class Compositor:
         return self._visible_widgets
 
     def _arrange_root(
-        self, root: Widget, size: Size, visible_only: bool = True
+        self, root: Widget, size: Size, visible_only: bool = True,
+        retain_geometry: Iterable[Widget] = (),
     ) -> tuple[CompositorMap, set[Widget]]:
         """Arrange a widget's children based on its layout attribute.
 
@@ -571,6 +583,16 @@ class Compositor:
         # ancestors list and a layer dictionary for every nested widget.
         inherited_layers: dict[Widget, dict[str, int] | None] = {}
         default_layers = {"default": 0}
+        retained_paths: set[Widget] = set()
+        if visible_only:
+            for target in retain_geometry:
+                path: list[Widget] = []
+                node = target
+                while isinstance(node, Widget) and node is not root:
+                    path.append(node)
+                    node = node.parent
+                if node is root:
+                    retained_paths.update(path)
 
         def get_layers(widget: Widget) -> dict[str, int] | None:
             if widget in inherited_layers:
@@ -659,6 +681,14 @@ class Compositor:
                         placements = arrange_result.get_visible_placements(
                             sub_clip - child_region.offset + widget.scroll_offset
                         )
+                        if retained_paths:
+                            # Keep the original declaration-owned paint order.
+                            # Only targeted offscreen branches are traversed;
+                            # geometry does not imply that a widget is painted.
+                            placed = {placement.widget for placement in placements}
+                            if (arranged_widgets & retained_paths) - placed:
+                                placements = [placement for placement in arrange_result.placements
+                                              if placement.widget in placed or placement.widget in retained_paths]
                     else:
                         placements = arrange_result.placements
                     total_region = total_region.union(arrange_result.total_region)

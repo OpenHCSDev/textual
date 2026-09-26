@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from functools import partial
 from inspect import isawaitable
+from weakref import WeakKeyDictionary
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -186,6 +187,29 @@ class Reactive(Generic[ReactiveType]):
             getattr(obj, "__watchers").clear()
         except AttributeError:
             pass
+
+    @classmethod
+    def _clear_watch_subscriptions(cls, node: Reactable) -> None:
+        """Release this subscriber from publishers, including quiet publishers.
+
+        Publishers retain callbacks strongly for delivery. The subscriber owns
+        their lifetime; its reverse index must not itself retain publishers.
+        """
+        sources = getattr(node, "_reactive_watch_sources", None)
+        if sources is None:
+            return
+        node._reactive_watch_sources = None
+        for source, attributes in tuple(sources.items()):
+            watchers = getattr(source, "__watchers", {})
+            for attribute in attributes:
+                remaining = [(subscriber, callback) for subscriber, callback in watchers.get(attribute, ())
+                             if subscriber is not node]
+                # Replace rather than mutate a list which may be delivering a
+                # change. Other subscribers keep their order and registration.
+                if remaining:
+                    watchers[attribute] = remaining
+                else:
+                    watchers.pop(attribute, None)
 
     @property
     def owner(self) -> Type[MessageTarget]:
@@ -410,6 +434,8 @@ class Reactive(Generic[ReactiveType]):
                 if not reactable._closing
             ]
             for reactable, callback in watchers:
+                if reactable._closing or reactable._closed:
+                    continue
                 with reactable.prevent(*obj._prevent_message_types_stack[-1]):
                     invoke_watcher(reactable, callback, old_value, value)
 
@@ -523,6 +549,8 @@ def _watch(
         callback: A callable to call when the attribute changes.
         init: True to call watcher initialization.
     """
+    if node._closing or node._closed:
+        return
     if not hasattr(obj, "__watchers"):
         setattr(obj, "__watchers", {})
     watchers: dict[str, list[tuple[Reactable, WatchCallbackType]]]
@@ -533,4 +561,10 @@ def _watch(
     if init:
         current_value = getattr(obj, attribute_name, None)
         invoke_watcher(obj, callback, current_value, current_value)
+    if node._closing or node._closed:
+        return
     watcher_list.append((node, callback))
+    sources = getattr(node, "_reactive_watch_sources", None)
+    if sources is None:
+        node._reactive_watch_sources = sources = WeakKeyDictionary()
+    sources.setdefault(obj, set()).add(attribute_name)

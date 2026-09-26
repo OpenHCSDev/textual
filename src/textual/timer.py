@@ -92,6 +92,7 @@ class Timer:
 
     def stop(self) -> None:
         """Stop the timer."""
+        self._callback = None
         if self._task is None:
             return
 
@@ -113,6 +114,7 @@ class Timer:
             Args:
                 timer: A Timer instance.
             """
+            timer._callback = None
             if timer._task is not None:
                 timer._active.set()
                 timer._task.cancel()
@@ -146,6 +148,12 @@ class Timer:
             await self._run()
         except CancelledError:
             pass
+        finally:
+            # A stopped/completed timer may remain in an application's public
+            # timer attribute. It must not keep the callback's widget or the
+            # completed task's inherited context alive after work has ended.
+            self._callback = None
+            self._task = None
 
     async def _run(self) -> None:
         """Run the timer."""

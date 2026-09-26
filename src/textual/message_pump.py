@@ -121,9 +121,7 @@ class MessagePump(metaclass=_MessagePumpMeta):
         self._running: bool = False
         self._closing: bool = False
         self._closed: bool = False
-        self._disabled_messages: set[type[Message]] = set()
         self._task: Task | None = None
-        self._timers: WeakSet[Timer] = WeakSet()
         self._last_idle: float = time()
         self._max_idle: float | None = None
         self._is_mounted = False
@@ -133,16 +131,30 @@ class MessagePump(metaclass=_MessagePumpMeta):
         we need to access this frequently in the compositor and the attribute with the
         explicit Boolean value is faster than the two lookups and the function call.
         """
-        self._next_callbacks: list[events.Callback] = []
         self._thread_id: int = threading.get_ident()
         self._prevented_messages_on_mount = self._prevent_message_types_stack[-1]
-        self.message_signal: Signal[Message] = Signal(self, "messages")
-        """Subscribe to this signal to be notified of all messages sent to this widget.
-        
-        This is a fairly low-level mechanism, and shouldn't replace regular message handling.
-        
-        """
         self._subscribed_signals: WeakSet[Signal[Any]] | None = None
+
+    @cached_property
+    def _disabled_messages(self) -> set[type[Message]]:
+        return set()
+
+    @cached_property
+    def _timers(self) -> WeakSet[Timer]:
+        return WeakSet()
+
+    @cached_property
+    def _next_callbacks(self) -> list[events.Callback]:
+        return []
+
+    @cached_property
+    def message_signal(self) -> Signal[Message]:
+        """A low-level signal for messages sent to this widget.
+
+        Style-only DOM nodes never process messages, so they need not allocate
+        a subscriber dictionary and its weak-reference machinery.
+        """
+        return Signal(self, "messages")
 
     def _register_signal_subscription(self, signal: Signal[Any]) -> None:
         """Own subscription cleanup without retaining the publisher."""
@@ -539,6 +551,7 @@ class MessagePump(metaclass=_MessagePumpMeta):
             return
         self._closing = True
         self._clear_signal_subscriptions()
+        Reactive._clear_watch_subscriptions(self)
         if self._timers:
             await Timer._stop_all(self._timers)
             self._timers.clear()
@@ -593,6 +606,7 @@ class MessagePump(metaclass=_MessagePumpMeta):
             # including cancellation and failed pre-processing.
             self._running = False
             self._clear_signal_subscriptions()
+            Reactive._clear_watch_subscriptions(self)
             self._task = None
 
     async def _message_loop_exit(self) -> None:
@@ -682,8 +696,15 @@ class MessagePump(metaclass=_MessagePumpMeta):
                 self.app._handle_exception(error)
                 break
             finally:
-                self.message_signal.publish(message)
+                # Subscription access initializes this optional signal. Do not
+                # allocate its weak-key subscriber machinery for quiet pumps.
+                message_signal = self.__dict__.get("message_signal")
+                if message_signal is not None:
+                    message_signal.publish(message)
                 self._message_queue.task_done()
+                # An idle pump can otherwise retain arbitrary callback arguments
+                # or event payloads until its next message arrives.
+                del message
 
                 current_time = time()
 
