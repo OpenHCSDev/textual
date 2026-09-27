@@ -7,6 +7,36 @@ Draft companion to the OpenHCSDev Toad responsiveness investigation.
 - Bounded history/worker views: https://github.com/OpenHCSDev/toad/issues/61
 - Animation budget: https://github.com/OpenHCSDev/toad/issues/64
 
+## Removal completion and input ingress checkpoint
+
+Native key-route evidence exposed an unrelated teardown barrier: a key entered
+the app queue after5ms but waited another86ms before dispatch while widget removal
+was being awaited through `App.call_next`. `AwaitRemove` now owns one shared
+completion independently of the receiver's message pump. The app observes that
+receipt only once it is done. Explicit waiters still wait for actual removal and
+publication; cancelling a waiter cannot cancel node teardown or its final callback.
+Self-removal retains its non-deadlocking semantics. Completed receipts release the
+removed tasks, callback and task context instead of retaining the retired tree.
+
+This also removes duplicate post-removal callbacks when both the caller and the
+automatic receiver await the same receipt. Four failing-before regressions cover
+input blocked by a held unmount, duplicate publication, cancellation propagation
+and retired widgets retained by a completed receipt. Further tests cover async
+publication cancellation, error replay and self-removal.
+
+Driver ingress directly schedules the declared `App.post_message` operation on
+its owning event loop. The previous coroutine adapter only called that method,
+but added an unused cross-thread Future and an extra loop turn before enqueueing.
+Tests verify one-handoff ordering and native bindings/focus/paste behavior.
+
+Current full verification: **3,440 passed,1skipped,4xfailed** excluding snapshots;
+**56 Toad pilots passed**. The focused native prune snapshot also passes.
+Two serial unprofiled native runs completed all72actions/52typed markers:
+input median24.56/29.42ms, p9554.36/49.04ms, maximum93.90/59.98ms. The earlier
+published candidate's maximum was143.68ms. These are improved input-tail receipts,
+not universal sub50ms acceptance: loop maxima remain121.48/103.23ms, including
+roughly100ms sidebar layout+paint and62ms collections. Keep both repeated results.
+
 ## Declaration-bound dispatch checkpoint
 
 `SelectorSet.check` owns target-only query matching. Single selectors and compound

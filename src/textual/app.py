@@ -4416,7 +4416,7 @@ class App(Generic[ReturnType], DOMNode):
             [task for node in nodes if (task := node._task) is not None],
             post_mount,
         )
-        self.call_next(await_complete)
+        await_complete.call_when_ready(self)
         return await_complete
 
     def _watch_app_focus(self, focus: bool) -> None:

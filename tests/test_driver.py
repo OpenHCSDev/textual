@@ -1,7 +1,71 @@
+import asyncio
+import threading
+
 from textual import on
 from textual.app import App
-from textual.events import Click, MouseDown, MouseUp
-from textual.widgets import Button
+from textual.binding import Binding
+from textual.events import Click, Key, MouseDown, MouseUp, Paste
+from textual.widgets import Button, Input
+
+
+async def test_driver_input_enters_native_queue_in_one_loop_handoff():
+    """An extra relay task lets an entire ready render overtake input ingress."""
+    posted = []
+
+    class InputApp(App):
+        def compose(self):
+            yield Input()
+
+        def post_message(self, message):
+            if isinstance(message, Key):
+                posted.append((message.key, threading.get_ident()))
+            return super().post_message(message)
+
+    app = InputApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        loop = asyncio.get_running_loop()
+        checkpoint = loop.create_future()
+        owner_thread = threading.get_ident()
+
+        def send():
+            app._driver.send_message(Key("a", "a"))
+            app._driver.send_message(Key("b", "b"))
+            loop.call_soon_threadsafe(lambda: checkpoint.set_result(tuple(posted)))
+
+        sender = threading.Thread(target=send)
+        sender.start()
+        # The sender only enqueues thread-safe callbacks; synchronize the test
+        # so the observation has a deterministic place in that callback order.
+        sender.join(timeout=1)
+        assert not sender.is_alive()
+        observed = await asyncio.wait_for(checkpoint, 1)
+        assert observed == (("a", owner_thread), ("b", owner_thread))
+        await pilot.pause()
+        assert app.query_one(Input).value == "ab"
+
+
+async def test_driver_keeps_native_priority_bindings_focus_and_paste_routing():
+    class InputApp(App):
+        BINDINGS = [Binding("ctrl+p", "priority", priority=True)]
+        priority_called = False
+
+        def compose(self):
+            yield Input(id="first")
+            yield Input(id="second")
+
+        def action_priority(self):
+            self.priority_called = True
+
+    app = InputApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        for event in (Key("a", "a"), Key("ctrl+p", None), Key("tab", "\t"), Paste("bc")):
+            await asyncio.to_thread(app._driver.send_message, event)
+            await pilot.pause()
+        assert app.priority_called
+        assert app.query_one("#first", Input).value == "a"
+        assert app.query_one("#second", Input).value == "bc"
 
 
 async def test_driver_mouse_down_up_click():
