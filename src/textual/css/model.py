@@ -189,6 +189,24 @@ class SelectorSet:
         for selector, next_selector in zip(self.selectors, self.selectors[1:]):
             selector.advance = int(next_selector.combinator != SAME)
 
+    def check(self, node: DOMNode) -> bool:
+        """Match this declaration, walking CSS ancestry only when it is needed.
+
+        A single compound selector must match the target itself. Its checks
+        still own dynamic pseudo-class semantics (including inherited state);
+        neither their results nor a live DOM path are cached here.
+        """
+        selectors = self.selectors
+        if selectors and selectors[0].combinator is CombinatorType.DESCENDENT:
+            if len(selectors) == 1:
+                return selectors[0].check(node)
+            if all(selector.combinator is CombinatorType.SAME for selector in selectors[1:]):
+                return all(selector.check(node) for selector in selectors)
+
+        from textual.css.match import _check_selectors
+
+        return _check_selectors(selectors, node.css_path_nodes)
+
     @property
     def css(self) -> str:
         return RuleSet._selector_to_css(self.selectors)

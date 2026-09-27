@@ -205,6 +205,9 @@ class Layout(ABC):
 
     name: ClassVar[str] = ""
 
+    def clear_cache(self) -> None:
+        """Release layout-owned derived state after structural child removal."""
+
     def __repr__(self) -> str:
         return f"<{self.name}>"
 

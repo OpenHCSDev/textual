@@ -70,9 +70,10 @@ class Driver(ABC):
         Args:
             message: A message.
         """
-        asyncio.run_coroutine_threadsafe(
-            self._app._post_message(message), loop=self._loop
-        )
+        # Queue on the owning loop directly. The async _post_message adapter
+        # only calls post_message, so wrapping it in a task added another ready
+        # queue turn (and an unused cross-thread Future) before input arrived.
+        self._loop.call_soon_threadsafe(self._app.post_message, message)
 
     def process_message(self, message: messages.Message) -> None:
         """Perform additional processing on a message, prior to sending.

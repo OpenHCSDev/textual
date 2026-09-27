@@ -18,10 +18,7 @@ def match(selector_sets: Iterable[SelectorSet], node: DOMNode) -> bool:
     Returns:
         True if the node matches the selector, otherwise False.
     """
-    return any(
-        _check_selectors(selector_set.selectors, node.css_path_nodes)
-        for selector_set in selector_sets
-    )
+    return any(selector_set.check(node) for selector_set in selector_sets)
 
 
 def _check_selectors(selectors: list[Selector], css_path_nodes: list[DOMNode]) -> bool:

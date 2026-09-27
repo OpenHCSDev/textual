@@ -282,7 +282,10 @@ class ChopsUpdate(CompositorUpdate):
 class Compositor:
     """Responsible for storing information regarding the relative positions of Widgets and rendering them."""
 
-    def __init__(self) -> None:
+    DEFAULT_SUBTREE_GEOMETRY_CACHE_ENTRIES = 64
+    """Tunable initial entry budget, not a bound derived from layout semantics."""
+
+    def __init__(self, *, max_subtree_geometry_entries: int = DEFAULT_SUBTREE_GEOMETRY_CACHE_ENTRIES) -> None:
         # A mapping of Widget on to its "render location" (absolute position / depth)
         self._full_map: CompositorMap = {}
         self._full_map_invalidated = True
@@ -312,15 +315,60 @@ class Compositor:
 
         # Mapping of line numbers on to lists of widget and regions
         self._layers_visible: list[list[tuple[Widget, Region, Region]]] | None = None
+        self._subtree_geometry: dict[Widget, tuple[tuple, CompositorMap, set[Widget], set[Widget]]] = {}
+        self.max_subtree_geometry_entries = max_subtree_geometry_entries
+
+    @property
+    def max_subtree_geometry_entries(self) -> int:
+        return self._max_subtree_geometry_entries
+
+    @max_subtree_geometry_entries.setter
+    def max_subtree_geometry_entries(self, capacity: int) -> None:
+        if type(capacity) is not int or capacity < 0:
+            raise ValueError("max_subtree_geometry_entries must be a non-negative integer")
+        self._max_subtree_geometry_entries = capacity
+        while len(self._subtree_geometry) > capacity:
+            self._subtree_geometry.pop(next(iter(self._subtree_geometry)))
 
     def clear(self) -> None:
         """Remove all references to widgets (used when the screen closes)."""
+        self.root = None
         self._full_map.clear()
+        self._full_map_invalidated = True
         self._visible_map = None
         self._layers = None
         self.widgets.clear()
         self._visible_widgets = None
         self._layers_visible = None
+        self._cuts = None
+        self._dirty_regions.clear()
+        self._subtree_geometry.clear()
+
+    def discard_widgets(self, widgets: set[Widget]) -> None:
+        """Release retired scene objects while preserving their repaint damage.
+
+        Geometry invalidation alone leaves the old full map and derived layer
+        projections owning removed widgets indefinitely on inactive screens.
+        Damage needs rectangles, not the retired widget trees that occupied them.
+        """
+        self._subtree_geometry.clear()
+        changed = False
+        for mapping in (self._full_map, self._visible_map):
+            if mapping is None:
+                continue
+            for widget in widgets:
+                geometry = mapping.pop(widget, None)
+                if geometry is not None:
+                    changed = True
+                    if region := geometry.region.intersection(geometry.clip):
+                        self._dirty_regions.add(region)
+        self.widgets.difference_update(widgets)
+        if changed:
+            self._full_map_invalidated = True
+            self._visible_widgets = None
+            self._layers = None
+            self._layers_visible = None
+            self._cuts = None
 
     @classmethod
     def _regions_to_spans(
@@ -364,7 +412,10 @@ class Compositor:
         yield "size", self.size
         yield "widgets", self.widgets
 
-    def reflow(self, parent: Widget, size: Size, *, visible_only: bool = False) -> ReflowResult:
+    def reflow(
+        self, parent: Widget, size: Size, *, visible_only: bool = False,
+        retain_geometry: Iterable[Widget] = (),
+    ) -> ReflowResult:
         """Reflow (layout) widget and its children.
 
         Args:
@@ -372,6 +423,8 @@ class Compositor:
             size: Size of the area to be filled.
             visible_only: Commit viewport geometry and defer offscreen geometry
                 until it is queried. Show/hide notifications become viewport-local.
+            retain_geometry: Also calculate these widgets' ancestry paths when
+                using viewport layout, without traversing unrelated descendants.
 
         Returns:
             Hidden, shown, and resized widgets.
@@ -389,7 +442,9 @@ class Compositor:
         old_map = previous_map
         old_widgets = old_map.keys()
 
-        map, widgets = self._arrange_root(parent, size, visible_only=visible_only)
+        map, widgets = self._arrange_root(
+            parent, size, visible_only=visible_only, retain_geometry=retain_geometry,
+        )
 
         new_widgets = map.keys()
 
@@ -545,7 +600,8 @@ class Compositor:
         return self._visible_widgets
 
     def _arrange_root(
-        self, root: Widget, size: Size, visible_only: bool = True
+        self, root: Widget, size: Size, visible_only: bool = True,
+        retain_geometry: Iterable[Widget] = (),
     ) -> tuple[CompositorMap, set[Widget]]:
         """Arrange a widget's children based on its layout attribute.
 
@@ -571,6 +627,16 @@ class Compositor:
         # ancestors list and a layer dictionary for every nested widget.
         inherited_layers: dict[Widget, dict[str, int] | None] = {}
         default_layers = {"default": 0}
+        retained_paths: set[Widget] = set()
+        if visible_only:
+            for target in retain_geometry:
+                path: list[Widget] = []
+                node = target
+                while isinstance(node, Widget) and node is not root:
+                    path.append(node)
+                    node = node.parent
+                if node is root:
+                    retained_paths.update(path)
 
         def get_layers(widget: Widget) -> dict[str, int] | None:
             if widget in inherited_layers:
@@ -582,7 +648,7 @@ class Compositor:
             inherited_layers[widget] = layers
             return layers
 
-        def add_widget(
+        def arrange_widget(
             widget: Widget,
             virtual_region: Region,
             region: Region,
@@ -659,6 +725,14 @@ class Compositor:
                         placements = arrange_result.get_visible_placements(
                             sub_clip - child_region.offset + widget.scroll_offset
                         )
+                        if retained_paths:
+                            # Keep the original declaration-owned paint order.
+                            # Only targeted offscreen branches are traversed;
+                            # geometry does not imply that a widget is painted.
+                            placed = {placement.widget for placement in placements}
+                            if (arranged_widgets & retained_paths) - placed:
+                                placements = [placement for placement in arrange_result.placements
+                                              if placement.widget in placed or placement.widget in retained_paths]
                     else:
                         placements = arrange_result.placements
                     total_region = total_region.union(arrange_result.total_region)
@@ -782,6 +856,32 @@ class Compositor:
                     dock_gutter,
                 )
 
+        def add_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter):
+            if (not self.max_subtree_geometry_entries or not widget.CACHE_SUBTREE_GEOMETRY or widget in retained_paths
+                    or not widget._is_mounted):
+                arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter)  # noqa: F821 -- closure cleared after traversal
+                return
+            inherited = get_layers(widget)  # noqa: F821 -- closure cleared after traversal
+            key = (widget._geometry_revision, widget._nodes._updates, widget.styles._cache_key,
+                   virtual_region, region, order, layer_order, clip, visible, dock_gutter,
+                   size, visible_only, widget.scroll_offset,
+                   tuple(inherited.items()) if inherited is not None else ())
+            cached = self._subtree_geometry.get(widget)
+            if cached is not None and cached[0] == key:
+                map.update(cached[1])
+                widgets.update(cached[2])
+                invisible_widgets.update(cached[3])
+                return
+            previous_map, previous_widgets, previous_invisible = set(map), widgets.copy(), invisible_widgets.copy()
+            arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter)  # noqa: F821 -- closure cleared after traversal
+            if (widget not in self._subtree_geometry
+                    and len(self._subtree_geometry) >= self.max_subtree_geometry_entries):
+                self._subtree_geometry.pop(next(iter(self._subtree_geometry)))
+            self._subtree_geometry[widget] = (
+                key, {node: geometry for node, geometry in map.items() if node not in previous_map},
+                widgets - previous_widgets, invisible_widgets - previous_invisible,
+            )
+
         # Add top level (root) widget
         self._arranging = True
         try:
@@ -801,7 +901,7 @@ class Compositor:
             # their closure cells, keeping old maps and entire widget trees
             # alive until cyclic GC. Reflow is finished, so break those local
             # recursion links before returning the authoritative scene map.
-            del add_widget, get_layers
+            del add_widget, arrange_widget, get_layers
         widgets -= invisible_widgets
         return map, widgets
 
@@ -1266,28 +1366,40 @@ class Compositor:
         remaining = [len(line) for line in chops]
 
         def render_regions(region: Region) -> Iterable[Region]:
-            """Render runs of damaged rows still exposed below higher layers.
+            """Request exposed chop spans, coalesced across adjacent rows.
 
-            A bounding damage rectangle can span an entire transcript for two
-            small updates at its ends. Do not ask widgets to render the clean
-            rows between them, or rows already covered by a foreground widget.
-            Retain horizontal chop boundaries when selecting vertical runs.
+            Parent backgrounds often have narrow margins beside foreground
+            children. Dividing their whole width materializes and discards the
+            covered segments. Resolve exposure before asking widgets to paint.
             """
             first, last = region.column_span
-            start: int | None = None
+            runs: dict[tuple[int, int], int] = {}
             for y in region.line_range:
-                exposed = (
-                    remaining[y] and is_rendered_line(y)
-                    and any(value is None and first <= x < last for x, value in chops[y].items())
-                )
-                if exposed:
-                    if start is None:
-                        start = y
-                elif start is not None:
-                    yield Region(first, start, region.width, y - start)
-                    start = None
-            if start is not None:
-                yield Region(first, start, region.width, region.bottom - start)
+                spans: set[tuple[int, int]] = set()
+                if remaining[y] and is_rendered_line(y):
+                    start_x = None
+                    for x, value in chops[y].items():
+                        if x < first:
+                            continue
+                        if x >= last:
+                            break
+                        if value is None:
+                            if start_x is None:
+                                start_x = x
+                        elif start_x is not None:
+                            spans.add((start_x, x))
+                            start_x = None
+                    if start_x is not None:
+                        spans.add((start_x, last))
+                for span in tuple(runs):
+                    if span not in spans:
+                        start_y = runs.pop(span)
+                        left, right = span
+                        yield Region(left, start_y, right - left, y - start_y)
+                for span in spans:
+                    runs.setdefault(span, y)
+            for (left, right), start_y in runs.items():
+                yield Region(left, start_y, right - left, region.bottom - start_y)
 
         cut_strips: Iterable[Strip]
 

@@ -193,6 +193,9 @@ class NodeList(Sequence["Widget"]):
         """Release removed children even if the projections are never read again."""
         self._displayed_nodes = (-1, [])
         self._displayed_visible_nodes = (-1, True, [])
+        parent = None if self._parent is None else self._parent()
+        if parent is not None:
+            parent._child_nodes_removed()
 
     def __iter__(self) -> Iterator[Widget]:
         return iter(self._nodes)

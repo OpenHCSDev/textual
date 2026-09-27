@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 import threading
+from weakref import ref
 from functools import lru_cache, partial
 from inspect import getfile
 from typing import (
@@ -32,7 +33,9 @@ from rich.text import Text
 from rich.tree import Tree
 
 from textual._context import NoActiveAppError, active_message_pump
+from textual._compat import cached_property
 from textual._node_list import NodeList
+from textual._paint_state import EMPTY_PAINT, PaintState, resolve_paint
 from textual._types import WatchCallbackType
 from textual.binding import Binding, BindingsMap, BindingType
 from textual.cache import LRUCache
@@ -62,6 +65,7 @@ if TYPE_CHECKING:
     from textual.css.query import DOMQuery, QueryType
     from textual.css.types import CSSLocation
     from textual.message import Message
+    from textual.reactive import _StoredReactiveAccess
     from textual.screen import Screen
     from textual.widget import Widget
     from textual.worker import Worker, WorkType, ResultType
@@ -176,6 +180,7 @@ class DOMNode(MessagePump):
     _merged_bindings: ClassVar[BindingsMap | None] = None
 
     _reactives: ClassVar[dict[str, Reactive]]
+    _reactive_accessors: ClassVar[dict[str, _StoredReactiveAccess]]
 
     _decorated_handlers: dict[type[Message], list[tuple[Callable, str | None]]]
 
@@ -203,23 +208,14 @@ class DOMNode(MessagePump):
         check_identifiers("class name", *_classes)
         self._classes.update(_classes)
 
-        self._nodes: NodeList = NodeList(self)
         self._css_styles: Styles = Styles(self)
         self._inline_styles: Styles = Styles(self)
         self.styles: RenderStyles = RenderStyles(
             self, self._css_styles, self._inline_styles
         )
-        # A mapping of class names to Styles set in COMPONENT_CLASSES
-        self._component_styles: dict[str, RenderStyles] = {}
-
         self._auto_refresh: float | None = None
         self._auto_refresh_timer: Timer | None = None
-        self._css_types = {cls.__name__ for cls in self._css_bases(self.__class__)}
-        self._bindings = (
-            BindingsMap()
-            if self._merged_bindings is None
-            else self._merged_bindings.copy()
-        )
+        self._css_types = self._selector_type_names()
         self._has_hover_style: bool = False
         self._has_focus_within: bool = False
         self._has_order_style: bool = False
@@ -230,10 +226,32 @@ class DOMNode(MessagePump):
             dict[str, tuple[MessagePump, Reactive[object] | object]] | None
         ) = None
         self._pruning = False
-        self._query_one_cache: LRUCache[QueryOneCacheKey, DOMNode] = LRUCache(1024)
+        self._display_constraints: set[str] | None = None
         self._trap_focus = False
 
         super().__init__()
+
+    @classmethod
+    @lru_cache(maxsize=None)
+    def _selector_type_names(cls) -> frozenset[str]:
+        """Selector type names are class metadata, shared by every instance."""
+        return frozenset(base.__name__ for base in cls._css_bases(cls))
+
+    @cached_property
+    def _nodes(self) -> NodeList:
+        return NodeList(self)
+
+    @cached_property
+    def _component_styles(self) -> dict[str, RenderStyles]:
+        return {}
+
+    @cached_property
+    def _bindings(self) -> BindingsMap:
+        return BindingsMap() if self._merged_bindings is None else self._merged_bindings.copy()
+
+    @cached_property
+    def _query_one_cache(self) -> LRUCache[QueryOneCacheKey, DOMNode]:
+        return LRUCache(1024)
 
     def _get_dom_base(self) -> DOMNode:
         """Get the DOM base node (typically self).
@@ -590,13 +608,14 @@ class DOMNode(MessagePump):
             css_type_names.add(base.__name__)
         cls._merged_bindings = cls._merge_bindings()
         cls._css_type_names = frozenset(css_type_names)
-        cls._computes = frozenset(
-            [
-                name.lstrip("_")[8:]
-                for name in dir(cls)
-                if name.startswith(("_compute_", "compute_"))
-            ]
+        compute_methods = frozenset(
+            name for name in dir(cls) if name.startswith(("_compute_", "compute_"))
         )
+        cls._computes = frozenset(name.lstrip("_")[8:] for name in compute_methods)
+        cls._reactive_accessors = {
+            name: reactive._bind_access(compute_methods)
+            for name, reactive in reactives.items()
+        }
 
     def get_component_styles(self, *names: str) -> RenderStyles:
         """Get a "component" styles object (must be defined in COMPONENT_CLASSES classvar).
@@ -790,6 +809,11 @@ class DOMNode(MessagePump):
         Raises:
             NoScreen: If this node isn't mounted (and has no screen).
         """
+        cached = self.__dict__.get("_screen_reference")
+        if cached is not None and cached[0] == MessagePump._tree_revision:
+            screen = cached[1]()
+            if screen is not None:
+                return screen
         # Get the node by looking up a chain of parents
         # Note that self.screen may not be the same as self.app.screen
         from textual.screen import Screen
@@ -804,6 +828,7 @@ class DOMNode(MessagePump):
             ) from None
         if not isinstance(node, Screen):
             raise NoScreen("node has no screen")
+        self._screen_reference = (MessagePump._tree_revision, ref(node))
         return node
 
     @property
@@ -899,6 +924,9 @@ class DOMNode(MessagePump):
             selectors.add(f"#{self._id}")
         return selectors
 
+    def _child_nodes_removed(self) -> None:
+        """Retire child-derived ownership at the structural removal boundary."""
+
     @property
     def display(self) -> bool:
         """Should the DOM node be displayed?
@@ -910,7 +938,7 @@ class DOMNode(MessagePump):
             my_widget.display = False  # Hide my_widget
             ```
         """
-        return self.styles.display != "none" and not (
+        return not self._display_constraints and self.styles.display != "none" and not (
             self._closing or self._closed or self._pruning
         )
 
@@ -934,6 +962,32 @@ class DOMNode(MessagePump):
                 f"invalid value for display (received {new_val!r}, "
                 f"expected {friendly_list(VALID_DISPLAY)})",
             )
+
+    def set_display_constraint(self, reason: str, allowed: bool) -> None:
+        """Restrict display without overwriting authored CSS or restyling children.
+
+        Independent model owners use stable reason names. Removing a constraint
+        exposes the current CSS display value, including changes made while the
+        node was constrained. Normal layout and show/hide handling still apply.
+        """
+        constraints = self._display_constraints
+        blocked = constraints is not None and reason in constraints
+        if blocked == (not allowed):
+            return
+        was_displayed = self.display
+        if allowed:
+            assert constraints is not None
+            constraints.discard(reason)
+            if not constraints:
+                self._display_constraints = None
+        else:
+            if constraints is None:
+                constraints = self._display_constraints = set()
+            constraints.add(reason)
+        if self._parent is not None:
+            self._nodes.updated()
+        if self.display != was_displayed:
+            self.refresh(layout=True)
 
     @property
     def visible(self) -> bool:
@@ -1069,9 +1123,36 @@ class DOMNode(MessagePump):
         Returns:
             A Rich Style.
         """
-        return Style.combine(
-            node.styles.text_style for node in reversed(self.ancestors_with_self)
+        return self._resolved_paint_state().text_style
+
+    def _resolved_paint_state(self) -> PaintState:
+        if type(self).ancestors_with_self is not DOMNode.ancestors_with_self:
+            # Custom ancestry may change independently of native topology or
+            # style mutations, including when inherited by a native child.
+            state = EMPTY_PAINT._replace(cacheable=False)
+            for node in reversed(self.ancestors_with_self):
+                state = resolve_paint(state, node.styles)
+            return state
+        epoch = (Styles._revision, MessagePump._tree_revision)
+        state = self.__dict__.get("_paint_state")
+        if (
+            state is not None
+            and state.cacheable
+            and self.__dict__.get("_paint_epoch") == epoch
+        ):
+            return state
+        parent = self._parent
+        inherited = (
+            parent._resolved_paint_state() if isinstance(parent, DOMNode) else EMPTY_PAINT
         )
+        if (
+            state is None
+            or state.parent is not inherited
+            or state.style_key != self.styles._cache_key
+        ):
+            state = self._paint_state = resolve_paint(inherited, self.styles)
+        self._paint_epoch = epoch
+        return state
 
     @property
     def selection_style(self) -> Style:
@@ -1088,36 +1169,12 @@ class DOMNode(MessagePump):
         Returns:
             A Rich style.
         """
-        background = Color(0, 0, 0, 0)
-        color = Color(255, 255, 255, 0)
-
-        style = Style()
-        opacity = 1.0
-
-        for node in reversed(self.ancestors_with_self):
-            styles = node.styles
-            has_rule = styles.has_rule
-            opacity *= styles.opacity
-            if has_rule("background"):
-                text_background = background + styles.background.tint(
-                    styles.background_tint
-                )
-                background += (
-                    styles.background.tint(styles.background_tint)
-                ).multiply_alpha(opacity)
-            else:
-                text_background = background
-            if has_rule("color"):
-                color = styles.color
-            style += styles.text_style
-            if has_rule("auto_color") and styles.auto_color:
-                color = text_background.get_contrast_text(color.a)
-
-        style += Style.from_color(
+        state = self._resolved_paint_state()
+        background, color = state.background, state.foreground
+        return state.text_style + Style.from_color(
             (background + color).rich_color if (background.a or color.a) else None,
             background.rich_color if background.a else None,
         )
-        return style
 
     def check_consume_key(self, key: str, character: str | None) -> bool:
         """Check if the widget may consume the given key.
@@ -1189,16 +1246,8 @@ class DOMNode(MessagePump):
         Returns:
             `(<background color>, <color>)`
         """
-        base_background = background = Color(0, 0, 0, 0)
-        opacity = 1.0
-        for node in reversed(self.ancestors_with_self):
-            styles = node.styles
-            base_background = background
-            opacity *= styles.opacity
-            background += styles.background.tint(styles.background_tint).multiply_alpha(
-                opacity
-            )
-        return (base_background, background)
+        state = self._resolved_paint_state()
+        return state.base_background, state.layered_background
 
     @property
     def colors(self) -> tuple[Color, Color, Color, Color]:

@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from functools import partial
 from inspect import isawaitable
+from operator import methodcaller
+from weakref import WeakKeyDictionary
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -85,6 +87,62 @@ async def await_watcher(obj: Reactable, awaitable: Awaitable[object]) -> None:
     await awaitable
     # Watcher may have changed the state, so run compute again
     obj.post_message(events.Callback(callback=partial(Reactive._compute, obj)))
+
+
+class _StoredReactiveAccess:
+    """Class-owned value access; no widget or bound callback is retained here."""
+
+    __slots__ = ()
+
+    def get(self, reactive: Reactive[ReactiveType], obj: Reactable) -> ReactiveType:
+        try:
+            return obj.__dict__[reactive.internal_name]
+        except KeyError:
+            reactive._initialize_reactive(obj, reactive.name)
+            return obj.__dict__[reactive.internal_name]
+
+    def initial_value(self, reactive: Reactive[ReactiveType], obj: Reactable) -> ReactiveType:
+        return reactive._default_value(obj)
+
+    def require_writable(self, reactive: Reactive, obj: Reactable) -> None:
+        """Stored declarations accept writes."""
+
+    def compute(self, reactive: Reactive, obj: Reactable) -> None:
+        """Stored declarations have no derived value to recompute."""
+
+
+class _ComputedReactiveAccess(_StoredReactiveAccess):
+    __slots__ = ("_compute_value",)
+
+    def __init__(self, compute_name: str) -> None:
+        # Compile the declared method call, retaining normal Python dispatch
+        # for overrides without storing a bound widget or probing capabilities.
+        self._compute_value = methodcaller(compute_name)
+
+    def get(self, reactive: Reactive[ReactiveType], obj: Reactable) -> ReactiveType:
+        old_value = super().get(reactive, obj)
+        value = self._compute_value(obj)
+        obj.__dict__[reactive.internal_name] = value
+        reactive._check_watchers(obj, reactive.name, old_value)
+        return value
+
+    def initial_value(self, reactive: Reactive[ReactiveType], obj: Reactable) -> ReactiveType:
+        return self._compute_value(obj) if reactive._init else reactive._default_value(obj)
+
+    def require_writable(self, reactive: Reactive, obj: Reactable) -> None:
+        raise AttributeError(
+            f"Can't set {obj}.{reactive.name!r}; reactive attributes with a compute method are read-only"
+        )
+
+    def compute(self, reactive: Reactive, obj: Reactable) -> None:
+        current = obj.__dict__.get(reactive.internal_name, reactive._default)
+        value = self._compute_value(obj)
+        obj.__dict__[reactive.internal_name] = value
+        if value != current:
+            reactive._check_watchers(obj, reactive.name, current)
+
+
+_STORED_REACTIVE_ACCESS = _StoredReactiveAccess()
 
 
 def invoke_watcher(
@@ -187,11 +245,50 @@ class Reactive(Generic[ReactiveType]):
         except AttributeError:
             pass
 
+    @classmethod
+    def _clear_watch_subscriptions(cls, node: Reactable) -> None:
+        """Release this subscriber from publishers, including quiet publishers.
+
+        Publishers retain callbacks strongly for delivery. The subscriber owns
+        their lifetime; its reverse index must not itself retain publishers.
+        """
+        sources = getattr(node, "_reactive_watch_sources", None)
+        if sources is None:
+            return
+        node._reactive_watch_sources = None
+        for source, attributes in tuple(sources.items()):
+            watchers = getattr(source, "__watchers", {})
+            for attribute in attributes:
+                remaining = [(subscriber, callback) for subscriber, callback in watchers.get(attribute, ())
+                             if subscriber is not node]
+                # Replace rather than mutate a list which may be delivering a
+                # change. Other subscribers keep their order and registration.
+                if remaining:
+                    watchers[attribute] = remaining
+                else:
+                    watchers.pop(attribute, None)
+
     @property
     def owner(self) -> Type[MessageTarget]:
         """The owner (class) where the reactive was declared."""
         assert self._owner is not None
         return self._owner
+
+    def _bind_access(self, compute_methods: frozenset[str]) -> _StoredReactiveAccess:
+        """Resolve the concrete class's declaration once, including inherited vars."""
+        private_name = f"_compute_{self.name}"
+        public_name = f"compute_{self.name}"
+        if private_name in compute_methods:
+            return _ComputedReactiveAccess(private_name)
+        if public_name in compute_methods:
+            return _ComputedReactiveAccess(public_name)
+        return _STORED_REACTIVE_ACCESS
+
+    def _default_value(self, obj: Reactable) -> ReactiveType:
+        default = self._default
+        if isinstance(default, Initialize):
+            return default(obj)
+        return default() if callable(default) else default
 
     def _initialize_reactive(self, obj: Reactable, name: str) -> None:
         """Initialized a reactive attribute on an object.
@@ -202,26 +299,17 @@ class Reactive(Generic[ReactiveType]):
         """
         _rich_traceback_omit = True
 
-        internal_name = f"_reactive_{name}"
-        if hasattr(obj, internal_name):
+        internal_name = self.internal_name
+        if internal_name in obj.__dict__:
             # Attribute already has a value
             return
-
-        compute_method = getattr(obj, self.compute_name, None)
-        if compute_method is not None and self._init:
-            default = compute_method()
-        else:
-            default_or_callable = self._default
-            default = (
-                (
-                    default_or_callable(obj)
-                    if isinstance(default_or_callable, Initialize)
-                    else default_or_callable()
-                )
-                if callable(default_or_callable)
-                else default_or_callable
+        if "_id" not in obj.__dict__:
+            raise ReactiveError(
+                f"Node is missing data; Check you are calling super().__init__(...) in the {obj.__class__.__name__}() constructor, before accessing reactives."
             )
-        setattr(obj, internal_name, default)
+
+        default = obj._reactive_accessors[name].initial_value(self, obj)
+        obj.__dict__[internal_name] = default
         if (toggle_class := self._toggle_class) is not None:
             obj.set_class(bool(default), *toggle_class.split())
         if self._init:
@@ -296,22 +384,7 @@ class Reactive(Generic[ReactiveType]):
         if obj is None:
             # obj is None means we are invoking the descriptor via the class, and not the instance
             return self
-        if not hasattr(obj, "id"):
-            raise ReactiveError(
-                f"Node is missing data; Check you are calling super().__init__(...) in the {obj.__class__.__name__}() constructor, before getting reactives."
-            )
-        if not hasattr(obj, internal_name := self.internal_name):
-            self._initialize_reactive(obj, self.name)
-
-        if hasattr(obj, self.compute_name):
-            value: ReactiveType
-            old_value = getattr(obj, internal_name)
-            value = getattr(obj, self.compute_name)()
-            setattr(obj, internal_name, value)
-            self._check_watchers(obj, self.name, old_value)
-            return value
-        else:
-            return getattr(obj, internal_name)
+        return obj._reactive_accessors[self.name].get(self, obj)
 
     def _set(
         self, obj: Reactable, value: ReactiveType, always: bool = False,
@@ -319,21 +392,13 @@ class Reactive(Generic[ReactiveType]):
     ) -> None:
         _rich_traceback_omit = True
 
-        if not hasattr(obj, "_id"):
-            raise ReactiveError(
-                f"Node is missing data; Check you are calling super().__init__(...) in the {obj.__class__.__name__}() constructor, before setting reactives."
-            )
-
         if isinstance(value, _Mutated):
             value = value.value
             always = True
 
         self._initialize_reactive(obj, self.name)
 
-        if hasattr(obj, self.compute_name):
-            raise AttributeError(
-                f"Can't set {obj}.{self.name!r}; reactive attributes with a compute method are read-only"
-            )
+        obj._reactive_accessors[self.name].require_writable(self, obj)
 
         name = self.name
         current_value = getattr(obj, name)
@@ -410,6 +475,8 @@ class Reactive(Generic[ReactiveType]):
                 if not reactable._closing
             ]
             for reactable, callback in watchers:
+                if reactable._closing or reactable._closed:
+                    continue
                 with reactable.prevent(*obj._prevent_message_types_stack[-1]):
                     invoke_watcher(reactable, callback, old_value, value)
 
@@ -422,20 +489,7 @@ class Reactive(Generic[ReactiveType]):
         """
         _rich_traceback_guard = True
         for compute in obj._reactives.keys() & obj._computes:
-            try:
-                compute_method = getattr(obj, f"compute_{compute}")
-            except AttributeError:
-                try:
-                    compute_method = getattr(obj, f"_compute_{compute}")
-                except AttributeError:
-                    continue
-            current_value = getattr(
-                obj, f"_reactive_{compute}", getattr(obj, f"_default_{compute}", None)
-            )
-            value = compute_method()
-            setattr(obj, f"_reactive_{compute}", value)
-            if value != current_value:
-                cls._check_watchers(obj, compute, current_value)
+            obj._reactive_accessors[compute].compute(obj._reactives[compute], obj)
 
 
 class reactive(Reactive[ReactiveType]):
@@ -523,6 +577,8 @@ def _watch(
         callback: A callable to call when the attribute changes.
         init: True to call watcher initialization.
     """
+    if node._closing or node._closed:
+        return
     if not hasattr(obj, "__watchers"):
         setattr(obj, "__watchers", {})
     watchers: dict[str, list[tuple[Reactable, WatchCallbackType]]]
@@ -533,4 +589,10 @@ def _watch(
     if init:
         current_value = getattr(obj, attribute_name, None)
         invoke_watcher(obj, callback, current_value, current_value)
+    if node._closing or node._closed:
+        return
     watcher_list.append((node, callback))
+    sources = getattr(node, "_reactive_watch_sources", None)
+    if sources is None:
+        node._reactive_watch_sources = sources = WeakKeyDictionary()
+    sources.setdefault(obj, set()).add(attribute_name)

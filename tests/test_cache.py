@@ -32,6 +32,37 @@ def test_removed_cache_values_do_not_wait_for_gc(operation):
             gc.enable()
 
 
+def test_discarded_cache_releases_acyclic_payload_without_collection():
+    class Payload:
+        pass
+
+    enabled = gc.isenabled()
+    gc.disable()
+    try:
+        cache = LRUCache(4)
+        value = Payload()
+        reference = weakref.ref(value)
+        cache["payload"] = value
+        del value, cache
+        assert reference() is None, "Cache-internal cycles retained the payload"
+    finally:
+        if enabled:
+            gc.enable()
+
+
+def test_recency_does_not_reorder_keys_or_replace_existing_values():
+    cache = LRUCache(3)
+    cache["first"] = None
+    cache["second"] = 2
+    cache["third"] = 3
+    assert cache.get("first", "missing") is None
+    assert tuple(cache.keys()) == ("first", "second", "third")
+    cache["first"] = "replacement"
+    assert cache["first"] is None
+    cache["fourth"] = 4
+    assert tuple(cache.keys()) == ("first", "third", "fourth")
+
+
 def test_lru_cache():
     cache = LRUCache(3)
 

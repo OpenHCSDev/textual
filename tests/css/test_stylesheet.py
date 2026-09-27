@@ -10,10 +10,29 @@ from textual.color import Color
 from textual.containers import Container
 from textual.css.stylesheet import CssSource, Stylesheet, StylesheetParseError
 from textual.css.tokenizer import TokenError
+from textual.css.transition import Transition
 from textual.dom import DOMNode
 from textual.geometry import Spacing
 from textual.widget import Widget
 from textual.widgets import Static
+
+
+async def test_equal_current_rules_retarget_a_pending_transition():
+    app = App()
+    async with app.run_test() as pilot:
+        widget = Static("transition target")
+        await app.mount(widget)
+        await pilot.pause()
+        rules = {**widget.styles.base.get_rules(), "opacity": 1.0,
+                 "transitions": {"opacity": Transition(1, "linear", 60)}}
+        Stylesheet.replace_rules(widget, rules)
+        Stylesheet.replace_rules(widget, {**rules, "opacity": .5}, animate=True)
+        assert app.animator.is_being_animated(widget.styles.base, "opacity")
+        assert widget.styles.base.opacity == 1.0
+        with patch.object(app.animator, "animate", wraps=app.animator.animate) as animate:
+            Stylesheet.replace_rules(widget, rules, animate=True)
+            animate.assert_called_once()
+            assert animate.call_args.args == (widget.styles.base, "opacity", 1.0)
 
 
 def test_component_styles_own_node_without_a_collection_cycle():

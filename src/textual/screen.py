@@ -292,7 +292,7 @@ class Screen(Generic[ScreenResultType], Widget):
         """
         self._modal = False
         super().__init__(name=name, id=id, classes=classes)
-        self._compositor = Compositor()
+        self._compositor = Compositor(max_subtree_geometry_entries=self.SUBTREE_GEOMETRY_CACHE_ENTRIES)
         self._dirty_widgets: set[Widget] = set()
         self._selection_update_pending = False
         self.__update_timer: Timer | None = None
@@ -1099,20 +1099,10 @@ class Screen(Generic[ScreenResultType], Widget):
             focused: The widget that was focused.
             blurred: The widget that was blurred.
         """
-        widgets: set[DOMNode] = set()
-
-        if focused is not None:
-            for widget in reversed(focused.ancestors_with_self):
-                if widget._has_focus_within:
-                    widgets.update(widget.walk_children(with_self=True))
-                    break
-        if blurred is not None:
-            for widget in reversed(blurred.ancestors_with_self):
-                if widget._has_focus_within:
-                    widgets.update(widget.walk_children(with_self=True))
-                    break
-        if widgets:
-            self.app.stylesheet.update_nodes(widgets, animate=True)
+        entered = set(focused.ancestors_with_self) if focused is not None else set()
+        exited = set(blurred.ancestors_with_self) if blurred is not None else set()
+        for node in entered ^ exited:
+            self.app.stylesheet.update_focus_within(node)
 
     def set_focus(
         self,
@@ -1258,6 +1248,13 @@ class Screen(Generic[ScreenResultType], Widget):
         self._update_timer.pause()
         if self.is_current and not self.app._batch_count:
             self._flush_pending_selection()
+            if self._repaint_required:
+                # Layout already paints its committed scene. Include the full
+                # repaint intent in that same transaction instead of painting
+                # once for layout and then painting the whole screen again.
+                self._dirty_widgets.clear()
+                self._dirty_widgets.add(self)
+                self._repaint_required = False
             if self._layout_required:
                 self._refresh_layout(scroll=self._scroll_required)
                 self._layout_required = False
@@ -1265,11 +1262,6 @@ class Screen(Generic[ScreenResultType], Widget):
             elif self._scroll_required:
                 self._refresh_layout(scroll=True)
             self._scroll_required = False
-
-            if self._repaint_required:
-                self._dirty_widgets.clear()
-                self._dirty_widgets.add(self)
-                self._repaint_required = False
 
             if self._dirty_widgets:
                 self._compositor.update_widgets(self._dirty_widgets)
@@ -1323,6 +1315,8 @@ class Screen(Generic[ScreenResultType], Widget):
     async def _message_loop_exit(self) -> None:
         await super()._message_loop_exit()
         self._compositor.clear()
+        self._callbacks.clear()
+        self._layout_widgets.clear()
         self._dirty_widgets.clear()
         self._dirty_regions.clear()
         self._arrangement_cache.clear()
@@ -1337,6 +1331,10 @@ class Screen(Generic[ScreenResultType], Widget):
     def _use_viewport_layout(self) -> bool:
         """Opt in to viewport-local geometry/lifecycle with lazy full-map lookup."""
         return False
+
+    def _layout_geometry_targets(self) -> tuple[Widget, ...]:
+        """Additional native geometry required by a viewport-layout transaction."""
+        return ()
 
     def _refresh_layout(self, size: Size | None = None, scroll: bool = False) -> None:
         """Refresh the layout (can change size and positions of widgets)."""
@@ -1376,7 +1374,9 @@ class Screen(Generic[ScreenResultType], Widget):
             else:
                 viewport_layout = self._use_viewport_layout()
                 if viewport_layout:
-                    hidden, shown, resized = self._compositor.reflow(self, size, visible_only=True)
+                    hidden, shown, resized = self._compositor.reflow(
+                        self, size, visible_only=True, retain_geometry=self._layout_geometry_targets(),
+                    )
                 else:
                     hidden, shown, resized = self._compositor.reflow(self, size)
                 self._layout_widgets.clear()
@@ -1429,6 +1429,8 @@ class Screen(Generic[ScreenResultType], Widget):
         message.prevent_default()
         widget = message.widget
         assert isinstance(widget, Widget)
+        if widget._pruning or widget._closed:
+            return
 
         if self in self._compositor:
             self._dirty_widgets.add(widget)
@@ -1440,6 +1442,8 @@ class Screen(Generic[ScreenResultType], Widget):
 
         layout_required = False
         widget: DOMNode = message.widget
+        if widget._pruning or widget._closed:
+            return
         for ancestor in message.widget.ancestors:
             if not isinstance(ancestor, Widget):
                 break
@@ -1461,6 +1465,16 @@ class Screen(Generic[ScreenResultType], Widget):
         message.prevent_default()
         self._scroll_required = True
         self.check_idle()
+
+    def _forget_pruned_widgets(self, widgets: set[Widget]) -> None:
+        """Retire scene and queued damage owners without dropping repaint regions."""
+        self._compositor.discard_widgets(widgets)
+        self._dirty_widgets.difference_update(widgets)
+        for ancestor, children in tuple(self._layout_widgets.items()):
+            if ancestor in widgets:
+                self._layout_widgets.pop(ancestor)
+            else:
+                children.difference_update(widgets)
 
     def _get_inline_height(self, size: Size) -> int:
         """Get the inline height (number of lines to display when running inline mode).
@@ -1535,6 +1549,34 @@ class Screen(Generic[ScreenResultType], Widget):
         self.app._set_mouse_over(None, None)
         self._clear_tooltip()
         self.stack_updates += 1
+        if not self.RETAIN_INACTIVE_PRESENTATION:
+            self.call_later(self._retire_inactive_presentation)
+
+    RETAIN_INACTIVE_PRESENTATION: ClassVar[bool] = True
+    """Retain derived paint/measurement caches while outside the visible stack.
+
+    Applications with many model-backed modes may opt out. Content, rules,
+    selection and native widget lifetimes are preserved; resume recomputes the
+    presentation. A screen still used as a visible backdrop is never retired.
+    """
+
+    def _retire_inactive_presentation(self) -> None:
+        if self.is_current or self._closing or self in self.app._background_screens:
+            return
+        for widget in self.walk_children(with_self=True):
+            widget._release_presentation()
+        self._compositor.clear()
+        self._dirty_widgets.clear()
+        self._layout_widgets.clear()
+        self._layout_required = True
+        self._repaint_required = True
+
+    SUBTREE_GEOMETRY_CACHE_ENTRIES: ClassVar[int] = Compositor.DEFAULT_SUBTREE_GEOMETRY_CACHE_ENTRIES
+    """Maximum retained opt-in subtree projections; zero disables retention.
+
+    This is an application-tunable working-set budget, not a layout limit.
+    Lower values trade reuse for memory without changing geometry or content.
+    """
 
     async def _on_resize(self, event: events.Resize) -> None:
         event.stop()
