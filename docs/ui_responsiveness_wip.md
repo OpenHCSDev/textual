@@ -9,6 +9,20 @@ Draft companion to the OpenHCSDev Toad responsiveness investigation.
 
 ## Structural measurement revision follow-up
 
+The subsequent pilot-idle correction measures CPU on the calling event-loop
+thread instead of the whole process. Background preparation can remain busy after
+UI messages drain; it must not force every pilot pause to its one-second limit.
+The helper's minimum/maximum waits and active-UI behavior are unchanged. Four
+deterministic clock tests preserve those boundaries; the diagnostic comms fixture
+completed in75.27s versus70.45s spent in process-idle waits alone during an earlier
+96.43s interrupted diagnostic. This is a test-harness correction, not an advertised
+native UI speedup. Native input scheduling and GC policy are unchanged.
+
+An exact integer-before-Fraction simplification was tested but withdrawn: native
+maximum input delay was62.26ms in its control versus113.27/89.49ms in the two
+candidate runs. No end-to-end benefit was established, so the existing rational
+layout computation is retained. Those failed timing receipts remain in the audit.
+
 The viewport-stutter follow-up exposed a stale intrinsic-size cache during
 progressive child admission: a parent could retain a29-row box while its child
 already arranged33rows, clipping the tail for one frame. Native `NodeList`
@@ -27,12 +41,16 @@ The Toad progressive-tail diagnostic passed six consecutive runs with this fix.
 The corrected-environment framework run passed3,442tests (1skip,4xfail) in193.07s,
 and six focused scrollbar/Markdown/prune snapshots passed. The framework job peaked
 246.5MiB under a4GiB/no-swap limit.
-The full80pilot run passed79cases including the prior frame failure; the large
-comms case exceeded100s and remains a separate validation limit. Two serial native
+The initial80pilot run passed79cases including the prior frame failure; the large
+comms case exceeded100s. After the owner-clock correction, all80pilots passed
+in524.28s and the framework passed3,446tests (1skip,4xfail) in195.47s. After
+withdrawing the arithmetic experiment, the final isolated comms rerun passed
+in61.04s with the same100s deadline. Full Toad validation peaked552.9MiB and
+framework validation249.3MiB, both with zero swap. Two earlier serial native
 candidate runs preserved72actions/52markers and recorded input maxima59.59/69.87ms
 versus96.75ms in the matched landed control. Anchor-induced full geometry passes
 fell22to0, but loop maxima112.89/124.73ms still miss the overall stutter target.
-Validation used one worker with4GiB/no-swap limits; the full Toad job peaked494.2MiB.
+Validation uses one worker with4GiB/no-swap limits.
 
 ## Removal completion and input ingress checkpoint
 
