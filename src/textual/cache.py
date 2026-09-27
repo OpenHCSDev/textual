@@ -8,11 +8,13 @@ You can also use them in your own apps for similar reasons.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Dict, Generic, KeysView, TypeVar, overload
+from collections import OrderedDict
+from typing import TYPE_CHECKING, Generic, KeysView, TypeVar, overload
 
 CacheKey = TypeVar("CacheKey")
 CacheValue = TypeVar("CacheValue")
 DefaultValue = TypeVar("DefaultValue")
+_MISSING = object()
 
 __all__ = ["LRUCache", "FIFOCache"]
 
@@ -24,11 +26,8 @@ class LRUCache(Generic[CacheKey, CacheValue]):
     If an additional item is added when the LRUCache is full, the least
     recently used key is discarded to make room for the new item.
 
-    The implementation is similar to functools.lru_cache, which uses a (doubly)
-    linked list to keep track of the most recently used items.
-
-    Each entry is stored as [PREV, NEXT, KEY, VALUE] where PREV is a reference
-    to the previous entry, and NEXT is a reference to the next value.
+    The values dictionary preserves insertion-order key views. A C-backed
+    OrderedDict owns recency without one cyclic Python list per cache entry.
 
     Note that stdlib's @lru_cache is implemented in C and faster! It's best to use
     @lru_cache where you are caching things that are fairly quick and called many times.
@@ -40,7 +39,7 @@ class LRUCache(Generic[CacheKey, CacheValue]):
         "_maxsize",
         "_cache",
         "_full",
-        "_head",
+        "_recency",
         "hits",
         "misses",
     ]
@@ -52,9 +51,9 @@ class LRUCache(Generic[CacheKey, CacheValue]):
             maxsize: Maximum size of the cache, before old items are discarded.
         """
         self._maxsize = maxsize
-        self._cache: Dict[CacheKey, list[object]] = {}
+        self._cache: dict[CacheKey, CacheValue] = {}
         self._full = False
-        self._head: list[object] = []
+        self._recency: OrderedDict[CacheKey, None] = OrderedDict()
         self.hits = 0
         self.misses = 0
         super().__init__()
@@ -87,15 +86,9 @@ class LRUCache(Generic[CacheKey, CacheValue]):
 
     def clear(self) -> None:
         """Clear the cache."""
-        links = list(self._cache.values())
         self._cache.clear()
         self._full = False
-        self._head = []
-        # Each linked entry is circular even after its dictionary is cleared.
-        # Release keys/values now rather than retaining their object graphs
-        # until a later cyclic collection on an unrelated UI frame.
-        for link in links:
-            link.clear()
+        self._recency.clear()
 
     def keys(self) -> KeysView[CacheKey]:
         """Get cache keys."""
@@ -109,27 +102,13 @@ class LRUCache(Generic[CacheKey, CacheValue]):
             key: Key.
             value: Value.
         """
-        if self._cache.get(key) is None:
-            head = self._head
-            if not head:
-                # First link references itself
-                self._head[:] = [head, head, key, value]
-            else:
-                # Add a new root to the beginning
-                self._head = [head[0], head, key, value]
-                # Updated references on previous root
-                head[0][1] = self._head  # type: ignore[index]
-                head[0] = self._head
-            self._cache[key] = self._head
-
+        if key not in self._cache:
+            self._cache[key] = value
+            self._recency[key] = None
             if self._full or len(self._cache) > self._maxsize:
-                # Cache is full, we need to evict the oldest one
                 self._full = True
-                head = self._head
-                last = head[0]
-                last[0][1] = head  # type: ignore[index]
-                head[0] = last[0]  # type: ignore[index]
-                del self._cache[last[2]]  # type: ignore[index]
+                oldest, _ = self._recency.popitem(last=False)
+                del self._cache[oldest]
 
     __setitem__ = set
 
@@ -156,35 +135,22 @@ class LRUCache(Generic[CacheKey, CacheValue]):
             Either the value or a default.
         """
 
-        if (link := self._cache.get(key)) is None:
+        value = self._cache.get(key, _MISSING)
+        if value is _MISSING:
             self.misses += 1
             return default
-        if link is not self._head:
-            # Remove link from list
-            link[0][1] = link[1]  # type: ignore[index]
-            link[1][0] = link[0]  # type: ignore[index]
-            head = self._head
-            # Move link to head of list
-            link[0] = head[0]
-            link[1] = head
-            self._head = head[0][1] = head[0] = link  # type: ignore[index]
+        self._recency.move_to_end(key)
         self.hits += 1
-        return link[3]  # type: ignore[return-value]
+        return value  # type: ignore[return-value]
 
     def __getitem__(self, key: CacheKey) -> CacheValue:
-        link = self._cache.get(key)
-        if (link := self._cache.get(key)) is None:
+        value = self._cache.get(key, _MISSING)
+        if value is _MISSING:
             self.misses += 1
             raise KeyError(key)
-        if link is not self._head:
-            link[0][1] = link[1]  # type: ignore[index]
-            link[1][0] = link[0]  # type: ignore[index]
-            head = self._head
-            link[0] = head[0]
-            link[1] = head
-            self._head = head[0][1] = head[0] = link  # type: ignore[index]
+        self._recency.move_to_end(key)
         self.hits += 1
-        return link[3]  # type: ignore[return-value]
+        return value  # type: ignore[return-value]
 
     def __contains__(self, key: CacheKey) -> bool:
         return key in self._cache
@@ -197,21 +163,9 @@ class LRUCache(Generic[CacheKey, CacheValue]):
         """
         if key not in self._cache:
             return
-        link = self._cache[key]
-
-        # Remove link from list
-        link[0][1] = link[1]  # type: ignore[index]
-        link[1][0] = link[0]  # type: ignore[index]
-        # Remove link from cache
-
-        if self._head[2] == key:
-            self._head = self._head[1]  # type: ignore[assignment]
-            if self._head[2] == key:  # type: ignore[index]
-                self._head = []
-
         del self._cache[key]
+        del self._recency[key]
         self._full = False
-        link.clear()
 
 
 class FIFOCache(Generic[CacheKey, CacheValue]):

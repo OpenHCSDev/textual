@@ -166,7 +166,7 @@ class Content(Visual):
         self._cell_length = cell_length
         self._optimal_width_cache: int | None = None
         self._minimal_width_cache: int | None = None
-        self._height_cache: tuple[tuple[int, str, bool] | None, int] = (None, 0)
+        self._height_cache: tuple[tuple[int, int, str, bool] | None, int] = (None, 0)
         self._divide_cache: (
             FIFOCache[Sequence[int], list[tuple[Span, int, int]]] | None
         ) = None
@@ -606,14 +606,28 @@ class Content(Visual):
         line_pad = get_rule("line_pad", 0) * 2
         overflow = get_rule("text_overflow", "fold")
         no_wrap = get_rule("text_wrap", "wrap") == "nowrap"
-        cache_key = (width + line_pad, overflow, no_wrap)
+        cache_key = (width, line_pad, overflow, no_wrap)
         if self._height_cache[0] == cache_key:
             height = self._height_cache[1]
         else:
-            lines = self.without_spans._wrap_and_format(
-                width - line_pad, overflow=overflow, no_wrap=no_wrap
-            )
-            height = len(lines)
+            available = width - line_pad
+            if available <= 0:
+                height = len(self.without_spans._wrap_and_format(
+                    available, overflow=overflow, no_wrap=no_wrap,
+                ))
+            else:
+                # Measurement needs only native wrapping boundaries. Building
+                # Content slices, span caches and _FormattedLine objects here
+                # constructs a throwaway presentation tree just to count rows.
+                height = 0
+                for line in self.plain.split("\n"):
+                    if "\t" in line:
+                        line = line.expandtabs(8)
+                    if no_wrap:
+                        height += (max(1, (cell_len(line) + available - 1) // available)
+                                   if overflow == "fold" else 1)
+                    else:
+                        height += 1 + len(divide_line(line, available, fold=overflow == "fold"))
             self._height_cache = (cache_key, height)
         return height
 

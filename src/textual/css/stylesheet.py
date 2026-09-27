@@ -171,9 +171,11 @@ class Stylesheet:
         self._style_parse_cache: LRUCache[str, Style] = LRUCache(1024 * 4)
         self._path_rules_cache: FIFOCache[tuple, RulesMap] = FIFOCache(4096)
         self._ids_in_rules: set[str] = set()
+        self._classes_in_rules: set[str] = set()
         self._component_cache_safe: dict[str, bool] = {}
         self._component_rule_classes: dict[str, frozenset[str]] = {}
         self._component_rule_keys: dict[str, tuple[RuleSet, ...]] = {}
+        self._local_display_classes: dict[str, bool] = {}
         self._candidate_rules: FIFOCache[
             frozenset[str], tuple[list[RuleSet], frozenset[str], frozenset[str], tuple[RuleSet, ...]]
         ] = FIFOCache(1024)
@@ -405,6 +407,7 @@ class Stylesheet:
         self._component_cache_safe.clear()
         self._component_rule_classes.clear()
         self._component_rule_keys.clear()
+        self._local_display_classes.clear()
         self._candidate_rules.clear()
         rules: list[RuleSet] = []
         add_rules = rules.extend
@@ -444,6 +447,13 @@ class Stylesheet:
             selector.name for rule in rules for group in rule.selector_set
             for selector in group.selectors if selector.type == SelectorType.ID
         }
+        self._classes_in_rules = {
+            selector.name
+            for rule in rules
+            for group in rule.selector_set
+            for selector in group.selectors
+            if selector.type == SelectorType.CLASS
+        }
         self._require_parse = False
         self._rules_map = None
 
@@ -460,6 +470,7 @@ class Stylesheet:
         self._component_cache_safe.clear()
         self._component_rule_classes.clear()
         self._component_rule_keys.clear()
+        self._local_display_classes.clear()
         self._candidate_rules.clear()
         for read_from, (css, is_defaults, tie_breaker, scope) in self.source.items():
             stylesheet.add_source(
@@ -481,6 +492,7 @@ class Stylesheet:
             self._rules = stylesheet.rules
             self._source_rules = stylesheet._source_rules
             self._ids_in_rules = stylesheet._ids_in_rules
+            self._classes_in_rules = stylesheet._classes_in_rules
             self._rules_map = None
             self.source = stylesheet.source
             self._require_parse = False
@@ -831,14 +843,21 @@ class Stylesheet:
         styles = node.styles
         base_styles = styles.base
 
+        if animate:
+            # With no declared transition there is no animated target to
+            # resolve. Materializing every render-rule default allocates an
+            # unrelated style graph for ordinary focus/class changes.
+            animate = bool(rules.get("transitions"))
+            if not animate and base_styles._rules == rules:
+                return
+            # Equal current values do not imply an equal animation target:
+            # a previous delayed transition may not have started yet.
+
         # Styles currently used on new rules
         modified_rule_keys = base_styles._rules.keys() | rules.keys()
 
         if animate:
             new_styles = Styles(node, rules)
-            if new_styles == base_styles:
-                # Nothing to animate, return early
-                return
             current_render_rules = styles.get_render_rules()
             is_animatable = styles.is_animatable
             get_current_render_rule = current_render_rules.get
@@ -886,6 +905,35 @@ class Stylesheet:
                     setattr(base_styles, key, value)
         node.notify_style_update()
 
+    def references_class(self, class_name: str) -> bool:
+        """Check parsed declarations, including ancestor/compound selectors."""
+        self.rules  # Resolve pending source changes before querying the index.
+        return class_name in self._classes_in_rules
+
+    def is_local_display_class(self, class_name: str) -> bool:
+        """Whether every rule mentioning a class changes only its node's display.
+
+        This is an opt-in invalidation query, not a change to ordinary class
+        updates. Descendant selectors, inherited properties and custom rules
+        conservatively require the normal subtree update.
+        """
+        rules = self.rules  # Parse pending edits before consulting the plan.
+        if class_name in self._local_display_classes:
+            return self._local_display_classes[class_name]
+        mentioned = False
+        for rule in rules:
+            for group in rule.selector_set:
+                for index, selector in enumerate(group.selectors):
+                    if selector.type != SelectorType.CLASS or selector.name != class_name:
+                        continue
+                    mentioned = True
+                    if (rule.styles.get_rules().keys() - {"display"}
+                            or any(part.advance for part in group.selectors[index:-1])):
+                        self._local_display_classes[class_name] = False
+                        return False
+        self._local_display_classes[class_name] = mentioned
+        return mentioned
+
     def update(self, root: DOMNode, animate: bool = False) -> None:
         """Update styles on node and its children.
 
@@ -914,13 +962,25 @@ class Stylesheet:
         """
         self._update_focus_dependencies(root, root)
 
-    def _update_focus_dependencies(self, root: DOMNode, focus_node: DOMNode) -> None:
-        """Restyle matching targets and their potentially inheriting children."""
+    def update_focus_within(self, root: DOMNode) -> None:
+        """Restyle declaration targets affected by this ancestor's focus state."""
+        self._update_focus_dependencies(root, root, frozenset({"focus-within"}))
+
+    def _update_focus_dependencies(
+        self, root: DOMNode, focus_node: DOMNode,
+        pseudo_classes: frozenset[str] = frozenset({"focus", "blur"}),
+    ) -> None:
+        """Rematch affected targets; style descriptors own inherited repaint.
+
+        A matching ancestor does not imply every descendant's CSS changed.
+        Color, opacity and other inherited style descriptors already invalidate
+        child presentation. Descendant selectors declare their own target names.
+        """
         affected_names = {
             name
             for rule in self.rules
             if any(
-                selector.pseudo_classes & {"focus", "blur"}
+                selector.pseudo_classes & pseudo_classes
                 and selector._check(focus_node)
                 for group in rule.selector_set for selector in group.selectors
             )
@@ -928,16 +988,17 @@ class Stylesheet:
         }
         if not affected_names:
             return
+        affected = []
         pending = [root]
         while pending:
             node = pending.pop()
             component_names = {f".{name}" for name in node._get_component_classes()}
             if affected_names & (node._selector_names | component_names):
-                self.update(node, animate=True)
-            else:
-                pending.extend(node.children)
-                if isinstance(node, Widget):
-                    pending.extend(node._get_virtual_dom())
+                affected.append(node)
+            pending.extend(node.children)
+            if isinstance(node, Widget):
+                pending.extend(node._get_virtual_dom())
+        self.update_nodes(affected, animate=True)
 
     def update_nodes(self, nodes: Iterable[DOMNode], animate: bool = False) -> None:
         """Update styles for nodes.

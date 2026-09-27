@@ -36,11 +36,16 @@ class StreamLayout(Layout):
         self._cached_width = 0
         super().__init__()
 
+    def clear_cache(self) -> None:
+        self._cached_placements = None
+        self._cached_width = 0
+
     def arrange(
         self, parent: Widget, children: list[Widget], size: Size, greedy: bool = True
     ) -> ArrangeResult:
         parent.pre_layout(self)
         if not children:
+            self.clear_cache()
             return []
         viewport = parent.app.viewport_size
 
