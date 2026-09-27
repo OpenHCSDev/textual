@@ -7,6 +7,39 @@ Draft companion to the OpenHCSDev Toad responsiveness investigation.
 - Bounded history/worker views: https://github.com/OpenHCSDev/toad/issues/61
 - Animation budget: https://github.com/OpenHCSDev/toad/issues/64
 
+## Declaration-bound dispatch checkpoint
+
+`SelectorSet.check` owns target-only query matching. Single selectors and compound
+selectors whose terms all apply to the target call the existing selector checks
+directly. Relational selectors still use the existing interpreter and authoritative
+CSS ancestry. This removes unnecessary ancestor-path allocation without caching
+dynamic matches or adding widget-specific cases.
+
+Reactive access now follows the same declaration-owned approach. At class
+construction, `DOMNode` resolves each reactive to stored or computed access using
+the concrete class's declarations. The descriptor directly calls that accessor on
+reads, writes and recomputation. Stored reads do not rediscover compute methods or
+recheck constructor readiness. Computed access preserves ordinary Python method
+overrides; class metadata retains neither widgets nor bound instance callbacks.
+Cold lazy initialization retains missing-constructor diagnostics and factory/
+`Initialize` semantics. A private compute method introduced for an inherited
+reactive is now correctly bound; a failing-before regression covers that bug.
+
+Current checks: **3,431 passed, 1 skipped, 4 xfailed** excluding snapshots, and
+**56 companion Toad pilots passed**. Thirteen selector tests cover old-interpreter
+parity, custom ancestry, dynamic classes, inherited disabled state, focus and
+elimination of unnecessary path construction. Six reactive access tests cover
+probe-free reads, public/private inheritance, override dispatch, lazy defaults,
+raw values, exception propagation and constructor diagnostics.
+
+A focused sidebar action profile recorded **38,255 →1,972 total `hasattr` calls**;
+reactive reads contributed **34,074 →0**. For roughly11.4k reads, cumulative
+profiled reactive-get time fell from about36ms to8ms. This is a profiling result,
+not an end-to-end timing claim. The latest unprofiled native filter workload
+completed72actions and52typed markers, but input median42.63/p9595.47/
+maximum143.68ms still misses the universal sub50ms target. Remaining layout,
+paint, allocation/GC and consecutive-frame queue latency need further work.
+
 ## Included work
 
 1. Reactive subscribers unregister watches from quiet publishers on close,
@@ -77,7 +110,7 @@ pins this framework checkpoint. Correctness receipts do not establish latency ta
 
 ## Verification
 
-Verified suite excluding snapshot tests: **3,412 passed, 1 skipped,
+Published checkpoint suite excluding snapshot tests: **3,412 passed, 1 skipped,
 4 xfailed** with
 `pytest tests --ignore=tests/snapshot_tests -q -n 2`.
 Focused footer/scrollbar/opacity visual snapshots: **25 passed**. The companion

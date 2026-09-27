@@ -65,6 +65,7 @@ if TYPE_CHECKING:
     from textual.css.query import DOMQuery, QueryType
     from textual.css.types import CSSLocation
     from textual.message import Message
+    from textual.reactive import _StoredReactiveAccess
     from textual.screen import Screen
     from textual.widget import Widget
     from textual.worker import Worker, WorkType, ResultType
@@ -179,6 +180,7 @@ class DOMNode(MessagePump):
     _merged_bindings: ClassVar[BindingsMap | None] = None
 
     _reactives: ClassVar[dict[str, Reactive]]
+    _reactive_accessors: ClassVar[dict[str, _StoredReactiveAccess]]
 
     _decorated_handlers: dict[type[Message], list[tuple[Callable, str | None]]]
 
@@ -606,13 +608,14 @@ class DOMNode(MessagePump):
             css_type_names.add(base.__name__)
         cls._merged_bindings = cls._merge_bindings()
         cls._css_type_names = frozenset(css_type_names)
-        cls._computes = frozenset(
-            [
-                name.lstrip("_")[8:]
-                for name in dir(cls)
-                if name.startswith(("_compute_", "compute_"))
-            ]
+        compute_methods = frozenset(
+            name for name in dir(cls) if name.startswith(("_compute_", "compute_"))
         )
+        cls._computes = frozenset(name.lstrip("_")[8:] for name in compute_methods)
+        cls._reactive_accessors = {
+            name: reactive._bind_access(compute_methods)
+            for name, reactive in reactives.items()
+        }
 
     def get_component_styles(self, *names: str) -> RenderStyles:
         """Get a "component" styles object (must be defined in COMPONENT_CLASSES classvar).
