@@ -66,7 +66,7 @@ async def test_widget_focus_targets_inheritance_components_and_ancestor_focus_wi
         with patch.object(app.stylesheet, "apply", wraps=app.stylesheet.apply) as apply:
             owner.has_focus = False
             touched = {call.args[0] for call in apply.call_args_list}
-            assert affected in touched and child in touched and component in touched
+            assert affected in touched and child not in touched and component in touched
             assert not any(node.has_class("unaffected") for node in touched)
 
 

@@ -57,6 +57,10 @@ if TYPE_CHECKING:
 Callback: TypeAlias = "Callable[..., Any] | Callable[..., Awaitable[Any]]"
 
 
+def _parent_retired(_reference) -> None:
+    MessagePump._tree_revision += 1
+
+
 class CallbackError(Exception):
     pass
 
@@ -115,6 +119,8 @@ class _MessagePumpMeta(type):
 
 class MessagePump(metaclass=_MessagePumpMeta):
     """Base class which supplies a message pump."""
+
+    _tree_revision = 0
 
     def __init__(self, parent: MessagePump | None = None) -> None:
         self._parent = parent
@@ -179,7 +185,12 @@ class MessagePump(metaclass=_MessagePumpMeta):
 
     @_parent.setter
     def _parent(self, parent: MessagePump | None) -> None:
-        self.__parent = None if parent is None else ref(parent)
+        previous = self.__dict__.get("_MessagePump__parent")
+        if previous is not None and previous() is parent:
+            return
+        self.__parent = None if parent is None else ref(parent, _parent_retired)
+        if previous is not None or parent is not None:
+            MessagePump._tree_revision += 1
 
     @cached_property
     def _message_queue(self) -> Queue[Message | None]:

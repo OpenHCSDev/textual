@@ -4,7 +4,7 @@ import weakref
 from dataclasses import dataclass, field
 from functools import partial
 from operator import attrgetter
-from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator, Literal, cast
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, Iterable, Iterator, Literal, cast
 
 import rich.repr
 from rich.style import Style
@@ -900,6 +900,10 @@ class _StyleNodeReference:
 @rich.repr.auto
 @dataclass
 class Styles(StylesBase):
+    # Mutation epoch for inherited-value projections. Increment at the rule
+    # owner, including edits that intentionally do not schedule a refresh.
+    _revision: ClassVar[int] = 0
+
     node: DOMNode | None = cast("DOMNode | None", _StyleNodeReference())
     _rules: RulesMap = field(default_factory=RulesMap)
     _updates: int = 0
@@ -918,6 +922,10 @@ class Styles(StylesBase):
             important=self.important,
         )
 
+    def _mark_updated(self) -> None:
+        self._updates += 1
+        Styles._revision += 1
+
     def clear_rule(self, rule_name: str) -> bool:
         """Removes the rule from the Styles object, as if it had never been set.
 
@@ -929,7 +937,7 @@ class Styles(StylesBase):
         """
         changed = self._rules.pop(rule_name, None) is not None  # type: ignore
         if changed:
-            self._updates += 1
+            self._mark_updated()
         return changed
 
     def get_rules(self) -> RulesMap:
@@ -948,13 +956,13 @@ class Styles(StylesBase):
         if value is None:
             changed = self._rules.pop(rule, None) is not None  # type: ignore
             if changed:
-                self._updates += 1
+                self._mark_updated()
             return changed
         current = self._rules.get(rule)
         self._rules[rule] = value  # type: ignore
         changed = current != value
         if changed:
-            self._updates += 1
+            self._mark_updated()
         return changed
 
     def refresh(
@@ -973,11 +981,12 @@ class Styles(StylesBase):
         node.refresh(layout=layout)
         if children:
             for child in node.walk_children(with_self=False, reverse=True):
+                child.notify_style_update()
                 child.refresh(layout=layout, repaint=repaint)
 
     def reset(self) -> None:
         """Reset the rules to initial state."""
-        self._updates += 1
+        self._mark_updated()
         self._rules.clear()  # type: ignore
 
     def merge(self, other: StylesBase) -> None:
@@ -986,11 +995,11 @@ class Styles(StylesBase):
         Args:
             other: A Styles object.
         """
-        self._updates += 1
+        self._mark_updated()
         self._rules.update(other.get_rules())
 
     def merge_rules(self, rules: RulesMap) -> None:
-        self._updates += 1
+        self._mark_updated()
         self._rules.update(rules)
 
     def extract_rules(

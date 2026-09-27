@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections import defaultdict
+from dataclasses import dataclass
 from itertools import groupby
 from typing import TYPE_CHECKING
 
@@ -17,6 +17,29 @@ from textual.widgets import Label
 
 if TYPE_CHECKING:
     from textual.screen import Screen
+
+
+@dataclass(frozen=True)
+class FooterBinding:
+    """Display projection of an already-resolved binding, not another key map."""
+
+    binding: Binding
+    enabled: bool
+    tooltip: str
+    key_display: str
+
+
+@dataclass(frozen=True)
+class FooterBindingGroup:
+    group: Binding.Group | None
+    bindings: tuple[FooterBinding, ...]
+
+
+@dataclass(frozen=True)
+class FooterProjection:
+    groups: tuple[FooterBindingGroup, ...]
+    palette: FooterBinding | None
+    columns: int
 
 
 @rich.repr.auto
@@ -240,77 +263,197 @@ class Footer(ScrollableContainer, can_focus=False, can_focus_children=False):
         self.set_reactive(Footer.show_command_palette, show_command_palette)
         self.set_reactive(Footer.compact, compact)
         self.set_class(compact, "-compact", update=False)
+        self._binding_projection: FooterProjection | None = None
+        self._binding_update_pending = False
+        self._binding_revision = 0
 
     def compose(self) -> ComposeResult:
         if not self._bindings_ready:
             return
-        active_bindings = self.screen.active_bindings
-        bindings = [
-            (binding, enabled, tooltip)
-            for (_, binding, enabled, tooltip) in active_bindings.values()
-            if binding.show
-        ]
-        action_to_bindings: defaultdict[str, list[tuple[Binding, bool, str]]]
-        action_to_bindings = defaultdict(list)
-        for binding, enabled, tooltip in bindings:
-            action_to_bindings[binding.action].append((binding, enabled, tooltip))
-
-        self.styles.grid_size_columns = len(action_to_bindings)
-
-        for group, multi_bindings_iterable in groupby(
-            action_to_bindings.values(),
-            lambda multi_bindings_: multi_bindings_[0][0].group,
-        ):
-            multi_bindings = list(multi_bindings_iterable)
-            if group is not None and len(multi_bindings) > 1:
-                with KeyGroup(classes="-compact" if group.compact else ""):
-                    for multi_bindings in multi_bindings:
-                        binding, enabled, tooltip = multi_bindings[0]
-                        yield FooterKey(
-                            binding.key,
-                            self.app.get_key_display(binding),
-                            "",
-                            binding.action,
-                            disabled=not enabled,
-                            tooltip=tooltip or binding.description,
-                            classes="-grouped",
-                        ).data_bind(compact=Footer.compact)
-                yield FooterLabel(group.description)
+        projection = self._binding_projection = self._project_bindings()
+        self.styles.grid_size_columns = projection.columns
+        for part in projection.groups:
+            if part.group is not None:
+                with KeyGroup(classes="-compact" if part.group.compact else ""):
+                    for item in part.bindings:
+                        yield self._make_key(item, grouped=True)
+                yield FooterLabel(part.group.description)
             else:
-                for multi_bindings in multi_bindings:
-                    binding, enabled, tooltip = multi_bindings[0]
-                    yield FooterKey(
-                        binding.key,
-                        self.app.get_key_display(binding),
-                        binding.description,
-                        binding.action,
-                        disabled=not enabled,
-                        tooltip=tooltip,
-                    ).data_bind(compact=Footer.compact)
-        if self.show_command_palette and self.app.ENABLE_COMMAND_PALETTE:
-            try:
-                _node, binding, enabled, tooltip = active_bindings[
-                    self.app.COMMAND_PALETTE_BINDING
-                ]
-            except KeyError:
-                pass
-            else:
-                yield FooterKey(
-                    binding.key,
-                    self.app.get_key_display(binding),
-                    binding.description,
-                    binding.action,
-                    classes="-command-palette",
-                    disabled=not enabled,
-                    tooltip=binding.tooltip or binding.description,
-                )
+                for item in part.bindings:
+                    yield self._make_key(item)
+        if projection.palette is not None:
+            yield self._make_key(projection.palette, palette=True)
+
+    def _make_key(
+        self, item: FooterBinding, *, grouped: bool = False, palette: bool = False
+    ) -> FooterKey:
+        binding = item.binding
+        key = FooterKey(
+            binding.key,
+            item.key_display,
+            "" if grouped else binding.description,
+            binding.action,
+            disabled=not item.enabled,
+            tooltip=(
+                (binding.tooltip or binding.description) if palette else
+                (item.tooltip or binding.description) if grouped else item.tooltip
+            ),
+            classes="-command-palette" if palette else "-grouped" if grouped else "",
+        )
+        return key if palette else key.data_bind(compact=Footer.compact)
 
     def bindings_changed(self, screen: Screen) -> None:
         self._bindings_ready = True
+        self._binding_revision += 1
         if not screen.app.app_focus:
             return
-        if self.is_attached and screen is self.screen:
-            self.call_after_refresh(self.recompose)
+        if self.is_attached and screen is self.screen and not self._binding_update_pending:
+            self._binding_update_pending = True
+            self.call_after_refresh(self._reconcile_bindings)
+
+    def _project_bindings(self) -> FooterProjection:
+        """Capture display facts, never binding-owner widgets or bound callbacks."""
+        active = self.screen.active_bindings
+        by_action: dict[str, FooterBinding] = {}
+        for _, binding, enabled, tooltip in active.values():
+            if binding.show and binding.action not in by_action:
+                by_action[binding.action] = FooterBinding(
+                    binding, enabled, tooltip, self.app.get_key_display(binding)
+                )
+        groups = []
+        for group, items in groupby(by_action.values(), lambda item: item.binding.group):
+            bindings = tuple(items)
+            groups.append(FooterBindingGroup(
+                group if group is not None and len(bindings) > 1 else None, bindings
+            ))
+        palette = active.get(self.app.COMMAND_PALETTE_BINDING)
+        palette_display = None
+        if (
+            self.show_command_palette
+            and self.app.ENABLE_COMMAND_PALETTE
+            and palette is not None
+        ):
+            _, binding, enabled, tooltip = palette
+            palette_display = FooterBinding(
+                binding, enabled, tooltip, self.app.get_key_display(binding)
+            )
+        return FooterProjection(tuple(groups), palette_display, len(by_action))
+
+    async def _reconcile_bindings(self) -> None:
+        revision = self._binding_revision
+        self._binding_update_pending = True
+        try:
+            # Share the native recompose lock and update transaction. A direct
+            # recompose must not replace children across our remove/mount awaits.
+            async with self.batch():
+                await self._apply_binding_projection()
+        finally:
+            self._binding_update_pending = False
+            if (
+                revision != self._binding_revision
+                and self.is_attached
+                and not self._closing
+                and not self._pruning
+            ):
+                self.bindings_changed(self.screen)
+
+    async def _apply_binding_projection(self) -> None:
+        if not self.is_attached or self._closing or self._pruning:
+            return
+        projection = self._project_bindings()
+        if projection == self._binding_projection:
+            return
+        previous = self._binding_projection
+        same_groups = (
+            previous is not None
+            and len(previous.groups) == len(projection.groups)
+            and all(
+                old.group == new.group
+                for old, new in zip(previous.groups, projection.groups)
+            )
+            and (previous.palette is None) == (projection.palette is None)
+        )
+        if not same_groups:
+            await self.recompose()
+            return
+        parents = iter(self.children)
+        for part in projection.groups:
+            if part.group is not None:
+                parent = next(parents)
+                assert isinstance(parent, KeyGroup)
+                await self._reconcile_keys(parent, part.bindings, grouped=True)
+                next(parents)  # The unchanged group's description label.
+            else:
+                # A flat footer is the common case; grouped/flat structural
+                # transitions retain ordinary recomposition above.
+                if len(projection.groups) != 1:
+                    await self.recompose()
+                    return
+                await self._reconcile_keys(self, part.bindings)
+            if not self.is_attached or self._closing or self._pruning:
+                return
+        if projection.palette is not None:
+            self._update_key(
+                self.query_one(".-command-palette", FooterKey),
+                projection.palette,
+                palette=True,
+            )
+        self.styles.grid_size_columns = projection.columns
+        self._binding_projection = projection
+
+    def _update_key(
+        self, key: FooterKey, item: FooterBinding, *,
+        grouped: bool = False, palette: bool = False,
+    ) -> None:
+        binding = item.binding
+        description = "" if grouped else binding.description
+        tooltip = (
+            (binding.tooltip or binding.description) if palette else
+            (item.tooltip or binding.description) if grouped else item.tooltip
+        ) or None
+        if (key.key, key.action, key.key_display, key.description, key._disabled, key.tooltip) == (
+            binding.key, binding.action, item.key_display, description, not item.enabled, tooltip
+        ):
+            return
+        changed_size = (key.key_display, key.description) != (item.key_display, description)
+        key.key, key.action = binding.key, binding.action
+        key.key_display, key.description = item.key_display, description
+        key._disabled = not item.enabled
+        key.set_class(not item.enabled, "-disabled")
+        key.tooltip = tooltip
+        key.refresh(layout=changed_size)
+
+    async def _reconcile_keys(
+        self, parent: Widget, items: tuple[FooterBinding, ...], *, grouped: bool = False
+    ) -> None:
+        existing = {
+            key.action: key for key in parent.children
+            if isinstance(key, FooterKey) and not key.has_class("-command-palette")
+        }
+        desired = {item.binding.action for item in items}
+        removed = [key for action, key in existing.items() if action not in desired]
+        if removed:
+            await parent.remove_children(removed)
+        if not parent.is_attached or self._closing or self._pruning:
+            return
+        ordered = []
+        added = []
+        for item in items:
+            key = existing.get(item.binding.action)
+            if key is None:
+                key = self._make_key(item, grouped=grouped)
+                added.append(key)
+            else:
+                self._update_key(key, item, grouped=grouped)
+            ordered.append(key)
+        if added:
+            await parent.mount_all(added)
+        if not parent.is_attached or self._closing or self._pruning:
+            return
+        ordered.extend(child for child in parent.children if child not in ordered)
+        if list(parent.children) != ordered:
+            positions = {child: index for index, child in enumerate(ordered)}
+            parent.sort_children(key=positions.__getitem__)
 
     def _on_mouse_scroll_down(self, event: events.MouseScrollDown) -> None:
         if self.allow_horizontal_scroll:

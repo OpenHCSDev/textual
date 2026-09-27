@@ -302,6 +302,16 @@ class Widget(DOMNode):
     See also [static][textual.widgets._static.Static] for starting point for your own widgets.
     """
 
+    CACHE_SUBTREE_GEOMETRY: ClassVar[bool] = False
+    """Reuse an unchanged contained scene during unrelated sibling reflows."""
+    _geometry_revision = 0
+
+    def _invalidate_subtree_geometry(self) -> None:
+        node = self
+        while isinstance(node, Widget):
+            node._geometry_revision += 1
+            node = node._parent
+
     DEFAULT_CSS = """
     Widget{
         scrollbar-background: $scrollbar-background;
@@ -474,6 +484,7 @@ class Widget(DOMNode):
         self._visual_style: VisualStyle | None = None
         """Cached style of visual."""
         self._visual_style_cache_key: int = -1
+        self._visual_paint_state = None
         """Cache busting integer."""
 
         self._render_cache = _RenderCache(_null_size, [])
@@ -644,12 +655,7 @@ class Widget(DOMNode):
     @property
     def opacity(self) -> float:
         """Total opacity of widget."""
-        opacity = 1.0
-        for node in reversed(self.ancestors_with_self):
-            opacity *= node.styles.opacity
-            if not opacity:
-                break
-        return opacity
+        return self._resolved_paint_state().opacity
 
     @property
     def is_anchored(self) -> bool:
@@ -1375,6 +1381,13 @@ class Widget(DOMNode):
     def _clear_arrangement_cache(self) -> None:
         """Clear arrangement cache, forcing a new arrange operation."""
         self._arrangement_cache.clear()
+
+    def _child_nodes_removed(self) -> None:
+        # A new NodeList generation prevents cache hits, but does not release
+        # cached placements. Inactive parents may never arrange again.
+        self._clear_arrangement_cache()
+        self.layout.clear_cache()
+        self._invalidate_subtree_geometry()
 
     def _get_virtual_dom(self) -> Iterable[Widget]:
         """Get widgets not part of the DOM.
@@ -4139,16 +4152,13 @@ class Widget(DOMNode):
     def _measured_virtual_size_requires_layout(self) -> bool:
         """Whether a committed virtual extent is also a measurement input.
 
-        Content-derived containers may override this when their extent is solely
-        an output of arranging their children. Watches and scrollbar changes
-        still run normally; authored virtual_size changes retain layout flags.
+        A container's measured extent is output of arranging its children,
+        including when those children scroll. Changes to scrollbar visibility
+        still invalidate layout through their own reactives. Custom widgets that
+        also use the committed extent as a measurement input may override this.
+        Authored virtual_size changes always retain their ordinary layout flags.
         """
-        measured_group = (
-            self.is_container
-            and self.styles.overflow_x == "hidden"
-            and self.styles.overflow_y == "hidden"
-        )
-        return self.is_scrollable and not measured_group
+        return self.is_scrollable and not self.is_container
 
     def _size_updated(
         self, size: Size, virtual_size: Size, container_size: Size, layout: bool = True
@@ -4177,7 +4187,7 @@ class Widget(DOMNode):
             self._size = size
             if layout:
                 if self._measured_virtual_size_requires_layout():
-                    # Scrolling/virtual views retain extent-driven feedback.
+                    # Independently authored virtual views retain feedback.
                     self.virtual_size = virtual_size
                 else:
                     # A layout group's measured extent is output of this pass,
@@ -4221,36 +4231,14 @@ class Widget(DOMNode):
     @property
     def visual_style(self) -> VisualStyle:
         """The widget's current style."""
+        resolved = self._resolved_paint_state()
         if (
             self._visual_style is None
-            or self._visual_style_cache_key != self.styles._cache_key
+            or self._visual_paint_state is not resolved
         ):
             self._visual_style_cache_key = self.styles._cache_key
-            background = Color(0, 0, 0, 0)
-            color = Color(255, 255, 255, 0)
-
-            style = Style()
-            opacity = 1.0
-
-            for node in reversed(self.ancestors_with_self):
-                styles = node.styles
-                has_rule = styles.has_rule
-                opacity *= styles.opacity
-                if has_rule("background"):
-                    text_background = background + styles.background.tint(
-                        styles.background_tint
-                    )
-                    background += (
-                        styles.background.tint(styles.background_tint)
-                    ).multiply_alpha(opacity)
-                else:
-                    text_background = background
-                if has_rule("color"):
-                    color = styles.color
-                style += styles.text_style
-                if has_rule("auto_color") and styles.auto_color:
-                    color = text_background.get_contrast_text(color.a)
-
+            self._visual_paint_state = resolved
+            background, color, style = resolved.background, resolved.foreground, resolved.text_style
             self._visual_style = VisualStyle(
                 background,
                 color,
@@ -4371,6 +4359,7 @@ class Widget(DOMNode):
 
     def _refresh_scroll(self) -> None:
         """Refreshes the scroll position."""
+        self._invalidate_subtree_geometry()
         self._scroll_required = True
         self.check_idle()
 
@@ -4404,6 +4393,8 @@ class Widget(DOMNode):
             The `Widget` instance.
         """
 
+        if layout:
+            self._invalidate_subtree_geometry()
         if layout and not self._layout_required:
             self._layout_required = True
             self._layout_updates += 1
@@ -4581,17 +4572,36 @@ class Widget(DOMNode):
         parent._nodes._remove(self)
         self.app._registry.discard(self)
         self._detach()
-        self._arrangement_cache.clear()
         self._nodes._clear()
+        self._release_presentation()
+        self._component_styles.clear()
+        self._query_one_cache.clear()
+
+    def _release_presentation(self) -> None:
+        """Release reconstructible paint/measurement state, retaining the model.
+
+        Closing widgets always release this state. Scene owners may also retire
+        it when an inactive presentation no longer has a working-set lease.
+        Authored rules, content, selection, subscriptions and child nodes remain.
+        """
+        self._arrangement_cache.clear()
+        self.layout.clear_cache()
         self._render_cache = _RenderCache(NULL_SIZE, [])
+        # The next exposed line must regenerate content, even when its native
+        # size did not change while this presentation was retired.
+        self._dirty_regions.add(self._size.region)
         self._layout_cache.clear()
         self._styles_cache.clear()
         self._rich_style_cache.clear()
         self._visual_style_cache.clear()
         self._visual_style = None
-        self._component_styles.clear()
-        self._query_one_cache.clear()
+        self.__dict__.pop("_paint_state", None)
+        self.__dict__.pop("_paint_epoch", None)
+        self._visual_paint_state = None
         self._box_model_cache.clear()
+        self._box_model_revision = None
+        self._content_width_cache = (None, 0)
+        self._content_height_cache = (None, 0)
 
     async def _on_idle(self, event: events.Idle) -> None:
         """Called when there are no more events on the queue.

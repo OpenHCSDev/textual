@@ -4386,10 +4386,11 @@ class App(Generic[ReturnType], DOMNode):
         try:
             screen = nodes[0].screen
         except (ScreenStackError, NoScreen):
-            pass
+            screen = None
         else:
             if screen.focused and screen.focused in pruning_nodes:
                 screen._reset_focus(screen.focused, list(pruning_nodes))
+        pruning_screen = screen
 
         for node in pruning_nodes:
             node._pruning = True
@@ -4397,13 +4398,16 @@ class App(Generic[ReturnType], DOMNode):
         def post_mount() -> None:
             """Called after removing children."""
 
+            if pruning_screen is not None:
+                pruning_screen._forget_pruned_widgets(pruning_nodes)
+
             if parent is not None:
                 try:
                     screen = parent.screen
                 except (ScreenStackError, NoScreen):
                     pass
                 else:
-                    if screen._running:
+                    if screen._running and screen.is_current:
                         self._update_mouse_over(screen)
                 finally:
                     parent.refresh(layout=True)

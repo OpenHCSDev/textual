@@ -843,14 +843,21 @@ class Stylesheet:
         styles = node.styles
         base_styles = styles.base
 
+        if animate:
+            # With no declared transition there is no animated target to
+            # resolve. Materializing every render-rule default allocates an
+            # unrelated style graph for ordinary focus/class changes.
+            animate = bool(rules.get("transitions"))
+            if not animate and base_styles._rules == rules:
+                return
+            # Equal current values do not imply an equal animation target:
+            # a previous delayed transition may not have started yet.
+
         # Styles currently used on new rules
         modified_rule_keys = base_styles._rules.keys() | rules.keys()
 
         if animate:
             new_styles = Styles(node, rules)
-            if new_styles == base_styles:
-                # Nothing to animate, return early
-                return
             current_render_rules = styles.get_render_rules()
             is_animatable = styles.is_animatable
             get_current_render_rule = current_render_rules.get
@@ -955,13 +962,25 @@ class Stylesheet:
         """
         self._update_focus_dependencies(root, root)
 
-    def _update_focus_dependencies(self, root: DOMNode, focus_node: DOMNode) -> None:
-        """Restyle matching targets and their potentially inheriting children."""
+    def update_focus_within(self, root: DOMNode) -> None:
+        """Restyle declaration targets affected by this ancestor's focus state."""
+        self._update_focus_dependencies(root, root, frozenset({"focus-within"}))
+
+    def _update_focus_dependencies(
+        self, root: DOMNode, focus_node: DOMNode,
+        pseudo_classes: frozenset[str] = frozenset({"focus", "blur"}),
+    ) -> None:
+        """Rematch affected targets; style descriptors own inherited repaint.
+
+        A matching ancestor does not imply every descendant's CSS changed.
+        Color, opacity and other inherited style descriptors already invalidate
+        child presentation. Descendant selectors declare their own target names.
+        """
         affected_names = {
             name
             for rule in self.rules
             if any(
-                selector.pseudo_classes & {"focus", "blur"}
+                selector.pseudo_classes & pseudo_classes
                 and selector._check(focus_node)
                 for group in rule.selector_set for selector in group.selectors
             )
@@ -969,16 +988,17 @@ class Stylesheet:
         }
         if not affected_names:
             return
+        affected = []
         pending = [root]
         while pending:
             node = pending.pop()
             component_names = {f".{name}" for name in node._get_component_classes()}
             if affected_names & (node._selector_names | component_names):
-                self.update(node, animate=True)
-            else:
-                pending.extend(node.children)
-                if isinstance(node, Widget):
-                    pending.extend(node._get_virtual_dom())
+                affected.append(node)
+            pending.extend(node.children)
+            if isinstance(node, Widget):
+                pending.extend(node._get_virtual_dom())
+        self.update_nodes(affected, animate=True)
 
     def update_nodes(self, nodes: Iterable[DOMNode], animate: bool = False) -> None:
         """Update styles for nodes.

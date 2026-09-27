@@ -22,10 +22,12 @@ Draft companion to the OpenHCSDev Toad responsiveness investigation.
 5. Viewport layout can retain declared anchor geometry paths without walking
    unrelated offscreen descendants. `_layout_geometry_targets()` is the screen
    declaration used by the application.
-6. `_measured_virtual_size_requires_layout()` preserves the default feedback
-   policy while allowing content-derived containers to declare their measured
-   extent as an output. Watchers, authored changes and scrollbar invalidation
-   remain normal.
+6. `_measured_virtual_size_requires_layout()` distinguishes committed layout
+   output from an authored measurement input. Child-derived containers, including
+   scrolling containers, no longer invalidate ancestor measurements merely for
+   committing their extent. Watchers, authored changes and scrollbar visibility
+   changes still invalidate normally. Custom extent-input widgets may override
+   the hook.
 7. `Stylesheet.is_local_display_class()` derives a conservative invalidation
    scope from parsed rules. Ordinary class mutation is unchanged; an application
    may opt into a node-local display update only when the declaration proves it
@@ -37,10 +39,51 @@ Draft companion to the OpenHCSDev Toad responsiveness investigation.
    `Stylesheet.references_class()` derives marker dependencies from parsed rules,
    including compound/ancestor selectors and source replacement/reparse.
 
+## Structural follow-up
+
+This draft includes the following structural changes. The companion Toad branch
+pins this framework checkpoint. Correctness receipts do not establish latency targets.
+
+- Removal retires parent arrangement and StreamLayout placements, inactive
+  compositor maps, layer projections and pending widget invalidations. A native
+  ownership reproduction failed against the previous source. Closed subscribers
+  alone were not a sufficient lifetime check.
+- Acyclic LRU storage releases acyclic payloads when the cache owner is dropped.
+- Sparse horizontal exposure avoids painting covered parent backgrounds.
+- Focus invalidation follows declaration targets; inherited paint is invalidated
+  through style owners. Unchanged non-transition rules avoid animated rule-graph
+  construction. Declared transitions still reconcile pending targets even when
+  their current values are equal, including delayed transitions.
+- Native layout and full-repaint intent commit in one frame. Content height
+  measurement counts wrapping boundaries without constructing formatted lines.
+- Screen resolution observes weak topology ownership. Optional inactive-scene
+  presentation retirement is available but was not enabled in Toad after its
+  cold-remeasurement tradeoff was measured.
+- Opt-in subtree geometry reuse has a validated, configurable entry budget:
+  `Compositor.max_subtree_geometry_entries` and
+  `Screen.SUBTREE_GEOMETRY_CACHE_ENTRIES`. Zero disables it; the default64 is a
+  heuristic, not a formal working-set bound.
+- Inherited paint uses immutable data-only `PaintState` records. Style mutations
+  and native topology changes own its validation epoch, avoiding repeated
+  ancestor walks between mutations. Custom ancestry bypasses epoch reuse;
+  ancestor collection and move/reset/merge/clear cases retain native behavior.
+  The record uses NamedTuple to preserve Python3.9 compatibility.
+- Footer consumes `Screen.active_bindings` through an immutable display
+  projection. Repeated notifications coalesce; compatible native FooterKeys are
+  updated/reordered rather than rebuilt. Reconciliation shares the native
+  recompose transaction, checks retirement after awaits, and reschedules changed
+  revisions. Keys still simulate native key events, so dispatch observes the
+  current owner and keymap rather than a captured callback.
+
 ## Verification
 
-Full suite excluding snapshot tests: **3,132 passed, 1 skipped, 4 xfailed** with
+Verified suite excluding snapshot tests: **3,412 passed, 1 skipped,
+4 xfailed** with
 `pytest tests --ignore=tests/snapshot_tests -q -n 2`.
+Focused footer/scrollbar/opacity visual snapshots: **25 passed**. The companion
+Toad pilot suite passed **52 cases** before the final transition regression and
+NamedTuple compatibility cleanup; focused framework tests and the final full
+framework suite cover those later changes.
 The reactive lifetime fixture was also rerun after correcting its callback
 closure construction: all five cases passed. Scoped Ruff and whitespace checks
 pass. Tests cover weak publisher lifetime, live-watch preservation, real Footer
@@ -60,3 +103,14 @@ steady-state animation work at 60 Hz with responsive input during filtering and
 loading. Whole-transcript/live-block scaling, remaining GC/render work, and
 clean repeated real-terminal acceptance still need work. Passing correctness
 tests or headless settlement is not proof of smooth UI performance.
+
+The pre-async-activation native navigation workload completed83actions, including ten
+tabs, resize, scrolling and selection. It still had a189.7ms maximum loop gap
+and139.8ms GC pause; target-mode flush medians were696.2ms for opening and169.3ms
+for switching. The four-thread/all-seven-filter run applied all52markers but
+input acknowledgment still reached134.9ms. These are performance failures.
+
+The subsequent Toad async-activation follow-up recorded loading-frame flush
+median53.52/max62.59ms and switching median55.09/max105.18ms. Input/GC tails still
+miss the universal sub50ms goal; see the companion Toad tracking plan for the
+separate loading, final-shell and content-ready receipts.

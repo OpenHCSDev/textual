@@ -40,7 +40,7 @@ async def test_app_focus_updates_inheritance_and_components_without_unrelated_ro
                 app.app_focus = focused
                 await pilot.pause()
                 touched = {call.args[0] for call in apply.call_args_list}
-                assert affected in touched and child in touched and component in touched
+                assert affected in touched and child not in touched and component in touched
                 assert not any(node.id and node.id.startswith("unaffected-") for node in touched)
             assert affected.styles.color == Color.parse(color)
             assert component.get_component_styles("focus-item--indicator").color == Color.parse(color)

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 import threading
+from weakref import ref
 from functools import lru_cache, partial
 from inspect import getfile
 from typing import (
@@ -34,6 +35,7 @@ from rich.tree import Tree
 from textual._context import NoActiveAppError, active_message_pump
 from textual._compat import cached_property
 from textual._node_list import NodeList
+from textual._paint_state import EMPTY_PAINT, PaintState, resolve_paint
 from textual._types import WatchCallbackType
 from textual.binding import Binding, BindingsMap, BindingType
 from textual.cache import LRUCache
@@ -804,6 +806,11 @@ class DOMNode(MessagePump):
         Raises:
             NoScreen: If this node isn't mounted (and has no screen).
         """
+        cached = self.__dict__.get("_screen_reference")
+        if cached is not None and cached[0] == MessagePump._tree_revision:
+            screen = cached[1]()
+            if screen is not None:
+                return screen
         # Get the node by looking up a chain of parents
         # Note that self.screen may not be the same as self.app.screen
         from textual.screen import Screen
@@ -818,6 +825,7 @@ class DOMNode(MessagePump):
             ) from None
         if not isinstance(node, Screen):
             raise NoScreen("node has no screen")
+        self._screen_reference = (MessagePump._tree_revision, ref(node))
         return node
 
     @property
@@ -912,6 +920,9 @@ class DOMNode(MessagePump):
         if self._id is not None:
             selectors.add(f"#{self._id}")
         return selectors
+
+    def _child_nodes_removed(self) -> None:
+        """Retire child-derived ownership at the structural removal boundary."""
 
     @property
     def display(self) -> bool:
@@ -1109,9 +1120,36 @@ class DOMNode(MessagePump):
         Returns:
             A Rich Style.
         """
-        return Style.combine(
-            node.styles.text_style for node in reversed(self.ancestors_with_self)
+        return self._resolved_paint_state().text_style
+
+    def _resolved_paint_state(self) -> PaintState:
+        if type(self).ancestors_with_self is not DOMNode.ancestors_with_self:
+            # Custom ancestry may change independently of native topology or
+            # style mutations, including when inherited by a native child.
+            state = EMPTY_PAINT._replace(cacheable=False)
+            for node in reversed(self.ancestors_with_self):
+                state = resolve_paint(state, node.styles)
+            return state
+        epoch = (Styles._revision, MessagePump._tree_revision)
+        state = self.__dict__.get("_paint_state")
+        if (
+            state is not None
+            and state.cacheable
+            and self.__dict__.get("_paint_epoch") == epoch
+        ):
+            return state
+        parent = self._parent
+        inherited = (
+            parent._resolved_paint_state() if isinstance(parent, DOMNode) else EMPTY_PAINT
         )
+        if (
+            state is None
+            or state.parent is not inherited
+            or state.style_key != self.styles._cache_key
+        ):
+            state = self._paint_state = resolve_paint(inherited, self.styles)
+        self._paint_epoch = epoch
+        return state
 
     @property
     def selection_style(self) -> Style:
@@ -1128,36 +1166,12 @@ class DOMNode(MessagePump):
         Returns:
             A Rich style.
         """
-        background = Color(0, 0, 0, 0)
-        color = Color(255, 255, 255, 0)
-
-        style = Style()
-        opacity = 1.0
-
-        for node in reversed(self.ancestors_with_self):
-            styles = node.styles
-            has_rule = styles.has_rule
-            opacity *= styles.opacity
-            if has_rule("background"):
-                text_background = background + styles.background.tint(
-                    styles.background_tint
-                )
-                background += (
-                    styles.background.tint(styles.background_tint)
-                ).multiply_alpha(opacity)
-            else:
-                text_background = background
-            if has_rule("color"):
-                color = styles.color
-            style += styles.text_style
-            if has_rule("auto_color") and styles.auto_color:
-                color = text_background.get_contrast_text(color.a)
-
-        style += Style.from_color(
+        state = self._resolved_paint_state()
+        background, color = state.background, state.foreground
+        return state.text_style + Style.from_color(
             (background + color).rich_color if (background.a or color.a) else None,
             background.rich_color if background.a else None,
         )
-        return style
 
     def check_consume_key(self, key: str, character: str | None) -> bool:
         """Check if the widget may consume the given key.
@@ -1229,16 +1243,8 @@ class DOMNode(MessagePump):
         Returns:
             `(<background color>, <color>)`
         """
-        base_background = background = Color(0, 0, 0, 0)
-        opacity = 1.0
-        for node in reversed(self.ancestors_with_self):
-            styles = node.styles
-            base_background = background
-            opacity *= styles.opacity
-            background += styles.background.tint(styles.background_tint).multiply_alpha(
-                opacity
-            )
-        return (base_background, background)
+        state = self._resolved_paint_state()
+        return state.base_background, state.layered_background
 
     @property
     def colors(self) -> tuple[Color, Color, Color, Color]:
