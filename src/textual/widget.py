@@ -494,7 +494,7 @@ class Widget(DOMNode):
         self._repaint_regions: set[Region] = set()
 
         self._box_model_cache: LRUCache[object, BoxModel] = LRUCache(16)
-        self._box_model_revision: tuple[int, int] | None = None
+        self._box_model_revision: tuple[int, int, int] | None = None
 
         # Cache the auto content dimensions
         self._content_width_cache: tuple[object, int] = (None, 0)
@@ -1784,11 +1784,16 @@ class Widget(DOMNode):
         Returns:
             The size and margin for this widget.
         """
-        revision = (self._layout_updates, self.styles._cache_key)
+        nodes = self.__dict__.get("_nodes")
+        revision = (self._layout_updates, self.styles._cache_key,
+                    nodes._updates if nodes is not None else 0)
         if revision != self._box_model_revision:
             # Measurements from previous revisions can never be hit again.
             # Keep width/viewport variants within this revision, rather than
             # retaining dead generation graphs until ordinary LRU eviction.
+            # NodeList propagates structural/display changes synchronously;
+            # ancestor Layout messages may not have reached idle delivery yet.
+            # Box measurements and arrangements must observe the same structure.
             self._box_model_cache.clear()
             self._box_model_revision = revision
         cache_key = (

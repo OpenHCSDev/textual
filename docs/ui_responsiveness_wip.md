@@ -7,6 +7,33 @@ Draft companion to the OpenHCSDev Toad responsiveness investigation.
 - Bounded history/worker views: https://github.com/OpenHCSDev/toad/issues/61
 - Animation budget: https://github.com/OpenHCSDev/toad/issues/64
 
+## Structural measurement revision follow-up
+
+The viewport-stutter follow-up exposed a stale intrinsic-size cache during
+progressive child admission: a parent could retain a29-row box while its child
+already arranged33rows, clipping the tail for one frame. Native `NodeList`
+propagates structure/display revisions synchronously, but the box cache previously
+waited for the later layout notification. Arrangement and box measurement could
+therefore describe different child structures in the same frame.
+
+The box-model revision now includes the existing native child-structure revision.
+Obsolete entries are retired through the same cache-generation boundary. There
+is no extra ancestor walk, duplicate revision registry or forced full-map layout.
+Two deterministic failing-before regressions cover nested admission and native
+display-projection changes before idle notification delivery; existing cache tests
+retain width reuse and obsolete-generation retirement assertions.
+
+The Toad progressive-tail diagnostic passed six consecutive runs with this fix.
+The corrected-environment framework run passed3,442tests (1skip,4xfail) in193.07s,
+and six focused scrollbar/Markdown/prune snapshots passed. The framework job peaked
+246.5MiB under a4GiB/no-swap limit.
+The full80pilot run passed79cases including the prior frame failure; the large
+comms case exceeded100s and remains a separate validation limit. Two serial native
+candidate runs preserved72actions/52markers and recorded input maxima59.59/69.87ms
+versus96.75ms in the matched landed control. Anchor-induced full geometry passes
+fell22to0, but loop maxima112.89/124.73ms still miss the overall stutter target.
+Validation used one worker with4GiB/no-swap limits; the full Toad job peaked494.2MiB.
+
 ## Removal completion and input ingress checkpoint
 
 Native key-route evidence exposed an unrelated teardown barrier: a key entered
