@@ -7,6 +7,32 @@ Draft companion to the OpenHCSDev Toad responsiveness investigation.
 - Bounded history/worker views: https://github.com/OpenHCSDev/toad/issues/61
 - Animation budget: https://github.com/OpenHCSDev/toad/issues/64
 
+## Paint color memo ownership
+
+`StylesCache.get_inner_outer` computed only from its two color arguments, but its
+global1024-entryLRU also keyed on the instance. That retained retired per-widget
+paint caches and their lines until eviction, and duplicated identical color
+results across owners. The operation is now static: the same bounded memo retains
+only colors and immutable style results. `clear()` also releases the reusable
+padding strip so a cleared scene cannot reuse its old background.
+
+Three regressions fail before/pass after: immediate owner release without forcing
+GC or evicting the memo, cross-owner color reuse, and changed padding paint after
+clear. The focused paint/lifetime/strip suite passes52tests; the full framework
+passes3,473tests (1skip,4xfail) in196.56s at245.8MiB peak. All60relevant visual
+snapshots pass. Native closing color-cache entries drop1,024to6/7and tracked
+paint-cache owners1,890to1,429/1,461. Input maxima111.20ms in control versus
+66.56/70.91ms in candidates do not imply a universal win: loop maxima worsened
+96.62ms to153.84/158.03ms with GC overlapping sidebar painting. GC maxima remain
+about67–68ms. Full evidence and runtime comparison are in the companion Toad audit.
+
+The online GC investigation is version-specific. CPython3.14.2's incremental
+collector still has a non-incremental global-root/stack marking phase;3.14.5
+restored three generations. Both tested runtime packages still had large pauses
+(3.14.2up to70.56ms; system3.14.6up to163.91ms in the fresh comparison). Their
+compiler/build flags also differ. Removing accidental owner retention is justified
+by the lifetime regression; no universal latency win is inferred from that alone.
+
 ## Structural measurement revision follow-up
 
 ### Opt-in available-height-independent box reuse
