@@ -18,6 +18,7 @@ from textual.widgets._text_area import (
     LanguageDoesNotExist,
     StartColumn,
     ThemeDoesNotExist,
+    TextAreaState,
     BUILTIN_LANGUAGES,
 )
 
@@ -38,6 +39,7 @@ __all__ = [
     "StartColumn",
     "SyntaxAwareDocument",
     "TextAreaTheme",
+    "TextAreaState",
     "ThemeDoesNotExist",
     "WrappedDocument",
 ]
