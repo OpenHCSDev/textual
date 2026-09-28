@@ -1740,6 +1740,78 @@ class Widget(DOMNode):
         # Request a refresh.
         self.refresh(layout=True)
 
+    def reparent(self, parent: Widget, *, before: Widget | None = None) -> None:
+        """Move a mounted subtree within its application without remounting it.
+
+        Widget identity, model state, message pumps and timers survive. Native
+        ancestry, styles, scene ownership, focus and selection move to the new
+        parent. Mount/Unmount are not sent. Explicit subscriptions to a particular
+        screen remain the subscriber's responsibility.
+
+        Args:
+            parent: Mounted destination widget in the same application.
+            before: Optional immediate child to insert before.
+
+        Raises:
+            WidgetError: The move would create a cycle, duplicate an ID, cross
+                applications, move a screen, or involve an unmounted/closing node.
+        """
+        from textual.screen import Screen
+
+        previous = self._parent
+        if (isinstance(self, Screen) or not isinstance(previous, Widget)
+                or not self.is_mounted or not self.is_attached or self._closing or self._pruning
+                or not parent.is_mounted or not parent.is_attached or parent._closing or parent._pruning):
+            raise WidgetError("Reparent requires live mounted widgets and cannot move screens")
+        ancestors = parent.ancestors_with_self
+        if self in ancestors or self.ancestors[-1] is not ancestors[-1]:
+            raise WidgetError("Reparent cannot create a cycle or cross applications")
+        if before is not None and before not in parent._nodes:
+            raise WidgetError("The insertion target must be an immediate destination child")
+        if parent is previous:
+            if before is not None and before is not self:
+                parent.move_child(self, before=before)
+            return
+        if self.id is not None and parent._nodes._get_by_id(self.id) is not None:
+            raise WidgetError("The destination already contains this widget ID")
+
+        nodes = set(self.walk_children(with_self=True))
+        for node in tuple(nodes):
+            nodes.update(node._get_virtual_dom())
+        app = self.app
+        if app.mouse_captured in nodes:
+            raise WidgetError("Release mouse capture before reparenting its subtree")
+        old_screen, new_screen = self.screen, parent.screen
+        focused = old_screen.focused if old_screen.focused in nodes else None
+        selections = {node: selection for node, selection in old_screen.selections.items() if node in nodes}
+        if old_screen is not new_screen:
+            if focused is not None:
+                old_screen.set_focus(None)
+            old_screen.selections = {node: selection for node, selection in old_screen.selections.items()
+                                     if node not in nodes}
+            retained_callbacks = []
+            for callback, sender in old_screen._callbacks:
+                if sender in nodes:
+                    new_screen._callbacks.append((callback, sender))
+                else:
+                    retained_callbacks.append((callback, sender))
+            old_screen._callbacks[:] = retained_callbacks
+        old_screen._forget_pruned_widgets(nodes)
+        previous._nodes._remove(self)
+        self._attach(parent)
+        if before is None:
+            parent._nodes._append(self)
+        else:
+            parent._nodes._insert(parent._nodes.index(before), self)
+        app.stylesheet.update_nodes(nodes, animate=False)
+        previous.refresh(layout=True)
+        parent.refresh(layout=True)
+        if old_screen is not new_screen:
+            if selections:
+                new_screen.selections = {**new_screen.selections, **selections}
+            if focused is not None:
+                new_screen.set_focus(focused, scroll_visible=False)
+
     def compose(self) -> ComposeResult:
         """Called by Textual to create child widgets.
 
