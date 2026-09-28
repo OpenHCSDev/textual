@@ -109,6 +109,26 @@ class TextAreaLanguage:
     """The tree-sitter highlight query to use for syntax highlighting."""
 
 
+@dataclass(frozen=True)
+class TextAreaState:
+    """Editor state whose lifetime is independent of a mounted TextArea.
+
+    Document and undo history are retained by identity, not copied. A caller
+    handing state to another editor must retire its previous editor first;
+    simultaneous editing through two widgets is not supported. Layout, wrapping,
+    paint and message-pump state remain owned by the receiving widget.
+    """
+
+    document: DocumentBase
+    history: EditHistory
+    selection: Selection
+    scroll_x: float
+    scroll_y: float
+    language: str | None
+    languages: tuple[TextAreaLanguage, ...]
+    highlight_query: Query | None
+
+
 class TextArea(ScrollView):
     DEFAULT_CSS = """\
 TextArea {
@@ -1211,6 +1231,35 @@ TextArea {
         """
         self.history.clear()
         self._set_document(text, self.language)
+        self.post_message(self.Changed(self).set_sender(self))
+        self.update_suggestion()
+
+    def capture_editor_state(self) -> TextAreaState:
+        """Retain the document, undo/redo and reader intent across UI retirement."""
+        return TextAreaState(
+            self.document, self.history, self.selection, self.scroll_x, self.scroll_y,
+            self.language, tuple(self._languages.values()), self._highlight_query,
+        )
+
+    def restore_editor_state(self, state: TextAreaState) -> None:
+        """Attach captured editor state without loading text or clearing history.
+
+        The receiving widget owns fresh width-dependent wrapping and paint.
+        Selection and scroll are restored through their ordinary native paths.
+        """
+        self._languages = {language.name: language for language in state.languages}
+        self.set_reactive(TextArea.language, state.language)
+        self.document = state.document
+        self.history = state.history
+        self._highlight_query = state.highlight_query
+        self.wrapped_document = WrappedDocument(self.document, tab_width=self.indent_width)
+        self.navigator = DocumentNavigator(self.wrapped_document)
+        self._build_highlight_map()
+        self._rewrap_and_refresh_virtual_size()
+        self.selection = state.selection
+        self.record_cursor_width()
+        self.call_after_refresh(self.scroll_to, x=state.scroll_x, y=state.scroll_y,
+                                animate=False, immediate=True)
         self.post_message(self.Changed(self).set_sender(self))
         self.update_suggestion()
 
