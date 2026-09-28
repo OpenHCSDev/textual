@@ -19,7 +19,10 @@ was tested but left disabled because rebuilding geometry caused a 130 ms revisit
 Paint-only retirement reduces retained strips from roughly 12,000 to 3,300; final
 GC maxima are 62.56/54.92 ms. One input still takes 118.96 ms, so this is not a
 universal worst-input win. Final framework validation passes 3,507 tests (1 skip,
-4 xfail) in 200.19 s at 250.3 MiB peak; companion final validation is in progress.
+4 xfail) in 200.19 s at 250.3 MiB peak. All 80 companion Toad pilots pass in
+517.29 s at 473.1 MiB peak and zero swap; comms takes 73.40 s under the unchanged
+100 s limit. Its earlier zero-size-row click failure remains documented; readiness,
+click and destination now share the original 10 s navigation deadline.
 
 The next candidate lifts the declared height-dependency proof to complete
 `DockArrangeResult` reuse, skipping recursive intrinsic measurement followed by
