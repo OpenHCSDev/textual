@@ -7,6 +7,57 @@ Draft companion to the OpenHCSDev Toad responsiveness investigation.
 - Bounded history/worker views: https://github.com/OpenHCSDev/toad/issues/61
 - Animation budget: https://github.com/OpenHCSDev/toad/issues/64
 
+## Whole-arrangement reuse and subtree-local invalidation
+
+The companion also opts out of `Screen.RETAIN_INACTIVE_PAINT` (framework default
+true). Widgets expose `_release_paint` separately from complete presentation
+retirement, preserving measurements and scene geometry while retiring cached line
+and style graphs. Native screen ownership protects visible backdrops. A failing-
+before regression verifies release, retained arrangement identity and identical
+resume pixels; another protects a transparent-overlay backdrop. All-cold retirement
+was tested but left disabled because rebuilding geometry caused a 130 ms revisit.
+Paint-only retirement reduces retained strips from roughly 12,000 to 3,300; final
+GC maxima are 62.56/54.92 ms. One input still takes 118.96 ms, so this is not a
+universal worst-input win. Final framework validation passes 3,507 tests (1 skip,
+4 xfail) in 200.19 s at 250.3 MiB peak; companion final validation is in progress.
+
+The next candidate lifts the declared height-dependency proof to complete
+`DockArrangeResult` reuse, skipping recursive intrinsic measurement followed by
+the same placement at a different available height. The new
+`Widget.CACHE_HEIGHT_INDEPENDENT_ARRANGEMENT` remains opt-in and uses the existing
+four-entry arrangement cache. Unknown hooks/layouts, dock/split/overlay behavior,
+alignment, height-relative tracks/scalars and custom direct content measurement
+retain the complete input context. Width, viewport and optimal/greedy mode remain
+distinct. Grid/stream declarations follow their direct content-measurement paths;
+a constant child box alone is not proof of constant content height.
+
+`Styles` publishes its existing mutation epoch to its owning DOM subtree and
+ancestors, including raw set/clear/reset/merge operations without refresh. Proofs
+and normalized measurements consume that local projection with native child and
+geometry revisions. Unrelated sibling style/structural edits no longer invalidate
+the transcript. Parent-sensitive box extrema also retain the immediate parent's
+native style key and a local projection of the parent's attachment revision.
+No widget references are stored in proof keys, and presentation retirement clears
+the derived proof and bounded result caches.
+
+The first four-toggle diagnostic found 18 transcript-grid arrangement misses;
+the local candidate had 9. Its inclusive grid span sum fell from roughly 76 to
+41 ms, but recursive/instrumented spans are not end-to-end acceptance evidence.
+New tests cover native placement parity, pre-idle/raw mutation, sibling locality,
+parent extrema, context-sensitive grid tracks and unknown hooks/scalars. The full
+framework passes 3,505 tests (1 skip, 4 xfail) in 198.80 s at 250.4 MiB peak.
+Broad native opt-in matches 92/93 snapshots; the one docking mismatch also occurs
+on unchanged ec244df7 with reuse disabled and differs only by a zero-width SVG
+background rectangle. Candidate/default SVG equals that baseline. No snapshot
+expectation was changed.
+
+Four serial native runs preserve all 72 actions/52 markers. Controls have layout
+median/max 12.24/108.93 and 12.92/129.41 ms; candidates 11.17/91.74 and 11.02/82.84 ms.
+Input maxima 59.10/69.75 ms in controls versus 64.00/67.15 ms in candidates and
+loop maxima 116.92/144.20 versus 132.07/89.98 ms remain overlapping. Keep the bad
+tails: this removes duplicated work, not all maximum-stutter failures. Complete
+measurements and companion validation are in the Toad audit.
+
 ## Paint color memo ownership
 
 `StylesCache.get_inner_outer` computed only from its two color arguments, but its

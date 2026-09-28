@@ -4,6 +4,7 @@ from fractions import Fraction
 from typing import TYPE_CHECKING, Iterable
 
 from textual._resolve import resolve
+from textual._measurement import GRID_HEIGHT, height_dependency
 from textual.css.scalar import Scalar
 from textual.geometry import NULL_OFFSET, Region, Size, Spacing
 from textual.layout import ArrangeResult, Layout, WidgetPlacement
@@ -45,6 +46,7 @@ class GridLayout(Layout):
         """
         return self._grid_size
 
+    @height_dependency(GRID_HEIGHT)
     def arrange(
         self, parent: Widget, children: list[Widget], size: Size, greedy: bool = True
     ) -> ArrangeResult:

@@ -1551,6 +1551,13 @@ class Screen(Generic[ScreenResultType], Widget):
         self.stack_updates += 1
         if not self.RETAIN_INACTIVE_PRESENTATION:
             self.call_later(self._retire_inactive_presentation)
+        elif not self.RETAIN_INACTIVE_PAINT:
+            self.call_later(self._retire_inactive_paint)
+
+    RETAIN_INACTIVE_PAINT: ClassVar[bool] = True
+    """Keep paint caches in inactive modes. Opt out to retain geometry but repaint
+    from the model on resume. Visible backdrops are never retired.
+    """
 
     RETAIN_INACTIVE_PRESENTATION: ClassVar[bool] = True
     """Retain derived paint/measurement caches while outside the visible stack.
@@ -1559,6 +1566,13 @@ class Screen(Generic[ScreenResultType], Widget):
     selection and native widget lifetimes are preserved; resume recomputes the
     presentation. A screen still used as a visible backdrop is never retired.
     """
+
+    def _retire_inactive_paint(self) -> None:
+        if self.is_current or self._closing or self in self.app._background_screens:
+            return
+        for widget in self.walk_children(with_self=True):
+            widget._release_paint()
+        self._repaint_required = True
 
     def _retire_inactive_presentation(self) -> None:
         if self.is_current or self._closing or self in self.app._background_screens:

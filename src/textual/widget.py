@@ -42,7 +42,7 @@ from rich.style import Style
 from rich.text import Text
 from typing_extensions import Self
 
-from textual.css.styles import Styles, StylesBase
+from textual.css.styles import StylesBase
 
 if TYPE_CHECKING:
     from textual.app import RenderResult
@@ -57,7 +57,8 @@ from textual._easing import DEFAULT_SCROLL_EASING
 from textual._extrema import Extrema
 from textual._measurement import (
     CONTEXT_HEIGHT, INDEPENDENT_HEIGHT, NATIVE_WIDGET_HEIGHT,
-    HeightDependency, box_depends_on_available_height, height_dependency,
+    HeightDependency, arrangement_depends_on_available_height,
+    box_depends_on_available_height, height_dependency,
 )
 from textual.message_pump import MessagePump
 from textual._styles_cache import StylesCache
@@ -316,6 +317,12 @@ class Widget(DOMNode):
     replacement requires disabling this opt-in or declaring the replacement on a
     class so its measurement contract is bound normally.
     """
+    CACHE_HEIGHT_INDEPENDENT_ARRANGEMENT: ClassVar[bool] = False
+    """Reuse complete arrangements only when declarations prove height independence.
+
+    Unknown layout/hooks retain full-context keys. As with box reuse, dynamic
+    method replacement requires disabling reuse or rebinding the class contract.
+    """
     _content_height_dependency: ClassVar[HeightDependency] = NATIVE_WIDGET_HEIGHT
     _native_box_measurement: ClassVar[bool] = True
     _native_content_width: ClassVar[bool] = True
@@ -510,14 +517,14 @@ class Widget(DOMNode):
         self._repaint_regions: set[Region] = set()
 
         self._box_model_cache: LRUCache[object, BoxModel] = LRUCache(16)
-        self._box_model_revision: tuple[int, ...] | None = None
+        self._box_model_revision: tuple[int | None, ...] | None = None
 
         # Cache the auto content dimensions
         self._content_width_cache: tuple[object, int] = (None, 0)
         self._content_height_cache: tuple[object, int] = (None, 0)
 
         self._arrangement_cache: FIFOCache[
-            tuple[Size, Size, int, int, bool], DockArrangeResult
+            tuple[object, ...], DockArrangeResult
         ] = FIFOCache(4)
 
         self._styles_cache = StylesCache()
@@ -1384,7 +1391,17 @@ class Widget(DOMNode):
             Widget locations.
         """
         viewport = self.screen.size
-        cache_key = (size, viewport, self._nodes._updates, self._layout_updates, optimal)
+        cache_key: tuple[object, ...] = (size, viewport, self._nodes._updates, self._layout_updates, optimal)
+        if self.CACHE_HEIGHT_INDEPENDENT_ARRANGEMENT:
+            epoch = (self._subtree_style_revision, self._nodes._updates,
+                     self._geometry_revision, self._layout_updates)
+            proof = self.__dict__.get("_height_arrangement_cache")
+            if proof is None or proof[0] != epoch:
+                self._arrangement_cache.clear()
+                proof = epoch, arrangement_depends_on_available_height(self)
+                self._height_arrangement_cache = proof
+            independent = not proof[1]
+            cache_key = ((size.with_height(0) if independent else size), *cache_key[1:], independent)
         cached_result = self._arrangement_cache.get(cache_key)
         if cached_result is not None:
             return cached_result
@@ -1782,8 +1799,8 @@ class Widget(DOMNode):
 
     def _box_depends_on_available_height(self) -> bool:
         nodes = self.__dict__.get("_nodes")
-        epoch = (Styles._revision, MessagePump._tree_revision,
-                 nodes._updates if nodes is not None else 0, self._layout_updates)
+        epoch = (self._subtree_style_revision, nodes._updates if nodes is not None else 0,
+                 self._geometry_revision, self._layout_updates)
         cached = self.__dict__.get("_height_dependency_cache")
         if cached is not None and cached[0] == epoch:
             return cached[1]
@@ -1818,9 +1835,12 @@ class Widget(DOMNode):
         cache_container, cache_height_fraction = container, height_fraction
         if self.CACHE_HEIGHT_INDEPENDENT_BOX and not self._box_depends_on_available_height():
             # The class/method/layout declarations proved these two inputs unused.
-            # Include descendant style/topology epochs before idle propagation,
+            # Include subtree and immediate-parent inputs before idle propagation,
             # and retire prior epochs rather than accumulating stale aliases.
-            revision += (Styles._revision, MessagePump._tree_revision)
+            parent = self._parent
+            revision += (self._subtree_style_revision, self._geometry_revision,
+                         self._parent_revision,
+                         None if parent is None else parent.styles._cache_key)
             cache_container = container.with_height(0)
             cache_height_fraction = Fraction(0)
         if revision != self._box_model_revision:
@@ -4637,15 +4657,8 @@ class Widget(DOMNode):
         self._component_styles.clear()
         self._query_one_cache.clear()
 
-    def _release_presentation(self) -> None:
-        """Release reconstructible paint/measurement state, retaining the model.
-
-        Closing widgets always release this state. Scene owners may also retire
-        it when an inactive presentation no longer has a working-set lease.
-        Authored rules, content, selection, subscriptions and child nodes remain.
-        """
-        self._arrangement_cache.clear()
-        self.layout.clear_cache()
+    def _release_paint(self) -> None:
+        """Release reconstructible paint without discarding measured geometry."""
         self._render_cache = _RenderCache(NULL_SIZE, [])
         # The next exposed line must regenerate content, even when its native
         # size did not change while this presentation was retired.
@@ -4658,8 +4671,20 @@ class Widget(DOMNode):
         self.__dict__.pop("_paint_state", None)
         self.__dict__.pop("_paint_epoch", None)
         self._visual_paint_state = None
+
+    def _release_presentation(self) -> None:
+        """Release reconstructible paint/measurement state, retaining the model.
+
+        Closing widgets always release this state. Scene owners may also retire
+        it when an inactive presentation no longer has a working-set lease.
+        Authored rules, content, selection, subscriptions and child nodes remain.
+        """
+        self._arrangement_cache.clear()
+        self.layout.clear_cache()
+        self._release_paint()
         self._box_model_cache.clear()
         self.__dict__.pop("_height_dependency_cache", None)
+        self.__dict__.pop("_height_arrangement_cache", None)
         self.__dict__.pop("_height_style_dependency_cache", None)
         self._box_model_revision = None
         self._content_width_cache = (None, 0)

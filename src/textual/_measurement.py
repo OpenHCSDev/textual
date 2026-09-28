@@ -1,4 +1,4 @@
-"""Declaration-owned available-height dependencies for optional box reuse."""
+"""Declaration-owned available-height dependencies for optional layout reuse."""
 
 from __future__ import annotations
 
@@ -51,9 +51,11 @@ class NativeLayoutHeight(HeightDependency):
     def depends(self, widget: Widget) -> bool:
         # Conservatively require a declaration for the arranger too. Even the
         # fixed-zero branch need not opt unknown/custom layout hooks into reuse.
-        return widget.layout._arrangement_height_dependency.depends(widget)
+        return arrangement_depends_on_available_height(widget)
 
     def box_depends(self, widget: Widget) -> bool:
+        if _arrangement_wrapper_uses_height(widget):
+            return True
         return widget.layout._arrangement_height_dependency.box_depends(widget)
 
 
@@ -81,11 +83,60 @@ class FlowHeight(HeightDependency):
     box_depends = depends
 
 
+class StreamHeight(HeightDependency):
+    def depends(self, widget: Widget) -> bool:
+        # Stream measures content directly, even when a child's CSS box height
+        # is fixed. A box proof alone cannot certify this operation.
+        return any(child._content_height_dependency.depends(child)
+                   for child in widget.displayed_children)
+
+
+def _scalar_uses_height(scalar: Scalar, *, height_fraction: bool = False) -> bool:
+    unit = scalar.percent_unit if scalar.unit is Unit.PERCENT else scalar.unit
+    return (type(scalar).resolve is not Scalar.resolve or unit is Unit.HEIGHT
+            or (height_fraction and unit is Unit.FRACTION))
+
+
+def _content_width_uses_height(widget: Widget) -> bool:
+    return (not widget._native_content_width or (widget.is_container and (
+        not widget._native_measurement_layout_hooks
+        or widget.layout._content_width_dependency.depends(widget)
+    )))
+
+
+class GridHeight(HeightDependency):
+    def depends(self, widget: Widget) -> bool:
+        styles = widget.styles
+        rows, columns = styles.grid_rows or (), styles.grid_columns or ()
+        # Default rows become fractional at nonzero height for non-auto parents.
+        if (not rows and not styles.is_auto_height
+                or any(_scalar_uses_height(row, height_fraction=True) for row in rows)
+                or any(_scalar_uses_height(column) for column in columns)):
+            return True
+        for child in widget.displayed_children:
+            child_styles = child.styles
+            # Auto cells pass the outer size directly to content measurement
+            # and extrema. Final boxes/offsets receive the already-resolved cell
+            # size, so fractional child boxes are safe once tracks are proven.
+            if child._content_height_dependency.depends(child):
+                return True
+            if _content_width_uses_height(child):
+                return True
+            if any(scalar is not None and _scalar_uses_height(scalar) for scalar in (
+                child_styles.min_width, child_styles.max_width,
+                child_styles.min_height, child_styles.max_height,
+            )):
+                return True
+        return False
+
+
 CONTEXT_HEIGHT = ContextHeight()
 INDEPENDENT_HEIGHT = IndependentHeight()
 NATIVE_WIDGET_HEIGHT = NativeWidgetHeight()
 NATIVE_LAYOUT_HEIGHT = NativeLayoutHeight()
 FLOW_HEIGHT = FlowHeight()
+STREAM_HEIGHT = StreamHeight()
+GRID_HEIGHT = GridHeight()
 
 Function = TypeVar("Function", bound=Callable)
 
@@ -154,3 +205,18 @@ def box_depends_on_available_height(widget: Widget) -> bool:
     if content_height:
         return widget._content_height_dependency.box_depends(widget)
     return False
+
+
+def _arrangement_wrapper_uses_height(widget: Widget) -> bool:
+    styles = widget.styles
+    if (not widget._native_measurement_layout_hooks
+            or styles.align_horizontal != "left" or styles.align_vertical != "top"):
+        return True
+    return any(child.styles.is_docked or child.styles.is_split
+               or child.styles.overlay == "screen" for child in widget.displayed_children)
+
+
+def arrangement_depends_on_available_height(widget: Widget) -> bool:
+    """Prove the complete native dock/alignment/flow arrangement, not just boxes."""
+    return (_arrangement_wrapper_uses_height(widget)
+            or widget.layout._arrangement_height_dependency.depends(widget))

@@ -139,6 +139,19 @@ class _ClassesDescriptor:
 class DOMNode(MessagePump):
     """The base class for object that can be in the Textual DOM (App and Widget)"""
 
+    _subtree_style_revision = 0
+
+    def _style_rules_updated(self, revision: int) -> None:
+        """Publish the rule owner's mutation to dependent ancestor subtrees.
+
+        This is a projection of Styles' mutation epoch, including raw writes
+        which do not schedule refresh. Unrelated sibling branches are untouched.
+        """
+        node: DOMNode | MessagePump | None = self
+        while isinstance(node, DOMNode):
+            node._subtree_style_revision = revision
+            node = node._parent
+
     DEFAULT_CSS: ClassVar[str] = ""
     """Default TCSS."""
 
