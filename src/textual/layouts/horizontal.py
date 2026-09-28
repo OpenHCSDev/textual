@@ -4,6 +4,7 @@ from fractions import Fraction
 from typing import TYPE_CHECKING
 
 from textual._resolve import resolve_box_models
+from textual._measurement import FLOW_HEIGHT, height_dependency
 from textual.geometry import NULL_OFFSET, Region, Size
 from textual.layout import ArrangeResult, Layout, WidgetPlacement
 
@@ -19,6 +20,7 @@ class HorizontalLayout(Layout):
 
     name = "horizontal"
 
+    @height_dependency(FLOW_HEIGHT)
     def arrange(
         self, parent: Widget, children: list[Widget], size: Size, greedy: bool = True
     ) -> ArrangeResult:

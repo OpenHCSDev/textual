@@ -89,3 +89,59 @@ async def test_inactive_presentation_policy_preserves_models_and_rebuilds_native
         await pilot.pause()
         assert owner.query_one("#model") is model
         assert owner._compositor.render_strips() == expected
+
+
+async def test_inactive_paint_policy_preserves_geometry_and_rebuilds_pixels():
+    class ColdPaintScreen(Screen):
+        RETAIN_INACTIVE_PAINT = False
+
+        def compose(self):
+            yield VerticalGroup(Static("Preserved model: café 界", id="model"), id="group")
+
+    app = App()
+    async with app.run_test() as pilot:
+        app.add_mode("paint", ColdPaintScreen)
+        app.add_mode("other", Screen)
+        await app.switch_mode("paint")
+        await pilot.pause()
+        owner = app.screen
+        model = owner.query_one("#model", Static)
+        parent = owner.query_one("#group", VerticalGroup)
+        expected = owner._compositor.render_strips()
+        arrangement = parent.arrange(parent.size)
+        assert model._layout_cache and model._styles_cache._cache
+        await app.switch_mode("other")
+        await pilot.pause()
+        assert model.is_mounted and not model._closed
+        assert not model._layout_cache and not model._styles_cache._cache
+        assert owner._compositor.root is owner
+        assert parent.arrange(parent.size) is arrangement
+        await app.switch_mode("paint")
+        await pilot.pause()
+        assert owner.query_one("#model") is model
+        assert owner._compositor.render_strips() == expected
+
+
+async def test_visible_backdrop_does_not_retire_its_paint():
+    class ColdPaintScreen(Screen):
+        RETAIN_INACTIVE_PAINT = False
+
+        def compose(self):
+            yield Static("backdrop", id="model")
+
+    class Overlay(Screen):
+        DEFAULT_CSS = "Overlay { background: transparent; }"
+
+    app = App()
+    async with app.run_test() as pilot:
+        await app.push_screen(ColdPaintScreen())
+        await pilot.pause()
+        owner = app.screen
+        model = owner.query_one("#model", Static)
+        owner._compositor.render_strips()
+        cached_lines = dict(model._styles_cache._cache)
+        await app.push_screen(Overlay())
+        await pilot.pause()
+        assert owner in app._background_screens
+        owner._retire_inactive_paint()
+        assert model._styles_cache._cache == cached_lines

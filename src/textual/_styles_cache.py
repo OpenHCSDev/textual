@@ -95,6 +95,7 @@ class StylesCache:
 
         self._cache.clear()
         self._dirty_lines.clear()
+        self._simple_strip = None
 
     def render_widget(self, widget: Widget, crop: Region) -> list[Strip]:
         """Render the content for a widget.
@@ -254,11 +255,12 @@ class StylesCache:
 
         return strips
 
+    @staticmethod
     @lru_cache(1024)
     def get_inner_outer(
-        cls, base_background: Color, background: Color
+        base_background: Color, background: Color
     ) -> tuple[Style, Style]:
-        """Get inner and outer background colors."""
+        """Cache color values without retaining the per-widget paint owner."""
         return (
             Style(background=base_background + background),
             Style(background=base_background),
