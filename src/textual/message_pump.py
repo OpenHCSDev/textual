@@ -121,6 +121,7 @@ class MessagePump(metaclass=_MessagePumpMeta):
     """Base class which supplies a message pump."""
 
     _tree_revision = 0
+    _parent_revision = 0
 
     def __init__(self, parent: MessagePump | None = None) -> None:
         self._parent = parent
@@ -191,6 +192,7 @@ class MessagePump(metaclass=_MessagePumpMeta):
         self.__parent = None if parent is None else ref(parent, _parent_retired)
         if previous is not None or parent is not None:
             MessagePump._tree_revision += 1
+            self._parent_revision = MessagePump._tree_revision
 
     @cached_property
     def _message_queue(self) -> Queue[Message | None]:

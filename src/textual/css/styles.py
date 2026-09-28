@@ -925,6 +925,8 @@ class Styles(StylesBase):
     def _mark_updated(self) -> None:
         self._updates += 1
         Styles._revision += 1
+        if (node := self.node) is not None:
+            node._style_rules_updated(Styles._revision)
 
     def clear_rule(self, rule_name: str) -> bool:
         """Removes the rule from the Styles object, as if it had never been set.

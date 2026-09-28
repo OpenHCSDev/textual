@@ -5,6 +5,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar, Iterable, NamedTuple
 
 from textual._spatial_map import SpatialMap
+from textual._measurement import (
+    INDEPENDENT_HEIGHT, NATIVE_LAYOUT_HEIGHT, HeightDependency, height_dependency,
+)
 from textual.canvas import Canvas, Rectangle
 from textual.geometry import Offset, Region, Size, Spacing
 from textual.strip import StripRenderable
@@ -204,6 +207,23 @@ class Layout(ABC):
     """Base class of the object responsible for arranging Widgets within a container."""
 
     name: ClassVar[str] = ""
+    _content_width_dependency: ClassVar[HeightDependency]
+    _content_height_dependency: ClassVar[HeightDependency]
+    _arrangement_height_dependency: ClassVar[HeightDependency]
+
+    def __init_subclass__(cls, **kwargs) -> None:
+        from textual._measurement import CONTEXT_HEIGHT
+
+        super().__init_subclass__(**kwargs)
+        cls._content_width_dependency = getattr(cls.get_content_width, "_height_dependency", CONTEXT_HEIGHT)
+        cls._content_height_dependency = getattr(cls.get_content_height, "_height_dependency", CONTEXT_HEIGHT)
+        cls._arrangement_height_dependency = getattr(cls.arrange, "_height_dependency", CONTEXT_HEIGHT)
+        if ("arrange" in cls.__dict__ and "get_content_height" not in cls.__dict__
+                and cls._arrangement_height_dependency is CONTEXT_HEIGHT):
+            cls._content_height_dependency = CONTEXT_HEIGHT
+        if ("arrange" in cls.__dict__ and "get_content_width" not in cls.__dict__
+                and cls._arrangement_height_dependency is CONTEXT_HEIGHT):
+            cls._content_width_dependency = CONTEXT_HEIGHT
 
     def clear_cache(self) -> None:
         """Release layout-owned derived state after structural child removal."""
@@ -229,6 +249,7 @@ class Layout(ABC):
             An iterable of widget location
         """
 
+    @height_dependency(INDEPENDENT_HEIGHT)
     def get_content_width(self, widget: Widget, container: Size, viewport: Size) -> int:
         """Get the optimal content width by arranging children.
 
@@ -250,6 +271,7 @@ class Layout(ABC):
             width = arrangement.total_region.right
         return width
 
+    @height_dependency(NATIVE_LAYOUT_HEIGHT)
     def get_content_height(
         self, widget: Widget, container: Size, viewport: Size, width: int
     ) -> int:

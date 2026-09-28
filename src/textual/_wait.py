@@ -1,5 +1,5 @@
 from asyncio import sleep
-from time import monotonic, process_time
+from time import monotonic, thread_time
 
 SLEEP_GRANULARITY: float = 1 / 50
 SLEEP_IDLE: float = SLEEP_GRANULARITY / 20.0
@@ -8,14 +8,13 @@ SLEEP_IDLE: float = SLEEP_GRANULARITY / 20.0
 async def wait_for_idle(
     min_sleep: float = SLEEP_GRANULARITY, max_sleep: float = 1
 ) -> None:
-    """Wait until the process isn't working very hard.
+    """Wait until the calling event-loop thread isn't working very hard.
 
-    This will compare wall clock time with process time. If the process time
-    is not advancing at the same rate as wall clock time it means the process is
-    idle (i.e. sleeping or waiting for input).
+    Compare wall time with this thread's CPU time. Work on background threads
+    cannot determine whether this event loop has drained its UI work.
 
-    When the process is idle it suggests that input has been processed and the state
-    is predictable enough to test.
+    Thread idleness suggests input has been processed, but does not establish
+    completion of a worker or domain operation; tests must await those receipts.
 
     Args:
         min_sleep: Minimum time to wait.
@@ -24,11 +23,11 @@ async def wait_for_idle(
     start_time = monotonic()
 
     while True:
-        cpu_time = process_time()
+        cpu_time = thread_time()
         # Sleep for a predetermined amount of time
         await sleep(SLEEP_GRANULARITY)
-        # Calculate the wall clock elapsed time and the process elapsed time
-        cpu_elapsed = process_time() - cpu_time
+        # Measure the owner whose idleness this test helper is waiting for.
+        cpu_elapsed = thread_time() - cpu_time
         elapsed_time = monotonic() - start_time
 
         # If we have slept the maximum, we can break

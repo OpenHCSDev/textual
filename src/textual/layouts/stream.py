@@ -4,6 +4,7 @@ from itertools import zip_longest
 from typing import TYPE_CHECKING
 
 from textual.geometry import NULL_OFFSET, Region, Size
+from textual._measurement import INDEPENDENT_HEIGHT, STREAM_HEIGHT, height_dependency
 from textual.layout import ArrangeResult, Layout, WidgetPlacement
 
 if TYPE_CHECKING:
@@ -40,6 +41,7 @@ class StreamLayout(Layout):
         self._cached_placements = None
         self._cached_width = 0
 
+    @height_dependency(STREAM_HEIGHT)
     def arrange(
         self, parent: Widget, children: list[Widget], size: Size, greedy: bool = True
     ) -> ArrangeResult:
@@ -132,6 +134,7 @@ class StreamLayout(Layout):
         """
         return widget.scrollable_content_region.width
 
+    @height_dependency(INDEPENDENT_HEIGHT)
     def get_content_height(
         self, widget: Widget, container: Size, viewport: Size, width: int
     ) -> int:
