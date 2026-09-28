@@ -9,6 +9,41 @@ Draft companion to the OpenHCSDev Toad responsiveness investigation.
 
 ## Structural measurement revision follow-up
 
+### Opt-in available-height-independent box reuse
+
+`Widget.CACHE_HEIGHT_INDEPENDENT_BOX` is an opt-in reuse contract, disabled by
+default. Native method/layout declarations resolve whether a box can change when
+only available container height and its fractional unit change. Positive proofs
+normalize those two cache-key members; width, viewport, width fraction, greedy and
+constraint inputs remain distinct. Existing native style/tree/structure epochs
+invalidate derived proofs and obsolete cache entries; no second source model or
+unbounded result cache is introduced.
+
+Vertical/horizontal flow and stream intrinsic measurement declare their behavior.
+Unknown method/layout/hook/scalar overrides, height-relative units, fill height,
+fractional height bounds, docking/splits/overlays, alignment, and the native
+zero-height max-bound exception conservatively retain context. Flow proofs also
+preserve native percentage-child stretch behavior even for raw width-axis height
+scalars. A method declaration must describe the complete implementation, not just
+its call to `super()`. Dynamic method replacement requires disabling the opt-in
+or rebinding the declaration on a class.
+
+Toad opts in its transcript fragment/page/history owners and declares the native
+Markdown height and pure margin-trimming hooks. Native result-oracle tests cover
+relative sizing, extrema, custom behavior, style/structural invalidation, width,
+viewport, padding, margins, offsets and greedy-mode changes. A diagnostic enabling
+reuse broadly across native widgets passed45scrollbar/Markdown/grid/prune snapshots.
+Final validation passed3,470framework tests (1skip,4xfail), all80Toad pilots and
+45broad-opt-in snapshots. Framework/application peaks were247.3/476.7MiB with
+zero swap under the4GiB cap. One preliminary comms run missed a late navigation
+receipt; the click is now explicitly asserted, and the full rerun passed without
+changing deadlines.
+
+Matched native controls/candidates retained72actions/52markers. Final layout p95
+was43.58ms in control versus33.45/36.96ms in two candidate runs. Input maxima were
+72.71ms versus80.32/146.59ms: the latter overlapped87.10ms UI-threadGC. This is a
+measured layout-cost reduction, not a robust maximum-input or sub50ms result.
+
 The subsequent pilot-idle correction measures CPU on the calling event-loop
 thread instead of the whole process. Background preparation can remain busy after
 UI messages drain; it must not force every pilot pause to its one-second limit.

@@ -42,7 +42,7 @@ from rich.style import Style
 from rich.text import Text
 from typing_extensions import Self
 
-from textual.css.styles import StylesBase
+from textual.css.styles import Styles, StylesBase
 
 if TYPE_CHECKING:
     from textual.app import RenderResult
@@ -55,6 +55,11 @@ from textual._debug import get_caller_file_and_line
 from textual._dispatch_key import dispatch_key
 from textual._easing import DEFAULT_SCROLL_EASING
 from textual._extrema import Extrema
+from textual._measurement import (
+    CONTEXT_HEIGHT, INDEPENDENT_HEIGHT, NATIVE_WIDGET_HEIGHT,
+    HeightDependency, box_depends_on_available_height, height_dependency,
+)
+from textual.message_pump import MessagePump
 from textual._styles_cache import StylesCache
 from textual._types import AnimationLevel
 from textual.actions import SkipAction
@@ -97,7 +102,6 @@ if TYPE_CHECKING:
     from textual.app import App, ComposeResult
     from textual.css.query import QueryType
     from textual.filter import LineFilter
-    from textual.message_pump import MessagePump
     from textual.scrollbar import (
         ScrollBar,
         ScrollBarCorner,
@@ -304,6 +308,18 @@ class Widget(DOMNode):
 
     CACHE_SUBTREE_GEOMETRY: ClassVar[bool] = False
     """Reuse an unchanged contained scene during unrelated sibling reflows."""
+
+    CACHE_HEIGHT_INDEPENDENT_BOX: ClassVar[bool] = False
+    """Opt in to sharing box measurements when declarations prove height independence.
+
+    Unknown measurement/layout overrides remain context-dependent. Dynamic method
+    replacement requires disabling this opt-in or declaring the replacement on a
+    class so its measurement contract is bound normally.
+    """
+    _content_height_dependency: ClassVar[HeightDependency] = NATIVE_WIDGET_HEIGHT
+    _native_box_measurement: ClassVar[bool] = True
+    _native_content_width: ClassVar[bool] = True
+    _native_measurement_layout_hooks: ClassVar[bool] = True
     _geometry_revision = 0
 
     def _invalidate_subtree_geometry(self) -> None:
@@ -494,7 +510,7 @@ class Widget(DOMNode):
         self._repaint_regions: set[Region] = set()
 
         self._box_model_cache: LRUCache[object, BoxModel] = LRUCache(16)
-        self._box_model_revision: tuple[int, int, int] | None = None
+        self._box_model_revision: tuple[int, ...] | None = None
 
         # Cache the auto content dimensions
         self._content_width_cache: tuple[object, int] = (None, 0)
@@ -796,6 +812,7 @@ class Widget(DOMNode):
         self.app.stylesheet.apply(widget)
         self.refresh(layout=True)
 
+    @height_dependency(INDEPENDENT_HEIGHT)
     def process_layout(
         self, placements: list[WidgetPlacement]
     ) -> list[WidgetPlacement]:
@@ -1763,6 +1780,17 @@ class Widget(DOMNode):
         if app.debug:
             app.call_next(self.preflight_checks)
 
+    def _box_depends_on_available_height(self) -> bool:
+        nodes = self.__dict__.get("_nodes")
+        epoch = (Styles._revision, MessagePump._tree_revision,
+                 nodes._updates if nodes is not None else 0, self._layout_updates)
+        cached = self.__dict__.get("_height_dependency_cache")
+        if cached is not None and cached[0] == epoch:
+            return cached[1]
+        dependent = box_depends_on_available_height(self)
+        self._height_dependency_cache = (epoch, dependent)
+        return dependent
+
     def _get_box_model(
         self,
         container: Size,
@@ -1787,6 +1815,14 @@ class Widget(DOMNode):
         nodes = self.__dict__.get("_nodes")
         revision = (self._layout_updates, self.styles._cache_key,
                     nodes._updates if nodes is not None else 0)
+        cache_container, cache_height_fraction = container, height_fraction
+        if self.CACHE_HEIGHT_INDEPENDENT_BOX and not self._box_depends_on_available_height():
+            # The class/method/layout declarations proved these two inputs unused.
+            # Include descendant style/topology epochs before idle propagation,
+            # and retire prior epochs rather than accumulating stale aliases.
+            revision += (Styles._revision, MessagePump._tree_revision)
+            cache_container = container.with_height(0)
+            cache_height_fraction = Fraction(0)
         if revision != self._box_model_revision:
             # Measurements from previous revisions can never be hit again.
             # Keep width/viewport variants within this revision, rather than
@@ -1797,10 +1833,10 @@ class Widget(DOMNode):
             self._box_model_cache.clear()
             self._box_model_revision = revision
         cache_key = (
-            container,
+            cache_container,
             viewport,
             width_fraction,
-            height_fraction,
+            cache_height_fraction,
             constrain_width,
             greedy,
             *revision,
@@ -1950,6 +1986,7 @@ class Widget(DOMNode):
 
         return width
 
+    @height_dependency(NATIVE_WIDGET_HEIGHT)
     def get_content_height(self, container: Size, viewport: Size, width: int) -> int:
         """Called by Textual to get the height of the content area. May be overridden in a subclass.
 
@@ -2874,6 +2911,7 @@ class Widget(DOMNode):
         """
         return self.ALLOW_SELECT
 
+    @height_dependency(INDEPENDENT_HEIGHT)
     def pre_layout(self, layout: Layout) -> None:
         """This method id called prior to a layout operation.
 
@@ -3935,6 +3973,23 @@ class Widget(DOMNode):
             inherit_css=inherit_css,
             inherit_bindings=inherit_bindings,
         )
+        # Bind method contracts once per concrete class, never probe capabilities
+        # on every measurement. Undeclared overrides select the safe full context.
+        cls._content_height_dependency = getattr(cls.get_content_height, "_height_dependency", CONTEXT_HEIGHT)
+        cls._native_content_width = cls.get_content_width is Widget.get_content_width
+        cls._native_box_measurement = (
+            cls._get_box_model is Widget._get_box_model
+            and cls._resolve_extrema is Widget._resolve_extrema
+            and cls._has_relative_children_height is Widget._has_relative_children_height
+            and cls._has_relative_children_width is Widget._has_relative_children_width
+            and cls.is_container is Widget.is_container
+            and cls.layout is Widget.layout
+        )
+        cls._native_measurement_layout_hooks = (
+            cls.arrange is Widget.arrange
+            and getattr(cls.pre_layout, "_height_dependency", CONTEXT_HEIGHT) is INDEPENDENT_HEIGHT
+            and getattr(cls.process_layout, "_height_dependency", CONTEXT_HEIGHT) is INDEPENDENT_HEIGHT
+        )
         base = cls.__mro__[0]
         if issubclass(base, Widget):
             cls.can_focus = base.can_focus if can_focus is None else can_focus
@@ -4604,6 +4659,8 @@ class Widget(DOMNode):
         self.__dict__.pop("_paint_epoch", None)
         self._visual_paint_state = None
         self._box_model_cache.clear()
+        self.__dict__.pop("_height_dependency_cache", None)
+        self.__dict__.pop("_height_style_dependency_cache", None)
         self._box_model_revision = None
         self._content_width_cache = (None, 0)
         self._content_height_cache = (None, 0)
