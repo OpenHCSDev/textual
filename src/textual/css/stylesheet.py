@@ -531,8 +531,6 @@ class Stylesheet:
         self,
         nodes: list[DOMNode],
         relevant_classes: frozenset[str],
-        *,
-        all_ids: bool = False,
     ) -> tuple:
         """Build an ancestry key without repeatedly walking disabled ancestors.
 
@@ -564,7 +562,7 @@ class Stylesheet:
                 pseudo_key = node._pseudo_classes_cache_key
             result.append(
                 (
-                    node._id if all_ids or node._id in self._ids_in_rules else None,
+                    node._id if node._id in self._ids_in_rules else None,
                     node.classes & relevant_classes,
                     node._css_type_name,
                     pseudo_key,
@@ -799,7 +797,7 @@ class Stylesheet:
                     tuple((component, self._component_rule_keys[component])
                           for component in sorted(component_classes)),
                     frozenset(component_classes),
-                    self._css_path_key(node.css_path_nodes, relevant_classes, all_ids=True),
+                    self._css_path_key(node.css_path_nodes, relevant_classes),
                 )
                 previous = getattr(node, "_component_css_signature", None)
                 if (node._component_styles and previous is not None
