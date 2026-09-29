@@ -18,4 +18,6 @@ Original installed c974 real scene red:25chops,span39,exact IndexError. Correcte
 
 Actual PTY ordinary ToadApp current150 with corrected Textual: real contentgrowth,139x25/70x20/139x40/139x25 resizing, cropped tail text, new mode/original return. First runner missed in-app stdout success marker (Textual redirects it); worker had exited0; corrected runner asserts App.return_value after terminal teardown. Receipt retained honestly.
 
-Full currentcore6bd physical Pi private loopback native input/source-return gate in progress; no live/user input replay/owners/install edits, paid calls or CI wait. Parent owns deployment.
+Full currentcore6bd physical Pi private loopback native input/source-return gate PASS exit0: actual consumption/checkpoint+paint/reattach/DM/channel/reopen/ACPcleanup; no live/user input replay/owners/install edits, paid calls or CI wait. Parent owns deployment.
+
+Final normalization occurs once at damage admission, before crop/spans/chops are derived, using captured screen_region. The existing empty-damage return covers old damage entirely outside new frame. Final corrected installed13 focused frame/region/horizontal-occlusion cases PASS; actual PTY Toad rerun on final wheel PASS. Initial typed boundary checkpoint and final admission form have same semantics; no duplicate native provider rerun. Private OpenCode handoff read; old116 ownership/pins/holds superseded by current142/main. No predecessor files modified.
