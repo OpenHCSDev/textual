@@ -11,3 +11,5 @@ Installed corrected native resize/mode/unmount gate passes: exactly both content
 Parent owns merge/install. No owner restart, live data, provider prompts, paid calls or CI wait. Tesla142 frameworkApp._close_all minimal scope coordinated142comment5883105046. Own persistent~/wt/textual-shutdown-mode-custody-sol-20260928.
 
 Final branch consumes mergedPR9mainb1efffff. Actual installed PTY controlledUIIndexError after real resize/mode-return PASS: original retained UI error preserved, both destructors execute, empty registry/screens/modes/stacks, no shutdown dictionary RuntimeError. No IndexError-root workaround reintroduced. Final focused shutdown+existingmode cases recorded in focused-final.txt; UI-only fix, no provider run needed.
+
+Focused final gate11 PASS2.66s. First pytest collection failed from unqualified sibling import in packaged tests; corrected tests.shutdown_mode_installed_pilot import and retained failure. App ASTspan4755→4755/chainterms4→4. No unchanged broad rerun.
