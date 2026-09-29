@@ -377,9 +377,10 @@ async def test_compute():
 
 
 async def test_watch_compute():
-    """Check that watching a computed attribute works."""
+    """Reading a computed value in a watcher must not echo an unchanged value."""
 
     watch_called: list[bool] = []
+    observed: list[bool] = []
 
     class Calculator(App):
         numbers = var("0")
@@ -398,15 +399,20 @@ async def test_watch_compute():
     # Referencing the value calls compute
     # Setting any reactive values calls compute
     async with app.run_test():
+        app.watch(app, "show_ac", lambda value: observed.append(app.show_ac))
         assert app.show_ac is True
+        assert app.show_ac is True
+        assert watch_called == observed == [True]
         app.value = "1"
         assert app.show_ac is False
+        assert app.show_ac is False
+        assert watch_called == observed == [True, False]
         app.value = "0"
         assert app.show_ac is True
         app.numbers = "123"
         assert app.show_ac is False
 
-    assert watch_called == [True, True, False, False, True, True, False, False]
+    assert watch_called == observed == [True, False, True, False]
 
 
 async def test_public_and_private_watch() -> None:
