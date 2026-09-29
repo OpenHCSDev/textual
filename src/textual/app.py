@@ -3720,7 +3720,7 @@ class App(Generic[ReturnType], DOMNode):
         """Close all message pumps."""
 
         # Close all screens on all stacks:
-        for stack in self._screen_stacks.values():
+        for stack in tuple(self._screen_stacks.values()):
             for stack_screen in reversed(stack):
                 if stack_screen._running:
                     await self._prune(stack_screen)
