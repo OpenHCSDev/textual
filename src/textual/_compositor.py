@@ -1317,15 +1317,15 @@ class Compositor:
             A ChopsUpdate if there is anything to update, otherwise `None`.
         """
         screen_region = self.size.region
-        update_regions = self._dirty_regions.copy()
+        update_regions = {
+            damage for region in self._dirty_regions if (damage := region.intersection(screen_region))
+        }
         self._dirty_regions.clear()
-        if update_regions:
-            # Create a crop region that surrounds all updates.
-            crop = Region.from_union(update_regions).intersection(screen_region)
-            spans = list(self._regions_to_spans(update_regions))
-            is_rendered_line = {y for y, _, _ in spans}.__contains__
-        else:
+        if not update_regions:
             return None
+        crop = Region.from_union(update_regions)
+        spans = list(self._regions_to_spans(update_regions))
+        is_rendered_line = {y for y, _, _ in spans}.__contains__
         chops = self._render_chops(crop, is_rendered_line)
         chop_ends = [cut_set[1:] for cut_set in self.cuts]
         return ChopsUpdate(chops, spans, chop_ends)
