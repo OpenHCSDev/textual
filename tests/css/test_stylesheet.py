@@ -156,7 +156,8 @@ async def test_component_style_reuses_unchanged_node_but_tracks_css_and_ancestry
         """
 
         def compose(self) -> ComposeResult:
-            yield Badge("first")
+            yield Container(Badge("first"), id="unused-left")
+            yield Container(id="unused-right")
 
     app = BadgeApp()
     async with app.run_test(size=(80, 20)) as pilot:
@@ -165,6 +166,14 @@ async def test_component_style_reuses_unchanged_node_but_tracks_css_and_ancestry
         stylesheet = app.stylesheet
         original = badge._component_styles["badge--label"]
         stylesheet.apply(badge)
+        assert badge._component_styles["badge--label"] is original
+        # Physical source custody may change an ID that no rule references.
+        # This must not replace an unchanged component's native style owner.
+        badge.reparent(app.query_one("#unused-right", Container))
+        await pilot.pause()
+        assert badge._component_styles["badge--label"] is original
+        badge.reparent(app.query_one("#unused-left", Container))
+        await pilot.pause()
         assert badge._component_styles["badge--label"] is original
         badge.add_class("alert")
         await pilot.pause()
@@ -177,6 +186,15 @@ async def test_component_style_reuses_unchanged_node_but_tracks_css_and_ancestry
         stylesheet.apply(badge)
         assert badge.get_component_styles("badge--label").color == Color.parse("green")
         assert badge._component_styles["badge--label"] is not updated
+        stylesheet.add_source("#unused-right Badge.alert > .badge--label { color: yellow; }",
+                              read_from=("badge-test", "ancestor"))
+        stylesheet.parse()
+        badge.reparent(app.query_one("#unused-right", Container))
+        await pilot.pause()
+        assert badge.get_component_styles("badge--label").color == Color.parse("yellow")
+        badge.reparent(app.query_one("#unused-left", Container))
+        await pilot.pause()
+        assert badge.get_component_styles("badge--label").color == Color.parse("green")
 
 
 async def test_component_style_keeps_focus_within_on_uncached_path():
