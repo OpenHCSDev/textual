@@ -1322,7 +1322,11 @@ class Compositor:
         if update_regions:
             # Create a crop region that surrounds all updates.
             crop = Region.from_union(update_regions).intersection(screen_region)
-            spans = list(self._regions_to_spans(update_regions))
+            spans = list(self._regions_to_spans(
+                region.intersection(crop) for region in update_regions
+            ))
+            if not spans:
+                return None
             is_rendered_line = {y for y, _, _ in spans}.__contains__
         else:
             return None
