@@ -120,11 +120,9 @@ class _ComputedReactiveAccess(_StoredReactiveAccess):
         self._compute_value = methodcaller(compute_name)
 
     def get(self, reactive: Reactive[ReactiveType], obj: Reactable) -> ReactiveType:
-        old_value = super().get(reactive, obj)
-        value = self._compute_value(obj)
-        obj.__dict__[reactive.internal_name] = value
-        reactive._check_watchers(obj, reactive.name, old_value)
-        return value
+        super().get(reactive, obj)
+        self.compute(reactive, obj)
+        return obj.__dict__[reactive.internal_name]
 
     def initial_value(self, reactive: Reactive[ReactiveType], obj: Reactable) -> ReactiveType:
         return self._compute_value(obj) if reactive._init else reactive._default_value(obj)
