@@ -31,8 +31,8 @@ Batch completion must wake the existing screen refresh mechanism. Existing
 after-refresh callbacks must remain queued until a deferred frame can paint.
 No new paint registry, geometry cache, source reader or semantic state mirror.
 
-This closes a bypass of a declared authority (IMPL-12) and duplicate lifetime
-decisions (IDEN-1). App's existing batch count and compositor dirty regions
+This closes duplicate paint policies with drift (IMPL-12). App's existing
+batch count and compositor dirty regions
 remain the only authorities.
 
 ## Acceptance
@@ -43,3 +43,22 @@ batch exit paints and releases callbacks without starvation. Paired Toad hook
 and existing writer/waiter contracts are reviewed together. Parent/Heisenberg
 then performs the sole installed original-history physical journey. No new
 capture, provider call or package mutation in this source work.
+
+## Source checkpoint
+
+Actual-framework batch-mount and callback-across-await journeys pass on this
+source through the restored Python 3.14 dependency environment. The same
+batch-mount journey fails on unchanged installed Textual412 by admitting a
+frame during batch 1. Existing call-later and call-after-refresh journeys pass.
+No protocol, geometry or UI objects are mocked. These headless checks are
+source regression evidence, not physical-terminal acceptance.
+
+The initial pytest run lacked the restored environment's historical
+pytest-asyncio extra: four async tests did not execute; the synchronous batch
+test passed. That tooling failure is recorded, not counted as a product result.
+The async journeys were executed directly with asyncio in the same interpreter.
+
+The repaint request on preparation refusal belongs to Screen. Toad deletes
+both its compositor wrapper/batch guard and viewport's duplicate write; its
+existing resource owner implements only the preparation hook. This preserves
+after-refresh waits while queued scroll geometry has not yet reached Screen.
