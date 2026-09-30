@@ -83,3 +83,55 @@ The stable idle viewport contains Contents/ContentsGrid but no visible history
 or fragments, with zero visible body resources. That points to the current
 history geometry/resource relation; it does not establish native ANSI or
 compositor corruption. Heisenberg owns that Toad producer/extent investigation.
+
+## Scoped READY: corrected installed pair, 2026-09-30
+
+The owner authorized shipping this useful checkpoint with the remaining fast
+scrolling and CPU work tracked separately. Freeze the production hook at
+Textual source `65053c5a2df12249ef1c4193beeff7023c1f75d7`; subsequent commits in
+this PR change evidence only. No repeat capture or native fixture was run.
+
+Corrected installed pair actually captured by Heisenberg:
+
+- Toad `f92fc54bd62c328aeb1bb12460347379fd694fff`.
+- Textual `65053c5a2df12249ef1c4193beeff7023c1f75d7`.
+- Core `72062939239b0f07707406309305a056a23f925f`, native4ab, ACP SDK0.12.1.
+- Stage `/home/ts/.local/share/agent-comms/runtime-canonical-cursor-tool-20260930`.
+
+The sole physical run opened the original retained 41-MiB nra-architecture
+history through the installed toad-comms launcher in isolated Xvfb/st, with held
+PageUp, PageDown, reverse PageUp, End and 15 seconds idle. It completed in
+57.0837 seconds; its 985 GIL samples reported zero sampling errors. Original
+owner identity was unchanged and alive afterward; custody cleanup reports no
+remaining owned processes or errors. No provider prompt, public replay or user
+X11 input was used.
+
+The exact completed Down, reverse, idle and after frames retain readable history
+and chrome. Idle geometry records Window121/max121/extent153, 24 body resources
+with three visible, and Screen0/max0. Kepler reviewed the exact idle-done PNG
+and the 60-fps PageDown transition sheet. The previous 4103 permanent blank
+failure is retained above as counterevidence; that corrected Toad geometry
+relation, with this unchanged Textual hook, recovers the readable idle view.
+This does not attribute the original permanent blank solely to Textual.
+
+Physical evidence:
+`/home/ts/.cache/agent-scratch/toad-reader-217-cursor-tool-20260930/capture/`:
+`receipt.json`, `terminal.mp4`, `phase-down-done.png`, `phase-idle-done.png`,
+`after.png`, phase DTOs, `down-transition-frames.png`, `cpu-profile.json` and
+`physical-body-frame-review.json`.
+
+Remaining defects are explicit: two PageDown frames at 26.233–26.267 seconds
+have a blank chat body while chrome remains present, followed by recovery.
+Kernel UI CPU remains about 95% during held scrolling and 57.55% during idle.
+Generic summed B/E stack spans overcount overlapping threads and recursive
+frames and are not CPU attribution. The same-run main-thread assessment and
+raw profile remain available for the named Toad217/221 and Core read owners.
+No final performance target, zero-hiccup scrolling or default activation claim.
+
+Deletion scope is unchanged: 18 Textual production lines removed, 42 added;
+paired Toad preparation policy removes 15 lines and adds two, for 33 replaced
+production lines deleted across the pair. One native Screen admission owner,
+one existing App batch count, one compositor damage authority and the existing
+callback queue remain. No parallel state, cache or registry was added.
+This receipt closes the native batch-admission hook checkpoint for parent paired
+merge/release; the physical scroll follow-up stays open with Heisenberg/Kepler.
