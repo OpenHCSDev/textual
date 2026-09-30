@@ -207,6 +207,7 @@ class LinuxInlineDriver(Driver):
         signal.signal(signal.SIGWINCH, on_terminal_resize)
 
         self.write("\x1b[?25l")  # Hide cursor
+        self._enable_application_keypad()
         self.write("\033[?1004h")  # Enable FocusIn/FocusOut.
         self.write("\x1b[>1u")  # https://sw.kovidgoyal.net/kitty/keyboard-protocol/
         self.flush()
@@ -310,6 +311,7 @@ class LinuxInlineDriver(Driver):
         """Stop application mode, restore state."""
         self._disable_bracketed_paste()
         self.disable_input()
+        self._disable_application_keypad()
         self.write("\x1b[<u")  # Disable kitty protocol
         self.write("\x1b[J")
 

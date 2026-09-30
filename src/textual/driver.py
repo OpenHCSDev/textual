@@ -143,6 +143,14 @@ class Driver(ABC):
     def flush(self) -> None:
         """Flush any buffered data."""
 
+    def _enable_application_keypad(self) -> None:
+        """Enter the terminal's unambiguous application-keypad input mode."""
+        self.write("\x1b=")  # DECKPAM; normal-mode Delete may collide with F1.
+
+    def _disable_application_keypad(self) -> None:
+        """Return the terminal keypad to normal mode on stop or suspension."""
+        self.write("\x1b>")  # DECKPNM.
+
     @abstractmethod
     def start_application_mode(self) -> None:
         """Start application mode."""

@@ -256,6 +256,7 @@ class LinuxDriver(Driver):
         send_size_event()
 
         self.write("\x1b[?1049h")  # Alt screen
+        self._enable_application_keypad()
 
         self._enable_mouse_support()
         try:
@@ -383,6 +384,7 @@ class LinuxDriver(Driver):
         self._enable_line_wrap()
         self._disable_in_band_window_resize()
         self.disable_input()
+        self._disable_application_keypad()
 
         if self.attrs_before is not None:
             try:
