@@ -57,8 +57,15 @@ The initial pytest run lacked the restored environment's historical
 pytest-asyncio extra: four async tests did not execute; the synchronous batch
 test passed. That tooling failure is recorded, not counted as a product result.
 The async journeys were executed directly with asyncio in the same interpreter.
+After restoring that required dev plugin, the original focused pytest command
+passed all five tests in 0.34 seconds. No broader repeat was run.
 
 The repaint request on preparation refusal belongs to Screen. Toad deletes
 both its compositor wrapper/batch guard and viewport's duplicate write; its
 existing resource owner implements only the preparation hook. This preserves
 after-refresh waits while queued scroll geometry has not yet reached Screen.
+
+Production diff against Textual412: **18 lines deleted**, 42 added, confined
+to `src/textual/screen.py` and `src/textual/app.py`. The callback queue remains
+the existing queue; pending refresh is derived from existing scene flags and
+dirty sets. Physical original-history acceptance is still outstanding.
