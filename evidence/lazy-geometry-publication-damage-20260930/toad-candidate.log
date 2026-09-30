@@ -1,0 +1,2 @@
+initial [48, 29, 32, 1] [48, 29, 69, 5] frozenset({'-has-queue'}) [(29, '                                               │Submitting (1): CAPTION_RESOURCE                                        ')]
+transition [48, 28, 28, 1] [[(28, '                                               │Queued (1): CAPTION_RESOURCE                                            ')], [(28, '                                               │Queued (1): CAPTION_RESOURCE                                            ')]]
