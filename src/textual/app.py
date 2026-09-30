@@ -1076,6 +1076,8 @@ class App(Generic[ReturnType], DOMNode):
         assert self._batch_count >= 0, "This won't happen if you use `batch_update`"
         if not self._batch_count:
             self.check_idle()
+            for screen in self._screen_stack:
+                screen.check_idle()
 
     def delay_update(self, delay: float = 0.05) -> None:
         """Delay updates for a short period of time.

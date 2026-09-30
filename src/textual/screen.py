@@ -1179,26 +1179,46 @@ class Screen(Generic[ScreenResultType], Widget):
             self, self._maybe_clear_tooltip, immediate=True
         )
 
+    @property
+    def _refresh_pending(self) -> bool:
+        """Whether the existing scene owners still have an unpainted update."""
+        return bool(
+            self._layout_required
+            or self._scroll_required
+            or self._repaint_required
+            or self._recompose_required
+            or self._dirty_widgets
+            or self._compositor._dirty_regions
+        )
+
     async def _on_idle(self, event: events.Idle) -> None:
         # Check for any widgets marked as 'dirty' (needs a repaint)
         event.prevent_default()
         if not self.app._batch_count and self.is_current:
-            if (
-                self._layout_required
-                or self._scroll_required
-                or self._repaint_required
-                or self._recompose_required
-                or self._dirty_widgets
-            ):
+            if self._refresh_pending:
                 self._update_timer.resume()
                 return
 
         await self._invoke_and_clear_callbacks()
 
+    def _prepare_compositor_refresh(self) -> bool:
+        """Prepare an admitted scene; return False while it cannot be painted.
+
+        This hook runs after batch admission, before any compositor damage is
+        consumed. Deferred preparation retains the existing repaint intent;
+        the scene owner arranges its next refresh through the update timer.
+        """
+        return True
+
     def _compositor_refresh(self) -> None:
         """Perform a compositor refresh."""
 
         app = self.app
+        if app._batch_count:
+            return
+        if not self._prepare_compositor_refresh():
+            self._repaint_required = True
+            return
 
         if app.is_inline:
             if self is app.screen:
@@ -1258,13 +1278,13 @@ class Screen(Generic[ScreenResultType], Widget):
             if self._layout_required:
                 self._refresh_layout(scroll=self._scroll_required)
                 self._layout_required = False
-                self._dirty_widgets.clear()
             elif self._scroll_required:
                 self._refresh_layout(scroll=True)
             self._scroll_required = False
 
             if self._dirty_widgets:
                 self._compositor.update_widgets(self._dirty_widgets)
+            if self._dirty_widgets or self._compositor._dirty_regions:
                 self._compositor_refresh()
 
             if self._recompose_required:
@@ -1277,12 +1297,17 @@ class Screen(Generic[ScreenResultType], Widget):
     async def _invoke_and_clear_callbacks(self) -> None:
         """If there are scheduled callbacks to run, call them and clear
         the callback queue."""
-        if self._callbacks:
-            callbacks = self._callbacks[:]
-            self._callbacks.clear()
-            for callback, message_pump in callbacks:
-                with message_pump._context():
-                    await invoke(callback)
+        for _ in range(len(self._callbacks)):
+            if self.app._batch_count:
+                return
+            if self.is_current and self._refresh_pending:
+                self.check_idle()
+                return
+            if not self._callbacks:
+                return
+            callback, message_pump = self._callbacks.pop(0)
+            with message_pump._context():
+                await invoke(callback)
 
     def _invoke_later(self, callback: CallbackType, sender: MessagePump) -> None:
         """Enqueue a callback to be invoked after the screen is repainted.
@@ -1413,10 +1438,7 @@ class Screen(Generic[ScreenResultType], Widget):
             return
 
         if self.is_current:
-            if self.app._batch_count:
-                self.call_later(self._compositor_refresh)
-            else:
-                self._compositor_refresh()
+            self._compositor_refresh()
 
         if self.app._dom_ready:
             self.screen_layout_refresh_signal.publish(self.screen)
