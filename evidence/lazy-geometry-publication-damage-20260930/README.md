@@ -37,3 +37,16 @@ Enter journey, idle and busy, proving original input physically visible before
 delivery and transferring once to native/chat. Kepler fixes any canonical queue
 flow regression independently. Do not replay old u02/c075 inputs or repeat an
 unchanged candidate. Current global Textual2e49 is unchanged by this source work.
+
+## Focused native checks
+
+Five compositor frame-damage/viewport-layout checks pass in1.10s, including the
+lazy full-map caption regression. This verifies both old and new rows remain in
+the native partial-update spans. Actual Toad source repro exits0 with exactly one
+caption in both transition frames; original red exits1 with both captions in the
+first frame. Raw original incremental ANSI and corrected ANSI are retained in
+original-lazy-map-frames.json and corrected-lazy-map-frames.json.
+
+Small observer dependencies were installed only under Toad254's owned
+.artifacts/caption-layout/{observer,test-deps}; installed253 packages/defaults
+remain untouched. No original fixture/native input was reused or replayed.
