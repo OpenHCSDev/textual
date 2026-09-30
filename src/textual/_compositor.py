@@ -474,18 +474,7 @@ class Compositor:
         # Widgets in both new and old
         common_widgets = old_widgets & new_widgets
 
-        # Mark dirty regions.
-        screen_region = size.region
-        if screen_region not in self._dirty_regions:
-            regions = {
-                region
-                for region in (
-                    map_geometry.clip.intersection(map_geometry.region)
-                    for _, map_geometry in changes
-                )
-                if region
-            }
-            self._dirty_regions.update(regions)
+        self._damage_geometry(changes)
 
         resized_widgets = {
             widget
@@ -535,20 +524,17 @@ class Compositor:
         # Contains widgets + geometry for every widget that changed (added, removed, or updated)
         changes = map.items() ^ old_map.items()
 
-        # Mark dirty regions.
-        screen_region = size.region
-        if screen_region not in self._dirty_regions:
-            regions = {
-                region
-                for region in (
-                    map_geometry.clip.intersection(map_geometry.region)
-                    for _, map_geometry in changes
-                )
-                if region
-            }
-            self._dirty_regions.update(regions)
+        self._damage_geometry(changes)
 
         return exposed_widgets
+
+    def _damage_geometry(self, changes: Iterable[tuple[Widget, MapGeometry]]) -> None:
+        """Retain old and new visible damage before publishing scene geometry."""
+        if self.size.region not in self._dirty_regions:
+            self._dirty_regions.update(
+                region for _, geometry in changes
+                if (region := geometry.clip.intersection(geometry.region))
+            )
 
     @property
     def full_map(self) -> CompositorMap:
@@ -558,7 +544,11 @@ class Compositor:
             return {}
         if self._full_map_invalidated and not self._arranging:
             map, _widgets = self._arrange_root(self.root, self.size, visible_only=False)
-            # Update any widgets which became visible in the interim
+            # A geometry query also publishes this scene. Retain the damage
+            # from its original visible coordinates before replacing the map;
+            # a later reflow can no longer recover that previous geometry.
+            previous = self._visible_map if self._visible_map is not None else self._full_map
+            self._damage_geometry(map.items() ^ previous.items())
             self._full_map = map
             self._full_map_invalidated = False
             self._visible_widgets = None
