@@ -38,9 +38,10 @@ class NativeScrollApp(App):
             with NativeBody(id="body"):
                 for index in range(3):
                     yield Static(f"original leading {index}")
-                with VerticalScroll(id="nested"):
+                with NativeReader(id="nested"):
                     yield Static("fixed native header", id="pinned")
-                    yield Static("\n".join(f"nested original {i}" for i in range(30)))
+                    for index in range(3):
+                        yield Static("\n".join(f"nested {index} original {i}" for i in range(30)))
                 for index in range(3):
                     yield Static(f"original trailing {index}")
             with NativeBody(id="screen-body"):
@@ -60,6 +61,9 @@ async def run(output):
         body = app.query_one("#body")
         compositor.reflow_visible(app.screen, app.screen.size)
         original = compositor._subtree_geometry[body]
+        unchanged, _ = compositor._arrange_root(app.screen, app.screen.size)
+        assert unchanged[body] is original.geometry[body].geometry
+        receipt["original_pose_native_geometry_identity_retained"] = True
         before = (body._geometry_revision, body._nodes._updates, body.styles._cache_key)
         start = reader.scroll_y
         arrangements = 0
@@ -112,6 +116,19 @@ async def run(output):
         check_scene("Reverse restores nested clip")
         assert compositor._subtree_geometry[body] is original
         nested = app.query_one("#nested")
+        await pilot.press("pagedown")
+        await pilot.pause()
+        compositor._arrange_root(app.screen, app.screen.size, retain_geometry=(body,))
+        culled = compositor._subtree_geometry[nested]
+        assert culled.key.visible_only, "Targeted outer traversal did not cull the nested viewport"
+        compositor.discard_widgets({body})
+        compositor._arrange_root(app.screen, app.screen.size)
+        complete = compositor._subtree_geometry[nested]
+        assert not complete.key.visible_only, "Complete ancestor reused culled descendant coverage"
+        assert complete is not culled, "Two different native coverage requests aliased one resource"
+        assert len(complete.geometry) > len(culled.geometry)
+        receipt["complete_culled_native_coverage_distinct"] = True
+        check_scene("Culled to complete descendant resource transition")
         nested.focus()
         await pilot.press("end")
         await pilot.pause()

@@ -230,7 +230,7 @@
           }
         },
         {
-          "function": "RelativeMapGeometry.from_scene",
+          "function": "SubtreeMapGeometry.from_scene",
           "before": {
             "string_dispatch": 0,
             "type_switch": 0,
@@ -249,7 +249,7 @@
           }
         },
         {
-          "function": "RelativeMapGeometry.project",
+          "function": "SubtreeMapGeometry.project",
           "before": {
             "string_dispatch": 0,
             "type_switch": 0,

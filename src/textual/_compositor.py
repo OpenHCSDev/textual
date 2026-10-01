@@ -134,36 +134,31 @@ class NestedSceneClip(SceneClip):
         return self.source.relative_bounds(root, origin) + (self.bound - origin,)
 
 
-class RelativeMapGeometry(NamedTuple):
-    """One intrinsic native scene entry; its clip is declared, not truncated."""
+class SubtreeMapGeometry(NamedTuple):
+    """Original native geometry with its untruncated intrinsic clip bounds."""
 
-    region: Region
-    order: tuple
+    geometry: MapGeometry
     clip_bounds: tuple[Region, ...]
-    virtual_size: Size
-    container_size: Size
-    virtual_region: Region
-    dock_gutter: Spacing
 
     @classmethod
     def from_scene(cls, entry: MapGeometry, clip: SceneClip,
-                   root: SceneClip, origin: Offset) -> RelativeMapGeometry:
+                   root: SceneClip, origin: Offset) -> SubtreeMapGeometry:
         bounds = clip.relative_bounds(root, origin)
         if bounds:
             intersection = bounds[0]
             for bound in bounds[1:]:
                 intersection = intersection.intersection(bound)
             bounds = (intersection,)
-        return cls(entry.region - origin, entry.order, bounds,
-                   entry.virtual_size, entry.container_size,
-                   entry.virtual_region, entry.dock_gutter)
+        return cls(entry, bounds)
 
-    def project(self, origin: Offset, clip: SceneClip) -> tuple[MapGeometry, SceneClip]:
+    def project(self, original_origin: Offset, origin: Offset,
+                clip: SceneClip) -> tuple[MapGeometry, SceneClip]:
         for bound in self.clip_bounds:
             clip = clip.intersect(bound + origin)
-        return (MapGeometry(self.region + origin, self.order, clip.region,
-                            self.virtual_size, self.container_size,
-                            self.virtual_region, self.dock_gutter), clip)
+        offset = origin - original_origin
+        if not offset and clip.region == self.geometry.clip:
+            return self.geometry, clip
+        return self.geometry._replace(region=self.geometry.region + offset, clip=clip.region), clip
 
 
 GeometryEntry = TypeVar("GeometryEntry")
@@ -221,7 +216,7 @@ class PlacedSubtreeGeometry(SubtreeGeometry[MapGeometry]):
 
 
 @dataclass(frozen=True)
-class IntrinsicSubtreeGeometry(SubtreeGeometry[RelativeMapGeometry]):
+class IntrinsicSubtreeGeometry(SubtreeGeometry[SubtreeMapGeometry]):
     """The same bounded resource, reusable under a new original outer clip."""
 
     @classmethod
@@ -234,7 +229,7 @@ class IntrinsicSubtreeGeometry(SubtreeGeometry[RelativeMapGeometry]):
                 or not all(clips[node].within(clip) for node in geometry)):
             return PlacedSubtreeGeometry.capture(
                 key, geometry, widgets, invisible_widgets, clips, clip, screen_coordinates)
-        intrinsic = {node: RelativeMapGeometry.from_scene(entry, clips[node], clip, key.region.offset)
+        intrinsic = {node: SubtreeMapGeometry.from_scene(entry, clips[node], clip, key.region.offset)
                      for node, entry in geometry.items()}
         return cls(key, MappingProxyType(intrinsic), widgets, invisible_widgets)
 
@@ -244,7 +239,7 @@ class IntrinsicSubtreeGeometry(SubtreeGeometry[RelativeMapGeometry]):
     def project_into(self, geometry: CompositorMap, key: SubtreeGeometryKey,
                      clip: SceneClip, clips: dict[Widget, SceneClip]) -> None:
         for node, entry in self.geometry.items():
-            geometry[node], clips[node] = entry.project(key.region.offset, clip)
+            geometry[node], clips[node] = entry.project(self.key.region.offset, key.region.offset, clip)
 
 
 class CompositorUpdate:
@@ -1066,22 +1061,23 @@ class Compositor:
                 arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter, complete)  # noqa: F821 -- closure cleared after traversal
                 return
             inherited = get_layers(widget)  # noqa: F821 -- closure cleared after traversal
+            resource_type = widget.subtree_geometry_resource()
+            complete = resource_type.complete_arrangement(complete)
             key = SubtreeGeometryKey(widget._geometry_revision, widget._nodes._updates, widget.styles._cache_key,
                    virtual_region, region, order, layer_order, clip.region, visible, dock_gutter,
-                   size, visible_only, widget.scroll_offset,
+                   size, visible_only and not complete, widget.scroll_offset,
                    tuple(inherited.items()) if inherited is not None else ())
             cached = self._subtree_geometry.get(widget)
             if cached is not None and cached.matches(key):
                 cached.restore_into(map, widgets, invisible_widgets, key, clip, clips)
                 return
             previous_map, previous_widgets, previous_invisible = set(map), widgets.copy(), invisible_widgets.copy()
-            resource_type = widget.subtree_geometry_resource()
             # A body needs its complete native arrangement to reveal new rows.
             # A scroll-owning viewport changes its own arrangement inputs and
             # must continue culling; it cannot demand the entire prepared buffer
             # merely to retain an exact-coordinate scene.
             arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
-                           resource_type.complete_arrangement(complete))  # noqa: F821 -- closure cleared after traversal
+                           complete)  # noqa: F821 -- closure cleared after traversal
             if (widget not in self._subtree_geometry
                     and len(self._subtree_geometry) >= self.max_subtree_geometry_entries):
                 self._subtree_geometry.pop(next(iter(self._subtree_geometry)))

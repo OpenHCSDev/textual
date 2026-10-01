@@ -72,6 +72,7 @@ raw trace and negative gates; do not repeat an unchanged provider/capture or
 claim global CPU/sub50ms firstpaint/Strip reuse from native resource identity.
 Absolute region/clip changes still invalidate geometry during scrolling and
 remain in275. All original whole-workspace scope stays with Heisenberg.
+
 # Intrinsic arrangement continuation under Toad PR275
 
 The installed ba65 Text18 attempt is preserved at
@@ -122,19 +123,32 @@ ancestor hooks; membership and retirement do not need another edit.
 ## Bounded source evidence and remaining gate
 
 `native-scroll-key-diagnostic.json` preserves the original single-body cache
-miss. `native-scroll-reprojection-closure06.json` records the expanded continuous
+miss. `native-scroll-reprojection-closure10.json` records the expanded continuous
 native control: PageDown0→20 retains the SAME intrinsic resource with ZERO body
-arrangement calls. Nine cached-visible-versus-uncached-full scene comparisons
-pass: reveal, reverse, nested scroll/fixed child, End, repeated bottom PageDown,
+arrangement calls. Ten cached-visible-versus-uncached-full scene comparisons
+pass: reveal, reverse, culled-to-complete coverage, nested scroll/fixed child, End, repeated bottom PageDown,
 resize, content mutation, screen constraints and overlays. The scroll-owning
 reader retains placed/culling policy. Earlier source receipts are intermediate
 controls, not installed acceptance or paired CPU measurements.
 
-`reprojection-retirement-candidate03.json` passes the ten original custody/
+`reprojection-retirement-candidate05.json` passes the ten original custody/
 retirement/scene/invalidation/budget controls. `reprojection-ratchet.json` passes
 all three files and31changed qualified functions: no dispatch subjects/arms,
-foreign absence probes or long-chain growth. Production versus ba65:41lines
-deleted,246added in `_compositor.py`, `layout.py`, and `widget.py`.
+foreign absence probes or long-chain growth. Production versus ba65:42lines
+deleted,243added in `_compositor.py`, `layout.py`, and `widget.py`.
+
+Kepler's bounded review found a coverage alias in the intermediate7246 version:
+the key used global visible-only rather than effective local coverage. The
+resource policy now resolves coverage BEFORE lookup/manufacture; its result uses
+the EXISTING visibility key dimension. No new flag, key field or cache exists.
+Actual retained-target culling followed by complete ancestor manufacture creates
+distinct native nested-viewport resources and passes scene equality. Placed
+children retain conservative clip opacity; no nested reuse or CPU gain is inferred.
+
+The sealed entry is now only original MapGeometry plus untruncated relative clip
+bounds. The intermediate seven-field replica is deleted in place. Zero-motion
+restoration retains original native geometry identity; moving/clipping projects
+through the same resource and original key origin without a projection store.
 
 No native build/package/default change occurred. Parent/Mendel own headroom and
 one normal immutable package. Proposed affected gate is one current-cohort
