@@ -174,9 +174,7 @@ class WidgetPlacement(NamedTuple):
         """
         widget = self.widget
         styles = widget.styles
-        if not widget.absolute_offset and not styles.has_any_rules(
-            "constrain_x", "constrain_y"
-        ):
+        if not widget.uses_screen_coordinates:
             # Bail early if there is nothing to do
             return self
         region = self.region
