@@ -134,6 +134,9 @@ class Vertical(Widget):
 class VerticalGroup(Widget):
     """A non-expanding container with vertical layout and no scrollbars."""
 
+    CACHE_HEIGHT_INDEPENDENT_BOX = True
+    CACHE_HEIGHT_INDEPENDENT_ARRANGEMENT = True
+
     DEFAULT_CSS = """
     VerticalGroup {
         width: 1fr;
@@ -171,6 +174,9 @@ class Horizontal(Widget):
 
 class HorizontalGroup(Widget):
     """A non-expanding container with horizontal layout and no scrollbars."""
+
+    CACHE_HEIGHT_INDEPENDENT_BOX = True
+    CACHE_HEIGHT_INDEPENDENT_ARRANGEMENT = True
 
     DEFAULT_CSS = """
     HorizontalGroup {
