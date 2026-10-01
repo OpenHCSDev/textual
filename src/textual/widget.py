@@ -725,6 +725,18 @@ class Widget(DOMNode):
         return False
 
     @property
+    def uses_screen_coordinates(self) -> bool:
+        """Whether the native placement must resolve against the screen."""
+        return (self.absolute_offset is not None
+                or self.styles.has_any_rules("constrain_x", "constrain_y"))
+
+    def subtree_geometry_resource(self):
+        """Choose the native arrangement owner for this widget's scroll scope."""
+        from textual._compositor import IntrinsicSubtreeGeometry, PlacedSubtreeGeometry
+
+        return PlacedSubtreeGeometry if self._allow_scroll else IntrinsicSubtreeGeometry
+
+    @property
     def _render_widget(self) -> Widget:
         """The widget the compositor should render."""
         # Will return the "cover widget" if one is set, otherwise self.
