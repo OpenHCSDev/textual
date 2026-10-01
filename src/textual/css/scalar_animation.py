@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable
 
 from textual._animator import Animation, EasingFunction
 from textual._types import AnimationLevel, CallbackType
@@ -49,6 +49,11 @@ class ScalarAnimation(Animation):
         else:
             assert duration is not None, "Duration expected to be non-None"
             self.duration = duration
+
+    def transform_values(self, transform: Callable[[Any], Any]) -> None:
+        self.start = transform(self.start)
+        self.destination = transform(self.destination)
+        self.final_value = transform(self.final_value)
 
     def __call__(
         self, time: float, app_animation_level: AnimationLevel = "full"

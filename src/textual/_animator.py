@@ -75,6 +75,11 @@ class Animation(ABC):
             await invoke(self.on_complete)
 
     @abstractmethod
+    def transform_values(self, transform: Callable[[Any], Any]) -> None:
+        """Project interpolation values without changing the running timeline."""
+        ...
+
+    @abstractmethod
     async def stop(self, complete: bool = True) -> None:
         """Stop the animation.
 
@@ -100,6 +105,11 @@ class SimpleAnimation(Animation):
     on_complete: CallbackType | None = None
     level: AnimationLevel = "full"
     """Minimum level required for the animation to take place (inclusive)."""
+
+    def transform_values(self, transform: Callable[[Any], Any]) -> None:
+        self.start_value = transform(self.start_value)
+        self.end_value = transform(self.end_value)
+        self.final_value = transform(self.final_value)
 
     def __call__(
         self, time: float, app_animation_level: AnimationLevel = "full"
@@ -525,6 +535,20 @@ class Animator:
             await self._stop_scheduled_animation(key, complete)
         elif key in self._animations:
             await self._stop_running_animation(key, complete)
+
+    def transform_running_animation(
+        self, obj: object, attribute: str, transform: Callable[[Any], Any],
+    ) -> None:
+        """Apply a coordinate projection to an active animation's own values.
+
+        The caller owns the current attribute and destination. This preserves
+        the original animation, timing, easing and completion callback; it does
+        not finish it or start a replacement. Scheduled, unstarted animations
+        are not running interpolation resources.
+        """
+        animation = self._animations.get((id(obj), attribute))
+        if animation is not None:
+            animation.transform_values(transform)
 
     def force_stop_animation(self, obj: object, attribute: str) -> None:
         """Force stop an animation on an attribute. This will immediately stop the animation,
