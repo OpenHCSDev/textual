@@ -1,0 +1,9 @@
+Using CPython 3.14.2 interpreter at: /home/ts/wt/toad-foreground-layout-resource-after-271-20261001/.artifacts/p275fb/bin/python
+Resolved 6 packages in 62ms
+Installed 6 packages in 7ms
+ + iniconfig==2.3.0
+ + packaging==26.3
+ + pluggy==1.6.0
+ + pygments==2.21.0
+ + pytest==9.1.1
+ + pytest-asyncio==1.4.0

@@ -1,0 +1,24 @@
+{"baseline_textual": "/home/ts/wt/toad-foreground-layout-resource-after-271-20261001/.artifacts/p275fb/lib/python3.14/site-packages/textual/__init__.py", "baseline_compositor": "/home/ts/wt/toad-foreground-layout-resource-after-271-20261001/.artifacts/p275fb/lib/python3.14/site-packages/textual/_compositor.py"}
+Traceback (most recent call last):
+  File "<stdin>", line 8, in <module>
+  File "<frozen runpy>", line 287, in run_path
+  File "<frozen runpy>", line 98, in _run_module_code
+  File "<frozen runpy>", line 88, in _run_code
+  File "evidence/native-subtree-retirement/actual_native_scroll_control.py", line 217, in <module>
+    asyncio.run(run(Path(sys.argv[1])))
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ts/.local/share/uv/python/cpython-3.14.2-linux-x86_64-gnu/lib/python3.14/asyncio/runners.py", line 204, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "/home/ts/.local/share/uv/python/cpython-3.14.2-linux-x86_64-gnu/lib/python3.14/asyncio/runners.py", line 127, in run
+    return self._loop.run_until_complete(task)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/home/ts/.local/share/uv/python/cpython-3.14.2-linux-x86_64-gnu/lib/python3.14/asyncio/base_events.py", line 719, in run_until_complete
+    return future.result()
+           ~~~~~~~~~~~~~^^
+  File "evidence/native-subtree-retirement/actual_native_scroll_control.py", line 161, in run
+    await check_placement("Prepend changes root virtual placement", prepend)
+  File "evidence/native-subtree-retirement/actual_native_scroll_control.py", line 134, in check_placement
+    assert compositor._subtree_geometry[body] is original, label
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Prepend changes root virtual placement

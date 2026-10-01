@@ -823,9 +823,7 @@ class Compositor:
             clips[node] = clip
 
         widgets: set[Widget] = set()
-        add_new_widget = widgets.add
         invisible_widgets: set[Widget] = set()
-        add_new_invisible_widget = invisible_widgets.add
         layer_order: int = 0
 
         no_clip = RootSceneClip(size.region)
@@ -887,9 +885,9 @@ class Compositor:
                 visible = visibility == "visible"
 
             if visible:
-                add_new_widget(widget)
+                widgets.add(widget)
             else:
-                add_new_invisible_widget(widget)
+                invisible_widgets.add(widget)
 
             # Container region is minus border
             container_region = region.shrink(styles.gutter)
@@ -1076,6 +1074,7 @@ class Compositor:
                 ), clip)
 
         def add_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter, complete):
+            nonlocal map, widgets, invisible_widgets
             if (not self.max_subtree_geometry_entries or not widget.CACHE_SUBTREE_GEOMETRY or widget in retained_paths
                     or not widget._is_mounted):
                 arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter, complete)  # noqa: F821 -- closure cleared after traversal
@@ -1091,19 +1090,28 @@ class Compositor:
             if cached is not None and cached.matches(key):
                 cached.restore_into(map, widgets, invisible_widgets, key, clip, clips, widget._render_widget)
                 return
-            previous_map, previous_widgets, previous_invisible = set(map), widgets.copy(), invisible_widgets.copy()
             # A body needs its complete native arrangement to reveal new rows.
             # A scroll-owning viewport changes its own arrangement inputs and
             # must continue culling; it cannot demand the entire prepared buffer
             # merely to retain an exact-coordinate scene.
-            arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
-                           complete)  # noqa: F821 -- closure cleared after traversal
+            # Construct only this native subtree, then publish it into its
+            # enclosing scene. Copying and subtracting the already-built whole
+            # scene for each body makes admission depend on unrelated bodies.
+            parent_map, parent_widgets, parent_invisible = map, widgets, invisible_widgets
+            map, widgets, invisible_widgets = {}, set(), set()
+            try:
+                arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
+                               complete)  # noqa: F821 -- closure cleared after traversal
+                geometry = map
+                added_widgets, added_invisible = frozenset(widgets), frozenset(invisible_widgets)
+            finally:
+                map, widgets, invisible_widgets = parent_map, parent_widgets, parent_invisible
+            map.update(geometry)
+            widgets.update(added_widgets)
+            invisible_widgets.update(added_invisible)
             if (widget not in self._subtree_geometry
                     and len(self._subtree_geometry) >= self.max_subtree_geometry_entries):
                 self._subtree_geometry.pop(next(iter(self._subtree_geometry)))
-            geometry = {node: entry for node, entry in map.items() if node not in previous_map}
-            added_widgets = frozenset(widgets - previous_widgets)
-            added_invisible = frozenset(invisible_widgets - previous_invisible)
             self._subtree_geometry[widget] = resource_type.capture(
                 key, geometry, added_widgets, added_invisible, clips, clip, screen_coordinates)
 
