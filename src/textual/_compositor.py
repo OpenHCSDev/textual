@@ -351,7 +351,11 @@ class Compositor:
         projections owning removed widgets indefinitely on inactive screens.
         Damage needs rectangles, not the retired widget trees that occupied them.
         """
-        self._subtree_geometry.clear()
+        for owner, (_, scene, members, hidden) in tuple(self._subtree_geometry.items()):
+            # The existing entry owns its root, rendered geometry and native
+            # descendants. Unrelated retained branches keep their same resource.
+            if not widgets.isdisjoint({owner, *scene, *members, *hidden}):
+                del self._subtree_geometry[owner]
         changed = False
         for mapping in (self._full_map, self._visible_map):
             if mapping is None:
