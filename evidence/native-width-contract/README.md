@@ -23,3 +23,14 @@ Textual25added22deleted, nativeDiff4added1deleted, Toad2method declaration lines
 Unknown subclasses continue ContextHeight. Full original scope stays271. Source
 control uses ownsource imports in unchanged installed pair; immutable affected
 installed and physical41MB/CPU/warm A/B proof are pending, not source READY.
+
+
+## Installed native consumer checkpoint
+
+One normalimmutable69pair verified Corecac7/Toadd9d/Text4e90/Diff8fa7/SDK12/
+native593; source Git bytes match full packages. Width-installed01 exits0/
+exceptionNone. All10nativeflow resources1equalarrangement/8heights; unknown
+width methods conservatively varygeometry, declaredwidth remainsstable; changed
+numbers3x1→9x6; relative/style/member/resize pass. OriginalRED01preserved.
+This is scoped installed native consumer Ready, NOToverallCPU/original41MB
+physical/current-agentwarmReady. Entire original271scope remains receivingowner.
