@@ -12,7 +12,9 @@ without having to render the entire screen.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from operator import itemgetter
+from types import MappingProxyType
 from typing import (
     TYPE_CHECKING,
     Callable,
@@ -54,6 +56,29 @@ class ReflowResult(NamedTuple):
 
 # Maps a widget on to its geometry (information that describes its position in the composition)
 CompositorMap: TypeAlias = "dict[Widget, MapGeometry]"
+
+
+@dataclass(frozen=True)
+class SubtreeGeometry:
+    """One immutable native arrangement resource in the compositor's cache."""
+
+    key: tuple
+    geometry: Mapping[Widget, MapGeometry]
+    widgets: frozenset[Widget]
+    invisible_widgets: frozenset[Widget]
+
+    def matches(self, key: tuple) -> bool:
+        return self.key == key
+
+    def restore_into(
+        self, geometry: CompositorMap, widgets: set[Widget], invisible_widgets: set[Widget],
+    ) -> None:
+        geometry.update(self.geometry)
+        widgets.update(self.widgets)
+        invisible_widgets.update(self.invisible_widgets)
+
+    def references_retired(self, owner: Widget, retired: set[Widget]) -> bool:
+        return not retired.isdisjoint((owner, *self.geometry, *self.widgets, *self.invisible_widgets))
 
 
 class CompositorUpdate:
@@ -315,7 +340,7 @@ class Compositor:
 
         # Mapping of line numbers on to lists of widget and regions
         self._layers_visible: list[list[tuple[Widget, Region, Region]]] | None = None
-        self._subtree_geometry: dict[Widget, tuple[tuple, CompositorMap, set[Widget], set[Widget]]] = {}
+        self._subtree_geometry: dict[Widget, SubtreeGeometry] = {}
         self.max_subtree_geometry_entries = max_subtree_geometry_entries
 
     @property
@@ -351,10 +376,8 @@ class Compositor:
         projections owning removed widgets indefinitely on inactive screens.
         Damage needs rectangles, not the retired widget trees that occupied them.
         """
-        for owner, (_, scene, members, hidden) in tuple(self._subtree_geometry.items()):
-            # The existing entry owns its root, rendered geometry and native
-            # descendants. Unrelated retained branches keep their same resource.
-            if not widgets.isdisjoint({owner, *scene, *members, *hidden}):
+        for owner, resource in tuple(self._subtree_geometry.items()):
+            if resource.references_retired(owner, widgets):
                 del self._subtree_geometry[owner]
         changed = False
         for mapping in (self._full_map, self._visible_map):
@@ -861,19 +884,17 @@ class Compositor:
                    size, visible_only, widget.scroll_offset,
                    tuple(inherited.items()) if inherited is not None else ())
             cached = self._subtree_geometry.get(widget)
-            if cached is not None and cached[0] == key:
-                map.update(cached[1])
-                widgets.update(cached[2])
-                invisible_widgets.update(cached[3])
+            if cached is not None and cached.matches(key):
+                cached.restore_into(map, widgets, invisible_widgets)
                 return
             previous_map, previous_widgets, previous_invisible = set(map), widgets.copy(), invisible_widgets.copy()
             arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter)  # noqa: F821 -- closure cleared after traversal
             if (widget not in self._subtree_geometry
                     and len(self._subtree_geometry) >= self.max_subtree_geometry_entries):
                 self._subtree_geometry.pop(next(iter(self._subtree_geometry)))
-            self._subtree_geometry[widget] = (
-                key, {node: geometry for node, geometry in map.items() if node not in previous_map},
-                widgets - previous_widgets, invisible_widgets - previous_invisible,
+            self._subtree_geometry[widget] = SubtreeGeometry(
+                key, MappingProxyType({node: geometry for node, geometry in map.items() if node not in previous_map}),
+                frozenset(widgets - previous_widgets), frozenset(invisible_widgets - previous_invisible),
             )
 
         # Add top level (root) widget
