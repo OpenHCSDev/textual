@@ -30,21 +30,35 @@ class IndependentHeight(HeightDependency):
         return False
 
 
-class NativeWidgetHeight(HeightDependency):
+class NativeWidgetMeasurementHeight(HeightDependency):
+    @abstractmethod
+    def layout_dependency(self, widget: Widget) -> HeightDependency:
+        """The native layout owns the selected measurement's dependency."""
+
     def depends(self, widget: Widget) -> bool:
         if not widget.is_container:
             # Native leaf visuals receive rules and width, not container height.
             return False
         if not widget._native_measurement_layout_hooks:
             return True
-        return widget.layout._content_height_dependency.depends(widget)
+        return self.layout_dependency(widget).depends(widget)
 
     def box_depends(self, widget: Widget) -> bool:
         if not widget.is_container:
             return False
         if not widget._native_measurement_layout_hooks:
             return True
-        return widget.layout._content_height_dependency.box_depends(widget)
+        return self.layout_dependency(widget).box_depends(widget)
+
+
+class NativeWidgetHeight(NativeWidgetMeasurementHeight):
+    def layout_dependency(self, widget: Widget) -> HeightDependency:
+        return widget.layout._content_height_dependency
+
+
+class NativeWidgetWidth(NativeWidgetMeasurementHeight):
+    def layout_dependency(self, widget: Widget) -> HeightDependency:
+        return widget.layout._content_width_dependency
 
 
 class NativeLayoutHeight(HeightDependency):
@@ -97,13 +111,6 @@ def _scalar_uses_height(scalar: Scalar, *, height_fraction: bool = False) -> boo
             or (height_fraction and unit is Unit.FRACTION))
 
 
-def _content_width_uses_height(widget: Widget) -> bool:
-    return (not widget._native_content_width or (widget.is_container and (
-        not widget._native_measurement_layout_hooks
-        or widget.layout._content_width_dependency.depends(widget)
-    )))
-
-
 class GridHeight(HeightDependency):
     def depends(self, widget: Widget) -> bool:
         styles = widget.styles
@@ -120,7 +127,7 @@ class GridHeight(HeightDependency):
             # size, so fractional child boxes are safe once tracks are proven.
             if child._content_height_dependency.depends(child):
                 return True
-            if _content_width_uses_height(child):
+            if child._content_width_dependency.depends(child):
                 return True
             if any(scalar is not None and _scalar_uses_height(scalar) for scalar in (
                 child_styles.min_width, child_styles.max_width,
@@ -133,6 +140,7 @@ class GridHeight(HeightDependency):
 CONTEXT_HEIGHT = ContextHeight()
 INDEPENDENT_HEIGHT = IndependentHeight()
 NATIVE_WIDGET_HEIGHT = NativeWidgetHeight()
+NATIVE_WIDGET_WIDTH = NativeWidgetWidth()
 NATIVE_LAYOUT_HEIGHT = NativeLayoutHeight()
 FLOW_HEIGHT = FlowHeight()
 STREAM_HEIGHT = StreamHeight()
@@ -194,14 +202,8 @@ def box_depends_on_available_height(widget: Widget) -> bool:
     depends, content_width, content_height = _local_box_inputs(widget)
     if depends:
         return True
-    if content_width:
-        if not widget._native_content_width:
-            return True
-        if widget.is_container and (
-            not widget._native_measurement_layout_hooks
-            or widget.layout._content_width_dependency.depends(widget)
-        ):
-            return True
+    if content_width and widget._content_width_dependency.depends(widget):
+        return True
     if content_height:
         return widget._content_height_dependency.box_depends(widget)
     return False
