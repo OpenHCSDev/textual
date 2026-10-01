@@ -32,3 +32,11 @@ src/textual/_compositor.py:1090:                cached.restore_into(map, widgets
 ## Final validation boundary
 
 Code reasoning and the coherent implementation precede final validation. Reuse existing native scroll/scene/custody control with prepend/reorder/eviction and complete-versus-culled scene equality, then one meaningful normal installed saved-history physical/CPU gate at a package checkpoint. No source or installed speed claim yet. Source profile evidence motivates this scope but does not assign a CPU fraction. Runtime lifecycle Arendt, compaction/T5 Sch,493 borrowed-reader methods retain their existing owners.
+
+## Source/native final validation
+
+The existing continuous native scroll control now includes prepend, sibling reorder/retirement and host relocation. All15 scene relations match a full uncached native traversal, including native paint order and parent-relative virtual_region. All5 placement transitions retain the same body resource and execute zero actual body layouts. Prepend/reorder/retirement also make zero body.arrange calls. Host offset changes call body.arrange once through native get_content_height, whose existing arrangement cache returns without executing body layout. The first validation incorrectly equated this cached measurement lookup with layout execution; preserve its failed log, then classify the caller rather than suppressing the lookup. The final observer records both lookup callers and actual layout execution.
+
+Original PageDown still performs zero body arrangement calls. Resize/content changes replace the resource; nested scrolling, fixed children, complete-versus-culled coverage and screen/overlay placement still match native uncached geometry. The unchanged projection returns the original MapGeometry before allocating a replacement. Source validation uses the existing installed dependency interpreter but imports this exact worktree's Textual source. It does not establish installed Toad performance or terminal Strip retention. Required next gate is the declared compatible normal installed pair after the parent's493/474 source union, without reusing obsolete native pins.
+
+Evidence: native-scroll-placement02.json and both native-scroll-placement.log/native-scroll-placement02.log. No provider calls or public root/owner/native input were involved.

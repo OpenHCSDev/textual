@@ -169,13 +169,15 @@ class SubtreeMapGeometry(NamedTuple):
         for bound in self.clip_bounds:
             clip = clip.intersect(bound + current.region.offset)
         offset = current.region.offset - original.region.offset
-        projected = self.geometry._replace(
+        order = original.project_order(self.geometry.order, current)
+        virtual_region = current.virtual_region if root else self.geometry.virtual_region
+        if (not offset and clip.region == self.geometry.clip
+                and order == self.geometry.order and virtual_region == self.geometry.virtual_region):
+            return self.geometry, clip
+        return self.geometry._replace(
             region=self.geometry.region + offset, clip=clip.region,
-            order=original.project_order(self.geometry.order, current),
-            virtual_region=current.virtual_region if root else self.geometry.virtual_region,
-        )
-        # Keep original native geometry identity on an unchanged frame.
-        return (self.geometry if projected == self.geometry else projected), clip
+            order=order, virtual_region=virtual_region,
+        ), clip
 
 
 GeometryEntry = TypeVar("GeometryEntry")
