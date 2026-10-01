@@ -1,0 +1,148 @@
+"""Locate existing native cache misses during actual PageDown dispatch."""
+import asyncio
+import json
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+from textual.app import App, ComposeResult
+from textual.containers import VerticalGroup, VerticalScroll
+from textual.widgets import Static
+from textual._compositor import Compositor, IntrinsicSubtreeGeometry
+
+
+class NativeBody(VerticalGroup):
+    CACHE_SUBTREE_GEOMETRY = True
+
+
+class NativeReader(VerticalScroll):
+    CACHE_SUBTREE_GEOMETRY = True
+
+
+class NativeScrollApp(App):
+    CSS = """
+    VerticalScroll {height: 20;}
+    NativeBody {height: auto;}
+    Static {height: 10;}
+    #nested {height: 15; padding: 1;}
+    #nested Static {height: 30;}
+    #pinned {dock: top; height: 1;}
+    #screen-body {height: 20;}
+    #screen-placed {constrain: inside inside;}
+    #overlay-body {height: 20;}
+    #overlay-label {overlay: screen;}
+    """
+
+    def compose(self) -> ComposeResult:
+        with NativeReader(id="reader"):
+            with NativeBody(id="body"):
+                for index in range(3):
+                    yield Static(f"original leading {index}")
+                with VerticalScroll(id="nested"):
+                    yield Static("fixed native header", id="pinned")
+                    yield Static("\n".join(f"nested original {i}" for i in range(30)))
+                for index in range(3):
+                    yield Static(f"original trailing {index}")
+            with NativeBody(id="screen-body"):
+                yield Static("screen-constrained original", id="screen-placed")
+            with NativeBody(id="overlay-body"):
+                yield Static("overlay native original", id="overlay-label")
+
+
+async def run(output):
+    app = NativeScrollApp()
+    receipt = {"scope": "Actual native scroll/reprojection counter; no installed Toad/CPU readiness claim"}
+    async with app.run_test(size=(80, 30)) as pilot:
+        reader = app.query_one("#reader")
+        reader.focus()
+        await pilot.pause()
+        compositor = app.screen._compositor
+        body = app.query_one("#body")
+        compositor.reflow_visible(app.screen, app.screen.size)
+        original = compositor._subtree_geometry[body]
+        before = (body._geometry_revision, body._nodes._updates, body.styles._cache_key)
+        start = reader.scroll_y
+        arrangements = 0
+
+        def observe(frame, event, argument):
+            nonlocal arrangements
+            if event == "call" and frame.f_code.co_name == "arrange" and frame.f_locals.get("self") is body:
+                arrangements += 1
+
+        sys.setprofile(observe)
+        try:
+            await pilot.press("pagedown")
+            await pilot.pause()
+            compositor.reflow_visible(app.screen, app.screen.size)
+        finally:
+            sys.setprofile(None)
+        current = compositor._subtree_geometry[body]
+        receipt.update(scroll_before=start, scroll_after=reader.scroll_y,
+            same_resource=current is original, body_arrangement_calls_during_pagedown=arrangements,
+            native_body_epoch_unchanged=before == (body._geometry_revision, body._nodes._updates, body.styles._cache_key),
+            changed_key_positions=[index for index, (old, new) in enumerate(zip(original.key, current.key)) if old != new],
+            changed_key_values=[{"index": index, "before": repr(old), "after": repr(new)}
+                for index, (old, new) in enumerate(zip(original.key, current.key)) if old != new])
+        assert reader.scroll_y > start, "Actual PageDown was not admitted"
+        assert receipt["native_body_epoch_unchanged"], receipt
+        assert current is original, "Original intrinsic resource was rebuilt during PageDown"
+        assert isinstance(current, IntrinsicSubtreeGeometry)
+        assert not arrangements, "The same native body was recursively arranged during PageDown"
+        assert not isinstance(compositor._subtree_geometry[reader], IntrinsicSubtreeGeometry)
+
+        def visible_scene(mapping):
+            return {node: entry for node, entry in mapping.items()
+                    if app.screen.size.region.overlaps(entry.region)
+                    and entry.clip.overlaps(entry.region)}
+
+        def check_scene(label):
+            cached, _ = compositor._arrange_root(app.screen, app.screen.size)
+            reference, _ = Compositor(max_subtree_geometry_entries=0)._arrange_root(
+                app.screen, app.screen.size, visible_only=False)
+            projected, expected = visible_scene(cached), visible_scene(reference)
+            assert projected == expected, (label, [
+                (type(node).__name__, node.id, projected.get(node), expected.get(node))
+                for node in projected.keys() | expected.keys()
+                if projected.get(node) != expected.get(node)])
+            receipt.setdefault("scene_checks", []).append(label)
+
+        check_scene("PageDown reveals previously clipped descendants")
+        await pilot.press("pageup")
+        await pilot.pause()
+        check_scene("Reverse restores nested clip")
+        assert compositor._subtree_geometry[body] is original
+        nested = app.query_one("#nested")
+        nested.focus()
+        await pilot.press("end")
+        await pilot.pause()
+        check_scene("Nested native scrolling and fixed child")
+        reader.focus()
+        await pilot.press("end")
+        await pilot.pause()
+        check_scene("End clips final descendants")
+        for _ in range(3):
+            await pilot.press("pagedown")
+        await pilot.pause()
+        check_scene("Repeated PageDown at bottom")
+        await pilot.resize_terminal(70, 25)
+        await pilot.pause()
+        check_scene("Resize invalidates intrinsic dimensions")
+        assert compositor._subtree_geometry[body] is not original
+        retained = compositor._subtree_geometry[body]
+        body.query_one(Static).update("original content changed\nnew line")
+        await pilot.pause()
+        check_scene("Native content mutation invalidates resource")
+        assert compositor._subtree_geometry[body] is not retained
+        constrained = app.query_one("#screen-body")
+        check_scene("Screen-dependent placement retains original coordinates")
+        assert not isinstance(compositor._subtree_geometry[constrained], IntrinsicSubtreeGeometry)
+        overlay = app.query_one("#overlay-body")
+        check_scene("Overlay uses canonical screen clip and paint order")
+        assert not isinstance(compositor._subtree_geometry[overlay], IntrinsicSubtreeGeometry)
+        receipt["result"] = "PASS"
+    output.write_text(json.dumps(receipt, indent=2) + "\n")
+    print(json.dumps(receipt))
+
+
+if __name__ == "__main__":
+    asyncio.run(run(Path(sys.argv[1])))

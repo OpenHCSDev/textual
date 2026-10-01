@@ -13,15 +13,19 @@ without having to render the entire screen.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from abc import ABC, abstractmethod
+from functools import cached_property
 from operator import itemgetter
 from types import MappingProxyType
 from typing import (
     TYPE_CHECKING,
     Callable,
+    Generic,
     Iterable,
     Mapping,
     NamedTuple,
     Sequence,
+    TypeVar,
     cast,
 )
 
@@ -58,27 +62,189 @@ class ReflowResult(NamedTuple):
 CompositorMap: TypeAlias = "dict[Widget, MapGeometry]"
 
 
+class SubtreeGeometryKey(NamedTuple):
+    geometry_revision: int
+    nodes_revision: int
+    styles_key: object
+    virtual_region: Region
+    region: Region
+    order: tuple
+    layer_order: int
+    clip: Region
+    visible: bool
+    dock_gutter: Spacing
+    screen_size: Size
+    visible_only: bool
+    scroll_offset: Offset
+    inherited_layers: tuple
+
+    def intrinsic(self) -> SubtreeGeometryKey:
+        """Separate placement from the same declared native arrangement inputs."""
+        return self._replace(region=self.region.reset_offset, clip=Region())
+
+
+class SceneClip(ABC):
+    """The original clip declaration path, before intersection loses its bounds."""
+
+    @property
+    @abstractmethod
+    def region(self) -> Region: ...
+
+    def intersect(self, region: Region) -> SceneClip:
+        return NestedSceneClip(self, region)
+
+    @abstractmethod
+    def within(self, root: SceneClip) -> bool: ...
+
+    @abstractmethod
+    def relative_bounds(self, root: SceneClip, origin: Offset) -> tuple[Region, ...]: ...
+
+
 @dataclass(frozen=True)
-class SubtreeGeometry:
+class RootSceneClip(SceneClip):
+    bound: Region
+
+    @property
+    def region(self) -> Region:
+        return self.bound
+
+    def within(self, root: SceneClip) -> bool:
+        return self is root
+
+    def relative_bounds(self, root: SceneClip, origin: Offset) -> tuple[Region, ...]:
+        assert self is root
+        return ()
+
+
+@dataclass(frozen=True)
+class NestedSceneClip(SceneClip):
+    source: SceneClip
+    bound: Region
+
+    @cached_property
+    def region(self) -> Region:
+        return self.source.region.intersection(self.bound)
+
+    def within(self, root: SceneClip) -> bool:
+        return self is root or self.source.within(root)
+
+    def relative_bounds(self, root: SceneClip, origin: Offset) -> tuple[Region, ...]:
+        if self is root:
+            return ()
+        return self.source.relative_bounds(root, origin) + (self.bound - origin,)
+
+
+class RelativeMapGeometry(NamedTuple):
+    """One intrinsic native scene entry; its clip is declared, not truncated."""
+
+    region: Region
+    order: tuple
+    clip_bounds: tuple[Region, ...]
+    virtual_size: Size
+    container_size: Size
+    virtual_region: Region
+    dock_gutter: Spacing
+
+    @classmethod
+    def from_scene(cls, entry: MapGeometry, clip: SceneClip,
+                   root: SceneClip, origin: Offset) -> RelativeMapGeometry:
+        bounds = clip.relative_bounds(root, origin)
+        if bounds:
+            intersection = bounds[0]
+            for bound in bounds[1:]:
+                intersection = intersection.intersection(bound)
+            bounds = (intersection,)
+        return cls(entry.region - origin, entry.order, bounds,
+                   entry.virtual_size, entry.container_size,
+                   entry.virtual_region, entry.dock_gutter)
+
+    def project(self, origin: Offset, clip: SceneClip) -> tuple[MapGeometry, SceneClip]:
+        for bound in self.clip_bounds:
+            clip = clip.intersect(bound + origin)
+        return (MapGeometry(self.region + origin, self.order, clip.region,
+                            self.virtual_size, self.container_size,
+                            self.virtual_region, self.dock_gutter), clip)
+
+
+GeometryEntry = TypeVar("GeometryEntry")
+
+
+@dataclass(frozen=True)
+class SubtreeGeometry(ABC, Generic[GeometryEntry]):
     """One immutable native arrangement resource in the compositor's cache."""
 
-    key: tuple
-    geometry: Mapping[Widget, MapGeometry]
+    key: SubtreeGeometryKey
+    geometry: Mapping[Widget, GeometryEntry]
     widgets: frozenset[Widget]
     invisible_widgets: frozenset[Widget]
 
-    def matches(self, key: tuple) -> bool:
-        return self.key == key
+    @classmethod
+    def complete_arrangement(cls, enclosing_complete: bool) -> bool:
+        return enclosing_complete
+
+    @classmethod
+    def capture(cls, key, geometry, widgets, invisible_widgets, clips, clip, screen_coordinates):
+        return cls(key, MappingProxyType(geometry), widgets, invisible_widgets)
+
+    @abstractmethod
+    def matches(self, key: SubtreeGeometryKey) -> bool:
+        ...
 
     def restore_into(
         self, geometry: CompositorMap, widgets: set[Widget], invisible_widgets: set[Widget],
+        key: SubtreeGeometryKey, clip: SceneClip, clips: dict[Widget, SceneClip],
     ) -> None:
-        geometry.update(self.geometry)
+        self.project_into(geometry, key, clip, clips)
         widgets.update(self.widgets)
         invisible_widgets.update(self.invisible_widgets)
 
+    @abstractmethod
+    def project_into(self, geometry: CompositorMap, key: SubtreeGeometryKey,
+                     clip: SceneClip, clips: dict[Widget, SceneClip]) -> None:
+        ...
+
     def references_retired(self, owner: Widget, retired: set[Widget]) -> bool:
         return not retired.isdisjoint((owner, *self.geometry, *self.widgets, *self.invisible_widgets))
+
+
+@dataclass(frozen=True)
+class PlacedSubtreeGeometry(SubtreeGeometry[MapGeometry]):
+    """A culled or screen-dependent arrangement keeps its exact placement."""
+
+    def matches(self, key: SubtreeGeometryKey) -> bool:
+        return self.key == key
+
+    def project_into(self, geometry: CompositorMap, key: SubtreeGeometryKey,
+                     clip: SceneClip, clips: dict[Widget, SceneClip]) -> None:
+        geometry.update(self.geometry)
+        clips.update((node, RootSceneClip(entry.clip)) for node, entry in self.geometry.items())
+
+
+@dataclass(frozen=True)
+class IntrinsicSubtreeGeometry(SubtreeGeometry[RelativeMapGeometry]):
+    """The same bounded resource, reusable under a new original outer clip."""
+
+    @classmethod
+    def complete_arrangement(cls, enclosing_complete: bool) -> bool:
+        return True
+
+    @classmethod
+    def capture(cls, key, geometry, widgets, invisible_widgets, clips, clip, screen_coordinates):
+        if (not (widgets | invisible_widgets).isdisjoint(screen_coordinates)
+                or not all(clips[node].within(clip) for node in geometry)):
+            return PlacedSubtreeGeometry.capture(
+                key, geometry, widgets, invisible_widgets, clips, clip, screen_coordinates)
+        intrinsic = {node: RelativeMapGeometry.from_scene(entry, clips[node], clip, key.region.offset)
+                     for node, entry in geometry.items()}
+        return cls(key, MappingProxyType(intrinsic), widgets, invisible_widgets)
+
+    def matches(self, key: SubtreeGeometryKey) -> bool:
+        return self.key.intrinsic() == key.intrinsic()
+
+    def project_into(self, geometry: CompositorMap, key: SubtreeGeometryKey,
+                     clip: SceneClip, clips: dict[Widget, SceneClip]) -> None:
+        for node, entry in self.geometry.items():
+            geometry[node], clips[node] = entry.project(key.region.offset, clip)
 
 
 class CompositorUpdate:
@@ -632,13 +798,22 @@ class Compositor:
         """
 
         map: CompositorMap = {}
+        # Transient declaration paths manufacture the one retained resource.
+        # The published MapGeometry continues to own the actual clipped scene.
+        clips: dict[Widget, SceneClip] = {}
+        screen_coordinates: set[Widget] = set()
+
+        def store_geometry(node: Widget, geometry: MapGeometry, clip: SceneClip) -> None:
+            map[node] = geometry
+            clips[node] = clip
+
         widgets: set[Widget] = set()
         add_new_widget = widgets.add
         invisible_widgets: set[Widget] = set()
         add_new_invisible_widget = invisible_widgets.add
         layer_order: int = 0
 
-        no_clip = size.region
+        no_clip = RootSceneClip(size.region)
         # Layer names normally inherit from the outermost declaring ancestor.
         # Resolve that once per node for this reflow, instead of rebuilding an
         # ancestors list and a layer dictionary for every nested widget.
@@ -671,9 +846,10 @@ class Compositor:
             region: Region,
             order: tuple[tuple[int, int, int], ...],
             layer_order: int,
-            clip: Region,
+            clip: SceneClip,
             visible: bool,
             dock_gutter: Spacing,
+            complete: bool,
             _MapGeometry: type[MapGeometry] = MapGeometry,
         ) -> None:
             """Called recursively to place a widget and its children in the map.
@@ -720,11 +896,19 @@ class Compositor:
                     # Arrange the layout
                     arrange_result = widget.arrange(child_region.size)
 
+                    # Culling chooses admission, not paint order. Derive ranks
+                    # from the original placement declaration before selecting
+                    # the current visible subset or restoring a full subtree.
+                    placement_order = {
+                        placement.widget: layer_order - index
+                        for index, placement in enumerate(reversed(arrange_result.placements))
+                    }
+
                     arranged_widgets = arrange_result.widgets
                     widgets.update(arranged_widgets)
 
                     # Get the region that will be updated
-                    sub_clip = clip.intersection(child_region)
+                    sub_clip = clip.intersect(child_region)
 
                     if widget._anchored and not widget._anchor_released:
                         new_scroll_y = (
@@ -738,9 +922,9 @@ class Compositor:
                         widget.set_reactive(Widget.scroll_target_y, new_scroll_y)
                         widget.vertical_scrollbar._reactive_position = new_scroll_y
 
-                    if visible_only:
+                    if visible_only and not complete:
                         placements = arrange_result.get_visible_placements(
-                            sub_clip - child_region.offset + widget.scroll_offset
+                            sub_clip.region - child_region.offset + widget.scroll_offset
                         )
                         if retained_paths:
                             # Keep the original declaration-owned paint order.
@@ -758,6 +942,8 @@ class Compositor:
                     placement_offset = container_region.offset
                     placement_scroll_offset = placement_offset - widget.scroll_offset
 
+                    screen_coordinates.update(placement.widget for placement in placements
+                                              if placement.widget.uses_screen_coordinates)
                     placements = [
                         placement.process_offset(size.region, placement_scroll_offset)
                         for placement in placements
@@ -776,15 +962,15 @@ class Compositor:
                     get_layer_index = layers_to_index.get
 
                     if widget._cover_widget is not None:
-                        map[widget._cover_widget] = _MapGeometry(
+                        store_geometry(widget._cover_widget, _MapGeometry(
                             region.shrink(widget.styles.gutter),
                             order,
-                            clip,
+                            clip.region,
                             region.size,
                             container_size,
                             virtual_region,
                             dock_gutter,
-                        )
+                        ), clip)
 
                     # Add all the widgets
                     for (
@@ -808,7 +994,8 @@ class Compositor:
                                 sub_region + sub_region_offset + placement_scroll_offset
                             )
 
-                        widget_order = order + ((layer_index, z, layer_order),)
+                        child_layer_order = placement_order[sub_widget]
+                        widget_order = order + ((layer_index, z, child_layer_order),)
 
                         if widget._cover_widget is None:
                             add_widget(  # noqa: F821 -- closure cleared only after traversal
@@ -816,12 +1003,12 @@ class Compositor:
                                 sub_region,
                                 widget_region,
                                 ((1, 0, 0),) if overlay else widget_order,
-                                layer_order,
+                                child_layer_order,
                                 no_clip if overlay else sub_clip,
                                 visible,
                                 arrange_result.scroll_spacing,
+                                complete,
                             )
-                        layer_order -= 1
                 else:
                     if widget._anchored and not widget._anchor_released:
                         new_scroll_y = widget.virtual_size.height - (
@@ -841,61 +1028,68 @@ class Compositor:
                         for chrome_widget, chrome_region in widget._arrange_scrollbars(
                             container_region
                         ):
-                            map[chrome_widget] = _MapGeometry(
+                            store_geometry(chrome_widget, _MapGeometry(
                                 chrome_region,
                                 order,
-                                clip,
+                                clip.region,
                                 container_size,
                                 container_size,
-                                chrome_region,
+                                chrome_region - container_region.offset,
                                 dock_gutter,
-                            )
+                            ), clip)
 
-                    map[widget._render_widget] = _MapGeometry(
+                    store_geometry(widget._render_widget, _MapGeometry(
                         region,
                         order,
-                        clip,
+                        clip.region,
                         total_region.size,
                         container_size,
                         virtual_region,
                         dock_gutter,
-                    )
+                    ), clip)
 
             elif visible:
                 # Add the widget to the map
-                map[widget._render_widget] = _MapGeometry(
+                store_geometry(widget._render_widget, _MapGeometry(
                     region,
                     order,
-                    clip,
+                    clip.region,
                     region.size,
                     container_size,
                     virtual_region,
                     dock_gutter,
-                )
+                ), clip)
 
-        def add_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter):
+        def add_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter, complete):
             if (not self.max_subtree_geometry_entries or not widget.CACHE_SUBTREE_GEOMETRY or widget in retained_paths
                     or not widget._is_mounted):
-                arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter)  # noqa: F821 -- closure cleared after traversal
+                arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter, complete)  # noqa: F821 -- closure cleared after traversal
                 return
             inherited = get_layers(widget)  # noqa: F821 -- closure cleared after traversal
-            key = (widget._geometry_revision, widget._nodes._updates, widget.styles._cache_key,
-                   virtual_region, region, order, layer_order, clip, visible, dock_gutter,
+            key = SubtreeGeometryKey(widget._geometry_revision, widget._nodes._updates, widget.styles._cache_key,
+                   virtual_region, region, order, layer_order, clip.region, visible, dock_gutter,
                    size, visible_only, widget.scroll_offset,
                    tuple(inherited.items()) if inherited is not None else ())
             cached = self._subtree_geometry.get(widget)
             if cached is not None and cached.matches(key):
-                cached.restore_into(map, widgets, invisible_widgets)
+                cached.restore_into(map, widgets, invisible_widgets, key, clip, clips)
                 return
             previous_map, previous_widgets, previous_invisible = set(map), widgets.copy(), invisible_widgets.copy()
-            arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter)  # noqa: F821 -- closure cleared after traversal
+            resource_type = widget.subtree_geometry_resource()
+            # A body needs its complete native arrangement to reveal new rows.
+            # A scroll-owning viewport changes its own arrangement inputs and
+            # must continue culling; it cannot demand the entire prepared buffer
+            # merely to retain an exact-coordinate scene.
+            arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
+                           resource_type.complete_arrangement(complete))  # noqa: F821 -- closure cleared after traversal
             if (widget not in self._subtree_geometry
                     and len(self._subtree_geometry) >= self.max_subtree_geometry_entries):
                 self._subtree_geometry.pop(next(iter(self._subtree_geometry)))
-            self._subtree_geometry[widget] = SubtreeGeometry(
-                key, MappingProxyType({node: geometry for node, geometry in map.items() if node not in previous_map}),
-                frozenset(widgets - previous_widgets), frozenset(invisible_widgets - previous_invisible),
-            )
+            geometry = {node: entry for node, entry in map.items() if node not in previous_map}
+            added_widgets = frozenset(widgets - previous_widgets)
+            added_invisible = frozenset(invisible_widgets - previous_invisible)
+            self._subtree_geometry[widget] = resource_type.capture(
+                key, geometry, added_widgets, added_invisible, clips, clip, screen_coordinates)
 
         # Add top level (root) widget
         self._arranging = True
@@ -906,9 +1100,10 @@ class Compositor:
                 size.region,
                 ((0, 0, 0),),
                 layer_order,
-                size.region,
+                no_clip,
                 True,
                 NULL_SPACING,
+                False,
             )
         finally:
             self._arranging = False

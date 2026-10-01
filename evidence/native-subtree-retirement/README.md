@@ -72,3 +72,73 @@ raw trace and negative gates; do not repeat an unchanged provider/capture or
 claim global CPU/sub50ms firstpaint/Strip reuse from native resource identity.
 Absolute region/clip changes still invalidate geometry during scrolling and
 remain in275. All original whole-workspace scope stays with Heisenberg.
+# Intrinsic arrangement continuation under Toad PR275
+
+The installed ba65 Text18 attempt is preserved at
+`/home/ts/.cache/agent-scratch/text18-original-warm-20261001-01`.
+Down/End/fifteen-second idle are physically readable, and the last75s video
+frame shows coldB selected with readable history. The ten-second saved-history/
+frame readiness predicate nevertheless fails; A-return is unreached. Original
+owner/journal unchanged, zero input/provider/public operations and cleanup empty.
+This is not installed warm/CPU acceptance. No unchanged recapture follows.
+
+## Original producer and consumer relation
+
+The native PageDown counter shows an unchanged body/style epoch while region
+moves0→-20. The old absolute scene key necessarily misses. Removing that key
+field alone is wrong: the stored scene contains original screen coordinates and
+already-truncated nested clips. IDEN-1/IDEN-5 require separating intrinsic native
+arrangement from its original frame placement, not another cache or renderer.
+
+The same bounded `_subtree_geometry` dictionary now owns a nominal immutable
+resource family. Its ancestor owns membership restoration, retirement and the
+measured14-input key. Placed resources validate exact coordinates and keep native
+viewport culling. Intrinsic resources own complete bounded body arrangements and
+derive original region/clip projection from the current native outer placement.
+Original clip declaration paths manufacture relative bounds before intersection
+loses information; sealed resources coalesce these bounds and retain no live
+clip-path/frame owner. These transient paths are not a second retained store.
+
+Widget owns the native scroll-scope choice and screen-coordinate placement law;
+the original WidgetPlacement processor and compositor share it. The resource
+family owns complete versus culled manufacture and matching/projection. Absolute
+offsets, constrained placements and screen overlays retain exact scene custody.
+Fixed children, nested scrolling and scrollbar chrome project through original
+geometry. Scrollbar virtual coordinates are now container-relative as required
+by MapGeometry and Widget.virtual_region; no type switch repairs consumers.
+
+Original arrangement placements also own paint rank. Visible culling chooses
+admission and never renumbers that declaration. Order values, retained targets,
+screen clipping, native focus geometry, content/style/dimension invalidation,
+capacity and selective retirement stay in the original compositor pipeline.
+All restore/factory consumers migrated; no absolute tuple implementation,
+compatibility alias, semantic state mirror, parallel renderer/cache or timer.
+
+New native widget/placement cases use their original Widget/layout declarations;
+consumers have no new class roster. A screen-dependent placement declares its
+coordinate law on its owner. An additional resource policy implements the same
+ancestor hooks; membership and retirement do not need another edit.
+
+## Bounded source evidence and remaining gate
+
+`native-scroll-key-diagnostic.json` preserves the original single-body cache
+miss. `native-scroll-reprojection-closure06.json` records the expanded continuous
+native control: PageDown0→20 retains the SAME intrinsic resource with ZERO body
+arrangement calls. Nine cached-visible-versus-uncached-full scene comparisons
+pass: reveal, reverse, nested scroll/fixed child, End, repeated bottom PageDown,
+resize, content mutation, screen constraints and overlays. The scroll-owning
+reader retains placed/culling policy. Earlier source receipts are intermediate
+controls, not installed acceptance or paired CPU measurements.
+
+`reprojection-retirement-candidate03.json` passes the ten original custody/
+retirement/scene/invalidation/budget controls. `reprojection-ratchet.json` passes
+all three files and31changed qualified functions: no dispatch subjects/arms,
+foreign absence probes or long-chain growth. Production versus ba65:41lines
+deleted,246added in `_compositor.py`, `layout.py`, and `widget.py`.
+
+No native build/package/default change occurred. Parent/Mendel own headroom and
+one normal immutable package. Proposed affected gate is one current-cohort
+copied41MB actual st/Xvfb A/B/A + heldUp/Down/reverse/End/15idle + draft/Undo,
+same-run profile/video/committed scene and failure-time readiness census. Zero
+prompts/provider/public-owner operations. Full CPU/firstpaint/Strip/33ms gaps,
+growingEnd/velocity/budget/focus/TC1/T9 remain Toad275; source controls close none.
