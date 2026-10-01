@@ -30,3 +30,14 @@ and correction retained. No product/test behavior assertion weakened. Full
 originalTC1/T9,warm/raster/focus/growingEnd/CPU scope stays in271. Next step normal
 immutable paired packaging/affected installed control. Original physical gate
 remains separate. Global packages/owners/source unchanged.
+
+
+## Installed affected consumer gate
+
+Normal69pair Corecac7/Toad3fa7/Text6e/native593/SDK0.12.1/nativeDiffaa4
+exactGit/noneditable/import/fulltrust/pipcheck verified. Corrected native
+control exits0: four certified diffscrollers each1arrangement; both native
+flow families1; resize,relative,padding,membership,unknownhook controls pass.
+First installed observer closure shadowing failure/log preserved, no product
+patch/catch/guard relaxation. Source bytes unchanged. Actual41MB physical
+CPU/warmagentA/B remains separate271 scope; no overallperf/live claim.
