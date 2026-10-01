@@ -7,7 +7,7 @@ substitute this uninstalled source checkpoint into that package.
 
 ## Original relation and all consumers
 
-`Screen._discard_widgets` calls the original `Compositor.discard_widgets` for
+`Screen._forget_pruned_widgets` calls the original `Compositor.discard_widgets` for
 native prune/unregister. That method cleared every bounded subtree geometry
 entry, including entries which own none of the retired widgets. This discards
 warm native scene resources during unrelated body retirement. Same-run271
