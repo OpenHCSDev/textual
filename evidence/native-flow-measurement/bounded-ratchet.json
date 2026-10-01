@@ -73,5 +73,8 @@
     "abstract_base": 0,
     "enum_class": 0,
     "code_lines": 4
-  }
+  },
+  "screening_pass": true,
+  "code_lines_added": 4,
+  "initial_check_error": "Initial diagnostic compared code_lines along with debt measures; expected4 native policy declarations add4 code lines. Original baseline/candidate tallies retained; no product assertion changed."
 }
