@@ -56,7 +56,7 @@ from textual._dispatch_key import dispatch_key
 from textual._easing import DEFAULT_SCROLL_EASING
 from textual._extrema import Extrema
 from textual._measurement import (
-    CONTEXT_HEIGHT, INDEPENDENT_HEIGHT, NATIVE_WIDGET_HEIGHT,
+    CONTEXT_HEIGHT, INDEPENDENT_HEIGHT, NATIVE_WIDGET_HEIGHT, NATIVE_WIDGET_WIDTH,
     HeightDependency, arrangement_depends_on_available_height,
     box_depends_on_available_height, height_dependency,
 )
@@ -324,8 +324,8 @@ class Widget(DOMNode):
     method replacement requires disabling reuse or rebinding the class contract.
     """
     _content_height_dependency: ClassVar[HeightDependency] = NATIVE_WIDGET_HEIGHT
+    _content_width_dependency: ClassVar[HeightDependency] = NATIVE_WIDGET_WIDTH
     _native_box_measurement: ClassVar[bool] = True
-    _native_content_width: ClassVar[bool] = True
     _native_measurement_layout_hooks: ClassVar[bool] = True
     _geometry_revision = 0
 
@@ -2047,6 +2047,7 @@ class Widget(DOMNode):
         self._box_model_cache[cache_key] = model
         return model
 
+    @height_dependency(NATIVE_WIDGET_WIDTH)
     def get_content_width(self, container: Size, viewport: Size) -> int:
         """Called by textual to get the width of the content area. May be overridden in a subclass.
 
@@ -4068,7 +4069,7 @@ class Widget(DOMNode):
         # Bind method contracts once per concrete class, never probe capabilities
         # on every measurement. Undeclared overrides select the safe full context.
         cls._content_height_dependency = getattr(cls.get_content_height, "_height_dependency", CONTEXT_HEIGHT)
-        cls._native_content_width = cls.get_content_width is Widget.get_content_width
+        cls._content_width_dependency = getattr(cls.get_content_width, "_height_dependency", CONTEXT_HEIGHT)
         cls._native_box_measurement = (
             cls._get_box_model is Widget._get_box_model
             and cls._resolve_extrema is Widget._resolve_extrema
