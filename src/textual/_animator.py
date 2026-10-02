@@ -431,6 +431,10 @@ class Animator:
                 self.force_stop_animation(obj, attribute, complete=False)
                 if on_complete is not None:
                     self.app.call_later(on_complete)
+                # The scheduled request cleared completion before it started.
+                # Let the original timer settle idle/completion even when this
+                # replacement has no interpolation work.
+                self._timer.resume()
                 return
 
             if duration is not None:
