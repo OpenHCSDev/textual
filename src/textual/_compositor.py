@@ -1615,10 +1615,10 @@ class Compositor:
         return size, [Strip.join(chop.values()) for chop in chops]
 
     def _subtree_paint_size(self, root: Widget) -> Size | None:
-        """Select the current native body's bounds, independent of cache residency."""
+        """Use committed native bounds without resolving the entire live scene."""
         if not root.is_mounted:
             return None
-        return root.region.size
+        return root.outer_size
 
     def can_render_subtree(self, root: Widget) -> bool:
         """Whether a mounted native body can supply its complete paint now."""
