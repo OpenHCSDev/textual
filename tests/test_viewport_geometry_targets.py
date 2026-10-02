@@ -146,6 +146,31 @@ async def test_body_capture_descendants_use_original_arrangement_and_screen_coor
         assert compositor._visible_map is published[1]
         assert compositor._render_geometry is None
 
+        # A descendant omitted by its real display rule must remain absent
+        # inside capture, rather than acquiring geometry from the outer scene.
+        hidden = body.children[1]
+        hidden.display = False
+        await pilot.pause()
+        screen._refresh_layout(app.size)
+        published = compositor._full_map, compositor._visible_map
+        scoped_misses = []
+
+        def render_with_hidden_query(crop):
+            try:
+                compositor.find_widget(hidden)
+            except errors.NoWidget:
+                scoped_misses.append(hidden)
+            else:
+                raise AssertionError("Hidden capture descendant escaped its original arrangement")
+            return render_lines(crop)
+
+        with patch.object(compositor, "_arrange_root", side_effect=arrange_body), patch.object(row, "render_lines", side_effect=render_with_hidden_query):
+            compositor.render_subtree_strips(body)
+        assert scoped_misses
+        assert compositor._render_geometry is None
+        assert compositor._full_map is published[0]
+        assert compositor._visible_map is published[1]
+
         # A failing renderer must release the same scoped resource and leave
         # ordinary screen queries with their original publication.
         with patch.object(row, "render_lines", side_effect=ValueError("render failed")):
