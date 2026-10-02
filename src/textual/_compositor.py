@@ -1605,7 +1605,7 @@ class Compositor:
         replacing any published screen map or constructing another compositor.
         """
         if not self.can_render_subtree(root):
-            raise errors.NoWidget("The subtree has no mounted native body")
+            raise errors.NoWidget("The subtree has no published native layout")
         size = self.find_widget(root).region.size
         geometry, _ = self._arrange_root(root, size, visible_only=False)
         widgets = self._paint_regions(geometry, size.region)
@@ -1615,8 +1615,8 @@ class Compositor:
         return size, [Strip.join(chop.values()) for chop in chops]
 
     def can_render_subtree(self, root: Widget) -> bool:
-        """Read original native custody without resolving layout for admission."""
-        return root.is_mounted
+        """Admit mounted bodies through original published scene membership."""
+        return root.is_mounted and root in self.widgets
 
     def _render_chops(
         self,
