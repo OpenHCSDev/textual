@@ -862,10 +862,16 @@ class Compositor:
             for target in retain_geometry:
                 path: list[Widget] = []
                 node = target
-                while isinstance(node, Widget) and node is not root:
+                # Existing members already own a path to this same root.
+                # Shared ancestors need admission once, not per target.
+                while (
+                    isinstance(node, Widget)
+                    and node is not root
+                    and node not in retained_paths
+                ):
                     path.append(node)
                     node = node.parent
-                if node is root:
+                if node is root or node in retained_paths:
                     retained_paths.update(path)
 
         def get_layers(widget: Widget) -> dict[str, int] | None:

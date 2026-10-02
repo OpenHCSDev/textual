@@ -18,3 +18,20 @@ Existing source/consumer analysis first; implementation next. This source
 checkpoint is not installed qualification or a speed claim. No new recording,
 provider, environment or test run is authorized in this source-only window.
 Heisenberg owns the eventual changed joined workflow.
+
+## Source checkpoint
+
+Existing NRA parsed all249 declared native production modules, no omissions.
+One retained_paths declaration and writer own admission; its consumers are
+DockArrangeResult retained membership and original subtree-cache eligibility.
+_arrange_root is consumed by reflow, reflow_visible, lazy full_map and complete
+render_subtree_strips. Only the viewport branch builds retained paths; complete
+capture/full-map behavior is unchanged. Static mapping does not prove dynamic
+resolution; original producer/consumers were read.
+
+The shared algorithm now stops when a target reaches root or an already
+connected original member. A path that reaches neither is not admitted. No
+complete ancestor-prefix traversal is repeated for targets sharing a path.
+The existing transaction-local set remains the only resource; no cross-frame
+state is retained. No checks/capture were run in this source-only window.
+Changed installed qualification and any performance attribution remain pending.
