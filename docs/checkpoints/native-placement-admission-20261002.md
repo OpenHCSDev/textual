@@ -32,9 +32,10 @@ remains separate and frozen.
 
 ## Working implementation
 
-DockArrangeResult.iter_placements owns first-widget ordinals, preserving duplicate
-widget placement rank. Its temporary construction dictionary is discarded; only
-the existing SpatialMap retains indexed original placements. Equal placement
+DockArrangeResult.from_placements owns first-widget ordinals, preserving duplicate
+widget placement rank. Its temporary construction dictionary is discarded; the
+existing placements field retains one indexed original sequence and SpatialMap
+indexes that same resource. Equal placement
 values remain deduplicated by that same spatial query. Complete geometry and
 explicit offscreen targets consume original list order, including duplicates.
 The compositor carries the admitted ordinal through offsets and derives its
@@ -44,14 +45,15 @@ independent retained-target selection are deleted. Generic SpatialMap is unchang
 Existing NRA parsed249 native and276 Toad modules without omissions. One
 get_visible_placements consumer is Compositor; remaining spatial_map consumers
 only read total_region. No Toad consumer needs migration. Original arrangement
-list mutation and spatial resource lifetime remain unchanged. AST attribute-name
+lifetime remains unchanged; its field and constructor now carry indexed placements
+through all declared consumers, without an unindexed compatibility view. AST attribute-name
 matching does not establish dynamic dispatch; the original owners were read.
-Two production files44+/32−. Original source selection and all native callers
+Three production files51+/33−. Original source selection and all native callers
 are changed together. Not installed-ready; no measured performance gain yet.
 
 ## Coherent source sanity and remaining installed boundary
 
-One final affected batch passed6 checks in3.21s using existing native App tests:
+The initial partial checkpoint batch passed6 checks in3.21s using existing native App tests:
 original duplicate/fixed/retained admission, four viewport geometry/capture
 checks and continuous viewport/full-render equivalence across resizing, scrolling,
 source update and exposure. These detect changed rank/dedup, lost offscreen boxes,
@@ -67,8 +69,8 @@ unchanged. Source artifacts and check log are preserved under
 `.artifacts/native-placement-admission28-source01/` in this worktree.
 
 Full arrangements and genuinely missing retained targets still traverse original
-placements, since those operations require them. This change removes the eager
-whole-list pass from ordinary culled scroll admission; it does not establish
+placements, since those operations require them. This change removes rank
+reconstruction from all admission paths; it does not establish
 absence of other native layout/paint work or measured CPU/smoothness gains.
 Heisenberg owns the next changed installed saved-UI video/profile with his Toad
 follow-up; no independent recording/provider or repeated Text27 qualification.
@@ -89,3 +91,23 @@ missing, but never rebuilds rank. All production constructors and native test
 readers of the changed field migrate in this coherent change; no scalar alias,
 old-format reader or extra cache. The initial6-check log remains historical;
 this changed complete source batch receives its final affected checks next.
+
+## Final indexed-family source result
+
+Frozen production e4abca481b54bd598ca14f2731a2fb1d55850a61 supersedes the partial
+29fc source. One final affected batch passes15 checks in3.55s: all original arrange
+producer cases, duplicate/fixed/retained ordinal semantics, four actual native
+geometry/capture cases, viewport/full paint/source/resize equivalence, descendant
+style invalidation and inactive-scene disposal across vertical/stream layouts.
+The extra migrated readers prevent retained tuples from breaking original
+height measurement and removed-child resource release. No broad suite, new env,
+provider or independent installed capture.
+
+Final AST mapping includes249 native production,276 Toad production and460 native
+test modules,0 parse omissions. One from_placements declaration constructs rank;
+its original _arrange caller alone manufactures the result. No iter_placements
+or placement_order remains in production. Full/retained/spatial consumers read
+same indexed placements; test consumers migrate without restoring raw-field aliases.
+The full retained-missing membership scan remains explicit, but it consumes rank
+rather than deciding it again. Pending: integration-owner installed changed
+motion/observer qualification using qualified current Toad and public epoch.

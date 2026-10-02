@@ -1,14 +1,14 @@
 {
   "qualification": "SOURCE_SANITY_PASS; changed joined installed path pending",
-  "production_head": "29fc185afaf349c17f2da3c98ead9cce67ee8320",
+  "production_head": "e4abca481b54bd598ca14f2731a2fb1d55850a61",
   "base": "667dc59ebcaddd08b7f9a20e8e083a7391624d1e",
   "production": {
-    "files": 2,
-    "added": 44,
-    "deleted": 32
+    "files": 3,
+    "added": 51,
+    "deleted": 33
   },
-  "source_owner": "DockArrangeResult.iter_placements -> original SpatialMap indexed membership -> DockArrangeResult.get_visible_placements -> Compositor original order projection",
-  "deleted": "Compositor placement_order construction and independent retained selection",
+  "source_owner": "DockArrangeResult.from_placements at original _arrange producer -> one indexed placements field -> original SpatialMap/admission -> Compositor projection",
+  "deleted": "Compositor placement_order and independent retained selection; iter_placements rank reconstruction",
   "before_modules": {
     "textual": 249,
     "toad": 276
@@ -16,15 +16,28 @@
   "omissions": [],
   "remaining_placement_order_refs": 0,
   "checks": {
-    "passed": 6,
-    "seconds": 3.21,
-    "log": ".artifacts/native-placement-admission28-source01/native-checks.log"
+    "passed": 15,
+    "seconds": 3.55,
+    "log": ".artifacts/native-placement-admission28-source01/indexed-native-checks.log"
   },
   "source_lead_recording": "/home/ts/.cache/agent-scratch/retirement325-published27-public-20261002-01/capture",
   "limits": [
     "Observed GIL transitions not calls/durations/CPU",
     "No new capture/provider/environment/public mutation",
-    "Full arrangements and explicit offscreen targets retain legitimate original-list traversal",
+    "Full geometry and retained-missing admission still consume original membership; no repeated rank construction or zero-scan claim",
     "No changed installed qualification or speed claim; Heisenberg sole joined integration owner"
-  ]
+  ],
+  "prior_checkpoint": {
+    "production": "29fc185afaf349c17f2da3c98ead9cce67ee8320",
+    "passed": 6,
+    "seconds": 3.21,
+    "log": ".artifacts/native-placement-admission28-source01/native-checks.log",
+    "remaining_source_gap": "Retained-missing path rebuilt scratch rank across original list; now deleted"
+  },
+  "after_modules": {
+    "textual": 249,
+    "toad": 276,
+    "native_tests": 460
+  },
+  "remaining_iter_placements_refs": 0
 }
