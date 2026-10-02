@@ -1,0 +1,10 @@
+115:class MarkdownLocation:
+135:class Navigator:
+1135:    class LinkClicked(Message):
+1142:            self.href: str = href
+1227:    def sanitize_location(location: str | PurePath | MarkdownLocation) -> MarkdownLocation:
+1648:class MarkdownViewer(VerticalScroll, can_focus=False, can_focus_children=True):
+1675:    class NavigatorUpdated(Message):
+1727:            await self.document.load(self.navigator.go(target))
+1733:            await self.document.load(self.navigator.location)
+1739:            await self.document.load(self.navigator.location)
