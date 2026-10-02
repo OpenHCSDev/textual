@@ -2957,7 +2957,7 @@ class Widget(DOMNode):
             if maybe_scroll_x:
                 assert x is not None
                 self.scroll_target_x = x
-                if x != self.scroll_x:
+                if x != self.scroll_x or animator.is_being_animated(self, "scroll_x"):
                     self.app._realtime_animation_begin()
                     self.animate(
                         "scroll_x",
@@ -2972,7 +2972,7 @@ class Widget(DOMNode):
             if maybe_scroll_y:
                 assert y is not None
                 self.scroll_target_y = y
-                if y != self.scroll_y:
+                if y != self.scroll_y or animator.is_being_animated(self, "scroll_y"):
                     self.app._realtime_animation_begin()
                     self.animate(
                         "scroll_y",

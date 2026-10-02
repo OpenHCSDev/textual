@@ -31,3 +31,25 @@ Full unfinished scope remains joined to Toad: lazy entry without interrupted
 animation, CPU/144Hz, firstpaint/raster/warm/cold tabs, bounded3viewport adaptive
 runway/reverse/idle/growingEnd/void, editor/draftUndo/focus, busy sidebar/IRC and
 TC1/T9/T4. Original339/342 negatives and raw recordings stay protected.
+
+## Published coherent source batch
+
+The branch normally merged qualified native81ecfccd (Text30/31) into main29
+6405228. PR30/31 were merged into their feature bases, so actual GitHub main29
+alone did not include that qualified source. This branch carries both histories;
+no selective reconstruction or source regression.
+
+Three production files:53 lines deleted,42 added against81ec. Widget deletes
+the early forced completion and delegates animated delivery to Animator, including
+a request whose destination equals the current position. Explicit direct delivery
+stops only its requested axes. Animator cancels the original scheduled Timer
+when replaced, so an old delayed callback cannot reinstall a replaced curve.
+The existing Animation base owns asynchronous stop plus callback invocation;
+SimpleAnimation/ScalarAnimation supply their completed-value hook. The concrete
+force-stop dispatch and duplicated leaf stop algorithms are deleted.
+
+Existing NRA parsed525 native/Toad modules, matching525 sourcefiles, with zero
+parse omissions;66 selected declaration/call sites are retained in the owned
+source receipt. Attribute-call resolution remains semantic, not established by
+AST alone. Existing native/source hooks and all force-stop callers were read.
+This is published working source, not installed validation or smoothness Ready.

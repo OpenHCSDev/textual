@@ -79,14 +79,20 @@ class Animation(ABC):
         """Project interpolation values without changing the running timeline."""
         ...
 
-    @abstractmethod
     async def stop(self, complete: bool = True) -> None:
         """Stop the animation.
 
         Args:
             complete: Flag to say if the animation should be taken to completion.
         """
-        raise NotImplementedError
+        if complete:
+            self.finish()
+        await self.invoke_callback()
+
+    @abstractmethod
+    def finish(self) -> None:
+        """Assign this animation's completed value without invoking callbacks."""
+        ...
 
     def __eq__(self, other: object) -> bool:
         return False
@@ -155,19 +161,8 @@ class SimpleAnimation(Animation):
         setattr(self.obj, self.attribute, value)
         return factor >= 1
 
-    async def stop(self, complete: bool = True) -> None:
-        """Stop the animation.
-
-        Args:
-            complete: Flag to say if the animation should be taken to completion.
-
-        Note:
-            [`on_complete`][Animation.on_complete] will be called regardless
-            of the value provided for `complete`.
-        """
-        if complete:
-            setattr(self.obj, self.attribute, self.end_value)
-        await self.invoke_callback()
+    def finish(self) -> None:
+        setattr(self.obj, self.attribute, self.end_value)
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, SimpleAnimation):
@@ -347,7 +342,10 @@ class Animator:
         )
         if delay:
             self._complete_event.clear()
-            self._scheduled[(id(obj), attribute)] = self.app.set_timer(
+            key = (id(obj), attribute)
+            if (scheduled := self._scheduled.pop(key, None)) is not None:
+                scheduled.stop()
+            self._scheduled[key] = self.app.set_timer(
                 delay, animate_callback
             )
         else:
@@ -396,10 +394,8 @@ class Animator:
 
         # If an animation is already scheduled for this attribute, unschedule it.
         animation_key = (id(obj), attribute)
-        try:
-            del self._scheduled[animation_key]
-        except KeyError:
-            pass
+        if (scheduled := self._scheduled.pop(animation_key, None)) is not None:
+            scheduled.stop()
 
         if final_value is ...:
             final_value = value
@@ -432,7 +428,7 @@ class Animator:
 
             start_value = getattr(obj, attribute)
             if start_value == value:
-                self._animations.pop(animation_key, None)
+                self.force_stop_animation(obj, attribute, complete=False)
                 if on_complete is not None:
                     self.app.call_later(on_complete)
                 return
@@ -553,8 +549,7 @@ class Animator:
     def force_stop_animation(
         self, obj: object, attribute: str, *, complete: bool = True
     ) -> None:
-        """Force stop an animation on an attribute. This will immediately stop the animation,
-        without running any associated callbacks, setting the attribute to its final value.
+        """Stop a running animation synchronously, invoking its completion callback.
 
         Args:
             obj: The object containing the attribute.
@@ -563,21 +558,20 @@ class Animator:
                 preserves the current value for a direct replacement.
 
         Note:
-            If there is no animation scheduled or running, this is a no-op.
+            With ``complete=False``, a delayed animation is also cancelled.
+            Use ``stop_animation`` to complete a delayed animation asynchronously.
         """
-        from textual.css.scalar_animation import ScalarAnimation
-
         animation_key = (id(obj), attribute)
+        if not complete:
+            if (scheduled := self._scheduled.pop(animation_key, None)) is not None:
+                scheduled.stop()
         try:
             animation = self._animations.pop(animation_key)
         except KeyError:
             return
 
         if complete:
-            if isinstance(animation, SimpleAnimation):
-                setattr(obj, attribute, animation.end_value)
-            elif isinstance(animation, ScalarAnimation):
-                setattr(obj, attribute, animation.final_value)
+            animation.finish()
 
         if animation.on_complete is not None:
             animation.on_complete()
