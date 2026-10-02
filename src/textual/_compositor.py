@@ -1391,19 +1391,29 @@ class Compositor:
         """
         geometry = self._get_geometry(widget)
         if geometry is None:
+            geometry = self.full_map.get(widget)
+        if geometry is None:
             raise errors.NoWidget("Widget is not in layout")
         return geometry
 
     def _get_geometry(self, widget: Widget) -> MapGeometry | None:
-        """Select current native geometry before requesting a full arrangement.
+        """Select geometry from its original current publication.
 
-        Both position queries and body admission use the same published maps.
-        An invalidated full map cannot override current viewport geometry.
+        Capture consumes this publication; ordinary find_widget may arrange
+        missing geometry. An invalidated full map cannot override the viewport.
+        A missing capture descendant cannot escape to another scene.
         """
         if self._render_geometry is not None:
             root, geometry = self._render_geometry
             if root in widget.ancestors_with_self:
-                return geometry.get(widget)
+                placement = geometry.get(widget)
+                if placement is None:
+                    raise errors.NoWidget("Widget is not in layout")
+                return placement
+        return self._get_published_geometry(widget)
+
+    def _get_published_geometry(self, widget: Widget) -> MapGeometry | None:
+        """Read the original scene placement without arranging or copying it."""
         if self.root is None:
             return None
         if not self._full_map_invalidated:
@@ -1414,7 +1424,7 @@ class Compositor:
             geometry = self._visible_map.get(widget)
             if geometry is not None:
                 return geometry
-        return self.full_map.get(widget)
+        return None
 
     @contextmanager
     def _using_geometry(self, root: Widget, geometry: CompositorMap) -> Iterator[None]:
@@ -1635,18 +1645,33 @@ class Compositor:
         render_strips = [Strip.join(chop.values()) for chop in chops[: size.height]]
         return render_strips
 
-    def render_subtree_strips(self, root: Widget) -> tuple[Size, list[Strip]]:
-        """Paint a complete native body, not its current screen exposure.
+    def published_geometry(
+        self, roots: Iterable[Widget],
+    ) -> Iterator[tuple[Widget, MapGeometry]]:
+        """Borrow the roots' original current placements without arranging.
 
-        The original live widget tree supplies the complete arrangement through
-        this compositor's ordinary layout algorithm. Its bounded geometry cache
-        remains an optimization, not a condition for retaining body paint.
-        The transient complete arrangement uses the same line/chop renderer without
-        replacing any published screen map or constructing another compositor.
+        Unmounted or unpublished roots have no capture resource. Consume each
+        placement synchronously before asynchronous preparation or pruning can
+        change the scene; mounted custody alone does not establish layout.
         """
-        if not self.can_render_subtree(root):
-            raise errors.NoWidget("The subtree has no published native layout")
-        root_geometry = self.find_widget(root)
+        for root in roots:
+            if not root.is_mounted:
+                continue
+            geometry = self._get_published_geometry(root)
+            if geometry is not None:
+                yield root, geometry
+
+    def render_subtree_strips(
+        self, root: Widget, root_geometry: MapGeometry,
+    ) -> tuple[Size, list[Strip]]:
+        """Paint a body using its borrowed original published placement.
+
+        The caller acquires the placement from published_geometry and consumes
+        it before any await or DOM mutation. Capture never reacquires eligibility
+        or manufactures a scene to decide whether a body can be retired. The
+        same original arrangement/line/chop algorithm supplies complete rows
+        without replacing any published map or constructing another compositor.
+        """
         bounds = root_geometry.region
         geometry, _ = self._arrange_root(
             root, self.size, visible_only=False, root_geometry=root_geometry,
@@ -1657,10 +1682,6 @@ class Compositor:
             chops = self._render_chops(bounds, lambda y: True,
                                       widgets=widgets, cuts=cuts, bounds=bounds)
         return bounds.size, [Strip.join(chop.values()) for chop in chops]
-
-    def can_render_subtree(self, root: Widget) -> bool:
-        """Admit mounted bodies with geometry in the original current scene."""
-        return root.is_mounted and self._get_geometry(root) is not None
 
     def _render_chops(
         self,
