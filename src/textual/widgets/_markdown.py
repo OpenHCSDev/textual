@@ -4,6 +4,7 @@ import asyncio
 import re
 import weakref
 from contextlib import suppress
+from dataclasses import dataclass
 from functools import partial
 from pathlib import Path, PurePath
 from types import MethodType
@@ -110,22 +111,43 @@ class MarkdownStream:
             await self.markdown_widget.append(new_markdown)
 
 
+@dataclass(frozen=True)
+class MarkdownLocation:
+    """One decoded filesystem destination and its separate document anchor."""
+
+    path: Path
+    anchor: str = ""
+
+    def resolve(self, current: MarkdownLocation) -> MarkdownLocation:
+        path = (current.path if self.path == Path(".") and self.anchor
+                else current.path.parent / self.path)
+        return MarkdownLocation(path.absolute(), self.anchor)
+
+    async def load(self, document: Markdown) -> None:
+        data = await asyncio.get_running_loop().run_in_executor(
+            None, partial(self.path.read_text, encoding="utf-8")
+        )
+        await document.update(data)
+        if self.anchor:
+            document.goto_anchor(self.anchor)
+
+
 class Navigator:
     """Manages a stack of paths like a browser."""
 
     def __init__(self) -> None:
-        self.stack: list[Path] = []
+        self.stack: list[MarkdownLocation] = []
         self.index = 0
 
     @property
-    def location(self) -> Path:
+    def location(self) -> MarkdownLocation:
         """The current location.
 
         Returns:
-            A path for the current document.
+            The original filesystem destination and its document anchor.
         """
         if not self.stack:
-            return Path(".")
+            return MarkdownLocation(Path("."))
         return self.stack[self.index]
 
     @property
@@ -138,7 +160,7 @@ class Navigator:
         """Is the current location at the end of the stack?"""
         return self.index >= len(self.stack) - 1
 
-    def go(self, path: str | PurePath) -> Path:
+    def go(self, path: str | PurePath | MarkdownLocation) -> MarkdownLocation:
         """Go to a new document.
 
         Args:
@@ -147,13 +169,9 @@ class Navigator:
         Returns:
             New location.
         """
-        location, anchor = Markdown.sanitize_location(str(path))
-        if location == Path(".") and anchor:
-            current_file, _ = Markdown.sanitize_location(str(self.location))
-            path = f"{current_file}#{anchor}"
-        new_path = self.location.parent / Path(path)
+        location = Markdown.sanitize_location(path)
+        new_path = location.resolve(self.location)
         self.stack = self.stack[: self.index + 1]
-        new_path = new_path.absolute()
         self.stack.append(new_path)
         self.index = len(self.stack) - 1
         return new_path
@@ -1121,8 +1139,8 @@ class Markdown(Widget):
             super().__init__()
             self.markdown: Markdown = markdown
             """The `Markdown` widget containing the link clicked."""
-            self.href: str = unquote(href)
-            """The link that was selected."""
+            self.href: str = href
+            """The original encoded URI; its consumer owns component decoding."""
 
         @property
         def control(self) -> Markdown:
@@ -1206,18 +1224,22 @@ class Markdown(Widget):
             self.app.open_url(event.href)
 
     @staticmethod
-    def sanitize_location(location: str) -> tuple[Path, str]:
+    def sanitize_location(location: str | PurePath | MarkdownLocation) -> MarkdownLocation:
         """Given a location, break out the path and any anchor.
 
         Args:
             location: The location to sanitize.
 
         Returns:
-            A tuple of the path to the location cleaned of any anchor, plus
-            the anchor (or an empty string if none was found).
+            The decoded filesystem path and separate anchor as one owned
+            navigation resource. Path values are literal filesystem spellings.
         """
-        location, _, anchor = location.partition("#")
-        return Path(location), anchor
+        if isinstance(location, MarkdownLocation):
+            return location
+        if isinstance(location, PurePath):
+            return MarkdownLocation(Path(location))
+        path, _, anchor = location.partition("#")
+        return MarkdownLocation(Path(unquote(path)), unquote(anchor))
 
     def goto_anchor(self, anchor: str) -> bool:
         """Try and find the given anchor in the current document.
@@ -1245,7 +1267,7 @@ class Markdown(Widget):
                 return True
         return False
 
-    async def load(self, path: Path) -> None:
+    async def load(self, path: Path | MarkdownLocation) -> None:
         """Load a new Markdown document.
 
         Args:
@@ -1258,13 +1280,7 @@ class Markdown(Widget):
             The exceptions that can be raised by this method are all of
             those that can be raised by calling [`Path.read_text`][pathlib.Path.read_text].
         """
-        path, anchor = self.sanitize_location(str(path))
-        data = await asyncio.get_running_loop().run_in_executor(
-            None, partial(path.read_text, encoding="utf-8")
-        )
-        await self.update(data)
-        if anchor:
-            self.goto_anchor(anchor)
+        await self.sanitize_location(path).load(self)
 
     def unhandled_token(self, token: Token) -> MarkdownBlock | None:
         """Process an unhandled token.
@@ -1702,13 +1718,13 @@ class MarkdownViewer(VerticalScroll, can_focus=False, can_focus_children=True):
 
     async def go(self, location: str | PurePath) -> None:
         """Navigate to a new document path."""
-        path, anchor = self.document.sanitize_location(str(location))
-        if path == Path(".") and anchor:
+        target = self.document.sanitize_location(location)
+        if target.path == Path(".") and target.anchor:
             # We've been asked to go to an anchor but with no file specified.
-            self.document.goto_anchor(anchor)
+            self.document.goto_anchor(target.anchor)
         else:
             # We've been asked to go to a file, optionally with an anchor.
-            await self.document.load(self.navigator.go(location))
+            await self.document.load(self.navigator.go(target))
             self.post_message(self.NavigatorUpdated())
 
     async def back(self) -> None:
