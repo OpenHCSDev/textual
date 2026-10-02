@@ -116,3 +116,41 @@ def test_custom_ancestry_does_not_use_native_mutation_epoch():
     custom.ancestor = second
     assert custom.rich_style == native_paint(custom)[5]
     assert child.rich_style != before
+
+
+def test_style_views_and_unchanged_rules_preserve_paint_until_original_mutation():
+    root, leaf = Widget(), Widget()
+    leaf._parent = root
+    root.styles.color = "red"
+    before = leaf.rich_style
+    paint_epoch = leaf._paint_epoch
+    rules_key = root.styles._cache_key
+
+    # Parsing and serializing declarations do not modify a widget. Merging
+    # equal rules and resetting an empty inline source also leave it unchanged.
+    detached = Styles.parse("color: blue;", read_from=("test", ""))
+    detached.merge_rules({"opacity": .5})
+    detached.reset()
+    root.styles.css
+    root.styles.merge_rules(root.styles.inline.get_rules())
+    root.styles.base.merge(root.styles.base)
+    root.styles.base.reset()
+    assert root.styles._cache_key == rules_key
+    assert leaf.rich_style == before
+    assert leaf._paint_epoch == paint_epoch
+
+    # Genuine bulk writes and removals are visible immediately, including
+    # reads inside the existing synchronous refresh batch.
+    with root.styles.batch_update():
+        root.styles.merge_rules({"color": Color.parse("blue")})
+        assert leaf.rich_style.color == Color.parse("blue").rich_color
+        root.styles.reset()
+        assert leaf.rich_style == native_paint(leaf)[5]
+        assert leaf.rich_style != before
+
+    # A stored initial declaration and a missing rule are different sources.
+    initial = Styles()
+    initial.merge_rules({"color": None})
+    assert initial.has_rule("color")
+    initial.reset()
+    assert not initial.has_rule("color")

@@ -663,7 +663,6 @@ class DOMNode(MessagePump):
             styles._update_node(component_styles.node)
             styles.base.merge(component_styles.base)
             styles.inline.merge(component_styles.inline)
-            styles._updates += 1
 
         return styles
 
