@@ -1374,24 +1374,28 @@ class Compositor:
         Returns:
             Widget's composition information.
         """
+        geometry = self._get_geometry(widget)
+        if geometry is None:
+            raise errors.NoWidget("Widget is not in layout")
+        return geometry
+
+    def _get_geometry(self, widget: Widget) -> MapGeometry | None:
+        """Select current native geometry before requesting a full arrangement.
+
+        Both position queries and body admission use the same published maps.
+        An invalidated full map cannot override current viewport geometry.
+        """
         if self.root is None:
-            raise errors.NoWidget("Widget is not in layout")
-        try:
-            if not self._full_map_invalidated:
-                try:
-                    return self._full_map[widget]
-                except KeyError:
-                    pass
-            if self._visible_map is not None:
-                try:
-                    return self._visible_map[widget]
-                except KeyError:
-                    pass
-            region = self.full_map[widget]
-        except KeyError:
-            raise errors.NoWidget("Widget is not in layout")
-        else:
-            return region
+            return None
+        if not self._full_map_invalidated:
+            geometry = self._full_map.get(widget)
+            if geometry is not None:
+                return geometry
+        if self._visible_map is not None:
+            geometry = self._visible_map.get(widget)
+            if geometry is not None:
+                return geometry
+        return self.full_map.get(widget)
 
     @property
     def cuts(self) -> list[list[int]]:
@@ -1616,7 +1620,7 @@ class Compositor:
 
     def can_render_subtree(self, root: Widget) -> bool:
         """Admit mounted bodies with geometry in the original current scene."""
-        return root.is_mounted and root in self.full_map
+        return root.is_mounted and self._get_geometry(root) is not None
 
     def _render_chops(
         self,
