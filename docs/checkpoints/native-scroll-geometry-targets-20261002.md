@@ -39,5 +39,33 @@ remain correct. The existing joined real Toad body family also passes all three
 body kinds, target boxes, style/resize/reentry/input/disposal. Source receipt:
 `native-scroll-geometry26-source-receipt.json`.
 
-This is a useful source checkpoint only. Heisenberg owns the one later changed
-installed gate; no new capture/environment/provider or performance claim here.
+## Scoped installed qualification
+
+READY for the native scroll geometry target propagation. Heisenberg's installed
+323/26 cohort uses Core d6e196a8, Toad dcac031f, Textual dd774cd0 and native
+ad533. Both recordings use those unchanged production sources. Seven physical
+input paging checks pass in the recorded motion run. That run remains
+INCOMPLETE: its recorder timed out exporting idle-done before the final B/A.
+The separate 41.32s completed physical lifetime run covers B opening, A return,
+original editor/history retention, draft and undo, and End at165/max165. It does
+not turn the incomplete motion recording into a whole-journey pass.
+
+Directly viewed idle-done, A-return, undo and final End PNGs are readable.
+Original owner identity is unchanged and both recordings cleaned up with no
+remaining owned processes/errors. Existing source mapping/native family checks
+and these affected installed observations qualify this useful scoped change.
+
+The same profile contains2554 samples with zero reported errors and nominal
+31ms clock uncertainty. Original ProfileTrace observes10 retirement full-scene
+stack groups, zero capture full-scene groups and4 other startup groups. These
+are changed stacks, not calls, samples, durations or CPU. No match is not proof
+of absence. Retirement lookup still needs work; source targets are no longer
+omitted by fast reflow. Measured marked Up CPU68.65% and idle22.40% use different
+phase bounds/workloads from earlier captures, so no causal performance gain is
+claimed. Writer p95 remains242.70ms Up/316.23ms reverse; motion remains discrete.
+
+Receipt: `native-scroll-geometry26-installed-receipt.json`; joined integration
+receipt is recorded there. This is candidate installed qualification, not
+default activation, full warm cache, overall CPU, smoothness or50ms/144Hz.
+Heisenberg retains Toad integration and the remaining performance goal; parent
+owns publication. No contributor capture/environment/provider operation added.
