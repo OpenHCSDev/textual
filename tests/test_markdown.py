@@ -216,4 +216,4 @@ async def test_markdown_quoting():
     app = MyApp()
     async with app.run_test() as pilot:
         await pilot.click(Markdown, offset=(3, 0))
-    assert links == ["tété"]
+    assert links == ["t%C3%A9t%C3%A9"]
