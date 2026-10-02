@@ -20,3 +20,24 @@ Toad within calls belong to WireMessageHandling and remain untouched.
 
 Reason source, implement family, then validate the changed workflow once at the
 end with its owner. No new capture/provider/environment in this source window.
+
+## Implemented ownership closure
+
+SceneClip.relative_bounds now recovers the ORIGINAL reached scope and at most
+one collapsed bound. RootSceneClip returns itself; NestedSceneClip stops at the
+requested inherited scope or delegates once to its original source, intersecting
+its own relative bound. Intrinsic capture alone compares that original identity
+to select intrinsic versus existing placed capture. Disconnected/overlay scopes
+remain placed, and screen-coordinate rejection remains unchanged. No exception
+catch, assertion dependency, duplicate source root, mirror, new map or family.
+
+Deleted SceneClip.within and both implementations, its sole capture predicate,
+and the obsolete SubtreeMapGeometry.from_scene bound-refolding factory. Existing
+SubtreeMapGeometry receives the once-derived bound and retains its original
+projection. Shared/inherited clips, identity-distinct equal bounds, external
+roots and empty intersections preserve their original meaning.
+
+One production file30+/31− relative to frozen29. Existing changed-source sanity
+and installed changed-path validation are pending at this published checkpoint.
+The source equality/current327 performance evidence is not evidence for this
+new source. Frozen29/critical537-332 qualification remain separate.
