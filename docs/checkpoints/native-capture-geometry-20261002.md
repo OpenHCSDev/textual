@@ -54,3 +54,23 @@ native input and disposal. See `native-capture-geometry25-source-receipt.json`.
 
 This is a useful source checkpoint, not an installed performance result.
 Heisenberg owns the one later changed installed journey and early layout timing.
+
+## READY: same changed installed322/25 journey
+
+The joined installed public saved-history gate completed107.353s with all seven
+input assertions, original owner/runtime unchanged and clean process cleanup.
+Directly reviewed held-Up/idle/final End PNGs remain readable; final native
+extent is105/105 with all bodies ready and preparation settled. The exact
+same-run receipt is `native-capture-geometry25-installed-receipt.json`.
+
+Original ProfileTrace reports1474 samples/zero errors. No descendant strip
+capture→fullscene chain was observed; source ownership and native checks close
+that family. This is not proof of absence for all sampling intervals or a CPU
+attribution. Retirement admission still has23 observed fullscene stack groups.
+The scroll fastpath drops declared geometrytargets, a separate original caller
+closure handed to Heisenberg for follow-up.
+
+Busy motion remains sparse/discrete. Up writer median/p95 is30.31/166.68ms;
+reverse31.31/242.57ms has worse p95 than the preceding gate. MarkedUp78.86%CPU
+and idle29–37% remain substantial, and intervals/Core/workload differ. No smooth
+scrolling,50ms,144Hz,overall CPU or default-live claim. No repeated capture.
