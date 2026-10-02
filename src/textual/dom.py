@@ -1793,8 +1793,9 @@ class DOMNode(MessagePump):
             self.refresh(layout=True)
 
         styles = self.styles
-        for key, value in update_styles.items():
-            setattr(styles, key, value)
+        with styles.batch_update():
+            for key, value in update_styles.items():
+                setattr(styles, key, value)
         return self
 
     def has_class(self, *class_names: str) -> bool:

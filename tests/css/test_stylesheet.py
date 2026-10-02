@@ -35,6 +35,56 @@ async def test_equal_current_rules_retarget_a_pending_transition():
             assert animate.call_args.args == (widget.styles.base, "opacity", 1.0)
 
 
+@pytest.mark.parametrize("from_css", [False, True])
+async def test_related_inherited_rules_invalidate_descendants_once(from_css):
+    app = App()
+    async with app.run_test() as pilot:
+        child = Static("inherited styles")
+        parent = Container(child)
+        await app.mount(parent)
+        await pilot.pause()
+        child.rich_style  # Populate the inherited style cache before the edit.
+        with patch.object(child, "notify_style_update", wraps=child.notify_style_update) as notify:
+            if from_css:
+                rules = {**parent.styles.base.get_rules(), "color": Color.parse("red"),
+                         "background": Color.parse("blue"), "text_style": "bold"}
+                Stylesheet.replace_rules(parent, rules)
+            else:
+                parent.set_styles(color="red", background="blue", text_style="bold")
+            assert notify.call_count == 1
+        await pilot.pause()
+        assert child.rich_style.color == Color.parse("red").rich_color
+        assert child.rich_style.bold
+        assert parent.styles.background == Color.parse("blue")
+
+
+async def test_style_batch_keeps_child_damage_separate_and_flushes_interrupted_edits():
+    from textual.css.errors import StyleValueError
+
+    app = App()
+    async with app.run_test() as pilot:
+        child = Static("cached child")
+        parent = Container(child)
+        await app.mount(parent)
+        await pilot.pause()
+        child.rich_style
+        with patch.object(child, "refresh", wraps=child.refresh) as refresh:
+            with parent.styles.batch_update():
+                parent.styles.refresh(layout=True)
+                with parent.styles.batch_update():
+                    parent.styles.color = "green"
+            refresh.assert_called_once_with(layout=False, repaint=True)
+        assert child.rich_style.color == Color.parse("green").rich_color
+        with pytest.raises(StyleValueError):
+            parent.set_styles(color="red", text_style="bold", align_horizontal="invalid")
+        assert child.rich_style.color == Color.parse("red").rich_color
+        assert child.rich_style.bold
+        # An interrupted edit must release the lifetime for later individual edits.
+        with patch.object(child, "notify_style_update", wraps=child.notify_style_update) as notify:
+            parent.styles.color = "blue"
+            notify.assert_called_once()
+
+
 def test_component_styles_own_node_without_a_collection_cycle():
     from textual.css.stylesheet import _ComponentStyles
 

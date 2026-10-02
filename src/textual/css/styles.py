@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import weakref
+from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass, field
 from functools import partial
 from operator import attrgetter
@@ -736,6 +737,10 @@ class StylesBase:
             repaint: Repaint the widgets.
         """
 
+    def batch_update(self) -> AbstractContextManager[None]:
+        """Apply related rule edits before invalidating their affected widgets."""
+        raise NotImplementedError()
+
     def reset(self) -> None:
         """Reset the rules to initial state."""
 
@@ -907,6 +912,9 @@ class Styles(StylesBase):
     node: DOMNode | None = cast("DOMNode | None", _StyleNodeReference())
     _rules: RulesMap = field(default_factory=RulesMap)
     _updates: int = 0
+    _refresh_batches: list[list[tuple[bool, bool, bool, bool]]] = field(
+        default_factory=list, init=False, repr=False
+    )
 
     important: set[str] = field(default_factory=set)
 
@@ -967,6 +975,24 @@ class Styles(StylesBase):
             self._mark_updated()
         return changed
 
+    @contextmanager
+    def batch_update(self) -> Iterator[None]:
+        """Invalidate once after related edits, including nested or interrupted edits.
+
+        Rule writes and their mutation epochs remain immediate. Only pending
+        widget damage belongs to this synchronous update lifetime.
+        """
+        requests: list[tuple[bool, bool, bool, bool]] = []
+        self._refresh_batches.append(requests)
+        try:
+            yield
+        finally:
+            self._refresh_batches.pop()
+            if self._refresh_batches:
+                self._refresh_batches[-1].extend(requests)
+            elif requests:
+                self._refresh(requests)
+
     def refresh(
         self,
         *,
@@ -975,16 +1001,26 @@ class Styles(StylesBase):
         parent: bool = False,
         repaint=True,
     ) -> None:
+        if self._refresh_batches:
+            self._refresh_batches[-1].append((layout, children, parent, repaint))
+            return
+        self._refresh([(layout, children, parent, repaint)])
+
+    def _refresh(self, requests: list[tuple[bool, bool, bool, bool]]) -> None:
         node = self.node
         if node is None or not node._is_mounted:
             return
-        if parent and node._parent is not None:
-            node._parent.refresh(repaint=repaint)
-        node.refresh(layout=layout)
-        if children:
+        parent_requests = [repaint for _, _, parent, repaint in requests if parent]
+        if parent_requests and node._parent is not None:
+            node._parent.refresh(repaint=any(parent_requests))
+        node.refresh(layout=any(layout for layout, _, _, _ in requests))
+        child_requests = [(layout, repaint) for layout, children, _, repaint in requests if children]
+        if child_requests:
+            child_layout = any(layout for layout, _ in child_requests)
+            child_repaint = any(repaint for _, repaint in child_requests)
             for child in node.walk_children(with_self=False, reverse=True):
                 child.notify_style_update()
-                child.refresh(layout=layout, repaint=repaint)
+                child.refresh(layout=child_layout, repaint=child_repaint)
 
     def reset(self) -> None:
         """Reset the rules to initial state."""
@@ -1491,6 +1527,9 @@ class RenderStyles(StylesBase):
         self._inline_styles.refresh(
             layout=layout, children=children, parent=parent, repaint=repaint
         )
+
+    def batch_update(self) -> AbstractContextManager[None]:
+        return self._inline_styles.batch_update()
 
     def merge(self, other: StylesBase) -> None:
         """Merge values from another Styles.

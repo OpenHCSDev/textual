@@ -841,66 +841,67 @@ class Stylesheet:
         styles = node.styles
         base_styles = styles.base
 
-        if animate:
-            # With no declared transition there is no animated target to
-            # resolve. Materializing every render-rule default allocates an
-            # unrelated style graph for ordinary focus/class changes.
-            animate = bool(rules.get("transitions"))
-            if not animate and base_styles._rules == rules:
-                return
-            # Equal current values do not imply an equal animation target:
-            # a previous delayed transition may not have started yet.
+        with base_styles.batch_update():
+            if animate:
+                # With no declared transition there is no animated target to
+                # resolve. Materializing every render-rule default allocates an
+                # unrelated style graph for ordinary focus/class changes.
+                animate = bool(rules.get("transitions"))
+                if not animate and base_styles._rules == rules:
+                    return
+                # Equal current values do not imply an equal animation target:
+                # a previous delayed transition may not have started yet.
 
-        # Styles currently used on new rules
-        modified_rule_keys = base_styles._rules.keys() | rules.keys()
+            # Styles currently used on new rules
+            modified_rule_keys = base_styles._rules.keys() | rules.keys()
 
-        if animate:
-            new_styles = Styles(node, rules)
-            current_render_rules = styles.get_render_rules()
-            is_animatable = styles.is_animatable
-            get_current_render_rule = current_render_rules.get
-            new_render_rules = new_styles.get_render_rules()
-            get_new_render_rule = new_render_rules.get
-            animator = node.app.animator
-            base = node.styles.base
-            for key in modified_rule_keys:
-                # Get old and new render rules
-                old_render_value = get_current_render_rule(key)
-                new_render_value = get_new_render_rule(key)
-                # Get new rule value (may be None)
-                new_value = rules.get(key)
+            if animate:
+                new_styles = Styles(node, rules)
+                current_render_rules = styles.get_render_rules()
+                is_animatable = styles.is_animatable
+                get_current_render_rule = current_render_rules.get
+                new_render_rules = new_styles.get_render_rules()
+                get_new_render_rule = new_render_rules.get
+                animator = node.app.animator
+                base = node.styles.base
+                for key in modified_rule_keys:
+                    # Get old and new render rules
+                    old_render_value = get_current_render_rule(key)
+                    new_render_value = get_new_render_rule(key)
+                    # Get new rule value (may be None)
+                    new_value = rules.get(key)
 
-                # Check if this can / should be animated. It doesn't suffice to check
-                # if the current and target values are different because a previous
-                # animation may have been scheduled but may have not started yet.
-                if is_animatable(key) and (
-                    new_render_value != old_render_value
-                    or animator.is_being_animated(base, key)
-                ):
-                    transition = new_styles._get_transition(key)
-                    if transition is not None:
-                        duration, easing, delay = transition
-                        animator.animate(
-                            base,
-                            key,
-                            new_render_value,
-                            final_value=new_value,
-                            duration=duration,
-                            delay=delay,
-                            easing=easing,
-                        )
-                        continue
-                # Default is to set value (if new_value is None, rule will be removed)
-                setattr(base_styles, key, new_value)
-        else:
-            # Not animated, so we apply the rules directly
-            get_rule = rules.get
-            get_current_rule = base_styles.get_rule
+                    # Check if this can / should be animated. It doesn't suffice to check
+                    # if the current and target values are different because a previous
+                    # animation may have been scheduled but may have not started yet.
+                    if is_animatable(key) and (
+                        new_render_value != old_render_value
+                        or animator.is_being_animated(base, key)
+                    ):
+                        transition = new_styles._get_transition(key)
+                        if transition is not None:
+                            duration, easing, delay = transition
+                            animator.animate(
+                                base,
+                                key,
+                                new_render_value,
+                                final_value=new_value,
+                                duration=duration,
+                                delay=delay,
+                                easing=easing,
+                            )
+                            continue
+                    # Default is to set value (if new_value is None, rule will be removed)
+                    setattr(base_styles, key, new_value)
+            else:
+                # Not animated, so we apply the rules directly
+                get_rule = rules.get
+                get_current_rule = base_styles.get_rule
 
-            for key in modified_rule_keys:
-                value = get_rule(key)
-                if get_current_rule(key) != value:
-                    setattr(base_styles, key, value)
+                for key in modified_rule_keys:
+                    value = get_rule(key)
+                    if get_current_rule(key) != value:
+                        setattr(base_styles, key, value)
         node.notify_style_update()
 
     def references_class(self, class_name: str) -> bool:
