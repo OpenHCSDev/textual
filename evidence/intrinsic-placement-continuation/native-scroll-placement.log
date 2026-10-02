@@ -1,0 +1,19 @@
+Traceback (most recent call last):
+  File "/home/ts/wt/textual-intrinsic-placement-after18-20261001/evidence/native-subtree-retirement/actual_native_scroll_control.py", line 206, in <module>
+    asyncio.run(run(Path(sys.argv[1])))
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ts/.local/share/uv/python/cpython-3.14.2-linux-x86_64-gnu/lib/python3.14/asyncio/runners.py", line 204, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "/home/ts/.local/share/uv/python/cpython-3.14.2-linux-x86_64-gnu/lib/python3.14/asyncio/runners.py", line 127, in run
+    return self._loop.run_until_complete(task)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/home/ts/.local/share/uv/python/cpython-3.14.2-linux-x86_64-gnu/lib/python3.14/asyncio/base_events.py", line 719, in run_until_complete
+    return future.result()
+           ~~~~~~~~~~~~~^^
+  File "/home/ts/wt/textual-intrinsic-placement-after18-20261001/evidence/native-subtree-retirement/actual_native_scroll_control.py", line 153, in run
+    await check_placement("Host placement projects nested clip and root coordinates", relocate)
+  File "/home/ts/wt/textual-intrinsic-placement-after18-20261001/evidence/native-subtree-retirement/actual_native_scroll_control.py", line 126, in check_placement
+    assert not arrangements, (label, arrangements)
+           ^^^^^^^^^^^^^^^^
+AssertionError: ('Host placement projects nested clip and root coordinates', 1)

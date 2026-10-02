@@ -67,11 +67,18 @@ async def run(output):
         before = (body._geometry_revision, body._nodes._updates, body.styles._cache_key)
         start = reader.scroll_y
         arrangements = 0
+        arrangement_callers = []
+        layout_calls = 0
 
         def observe(frame, event, argument):
-            nonlocal arrangements
+            nonlocal arrangements, layout_calls
             if event == "call" and frame.f_code.co_name == "arrange" and frame.f_locals.get("self") is body:
                 arrangements += 1
+                arrangement_callers.append(frame.f_back.f_code.co_name)
+            if (event == "call" and frame.f_code.co_name == "arrange"
+                    and frame.f_globals.get("__name__") == "textual._arrange"
+                    and frame.f_locals.get("widget") is body):
+                layout_calls += 1
 
         sys.setprofile(observe)
         try:
@@ -111,6 +118,51 @@ async def run(output):
             receipt.setdefault("scene_checks", []).append(label)
 
         check_scene("PageDown reveals previously clipped descendants")
+
+        async def check_placement(label, operation):
+            nonlocal arrangements, layout_calls
+            arrangements = 0
+            layout_calls = 0
+            arrangement_callers.clear()
+            sys.setprofile(observe)
+            try:
+                await operation()
+                await pilot.pause()
+                compositor.reflow_visible(app.screen, app.screen.size)
+            finally:
+                sys.setprofile(None)
+            assert compositor._subtree_geometry[body] is original, label
+            assert not layout_calls, (label, layout_calls, arrangement_callers)
+            assert "arrange_widget" not in arrangement_callers, (label, arrangement_callers)
+            check_scene(label)
+            receipt.setdefault("placement_checks", []).append({
+                "label": label, "same_resource": True, "body_arrangement_calls": arrangements,
+                "body_layout_executions": layout_calls, "arrangement_callers": arrangement_callers.copy(),
+                "current_geometry": repr(compositor._visible_map[body]),
+            })
+
+        prefix = Static("new original native sibling", id="prefix")
+
+        async def prepend():
+            await reader.mount(prefix, before=body)
+
+        async def reorder():
+            reader.move_child(prefix, after=body)
+
+        async def retire():
+            await prefix.remove()
+
+        async def relocate():
+            reader.styles.offset = (3, 1)
+
+        async def return_host():
+            reader.styles.offset = (0, 0)
+
+        await check_placement("Prepend changes root virtual placement", prepend)
+        await check_placement("Sibling reorder changes native descendant paint rank", reorder)
+        await check_placement("Sibling retirement preserves unrelated resource", retire)
+        await check_placement("Host placement projects nested clip and root coordinates", relocate)
+        await check_placement("Returning host retains original native arrangement", return_host)
         await pilot.press("pageup")
         await pilot.pause()
         check_scene("Reverse restores nested clip")
