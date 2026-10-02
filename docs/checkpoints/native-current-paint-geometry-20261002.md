@@ -21,8 +21,8 @@ Late stationary observations mainly select backend read/attestation work, not
 whole-tree style/layout. That source finding was handed to Arendt.
 
 Implement the native owner change first, then run one source-native geometry/body
-sanity batch. No new physical recording or provider call; original E03 remains
-the baseline and is not proof of this follow-up's performance.
+sanity batch and the sole changed installed journey owned by Heisenberg. E03
+remains the baseline; no provider input or duplicate recording is needed.
 
 ## Published owner change and final sanity
 
@@ -42,5 +42,25 @@ existing E03 dependency interpreter. That interpreter lacks pytest; the
 unchanged async native App test functions were called directly.
 
 Receipts are in `native-current-paint-geometry-24-source-receipt.json`.
-No new installed application, physical recording or performance result is
-claimed. Heisenberg owns combined application integration and layout targets.
+The preceding source checks alone did not qualify an installed application or
+performance result. Heisenberg owns combined integration and layout targets.
+
+## READY: joined changed installed journey
+
+The same installed Toad319/Textual24 run completed in 106.153s with all seven
+native input checks, unchanged original owner epoch/runtime and clean process
+cleanup. Directly viewed held-Up, stationary and final End PNGs retain readable
+body and chrome. Final End has current extent and ready retained resources.
+The immutable installed receipt is
+`native-current-paint-geometry-24-installed-receipt.json`.
+
+This qualifies the geometry change as a useful checkpoint. Motion is still
+sparse/discrete. The 78.88% marked-Up CPU versus E03's 91.16% is not a controlled
+causal result: intervals, source workload, Core pin and export costs differ;
+Up writer p95 worsened. The profile has one reported sampling error.
+
+The same original ProfileTrace identifies two remaining full-layout callers:
+retirement before viewport layout supplies a newly mounted root's geometry,
+and descendant region queries during native subtree strip rendering. These
+were handed directly to Heisenberg for the full performance continuation.
+No second capture, package or provider operation was started.
