@@ -4437,10 +4437,11 @@ class Widget(DOMNode):
 
     def _render_content(self) -> None:
         """Render all lines."""
-        width, height = self.size
+        size = self.size
+        width, height = size
         visual = self._render()
         strips = Visual.to_strips(self, visual, width, height, self.visual_style)
-        self._render_cache = _RenderCache(self.size, strips)
+        self._render_cache = _RenderCache(size, strips)
         self._dirty_regions.clear()
 
     def render_line(self, y: int) -> Strip:
@@ -4455,7 +4456,7 @@ class Widget(DOMNode):
         if self.BLANK:
             return Strip.blank(self.size.width, self.visual_style.rich_style)
 
-        if self._dirty_regions:
+        if self._dirty_regions or self._render_cache.size != self.size:
             self._render_content()
         try:
             line = self._render_cache.lines[y]

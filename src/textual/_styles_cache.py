@@ -62,14 +62,14 @@ class StylesCache:
     def __init__(self) -> None:
         self._cache: dict[int, Strip] = {}
         self._dirty_lines: set[int] = set()
-        self._width = 1
+        self._size = Size(0, 0)
         self._simple_strip: Strip | None = None
         """A simple strip consisting of left border + background + right border, which may be reused in a render."""
 
     def __rich_repr__(self) -> rich.repr.Result:
         if self._dirty_lines:
             yield "dirty", self._dirty_lines
-        yield "width", self._width, 1
+        yield "size", self._size
 
     def set_dirty(self, *regions: Region) -> None:
         """Add a dirty regions."""
@@ -208,9 +208,9 @@ class StylesCache:
             crop = size.region
 
         width, _height = size
-        if width != self._width:
+        if size != self._size:
             self.clear()
-            self._width = width
+            self._size = size
         strips: list[Strip] = []
         add_strip = strips.append
 
