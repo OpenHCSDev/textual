@@ -31,11 +31,11 @@ class DockArrangeResult:
     scroll_spacing: Spacing
     """Spacing to reduce scrollable area."""
 
-    _spatial_map: SpatialMap[WidgetPlacement] | None = None
+    _spatial_map: SpatialMap[tuple[int, WidgetPlacement]] | None = None
     """A Spatial map to query widget placements."""
 
     @property
-    def spatial_map(self) -> SpatialMap[WidgetPlacement]:
+    def spatial_map(self) -> SpatialMap[tuple[int, WidgetPlacement]]:
         """A lazy-calculated spatial map."""
         if self._spatial_map is None:
             self._spatial_map = SpatialMap()
@@ -45,9 +45,9 @@ class DockArrangeResult:
                     placement.offset,
                     placement.fixed,
                     placement.overlay,
-                    placement,
+                    (ordinal, placement),
                 )
-                for placement in self.placements
+                for ordinal, placement in self.iter_placements()
             )
 
         return self._spatial_map
@@ -62,25 +62,48 @@ class DockArrangeResult:
         _top, right, bottom, _left = self.scroll_spacing
         return self.spatial_map.total_region.grow((0, right, bottom, 0))
 
-    def get_visible_placements(self, region: Region) -> list[WidgetPlacement]:
-        """Get the placements visible within the given region.
+    def iter_placements(self) -> Iterable[tuple[int, WidgetPlacement]]:
+        """Pair original placements with their widget's first source ordinal.
+
+        Duplicate placements for one widget share its original rank. This
+        construction is consumed by the existing spatial resource or a complete
+        arrangement; no companion ordinal map survives the iteration.
+        """
+        ordinals: dict[Widget, int] = {}
+        for index, placement in enumerate(self.placements):
+            yield ordinals.setdefault(placement.widget, index), placement
+
+    def get_visible_placements(
+        self, region: Region, *, retain: Iterable[Widget] = (),
+    ) -> list[tuple[int, WidgetPlacement]]:
+        """Admit original indexed placements for visible and retained widgets.
 
         Args:
             region: A region.
+            retain: Original geometry targets which also need an offscreen box.
 
         Returns:
-            Set of placements.
+            Original ordinals and placements, preserving spatial query ordering.
         """
         if self.total_region in region:
             # Short circuit for when we want all the placements
-            return self.placements
+            return list(self.iter_placements())
         visible_placements = self.spatial_map.get_values_in_region(region)
         overlaps = region.overlaps
         culled_placements = [
-            placement
-            for placement in visible_placements
+            (ordinal, placement)
+            for ordinal, placement in visible_placements
             if placement.fixed or overlaps(placement.region + placement.offset)
         ]
+        retained_widgets = self.widgets.intersection(retain)
+        if retained_widgets:
+            visible_widgets = {placement.widget for _, placement in culled_placements}
+            if retained_widgets - visible_widgets:
+                return [
+                    (ordinal, placement)
+                    for ordinal, placement in self.iter_placements()
+                    if placement.widget in visible_widgets or placement.widget in retained_widgets
+                ]
         return culled_placements
 
 

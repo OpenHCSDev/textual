@@ -16,8 +16,7 @@ before visible culling on every reflow, despite the existing DockArrangeResult
 spatial resource already owning admission. It then independently selects retained
 offscreen targets. Original placement ordinal belongs to the arrangement.
 
-Extend the existing DockArrangeResult spatial resource to retain original list
-indices. Its existing visible-placement operation supplies indexed original
+Extend the existing DockArrangeResult spatial resource to retain the original first-widget ordinal with each original placement. Its existing visible-placement operation supplies indexed original
 placements and admits retained targets. Compositor derives rank from that ordinal
 and consumes it unchanged through offsets. Delete its whole-list rank dictionary
 and duplicated retained selection. No new map, cache, flag, type, registry,
@@ -30,3 +29,22 @@ bounded affected native sanity batch and the integration owner's changed actual
 saved-UI journey last. No independent capture/environment/provider, broad matrix,
 unchanged gate, smoothness or FPS claim. Text27 source/physical qualification
 remains separate and frozen.
+
+## Working implementation
+
+DockArrangeResult.iter_placements owns first-widget ordinals, preserving duplicate
+widget placement rank. Its temporary construction dictionary is discarded; only
+the existing SpatialMap retains indexed original placements. Equal placement
+values remain deduplicated by that same spatial query. Complete geometry and
+explicit offscreen targets consume original list order, including duplicates.
+The compositor carries the admitted ordinal through offsets and derives its
+rank relative to its parent. Its per-frame full-placement rank dictionary and
+independent retained-target selection are deleted. Generic SpatialMap is unchanged.
+
+Existing NRA parsed249 native and276 Toad modules without omissions. One
+get_visible_placements consumer is Compositor; remaining spatial_map consumers
+only read total_region. No Toad consumer needs migration. Original arrangement
+list mutation and spatial resource lifetime remain unchanged. AST attribute-name
+matching does not establish dynamic dispatch; the original owners were read.
+Two production files44+/32−. Original source selection and all native callers
+are changed together. Not installed-ready; no measured performance gain yet.

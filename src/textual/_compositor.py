@@ -934,13 +934,9 @@ class Compositor:
                     # Arrange the layout
                     arrange_result = widget.arrange(child_region.size)
 
-                    # Culling chooses admission, not paint order. Derive ranks
-                    # from the original placement declaration before selecting
-                    # the current visible subset or restoring a full subtree.
-                    placement_order = {
-                        placement.widget: layer_order - index
-                        for index, placement in enumerate(reversed(arrange_result.placements))
-                    }
+                    # Original arrangement ordinals survive spatial admission.
+                    # Do not rebuild ranks for every offscreen child on scroll.
+                    first_layer_order = layer_order - len(arrange_result.placements) + 1
 
                     arranged_widgets = arrange_result.widgets
                     widgets.update(arranged_widgets)
@@ -962,29 +958,22 @@ class Compositor:
 
                     if visible_only and not complete:
                         placements = arrange_result.get_visible_placements(
-                            sub_clip.region - child_region.offset + widget.scroll_offset
+                            sub_clip.region - child_region.offset + widget.scroll_offset,
+                            retain=retained_paths,
                         )
-                        if retained_paths:
-                            # Keep the original declaration-owned paint order.
-                            # Only targeted offscreen branches are traversed;
-                            # geometry does not imply that a widget is painted.
-                            placed = {placement.widget for placement in placements}
-                            if (arranged_widgets & retained_paths) - placed:
-                                placements = [placement for placement in arrange_result.placements
-                                              if placement.widget in placed or placement.widget in retained_paths]
                     else:
-                        placements = arrange_result.placements
+                        placements = list(arrange_result.iter_placements())
                     total_region = total_region.union(arrange_result.total_region)
 
                     # An offset added to all placements
                     placement_offset = container_region.offset
                     placement_scroll_offset = placement_offset - widget.scroll_offset
 
-                    screen_coordinates.update(placement.widget for placement in placements
+                    screen_coordinates.update(placement.widget for _, placement in placements
                                               if placement.widget.uses_screen_coordinates)
                     placements = [
-                        placement.process_offset(size.region, placement_scroll_offset)
-                        for placement in placements
+                        (ordinal, placement.process_offset(size.region, placement_scroll_offset))
+                        for ordinal, placement in placements
                     ]
 
                     if type(widget).layers is Widget.layers:
@@ -1011,7 +1000,7 @@ class Compositor:
                         ), clip)
 
                     # Add all the widgets
-                    for (
+                    for ordinal, (
                         sub_region,
                         sub_region_offset,
                         _,
@@ -1032,7 +1021,7 @@ class Compositor:
                                 sub_region + sub_region_offset + placement_scroll_offset
                             )
 
-                        child_layer_order = placement_order[sub_widget]
+                        child_layer_order = first_layer_order + ordinal
                         widget_order = order + ((layer_index, z, child_layer_order),)
 
                         if widget._cover_widget is None:
