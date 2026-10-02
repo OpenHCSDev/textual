@@ -76,6 +76,38 @@ inside the existing update lifetime. No UI/protocol/provider mocks were added.
 
 The 05 movie/profile establishes mounting, style propagation and layout during
 readable but discrete motion. It does not attribute CPU time to this deletion.
-This source is NOT installed-qualified or Ready. Heisenberg owns the next single
-changed installed 30/31 workflow; no new environment, capture or provider call
+At that source checkpoint installed qualification was pending. Heisenberg owned
+the next single changed installed30/31 workflow; no new environment, capture or provider call
 was made here. Text29/331 scoped shipment is independent.
+
+
+## Joined installed335 qualification
+
+The single changed installed335 recording ran124.443 seconds with original
+saved nra-architecture history, Core7dd5c14c, Toad4916e1aa and Textual81ecfccd
+(the same frozen30/31 production). Original native9f12 package and configured
+provider settings were retained; no new prompt or replay was admitted.
+
+All16 warm checks and7 input-focused checks passed, including actual held
+PageUp/PageDown/reversal, End, A/B/A reader/draft return and Undo. The final
+source state retains18 ready body resources. Three48-consecutive-frame
+sequences inside the actual held-key intervals show readable body/chrome
+with discrete chunk advances. This qualifies the useful source checkpoint,
+not smoothness, overall CPU, IRC, cold opening or the full performance goal.
+
+The initial BEFORE state/screen export remained PENDING after20s, leaving
+raw completed=false. Later required exports completed; the original failure
+and partial evidence remain intact. Normal application exit was not recorded.
+Cleanup left no owned processes or errors, and original owner/epoch/settings
+were preserved. No repeated capture, provider call or sanity batch was run.
+
+Heisenberg's immutable paired receipt is
+/home/ts/wt/toad-viewport-raster-cpu-continuation-20261001/docs/checkpoints/
+shared-preparation335-installed-scoped.json; movie/profile/physical frames are
+/home/ts/.cache/agent-scratch/shared-markdown335-native31-public-20261002-01/capture.
+Source proof SHA25659b54c0906b15da4b388a4cc751affd6678351e62520776c9407c03185035aa4
+confirms installed source equal to the frozen native batch. Profile has1362
+GIL observations/0errors; transition groups do not prove time attribution.
+
+Ready for scoped paired shipment. The unqualified whole performance/focus/
+IRC/normal-exit boundaries above remain open.
