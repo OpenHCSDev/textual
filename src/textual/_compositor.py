@@ -121,10 +121,16 @@ class SceneClip(ABC):
         return NestedSceneClip(self, region)
 
     @abstractmethod
-    def within(self, root: SceneClip) -> bool: ...
+    def relative_bounds(
+        self, root: SceneClip, origin: Offset,
+    ) -> tuple[SceneClip, tuple[Region, ...]]:
+        """Return the original reached scope and at most one relative bound.
 
-    @abstractmethod
-    def relative_bounds(self, root: SceneClip, origin: Offset) -> tuple[Region, ...]: ...
+        Reaching another root preserves its identity for placed capture; an
+        inherited scope stops at the requested declaration. Bounds exclude
+        that scope, so outer viewport clipping is never captured as intrinsic.
+        """
+        ...
 
 
 @dataclass(frozen=True)
@@ -135,12 +141,10 @@ class RootSceneClip(SceneClip):
     def region(self) -> Region:
         return self.bound
 
-    def within(self, root: SceneClip) -> bool:
-        return self is root
-
-    def relative_bounds(self, root: SceneClip, origin: Offset) -> tuple[Region, ...]:
-        assert self is root
-        return ()
+    def relative_bounds(
+        self, root: SceneClip, origin: Offset,
+    ) -> tuple[SceneClip, tuple[Region, ...]]:
+        return self, ()
 
 
 @dataclass(frozen=True)
@@ -152,13 +156,14 @@ class NestedSceneClip(SceneClip):
     def region(self) -> Region:
         return self.source.region.intersection(self.bound)
 
-    def within(self, root: SceneClip) -> bool:
-        return self is root or self.source.within(root)
-
-    def relative_bounds(self, root: SceneClip, origin: Offset) -> tuple[Region, ...]:
+    def relative_bounds(
+        self, root: SceneClip, origin: Offset,
+    ) -> tuple[SceneClip, tuple[Region, ...]]:
         if self is root:
-            return ()
-        return self.source.relative_bounds(root, origin) + (self.bound - origin,)
+            return self, ()
+        scope, bounds = self.source.relative_bounds(root, origin)
+        bound = self.bound - origin
+        return scope, (bounds[0].intersection(bound) if bounds else bound,)
 
 
 class SubtreeMapGeometry(NamedTuple):
@@ -166,17 +171,6 @@ class SubtreeMapGeometry(NamedTuple):
 
     geometry: MapGeometry
     clip_bounds: tuple[Region, ...]
-
-    @classmethod
-    def from_scene(cls, entry: MapGeometry, clip: SceneClip,
-                   root: SceneClip, origin: Offset) -> SubtreeMapGeometry:
-        bounds = clip.relative_bounds(root, origin)
-        if bounds:
-            intersection = bounds[0]
-            for bound in bounds[1:]:
-                intersection = intersection.intersection(bound)
-            bounds = (intersection,)
-        return cls(entry, bounds)
 
     def project(self, original: SubtreeGeometryKey, current: SubtreeGeometryKey,
                 clip: SceneClip, *, root: bool) -> tuple[MapGeometry, SceneClip]:
@@ -259,12 +253,17 @@ class IntrinsicSubtreeGeometry(SubtreeGeometry[SubtreeMapGeometry]):
 
     @classmethod
     def capture(cls, key, geometry, widgets, invisible_widgets, clips, clip, screen_coordinates):
-        if (not (widgets | invisible_widgets).isdisjoint(screen_coordinates)
-                or not all(clips[node].within(clip) for node in geometry)):
+        if not (widgets | invisible_widgets).isdisjoint(screen_coordinates):
             return PlacedSubtreeGeometry.capture(
                 key, geometry, widgets, invisible_widgets, clips, clip, screen_coordinates)
-        intrinsic = {node: SubtreeMapGeometry.from_scene(entry, clips[node], clip, key.region.offset)
-                     for node, entry in geometry.items()}
+        intrinsic = {}
+        origin = key.region.offset
+        for node, entry in geometry.items():
+            scope, bounds = clips[node].relative_bounds(clip, origin)
+            if scope is not clip:
+                return PlacedSubtreeGeometry.capture(
+                    key, geometry, widgets, invisible_widgets, clips, clip, screen_coordinates)
+            intrinsic[node] = SubtreeMapGeometry(entry, bounds)
         return cls(key, MappingProxyType(intrinsic), widgets, invisible_widgets)
 
     def matches(self, key: SubtreeGeometryKey) -> bool:

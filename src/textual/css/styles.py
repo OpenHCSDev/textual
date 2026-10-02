@@ -932,8 +932,8 @@ class Styles(StylesBase):
 
     def _mark_updated(self) -> None:
         self._updates += 1
-        Styles._revision += 1
         if (node := self.node) is not None:
+            Styles._revision += 1
             node._style_rules_updated(Styles._revision)
 
     def clear_rule(self, rule_name: str) -> bool:
@@ -1024,8 +1024,9 @@ class Styles(StylesBase):
 
     def reset(self) -> None:
         """Reset the rules to initial state."""
-        self._mark_updated()
-        self._rules.clear()  # type: ignore
+        if self._rules:
+            self._rules.clear()  # type: ignore
+            self._mark_updated()
 
     def merge(self, other: StylesBase) -> None:
         """Merge values from another Styles.
@@ -1033,12 +1034,16 @@ class Styles(StylesBase):
         Args:
             other: A Styles object.
         """
-        self._mark_updated()
-        self._rules.update(other.get_rules())
+        self.merge_rules(other.get_rules())
 
     def merge_rules(self, rules: RulesMap) -> None:
-        self._mark_updated()
+        changed = any(
+            rule not in self._rules or self._rules[rule] != value
+            for rule, value in rules.items()
+        )
         self._rules.update(rules)
+        if changed:
+            self._mark_updated()
 
     def extract_rules(
         self,
@@ -1402,7 +1407,6 @@ class RenderStyles(StylesBase):
         self._base_styles = base
         self._inline_styles = inline_styles
         self._animate: BoundAnimator | None = None
-        self._updates: int = 0
         self._rich_style: tuple[int, Style] | None = None
         self._gutter: tuple[int, Spacing] | None = None
 
@@ -1429,7 +1433,7 @@ class RenderStyles(StylesBase):
         Returns:
             An opaque integer.
         """
-        return self._updates + self._base_styles._updates + self._inline_styles._updates
+        return self._base_styles._updates + self._inline_styles._updates
 
     @property
     def node(self) -> DOMNode | None:
@@ -1541,12 +1545,10 @@ class RenderStyles(StylesBase):
 
     def merge_rules(self, rules: RulesMap) -> None:
         self._inline_styles.merge_rules(rules)
-        self._updates += 1
 
     def reset(self) -> None:
         """Reset the rules to initial state."""
         self._inline_styles.reset()
-        self._updates += 1
 
     def has_rule(self, rule_name: str) -> bool:
         """Check if a rule has been set."""
