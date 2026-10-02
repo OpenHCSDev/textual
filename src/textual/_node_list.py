@@ -55,6 +55,7 @@ class NodeList(Sequence["Widget"]):
 
         # Increments when list is updated (used for caching)
         self._updates = 0
+        self._descendant_count = 0
 
     def __bool__(self) -> bool:
         return bool(self._nodes)
@@ -71,15 +72,34 @@ class NodeList(Sequence["Widget"]):
     def __contains__(self, widget: object) -> bool:
         return widget in self._nodes
 
-    def updated(self) -> None:
-        """Mark the nodes as having been updated."""
+    @property
+    def descendant_count(self) -> int:
+        """Native child custody, including each child's descendants.
+
+        Pending composition and virtual widgets are not members of this list.
+        Structural mutations maintain this resource cardinality; style and
+        ordering invalidation do not require recounting the native tree.
+        """
+        return self._descendant_count
+
+    def updated(self, *, descendant_delta: int = 0) -> None:
+        """Invalidate projections and apply an original custody mutation."""
         self._updates += 1
+        self._descendant_count += descendant_delta
         node = None if self._parent is None else self._parent()
         if node is not None:
             node._query_one_cache.clear()
-        while node is not None and (node := node._parent) is not None:
-            node._nodes._updates += 1
-            node._query_one_cache.clear()
+        while node is not None and (parent := node._parent) is not None:
+            nodes = parent._nodes
+            # A virtual widget may share a message parent without native
+            # NodeList custody. Its changes invalidate the scene, but cannot
+            # contribute resources to a tree that does not contain it.
+            if node not in nodes._nodes_set:
+                descendant_delta = 0
+            nodes._descendant_count += descendant_delta
+            nodes._updates += 1
+            parent._query_one_cache.clear()
+            node = parent
 
     def _sort(
         self,
@@ -125,13 +145,14 @@ class NodeList(Sequence["Widget"]):
             widget: A widget.
         """
         if widget not in self._nodes_set:
-            self._nodes.append(widget)
-            self._nodes_set.add(widget)
             widget_id = widget.id
             if widget_id is not None:
                 self._ensure_unique_id(widget_id)
+            self._nodes.append(widget)
+            self._nodes_set.add(widget)
+            if widget_id is not None:
                 self._nodes_by_id[widget_id] = widget
-            self.updated()
+            self.updated(descendant_delta=1 + widget.descendant_count)
 
     def _insert(self, index: int, widget: Widget) -> None:
         """Insert a Widget.
@@ -140,13 +161,14 @@ class NodeList(Sequence["Widget"]):
             widget: A widget.
         """
         if widget not in self._nodes_set:
-            self._nodes.insert(index, widget)
-            self._nodes_set.add(widget)
             widget_id = widget.id
             if widget_id is not None:
                 self._ensure_unique_id(widget_id)
+            self._nodes.insert(index, widget)
+            self._nodes_set.add(widget)
+            if widget_id is not None:
                 self._nodes_by_id[widget_id] = widget
-            self.updated()
+            self.updated(descendant_delta=1 + widget.descendant_count)
 
     def _ensure_unique_id(self, widget_id: str) -> None:
         """Ensure a new widget ID would be unique.
@@ -178,16 +200,17 @@ class NodeList(Sequence["Widget"]):
             if widget_id in self._nodes_by_id:
                 del self._nodes_by_id[widget_id]
             self._release_cached_nodes()
-            self.updated()
+            self.updated(descendant_delta=-(1 + widget.descendant_count))
 
     def _clear(self) -> None:
         """Clear the node list."""
         if self._nodes:
+            descendant_count = self._descendant_count
             self._nodes.clear()
             self._nodes_set.clear()
             self._nodes_by_id.clear()
             self._release_cached_nodes()
-            self.updated()
+            self.updated(descendant_delta=-descendant_count)
 
     def _release_cached_nodes(self) -> None:
         """Release removed children even if the projections are never read again."""
