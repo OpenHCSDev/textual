@@ -3,7 +3,7 @@ from weakref import ref
 
 import pytest
 
-from textual._node_list import NodeList
+from textual._node_list import DuplicateIds, NodeList
 from textual.app import App, ComposeResult
 from textual.containers import Container
 from textual.widget import Widget
@@ -199,3 +199,74 @@ async def test_visible_child_cache_tracks_inheritance_overrides_and_remount():
         assert list(inner.displayed_and_visible_children) == [inherited]
         explicit.display = True
         check([explicit, inherited])
+
+
+@pytest.mark.parametrize("insert", [False, True])
+def test_duplicate_id_declines_custody_before_mutation(insert):
+    parent = Widget()
+    original = Widget(id="original")
+    parent._add_child(original)
+    with pytest.raises(DuplicateIds):
+        if insert:
+            parent._nodes._insert(0, Widget(id="original"))
+        else:
+            parent._nodes._append(Widget(id="original"))
+    assert list(parent.children) == [original]
+    assert parent.descendant_count == 1
+
+
+async def test_native_cardinality_follows_custody_not_style_or_virtual_parent():
+    class CustodyApp(App):
+        def compose(self) -> ComposeResult:
+            with Container(id="left"):
+                yield Container(Static("one"), Static("two"), id="branch")
+                yield Static("sibling", id="sibling")
+            with Container(id="right"):
+                yield Static("other")
+
+    app = CustodyApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        left, right = app.query_one("#left"), app.query_one("#right")
+        branch = app.query_one("#branch")
+
+        def check(root=app.screen):
+            # Independent traversal witnesses actual custody at each native
+            # owner, including structure pending asynchronous removal.
+            for node in root.walk_children(with_self=True):
+                assert node.descendant_count == len(node.walk_children())
+
+        check()
+        original_count = app.screen.descendant_count
+        branch.display = False
+        branch.styles.visibility = "hidden"
+        left.move_child(branch, after=left.children[-1])
+        await pilot.pause()
+        assert app.screen.descendant_count == original_count
+        check()
+
+        pending = Container(Static("new one"), Static("new two"))
+        assert pending.descendant_count == 0  # Composition has not acquired custody.
+        await left.mount(pending, before=branch)
+        check()
+        branch.reparent(right)
+        check()
+        await pilot.pause()
+        check()
+
+        cover = Container(Static("virtual child"))
+        left._cover(cover)
+        await pilot.pause()
+        assert cover.descendant_count == 1
+        check(cover)
+        check()  # A message parent without NodeList membership is not custody.
+        left._uncover()
+        await pilot.pause()
+        check()
+
+        await pending.remove()
+        check()
+        await right.remove_children()
+        assert right.descendant_count == 0
+        check()
+        assert app._exception is None

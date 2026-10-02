@@ -443,6 +443,16 @@ class DOMNode(MessagePump):
         return self._nodes
 
     @property
+    def descendant_count(self) -> int:
+        """Number of resources in the original native child tree.
+
+        This excludes the node itself, pending composition and virtual widgets.
+        Cardinality belongs to the child list's insertion/removal operations,
+        independently of layout, visibility and traversal order.
+        """
+        return self._nodes.descendant_count
+
+    @property
     def displayed_children(self) -> Sequence[Widget]:
         """The displayed children (where `node.display==True`).
 
