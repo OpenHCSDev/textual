@@ -46,6 +46,7 @@ async def test_offscreen_targets_match_full_geometry_without_full_tree_traversal
             assert screen.query_one("#row-50") not in compositor._visible_map
             assert len(compositor._visible_map) < 80
             with patch.object(compositor, "_arrange_root", side_effect=AssertionError("Anchor query rebuilt all geometry")):
+                assert compositor.can_render_subtree(target)
                 actual_target = compositor.find_widget(target)
                 rendered = tuple(tuple(strip) for strip in compositor.render_strips())
             compositor.reflow(screen, app.size)
@@ -68,3 +69,5 @@ async def test_foreign_and_removed_targets_do_not_enter_the_scene():
         screen._refresh_layout(app.size)
         assert target not in screen._compositor._visible_map
         assert foreign not in screen._compositor._visible_map
+        assert not screen._compositor.can_render_subtree(target)
+        assert not screen._compositor.can_render_subtree(foreign)
