@@ -1373,8 +1373,11 @@ class Screen(Generic[ScreenResultType], Widget):
         ResizeEvent = events.Resize
 
         try:
+            geometry_targets = self._layout_geometry_targets()
             if scroll and not self._layout_widgets:
-                exposed_widgets = self._compositor.reflow_visible(self, size)
+                exposed_widgets = self._compositor.reflow_visible(
+                    self, size, retain_geometry=geometry_targets,
+                )
                 if exposed_widgets:
                     layers = self._compositor.layers
                     for widget, (
@@ -1400,7 +1403,7 @@ class Screen(Generic[ScreenResultType], Widget):
                 viewport_layout = self._use_viewport_layout()
                 if viewport_layout:
                     hidden, shown, resized = self._compositor.reflow(
-                        self, size, visible_only=True, retain_geometry=self._layout_geometry_targets(),
+                        self, size, visible_only=True, retain_geometry=geometry_targets,
                     )
                 else:
                     hidden, shown, resized = self._compositor.reflow(self, size)
