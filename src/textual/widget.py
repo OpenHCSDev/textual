@@ -1739,18 +1739,8 @@ class Widget(DOMNode):
         if child is target:
             return  # Nothing to be done.
 
-        # At this point we should know what we're moving, and it should be a
-        # child; where we're moving it to, which should be within the child
-        # list; and how we're supposed to move it. All that's left is doing
-        # the right thing.
-        self._nodes._remove(child)
-        if before is not None:
-            self._nodes._insert(self._nodes.index(target), child)
-        else:
-            self._nodes._insert(self._nodes.index(target) + 1, child)
-
-        # Request a refresh.
-        self.refresh(layout=True)
+        if self._nodes._move(child, target, before=before is not None):
+            self.refresh(layout=True)
 
     def reparent(self, parent: Widget, *, before: Widget | None = None) -> None:
         """Move a mounted subtree within its application without remounting it.

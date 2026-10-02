@@ -496,8 +496,8 @@ class DOMNode(MessagePump):
                 or `None` to sort without a key function.
             reverse: Sort in descending order.
         """
-        self._nodes._sort(key=key, reverse=reverse)
-        self.refresh(layout=True)
+        if self._nodes._sort(key=key, reverse=reverse):
+            self.refresh(layout=True)
 
     @property
     def auto_refresh(self) -> float | None:
