@@ -2930,8 +2930,14 @@ class Widget(DOMNode):
         scrolled_x = scrolled_y = False
 
         animator = self.app.animator
-        animator.force_stop_animation(self, "scroll_x")
-        animator.force_stop_animation(self, "scroll_y")
+        # Animator owns replacement of a running curve from its current value.
+        # A direct request cancels only its axes; finishing the former target
+        # first would publish travel that this operation never requested.
+        if not animate:
+            if maybe_scroll_x:
+                animator.force_stop_animation(self, "scroll_x", complete=False)
+            if maybe_scroll_y:
+                animator.force_stop_animation(self, "scroll_y", complete=False)
 
         def _animate_on_complete() -> None:
             """set last scroll time, and invoke callback."""
@@ -2951,7 +2957,7 @@ class Widget(DOMNode):
             if maybe_scroll_x:
                 assert x is not None
                 self.scroll_target_x = x
-                if x != self.scroll_x:
+                if x != self.scroll_x or animator.is_being_animated(self, "scroll_x"):
                     self.app._realtime_animation_begin()
                     self.animate(
                         "scroll_x",
@@ -2966,7 +2972,7 @@ class Widget(DOMNode):
             if maybe_scroll_y:
                 assert y is not None
                 self.scroll_target_y = y
-                if y != self.scroll_y:
+                if y != self.scroll_y or animator.is_being_animated(self, "scroll_y"):
                     self.app._realtime_animation_begin()
                     self.animate(
                         "scroll_y",
@@ -3069,11 +3075,6 @@ class Widget(DOMNode):
         """
         if release_anchor:
             self.release_anchor()
-        animator = self.app.animator
-        if x is not None:
-            animator.force_stop_animation(self, "scroll_x")
-        if y is not None:
-            animator.force_stop_animation(self, "scroll_y")
         if immediate:
             self._scroll_to(
                 x,
