@@ -1604,9 +1604,9 @@ class Compositor:
         The transient body-local map uses the same line/chop renderer without
         replacing any published screen map or constructing another compositor.
         """
-        size = self._subtree_paint_size(root)
-        if size is None:
+        if not self.can_render_subtree(root):
             raise errors.NoWidget("The subtree has no mounted native body")
+        size = self.find_widget(root).region.size
         geometry, _ = self._arrange_root(root, size, visible_only=False)
         widgets = self._paint_regions(geometry, size.region)
         cuts = self._cuts_for_regions(size, widgets)
@@ -1614,15 +1614,9 @@ class Compositor:
                                   widgets=widgets, cuts=cuts)
         return size, [Strip.join(chop.values()) for chop in chops]
 
-    def _subtree_paint_size(self, root: Widget) -> Size | None:
-        """Use committed native bounds without resolving the entire live scene."""
-        if not root.is_mounted:
-            return None
-        return root.outer_size
-
     def can_render_subtree(self, root: Widget) -> bool:
-        """Whether a mounted native body can supply its complete paint now."""
-        return self._subtree_paint_size(root) is not None
+        """Read original native custody without resolving layout for admission."""
+        return root.is_mounted
 
     def _render_chops(
         self,
