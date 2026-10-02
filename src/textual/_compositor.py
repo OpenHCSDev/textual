@@ -87,7 +87,8 @@ class SubtreeGeometryKey(NamedTuple):
                     inherited_layers: tuple) -> SubtreeGeometryKey:
         """Bind original placement inputs to the widget's current native source."""
         return cls(widget._geometry_revision, widget._nodes._updates,
-                   widget.styles._cache_key, virtual_region, region, order,
+                   (widget.styles._cache_key, widget._subtree_style_revision),
+                   virtual_region, region, order,
                    layer_order, clip, visible, dock_gutter, screen_size,
                    visible_only, widget.scroll_offset, inherited_layers)
 
@@ -862,10 +863,16 @@ class Compositor:
             for target in retain_geometry:
                 path: list[Widget] = []
                 node = target
-                while isinstance(node, Widget) and node is not root:
+                # Existing members already own a path to this same root.
+                # Shared ancestors need admission once, not per target.
+                while (
+                    isinstance(node, Widget)
+                    and node is not root
+                    and node not in retained_paths
+                ):
                     path.append(node)
                     node = node.parent
-                if node is root:
+                if node is root or node in retained_paths:
                     retained_paths.update(path)
 
         def get_layers(widget: Widget) -> dict[str, int] | None:
@@ -1089,13 +1096,19 @@ class Compositor:
 
         def add_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter, complete):
             nonlocal map, widgets, invisible_widgets
-            if (not self.max_subtree_geometry_entries or not widget.CACHE_SUBTREE_GEOMETRY or widget in retained_paths
+            if (not self.max_subtree_geometry_entries or not widget.CACHE_SUBTREE_GEOMETRY
                     or not widget._is_mounted):
                 arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter, complete)  # noqa: F821 -- closure cleared after traversal
                 return
             inherited = get_layers(widget)  # noqa: F821 -- closure cleared after traversal
             resource_type = widget.subtree_geometry_resource()
             complete = resource_type.complete_arrangement(complete)
+            # Retention requires an uncropped path only for partial resources.
+            # Complete native arrangements already own every descendant box.
+            if widget in retained_paths and not complete:
+                arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
+                               complete)  # noqa: F821 -- closure cleared after traversal
+                return
             key = SubtreeGeometryKey.from_widget(widget,
                    virtual_region, region, order, layer_order, clip.region, visible, dock_gutter,
                    size, visible_only and not complete,
