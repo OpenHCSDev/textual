@@ -1615,8 +1615,8 @@ class Compositor:
         return size, [Strip.join(chop.values()) for chop in chops]
 
     def can_render_subtree(self, root: Widget) -> bool:
-        """Admit mounted bodies through original published scene membership."""
-        return root.is_mounted and root in self.widgets
+        """Admit mounted bodies with geometry in the original current scene."""
+        return root.is_mounted and root in self.full_map
 
     def _render_chops(
         self,
