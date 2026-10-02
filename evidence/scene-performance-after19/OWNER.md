@@ -24,3 +24,7 @@ Source reasoning and coherent nominal implementation FIRST, batched native sanit
 ## Implemented native ordering checkpoint
 
 NodeList owns same-parent reorder without false removal/reacquisition, and reports actual sorting changes to DOMNode; Widget/DOMNode inherit layout admission. See node-order-custody.md and node-order-native-sanity.json. Whole performance scope above remains active; installed changed-pair qualification is outstanding.
+
+## Scoped installed qualification
+
+Exact Core74877/Toadb08d/Text2382/native5184 normal69 public original journey completed102.374s, warm16/input7,18readybodies retained. Visible channel roster and original A/End/mididle pixels personally reviewed; original3084740 epoch unchanged, cleanup empty. FFmpeg255 is not independent UI exit proof. See node-order-public-certified508-qualified.json. Scope-ready ordering/custody checkpoint; CPU75–98%scroll/37.8%mididle/28%End idle remains unfinished with all larger scope above.
