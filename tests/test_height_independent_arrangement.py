@@ -44,7 +44,7 @@ async def test_raw_descendant_style_write_invalidates_without_refresh():
         child.styles.base.set_rule("height", Scalar.parse("1fr"))
         current = parent.arrange(Size(40, 100))
         assert current is not first
-        assert current.placements[0].region.height == 100
+        assert current.placements[0][1].region.height == 100
 
 
 async def test_box_reuse_observes_immediate_parent_width_exception():

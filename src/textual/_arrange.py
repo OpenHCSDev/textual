@@ -121,7 +121,7 @@ def arrange(
             WidgetPlacement.apply_absolute(layout_placements)
             placements.extend(layout_placements)
 
-    return DockArrangeResult(placements, set(display_widgets), scroll_spacing)
+    return DockArrangeResult.from_placements(placements, set(display_widgets), scroll_spacing)
 
 
 def _arrange_dock_widgets(

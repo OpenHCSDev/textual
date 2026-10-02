@@ -34,7 +34,7 @@ async def test_inactive_scene_releases_removed_geometry_and_arrangements(layout)
                        for placement in parent.layout._cached_placements or ())
         assert not any(placement.widget is removed
                        for result in parent._arrangement_cache._cache.values()
-                       for placement in result.placements)
+                       for _, placement in result.placements)
         assert removed not in compositor._full_map
         assert removed not in (compositor._visible_map or {})
         assert removed not in compositor.widgets
