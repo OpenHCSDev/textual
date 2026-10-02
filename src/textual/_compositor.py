@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
+from contextlib import contextmanager
 from functools import cached_property
 from operator import itemgetter
 from types import MappingProxyType
@@ -22,6 +23,7 @@ from typing import (
     Callable,
     Generic,
     Iterable,
+    Iterator,
     Mapping,
     NamedTuple,
     Sequence,
@@ -508,6 +510,8 @@ class Compositor:
         self._full_map_invalidated = True
         self._arranging = False
         """Geometry reads during measurement observe the last committed map."""
+        self._render_geometry: tuple[Widget, CompositorMap] | None = None
+        """The original arrangement selected by a synchronous body capture."""
         self._visible_map: CompositorMap | None = None
         self._layers: list[tuple[Widget, MapGeometry]] | None = None
 
@@ -810,6 +814,7 @@ class Compositor:
     def _arrange_root(
         self, root: Widget, size: Size, visible_only: bool = True,
         retain_geometry: Iterable[Widget] = (),
+        *, root_geometry: MapGeometry | None = None,
     ) -> tuple[CompositorMap, set[Widget]]:
         """Arrange a widget's children based on its layout attribute.
 
@@ -817,6 +822,7 @@ class Compositor:
             root: Top level widget.
             size: Size of visible area (screen).
             visible_only: Only update visible widgets (used in scrolling).
+            root_geometry: Original placement when arranging a complete body.
 
         Returns:
             Compositor map and set of widgets.
@@ -834,9 +840,13 @@ class Compositor:
 
         widgets: set[Widget] = set()
         invisible_widgets: set[Widget] = set()
-        layer_order: int = 0
-
-        no_clip = RootSceneClip(size.region)
+        if root_geometry is None:
+            root_geometry = MapGeometry(
+                size.region, ((0, 0, 0),), size.region,
+                size, size, size.region, NULL_SPACING,
+            )
+        layer_order = root_geometry.order[-1][2]
+        no_clip = RootSceneClip(root_geometry.region)
         # Layer names normally inherit from the outermost declaring ancestor.
         # Resolve that once per node for this reflow, instead of rebuilding an
         # ancestors list and a layer dictionary for every nested widget.
@@ -1130,13 +1140,13 @@ class Compositor:
         try:
             add_widget(
                 root,
-                size.region,
-                size.region,
-                ((0, 0, 0),),
+                root_geometry.virtual_region,
+                root_geometry.region,
+                root_geometry.order,
                 layer_order,
                 no_clip,
                 True,
-                NULL_SPACING,
+                root_geometry.dock_gutter,
                 False,
             )
         finally:
@@ -1385,6 +1395,10 @@ class Compositor:
         Both position queries and body admission use the same published maps.
         An invalidated full map cannot override current viewport geometry.
         """
+        if self._render_geometry is not None:
+            root, geometry = self._render_geometry
+            if root in widget.ancestors_with_self:
+                return geometry.get(widget)
         if self.root is None:
             return None
         if not self._full_map_invalidated:
@@ -1397,6 +1411,21 @@ class Compositor:
                 return geometry
         return self.full_map.get(widget)
 
+    @contextmanager
+    def _using_geometry(self, root: Widget, geometry: CompositorMap) -> Iterator[None]:
+        """Bind descendant queries to the same original capture arrangement.
+
+        Rendering is synchronous. Keep only references to its existing root and
+        map; never replace a published map or retain this resource after paint.
+        Nested capture and failed renderers restore the previous selection.
+        """
+        previous = self._render_geometry
+        self._render_geometry = root, geometry
+        try:
+            yield
+        finally:
+            self._render_geometry = previous
+
     @property
     def cuts(self) -> list[list[int]]:
         """Get vertical cuts.
@@ -1408,24 +1437,23 @@ class Compositor:
         """
         if self._cuts is not None:
             return self._cuts
-        self._cuts = self._cuts_for_regions(self.size, self.visible_widgets)
+        self._cuts = self._cuts_for_regions(self.size.region, self.visible_widgets)
         return self._cuts
 
     @staticmethod
-    def _cuts_for_regions(size: Size, widgets: Mapping[Widget, tuple[Region, Region]]
+    def _cuts_for_regions(bounds: Region, widgets: Mapping[Widget, tuple[Region, Region]]
                           ) -> list[list[int]]:
         """Derive chop boundaries from the original ordered paint regions."""
-        width, height = size
-        cuts = [[0, width] for _ in range(height)]
+        cuts = [[bounds.x, bounds.right] for _ in range(bounds.height)]
 
         intersection = Region.intersection
         extend = list.extend
 
         for region, clip in widgets.values():
-            x, y, region_width, region_height = intersection(intersection(region, clip), size.region)
+            x, y, region_width, region_height = intersection(intersection(region, clip), bounds)
             if region_width and region_height:
                 region_cuts = (x, x + region_width)
-                for cut in cuts[y : y + region_height]:
+                for cut in cuts[y - bounds.y : y - bounds.y + region_height]:
                     extend(cut, region_cuts)
 
         # Sort the cuts for each line
@@ -1549,7 +1577,8 @@ class Compositor:
         self._dirty_regions.clear()
         crop = screen_region
         chops = self._render_chops(crop, lambda y: True,
-                                  widgets=self.visible_widgets, cuts=self.cuts)
+                                  widgets=self.visible_widgets, cuts=self.cuts,
+                                  bounds=screen_region)
         render_strips: list[Iterable[Strip]]
         if simplify:
             # Simplify is done when exporting to SVG
@@ -1579,7 +1608,8 @@ class Compositor:
         spans = list(self._regions_to_spans(update_regions))
         is_rendered_line = {y for y, _, _ in spans}.__contains__
         chops = self._render_chops(crop, is_rendered_line,
-                                  widgets=self.visible_widgets, cuts=self.cuts)
+                                  widgets=self.visible_widgets, cuts=self.cuts,
+                                  bounds=screen_region)
         chop_ends = [cut_set[1:] for cut_set in self.cuts]
         return ChopsUpdate(chops, spans, chop_ends)
 
@@ -1595,7 +1625,8 @@ class Compositor:
         if size is None:
             size = self.size
         chops = self._render_chops(size.region, lambda y: True,
-                                  widgets=self.visible_widgets, cuts=self.cuts)
+                                  widgets=self.visible_widgets, cuts=self.cuts,
+                                  bounds=self.size.region)
         render_strips = [Strip.join(chop.values()) for chop in chops[: size.height]]
         return render_strips
 
@@ -1605,18 +1636,22 @@ class Compositor:
         The original live widget tree supplies the complete arrangement through
         this compositor's ordinary layout algorithm. Its bounded geometry cache
         remains an optimization, not a condition for retaining body paint.
-        The transient body-local map uses the same line/chop renderer without
+        The transient complete arrangement uses the same line/chop renderer without
         replacing any published screen map or constructing another compositor.
         """
         if not self.can_render_subtree(root):
             raise errors.NoWidget("The subtree has no published native layout")
-        size = self.find_widget(root).region.size
-        geometry, _ = self._arrange_root(root, size, visible_only=False)
-        widgets = self._paint_regions(geometry, size.region)
-        cuts = self._cuts_for_regions(size, widgets)
-        chops = self._render_chops(size.region, lambda y: True,
-                                  widgets=widgets, cuts=cuts)
-        return size, [Strip.join(chop.values()) for chop in chops]
+        root_geometry = self.find_widget(root)
+        bounds = root_geometry.region
+        geometry, _ = self._arrange_root(
+            root, self.size, visible_only=False, root_geometry=root_geometry,
+        )
+        widgets = self._paint_regions(geometry, bounds)
+        cuts = self._cuts_for_regions(bounds, widgets)
+        with self._using_geometry(root, geometry):
+            chops = self._render_chops(bounds, lambda y: True,
+                                      widgets=widgets, cuts=cuts, bounds=bounds)
+        return bounds.size, [Strip.join(chop.values()) for chop in chops]
 
     def can_render_subtree(self, root: Widget) -> bool:
         """Admit mounted bodies with geometry in the original current scene."""
@@ -1627,12 +1662,14 @@ class Compositor:
         crop: Region,
         is_rendered_line: Callable[[int], bool],
         *, widgets: Mapping[Widget, tuple[Region, Region]], cuts: list[list[int]],
+        bounds: Region,
     ) -> Sequence[Mapping[int, Strip]]:
         """Render update 'chops'.
 
         Args:
             crop: Region to crop to.
             is_rendered_line: Callable to check if line should be rendered.
+            bounds: Original screen or body bounds represented by the chops.
 
         Returns:
             Chops structure.
@@ -1652,10 +1689,11 @@ class Compositor:
             first, last = region.column_span
             runs: dict[tuple[int, int], int] = {}
             for y in region.line_range:
+                row = y - bounds.y
                 spans: set[tuple[int, int]] = set()
-                if remaining[y] and is_rendered_line(y):
+                if remaining[row] and is_rendered_line(y):
                     start_x = None
-                    for x, value in chops[y].items():
+                    for x, value in chops[row].items():
                         if x < first:
                             continue
                         if x >= last:
@@ -1693,8 +1731,9 @@ class Compositor:
                 if not is_rendered_line(y):
                     continue
 
-                chops_line = chops[y]
-                final_cuts = [cut for cut in cuts[y] if (last_cut >= cut >= first_cut)]
+                row = y - bounds.y
+                chops_line = chops[row]
+                final_cuts = [cut for cut in cuts[row] if (last_cut >= cut >= first_cut)]
                 cut_strips = strip.divide([cut - render_x for cut in final_cuts[1:]])
 
                 # Since we are painting front to back, the first segments for a cut "wins"
@@ -1702,7 +1741,7 @@ class Compositor:
                 for cut, strip in zip(final_cuts, cut_strips):
                     if get_chops_line(cut) is None:
                         chops_line[cut] = strip
-                        remaining[y] -= 1
+                        remaining[row] -= 1
         return cast("Sequence[Mapping[int, Strip]]", chops)
 
     def __rich__(self) -> StripRenderable:
