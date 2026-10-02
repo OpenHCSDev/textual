@@ -49,7 +49,7 @@ lifetime remains unchanged; its field and constructor now carry indexed placemen
 through all declared consumers, without an unindexed compatibility view. AST attribute-name
 matching does not establish dynamic dispatch; the original owners were read.
 Three production files51+/33−. Original source selection and all native callers
-are changed together. Not installed-ready; no measured performance gain yet.
+are changed together. Scoped installed qualification is recorded below; no isolated native performance gain is claimed.
 
 ## Coherent source sanity and remaining installed boundary
 
@@ -110,4 +110,35 @@ or placement_order remains in production. Full/retained/spatial consumers read
 same indexed placements; test consumers migrate without restoring raw-field aliases.
 The full retained-missing membership scan remains explicit, but it consumes rank
 rather than deciding it again. Pending: integration-owner installed changed
-motion/observer qualification using qualified current Toad and public epoch.
+motion/observer qualification is now complete on the joined candidate below.
+
+
+## Scoped installed qualification — Ready
+
+Heisenberg completed the changed original saved-history journey on Textual
+06c004708e29393f5212d4cda03f69577064312f (production e4ab), Toad
+3f1d7e2763b5a9bb6253dcaf5d535aa4348256b1, Core
+457b1047855752f4d069ee1d39b01e30603efa41 and native00c2, public epoch327.
+This was a candidate selected through the normal launcher runtime override, not
+a new default activation or qualification of subsequently integrated Core536.
+
+Original recording:
+`/home/ts/.cache/agent-scratch/direct-native-rows328-current327-public-20261002-01/capture`.
+The producer receipt reports capture/completed true; all16 warm-history and7
+input-paging checks passed. Native writer994 flushes/0 unmatched; original owner
+PID/start identity unchanged; cleanup has no remaining owned processes/errors.
+Heisenberg's committed joined receipt is
+`docs/checkpoints/direct-native-rows328-qualified.json` in his Toad checkout.
+
+Heisenberg inspected60 consecutive moving frames at21–22s DURING the run and
+Down65/Reverse73 frames AFTER: body/chrome readable, with discrete steps.
+Exact history-Up writer median/p95 was17.62/105.87ms versus26.68/248.95ms in
+the prior run; input-Up23.04/173.26ms versus26.55/159.98ms, so its p95 worsened.
+These are writer intervals on different public workloads and combined Toad/native
+changes, not isolated Textual gains or input-to-pixel latency. Input-Up CPU remains
+90.26%; recorded60fps is not application frame rate. No smoothness/fullCPU/FPS claim.
+
+The earlier incomplete motion recording and missing up-done observer proof are
+preserved, not converted to a pass. This checkpoint is Ready for original indexed
+placement ownership and the qualified joined user workflow. Remaining CPU/motion
+work continues separately; no extra run or production change accompanies this receipt.
