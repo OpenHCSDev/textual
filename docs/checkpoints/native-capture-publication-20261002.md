@@ -45,7 +45,8 @@ There is no old no-resource signature, compatibility alias, map, flag, registry,
 new type or rendering implementation.
 
 Heisenberg owns the sole Toad consumer and original BodyMeasurement/DocumentViewport
-capture-before-await/prune cohort. Matching Toad325 source is e053de88. Native
+capture-before-await/prune cohort. Matching Toad325 final published source is e6ac798e (production/pilot byte-equal
+to085700a2 used by the final source run). Native
 callers/tests now acquire the same original resource; no layer/membership/lazy
 query substitutes for capture admission. Source checks follow this coherent
 batch, with one changed installed saved-UI recording/profile owned by Heisenberg.
@@ -56,3 +57,23 @@ scene, ordinary position queries losing lazy layout, hidden capture descendants
 escaping their original arrangement, complete body coordinates, original map
 identity and failed-renderer resource release. Until the matching native/Toad
 batch and installed journey are checked, this checkpoint is NOT installed-ready.
+
+## Final coherent source batch
+
+Existing four real native geometry/capture checks pass. The original Toad
+retained-body pilot passes all three body kinds:3 captures before preparation
+or pruning,0 whole-scene arrangements during that capture cohort, source/style/
+resize invalidation, no-remount retained reentry, stream acquisition preventing
+commit, bounded warm admission, stationary resource retention, input
+materialization and disposal. No provider calls. These source observations do
+not qualify an installed release or establish overall performance.
+
+Three original failed runs remain recorded: parked offscreen fixture publication,
+parked reconstruction publication, and the genuine resume ordering gap.
+The first two now use actual native reflow before borrowing resources; the last
+was corrected in the existing viewport owner through original layout and frame
+publication. No oracle threshold or timeout was relaxed. Native checks were not
+repeated. Receipt: `native-capture-publication27-source-receipt.json`.
+
+Heisenberg owns one next changed installed saved-UI/profile journey. This draft
+remains unqualified for installation until that affected workflow is reviewed.
