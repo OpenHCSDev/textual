@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+from textual import errors
 from textual.app import App
 from textual.containers import VerticalGroup, VerticalScroll
 from textual.screen import Screen
@@ -50,7 +51,6 @@ async def test_offscreen_targets_match_full_geometry_without_full_tree_traversal
             assert screen.query_one("#row-50") not in compositor._visible_map
             assert len(compositor._visible_map) < 80
             with patch.object(compositor, "_arrange_root", side_effect=AssertionError("Anchor query rebuilt all geometry")):
-                assert compositor.can_render_subtree(target)
                 actual_target = compositor.find_widget(target)
                 rendered = tuple(tuple(strip) for strip in compositor.render_strips())
             compositor.reflow(screen, app.size)
@@ -74,8 +74,38 @@ async def test_foreign_and_removed_targets_do_not_enter_the_scene():
         screen._refresh_layout(app.size, scroll=True)
         assert target not in screen._compositor._visible_map
         assert foreign not in screen._compositor._visible_map
-        assert not screen._compositor.can_render_subtree(target)
-        assert not screen._compositor.can_render_subtree(foreign)
+        for body in (target, foreign):
+            try:
+                screen._compositor.render_subtree_strips(body)
+            except errors.NoWidget:
+                pass
+            else:
+                raise AssertionError("An unmounted body acquired native capture geometry")
+
+
+async def test_capture_requires_publication_while_position_queries_keep_lazy_layout():
+    app = App()
+    async with app.run_test(size=(80, 25)) as pilot:
+        screen = TargetedScreen()
+        await app.push_screen(screen)
+        await pilot.pause()
+        body = screen.query_one("#group-85", VerticalGroup)
+        screen._refresh_layout(app.size)
+        compositor = screen._compositor
+        assert body.is_mounted and body not in compositor._visible_map
+        published = compositor._full_map, compositor._visible_map
+        with patch.object(compositor, "_arrange_root", side_effect=AssertionError("Capture manufactured a full scene")):
+            try:
+                compositor.render_subtree_strips(body)
+            except errors.NoWidget:
+                pass
+            else:
+                raise AssertionError("An unpublished body acquired native capture geometry")
+        assert compositor._full_map is published[0]
+        assert compositor._visible_map is published[1]
+        # Position queries still acquire the ordinary complete layout.
+        assert compositor.find_widget(body).region.height > 0
+        assert body in compositor._full_map
 
 
 async def test_body_capture_descendants_use_original_arrangement_and_screen_coordinates():

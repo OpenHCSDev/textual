@@ -1391,19 +1391,25 @@ class Compositor:
         """
         geometry = self._get_geometry(widget)
         if geometry is None:
+            geometry = self.full_map.get(widget)
+        if geometry is None:
             raise errors.NoWidget("Widget is not in layout")
         return geometry
 
     def _get_geometry(self, widget: Widget) -> MapGeometry | None:
-        """Select current native geometry before requesting a full arrangement.
+        """Select geometry from its original current publication.
 
-        Both position queries and body admission use the same published maps.
-        An invalidated full map cannot override current viewport geometry.
+        Capture consumes this publication; ordinary find_widget may arrange
+        missing geometry. An invalidated full map cannot override the viewport.
+        A missing capture descendant cannot escape to another scene.
         """
         if self._render_geometry is not None:
             root, geometry = self._render_geometry
             if root in widget.ancestors_with_self:
-                return geometry.get(widget)
+                placement = geometry.get(widget)
+                if placement is None:
+                    raise errors.NoWidget("Widget is not in layout")
+                return placement
         if self.root is None:
             return None
         if not self._full_map_invalidated:
@@ -1414,7 +1420,7 @@ class Compositor:
             geometry = self._visible_map.get(widget)
             if geometry is not None:
                 return geometry
-        return self.full_map.get(widget)
+        return None
 
     @contextmanager
     def _using_geometry(self, root: Widget, geometry: CompositorMap) -> Iterator[None]:
@@ -1644,9 +1650,11 @@ class Compositor:
         The transient complete arrangement uses the same line/chop renderer without
         replacing any published screen map or constructing another compositor.
         """
-        if not self.can_render_subtree(root):
+        if not root.is_mounted:
             raise errors.NoWidget("The subtree has no published native layout")
-        root_geometry = self.find_widget(root)
+        root_geometry = self._get_geometry(root)
+        if root_geometry is None:
+            raise errors.NoWidget("The subtree has no published native layout")
         bounds = root_geometry.region
         geometry, _ = self._arrange_root(
             root, self.size, visible_only=False, root_geometry=root_geometry,
@@ -1657,10 +1665,6 @@ class Compositor:
             chops = self._render_chops(bounds, lambda y: True,
                                       widgets=widgets, cuts=cuts, bounds=bounds)
         return bounds.size, [Strip.join(chop.values()) for chop in chops]
-
-    def can_render_subtree(self, root: Widget) -> bool:
-        """Admit mounted bodies with geometry in the original current scene."""
-        return root.is_mounted and self._get_geometry(root) is not None
 
     def _render_chops(
         self,
