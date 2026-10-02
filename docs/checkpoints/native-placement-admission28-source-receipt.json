@@ -1,0 +1,30 @@
+{
+  "qualification": "SOURCE_SANITY_PASS; changed joined installed path pending",
+  "production_head": "29fc185afaf349c17f2da3c98ead9cce67ee8320",
+  "base": "667dc59ebcaddd08b7f9a20e8e083a7391624d1e",
+  "production": {
+    "files": 2,
+    "added": 44,
+    "deleted": 32
+  },
+  "source_owner": "DockArrangeResult.iter_placements -> original SpatialMap indexed membership -> DockArrangeResult.get_visible_placements -> Compositor original order projection",
+  "deleted": "Compositor placement_order construction and independent retained selection",
+  "before_modules": {
+    "textual": 249,
+    "toad": 276
+  },
+  "omissions": [],
+  "remaining_placement_order_refs": 0,
+  "checks": {
+    "passed": 6,
+    "seconds": 3.21,
+    "log": ".artifacts/native-placement-admission28-source01/native-checks.log"
+  },
+  "source_lead_recording": "/home/ts/.cache/agent-scratch/retirement325-published27-public-20261002-01/capture",
+  "limits": [
+    "Observed GIL transitions not calls/durations/CPU",
+    "No new capture/provider/environment/public mutation",
+    "Full arrangements and explicit offscreen targets retain legitimate original-list traversal",
+    "No changed installed qualification or speed claim; Heisenberg sole joined integration owner"
+  ]
+}

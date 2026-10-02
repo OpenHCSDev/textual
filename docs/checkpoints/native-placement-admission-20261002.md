@@ -48,3 +48,27 @@ list mutation and spatial resource lifetime remain unchanged. AST attribute-name
 matching does not establish dynamic dispatch; the original owners were read.
 Two production files44+/32−. Original source selection and all native callers
 are changed together. Not installed-ready; no measured performance gain yet.
+
+## Coherent source sanity and remaining installed boundary
+
+One final affected batch passed6 checks in3.21s using existing native App tests:
+original duplicate/fixed/retained admission, four viewport geometry/capture
+checks and continuous viewport/full-render equivalence across resizing, scrolling,
+source update and exposure. These detect changed rank/dedup, lost offscreen boxes,
+wrong absolute capture and stale paint. No environment was created or installed.
+This source run is not the changed installed Toad qualification.
+
+Before mapping:249 native +276 Toad modules,0 parse omissions. After:249 native,
+0 omissions, no placement_order definition or consumers. DockArrangeResult alone
+constructs ordinal membership; Compositor's two full/visible paths consume it.
+Only3 remaining spatial_map consumers read total_region or query the original
+resource. The generic SpatialMap and original list invalidation contract remain
+unchanged. Source artifacts and check log are preserved under
+`.artifacts/native-placement-admission28-source01/` in this worktree.
+
+Full arrangements and genuinely missing retained targets still traverse original
+placements, since those operations require them. This change removes the eager
+whole-list pass from ordinary culled scroll admission; it does not establish
+absence of other native layout/paint work or measured CPU/smoothness gains.
+Heisenberg owns the next changed installed saved-UI video/profile with his Toad
+follow-up; no independent recording/provider or repeated Text27 qualification.
