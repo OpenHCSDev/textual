@@ -41,3 +41,16 @@ One production file30+/31− relative to frozen29. Existing changed-source sanit
 and installed changed-path validation are pending at this published checkpoint.
 The source equality/current327 performance evidence is not evidence for this
 new source. Frozen29/critical537-332 qualification remain separate.
+
+## Final native sanity
+
+17 existing affected native App checks passed in3.98s AFTER the complete family
+change: bounded resource/reuse/invalidation, offscreen target geometry against
+full layout, foreign/removed exclusion, original published capture and absolute
+descendant coordinates, viewport/full paint across source/resize/scroll, raw
+descendant style invalidation and inactive-scene disposal. No new fixtures,
+provider/environment/recording, broad suite or repeated source iteration.
+
+Production source frozen67673dd36e70559aff8c7ea41136e51a9ece92b1. Installed
+changed-path qualification remains pending; this draft is NOT Ready and makes
+no isolated performance claim. Native29bf gate/source stay frozen separately.
