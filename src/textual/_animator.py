@@ -550,13 +550,17 @@ class Animator:
         if animation is not None:
             animation.transform_values(transform)
 
-    def force_stop_animation(self, obj: object, attribute: str) -> None:
+    def force_stop_animation(
+        self, obj: object, attribute: str, *, complete: bool = True
+    ) -> None:
         """Force stop an animation on an attribute. This will immediately stop the animation,
         without running any associated callbacks, setting the attribute to its final value.
 
         Args:
             obj: The object containing the attribute.
             attribute: The name of the attribute.
+            complete: Assign the former destination before stopping. False
+                preserves the current value for a direct replacement.
 
         Note:
             If there is no animation scheduled or running, this is a no-op.
@@ -569,10 +573,11 @@ class Animator:
         except KeyError:
             return
 
-        if isinstance(animation, SimpleAnimation):
-            setattr(obj, attribute, animation.end_value)
-        elif isinstance(animation, ScalarAnimation):
-            setattr(obj, attribute, animation.final_value)
+        if complete:
+            if isinstance(animation, SimpleAnimation):
+                setattr(obj, attribute, animation.end_value)
+            elif isinstance(animation, ScalarAnimation):
+                setattr(obj, attribute, animation.final_value)
 
         if animation.on_complete is not None:
             animation.on_complete()
