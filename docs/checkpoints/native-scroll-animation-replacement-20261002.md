@@ -39,7 +39,7 @@ The branch normally merged qualified native81ecfccd (Text30/31) into main29
 alone did not include that qualified source. This branch carries both histories;
 no selective reconstruction or source regression.
 
-Three production files:53 lines deleted,42 added against81ec. Widget deletes
+Three production files:53 lines deleted,46 added against81ec. Widget deletes
 the early forced completion and delegates animated delivery to Animator, including
 a request whose destination equals the current position. Explicit direct delivery
 stops only its requested axes. Animator cancels the original scheduled Timer
@@ -53,3 +53,21 @@ parse omissions;66 selected declaration/call sites are retained in the owned
 source receipt. Attribute-call resolution remains semantic, not established by
 AST alone. Existing native/source hooks and all force-stop callers were read.
 This is published working source, not installed validation or smoothness Ready.
+
+## Final source sanity
+
+Published production is d052eb133 (source equals9e00c9f32). Existing Animator,
+scalar scheduling and actual native scrolling application checks pass25/25 in
+2.35s. One family check verifies deferred delivery leaves the current position,
+new curve starts there, reversal to current position stops the old curve, direct
+y delivery preserves the x curve, and cancelled delayed y cannot restart.
+
+The first batch stopped after104s with14 checks passed: a scheduled replacement
+at its current value cleared completion without an active interpolation timer.
+The fix resumes the existing Animator timer so its original idle/completion
+settlement runs. Its raw log stays retained. A subsequent fixture assertion
+expected80 outside native max_scroll_y76; it now derives the native destination
+without changing the product clamp. The final25-check batch passes.
+
+Installed saved-history motion/profile remains the final qualification boundary.
+No smoothness or CPU result is supplied by these source/native checks.
