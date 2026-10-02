@@ -1,0 +1,9 @@
+# Complete native performance continuation after merged21
+
+Heisenberg remains sole owner in the SAME persistent native WT. Actual main base108298a58f4d2f34000c4eefc7cb7bf4d98b6f9a contains21. Preserve source branches and negative/raw artifacts.
+
+Retain every unfinished relation in [the full prior native scope](../scene-performance-after19/OWNER.md), original275/277 A–E and Toad full performance continuation: scene/layout/style work, bounded terminal Strips/raster and warm first paint, intrinsic/placed geometry, custody, animation compensation, current damage/frame publication, cold/growing-end/velocity/runway/void, busy sidebar, focus/editor, TC1/T9/T4 and final disposal. No overall smoothness claim.
+
+Merged21789ea50a is byteequal installed238229 native ordering custody: original NodeList owns atomic reorder and actual sort changes, Widget/DOMNode inherit. Exact public approved Core74877/Toadb08d/Text2382/native5184 journey102.374s warm16/input7/18readyresources, readable original A/End/mididle pixels. Full source/pixel/exit/profile limits are in [the qualification](../scene-performance-after19/node-order-public-certified508-qualified.json). CPU75–98%scroll/37.8%mididle/28%End remains unfinished; no independent UIexit proof from FFmpeg255 or busy-model/FPS/Strip/firstpaint attribution.
+
+Next source reasoning follows SidebarProjection publication -> original native NodeList/style/layout/Screen -> Workspace compensation.1712GIL samples/aligned physical phases already retained; no unchanged recapture. Read every original declaration/caller/consumer before extending existing owners; no competing semantic authorities, flags/timers/renderer/registry, raw style shortcuts or copied geometry. Existing owner analysis -> coherent implementation/deletion -> batched native sanity and affected installed real path last. Sch message/compaction and Arendt runtime/core ownership remain disjoint.
