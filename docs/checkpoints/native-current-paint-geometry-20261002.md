@@ -23,3 +23,24 @@ whole-tree style/layout. That source finding was handed to Arendt.
 Implement the native owner change first, then run one source-native geometry/body
 sanity batch. No new physical recording or provider call; original E03 remains
 the baseline and is not proof of this follow-up's performance.
+
+## Published owner change and final sanity
+
+Production change: `_compositor.py`, 22 added / 18 deleted lines. `_get_geometry`
+is the sole selection algorithm used by both `find_widget` and
+`can_render_subtree`. `render_subtree_strips` retains original current geometry
+and native renderer; Screen/Widget/selection consumers keep their public API.
+No new geometry state, scene or cache. Current viewport geometry is selected
+before a lazy full arrangement; invalidated full geometry cannot win.
+
+The existing native target checks passed for admission without full arrangement
+across four widths/scroll positions and refusal of removed/foreign bodies.
+The existing real Toad retained-body family passed source updates, styles,
+resize, three body kinds, warm admission, stationary resource retention,
+native input and disposal. Both used the changed Textual source with the
+existing E03 dependency interpreter. That interpreter lacks pytest; the
+unchanged async native App test functions were called directly.
+
+Receipts are in `native-current-paint-geometry-24-source-receipt.json`.
+No new installed application, physical recording or performance result is
+claimed. Heisenberg owns combined application integration and layout targets.
