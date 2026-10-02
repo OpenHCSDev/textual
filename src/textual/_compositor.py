@@ -78,6 +78,25 @@ class SubtreeGeometryKey(NamedTuple):
     scroll_offset: Offset
     inherited_layers: tuple
 
+    @classmethod
+    def from_widget(cls, widget: Widget, virtual_region: Region, region: Region,
+                    order: tuple, layer_order: int, clip: Region, visible: bool,
+                    dock_gutter: Spacing, screen_size: Size, visible_only: bool,
+                    inherited_layers: tuple) -> SubtreeGeometryKey:
+        """Bind original placement inputs to the widget's current native source."""
+        return cls(widget._geometry_revision, widget._nodes._updates,
+                   widget.styles._cache_key, virtual_region, region, order,
+                   layer_order, clip, visible, dock_gutter, screen_size,
+                   visible_only, widget.scroll_offset, inherited_layers)
+
+    def current(self, widget: Widget) -> SubtreeGeometryKey:
+        """Rebind this arrangement's source without manufacturing another scene."""
+        return self.from_widget(
+            widget, self.virtual_region, widget.region, self.order,
+            self.layer_order, self.clip, self.visible, self.dock_gutter,
+            self.screen_size, self.visible_only, self.inherited_layers,
+        )
+
     def intrinsic(self) -> SubtreeGeometryKey:
         """Separate placement from the same declared native arrangement inputs."""
         return self._replace(
@@ -221,6 +240,10 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
     def references_retired(self, owner: Widget, retired: set[Widget]) -> bool:
         return not retired.isdisjoint((owner, *self.geometry, *self.widgets, *self.invisible_widgets))
 
+    def paint_geometry(self, root: Widget) -> tuple[Size, CompositorMap]:
+        """Only an intrinsic complete arrangement can paint outside its scene."""
+        raise errors.NoWidget("The subtree has no complete intrinsic paint resource")
+
 
 @dataclass(frozen=True)
 class PlacedSubtreeGeometry(SubtreeGeometry[MapGeometry]):
@@ -260,6 +283,15 @@ class IntrinsicSubtreeGeometry(SubtreeGeometry[SubtreeMapGeometry]):
                      clip: SceneClip, clips: dict[Widget, SceneClip], root: Widget) -> None:
         for node, entry in self.geometry.items():
             geometry[node], clips[node] = entry.project(self.key, key, clip, root=node is root)
+
+    def paint_geometry(self, root: Widget) -> tuple[Size, CompositorMap]:
+        """Use the original untruncated clips under the complete body's bounds."""
+        size = self.key.region.size
+        key = self.key._replace(region=size.region,
+                               virtual_region=self.key.virtual_region.reset_offset)
+        geometry: CompositorMap = {}
+        self.project_into(geometry, key, RootSceneClip(size.region), {}, root)
+        return size, geometry
 
 
 class CompositorUpdate:
@@ -783,21 +815,18 @@ class Compositor:
                 if self._visible_map is not None
                 else (self._full_map or {})
             )
-            screen = self.size.region
-            in_screen = screen.overlaps
-            overlaps = Region.overlaps
-
-            # Widgets and regions in render order
-            visible_widgets = [
-                (order, widget, region, clip)
-                for widget, (region, order, clip, _, _, _, _) in map.items()
-                if in_screen(region) and overlaps(clip, region)
-            ]
-            visible_widgets.sort(key=itemgetter(0), reverse=True)
-            self._visible_widgets = {
-                widget: (region, clip) for _, widget, region, clip in visible_widgets
-            }
+            self._visible_widgets = self._paint_regions(map, self.size.region)
         return self._visible_widgets
+
+    @staticmethod
+    def _paint_regions(geometry: Mapping[Widget, MapGeometry], bounds: Region
+                       ) -> dict[Widget, tuple[Region, Region]]:
+        """The same native front-to-back order for a screen or intrinsic body."""
+        regions = [(entry.order, widget, entry.region, entry.clip)
+                   for widget, entry in geometry.items()
+                   if bounds.overlaps(entry.region) and entry.clip.overlaps(entry.region)]
+        regions.sort(key=itemgetter(0), reverse=True)
+        return {widget: (region, clip) for _, widget, region, clip in regions}
 
     def _arrange_root(
         self, root: Widget, size: Size, visible_only: bool = True,
@@ -1084,9 +1113,9 @@ class Compositor:
             inherited = get_layers(widget)  # noqa: F821 -- closure cleared after traversal
             resource_type = widget.subtree_geometry_resource()
             complete = resource_type.complete_arrangement(complete)
-            key = SubtreeGeometryKey(widget._geometry_revision, widget._nodes._updates, widget.styles._cache_key,
+            key = SubtreeGeometryKey.from_widget(widget,
                    virtual_region, region, order, layer_order, clip.region, visible, dock_gutter,
-                   size, visible_only and not complete, widget.scroll_offset,
+                   size, visible_only and not complete,
                    tuple(inherited.items()) if inherited is not None else ())
             cached = self._subtree_geometry.get(widget)
             if cached is not None and cached.matches(key):
@@ -1396,28 +1425,33 @@ class Compositor:
         """
         if self._cuts is not None:
             return self._cuts
+        self._cuts = self._cuts_for_regions(self.size, self.visible_widgets)
+        return self._cuts
 
-        width, height = self.size
+    @staticmethod
+    def _cuts_for_regions(size: Size, widgets: Mapping[Widget, tuple[Region, Region]]
+                          ) -> list[list[int]]:
+        """Derive chop boundaries from the original ordered paint regions."""
+        width, height = size
         cuts = [[0, width] for _ in range(height)]
 
         intersection = Region.intersection
         extend = list.extend
 
-        for region, clip in self.visible_widgets.values():
-            x, y, region_width, region_height = intersection(region, clip)
+        for region, clip in widgets.values():
+            x, y, region_width, region_height = intersection(intersection(region, clip), size.region)
             if region_width and region_height:
                 region_cuts = (x, x + region_width)
                 for cut in cuts[y : y + region_height]:
                     extend(cut, region_cuts)
 
         # Sort the cuts for each line
-        self._cuts = [sorted(set(line_cuts)) for line_cuts in cuts]
-
-        return self._cuts
+        return [sorted(set(line_cuts)) for line_cuts in cuts]
 
     def _get_renders(
         self, crop: Region | None = None,
         render_regions: Callable[[Region], Iterable[Region]] | None = None,
+        *, widgets: Mapping[Widget, tuple[Region, Region]],
     ) -> Iterable[tuple[Region, Region, list[Strip]]]:
         """Get rendered widgets (lists of segments) in the composition.
 
@@ -1434,19 +1468,17 @@ class Compositor:
 
         _Region = Region
 
-        visible_widgets = self.visible_widgets
-
         if crop:
             crop_overlaps = crop.overlaps
             widget_regions = [
                 (widget, region, clip)
-                for widget, (region, clip) in visible_widgets.items()
+                for widget, (region, clip) in widgets.items()
                 if crop_overlaps(clip)
             ]
         else:
             widget_regions = [
                 (widget, region, clip)
-                for widget, (region, clip) in visible_widgets.items()
+                for widget, (region, clip) in widgets.items()
             ]
 
         intersection = _Region.intersection
@@ -1533,7 +1565,8 @@ class Compositor:
         screen_region = self.size.region
         self._dirty_regions.clear()
         crop = screen_region
-        chops = self._render_chops(crop, lambda y: True)
+        chops = self._render_chops(crop, lambda y: True,
+                                  widgets=self.visible_widgets, cuts=self.cuts)
         render_strips: list[Iterable[Strip]]
         if simplify:
             # Simplify is done when exporting to SVG
@@ -1562,7 +1595,8 @@ class Compositor:
         crop = Region.from_union(update_regions)
         spans = list(self._regions_to_spans(update_regions))
         is_rendered_line = {y for y, _, _ in spans}.__contains__
-        chops = self._render_chops(crop, is_rendered_line)
+        chops = self._render_chops(crop, is_rendered_line,
+                                  widgets=self.visible_widgets, cuts=self.cuts)
         chop_ends = [cut_set[1:] for cut_set in self.cuts]
         return ChopsUpdate(chops, spans, chop_ends)
 
@@ -1577,14 +1611,38 @@ class Compositor:
         """
         if size is None:
             size = self.size
-        chops = self._render_chops(size.region, lambda y: True)
+        chops = self._render_chops(size.region, lambda y: True,
+                                  widgets=self.visible_widgets, cuts=self.cuts)
         render_strips = [Strip.join(chop.values()) for chop in chops[: size.height]]
         return render_strips
+
+    def render_subtree_strips(self, root: Widget) -> tuple[Size, list[Strip]]:
+        """Paint a complete native body, not its current screen exposure.
+
+        The existing intrinsic arrangement owns every descendant and its clip
+        declarations. Reproject that resource into the complete body's bounds,
+        then use the same native line/chop rendering as ordinary screen paint.
+        No replacement scene or other compositor or widget is created.
+        Missing, placed or stale resources retain their original live custody.
+        """
+        # Commit any existing invalidated geometry through its original owner
+        # before selecting the resource; a geometry query can replace it.
+        _ = root.region
+        resource = self._subtree_geometry.get(root)
+        if resource is None or not resource.matches(resource.key.current(root)):
+            raise errors.NoWidget("The subtree has no current intrinsic arrangement")
+        size, geometry = resource.paint_geometry(root._render_widget)
+        widgets = self._paint_regions(geometry, size.region)
+        cuts = self._cuts_for_regions(size, widgets)
+        chops = self._render_chops(size.region, lambda y: True,
+                                  widgets=widgets, cuts=cuts)
+        return size, [Strip.join(chop.values()) for chop in chops]
 
     def _render_chops(
         self,
         crop: Region,
         is_rendered_line: Callable[[int], bool],
+        *, widgets: Mapping[Widget, tuple[Region, Region]], cuts: list[list[int]],
     ) -> Sequence[Mapping[int, Strip]]:
         """Render update 'chops'.
 
@@ -1595,7 +1653,6 @@ class Compositor:
         Returns:
             Chops structure.
         """
-        cuts = self.cuts
         fromkeys = cast("Callable[[list[int]], dict[int, Strip | None]]", dict.fromkeys)
         chops: list[dict[int, Strip | None]]
         chops = [fromkeys(cut_set[:-1]) for cut_set in cuts]
@@ -1640,7 +1697,7 @@ class Compositor:
         cut_strips: Iterable[Strip]
 
         # Go through all the renders in reverse order and fill buckets with no render
-        renders = self._get_renders(crop, render_regions)
+        renders = self._get_renders(crop, render_regions, widgets=widgets)
         intersection = Region.intersection
 
         for region, clip, strips in renders:
