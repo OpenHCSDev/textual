@@ -20,3 +20,7 @@ Carry all unfinished [original native scope](../intrinsic-placement-continuation
 Trace existing native arrange_widget/replace_rules callers and body composition/style invalidation before changing their shared ancestor algorithm. Search all declarations/implementations/consumers and distinguish original source facts from legitimately retained render resources. Reuse existing owner families first; no duplicate classes/wrappers/registries. Delete replaced independent decisions and every caller in the same change. Patterns IDEN-1/IMPL-13/TIME-9 guide the receipt, not a count-only class split.
 
 Source reasoning and coherent nominal implementation FIRST, batched native sanity and affected installed real pixels/profile LAST. No new unchanged baseline capture. Existing pending-callback native check failure is preserved with identical old-baseline counterevidence; it is not suppressed. Sch source/compaction and Arendt runtime/bus ownership remain separate. Companion Toad integration is Heisenberg-owned; coordinate exact crossing methods before writes.
+
+## Implemented native ordering checkpoint
+
+NodeList owns same-parent reorder without false removal/reacquisition, and reports actual sorting changes to DOMNode; Widget/DOMNode inherit layout admission. See node-order-custody.md and node-order-native-sanity.json. Whole performance scope above remains active; installed changed-pair qualification is outstanding.
