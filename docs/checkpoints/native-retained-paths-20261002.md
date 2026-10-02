@@ -14,10 +14,9 @@ algorithm to _arrange_root. Original DockArrangeResult and geometry-cache
 consumers continue using the same retained_paths set. Complete subtree capture
 uses visible_only=False and retains its original geometry lifetime.
 
-Existing source/consumer analysis first; implementation next. This source
-checkpoint is not installed qualification or a speed claim. No new recording,
-provider, environment or test run is authorized in this source-only window.
-Heisenberg owns the eventual changed joined workflow.
+Existing source/consumer analysis preceded implementation. Heisenberg owns the
+joined installed workflow. The recorded 05 run below qualifies a useful subset
+of that workflow, without a speed or whole-workflow claim.
 
 ## Source checkpoint
 
@@ -34,7 +33,7 @@ connected original member. A path that reaches neither is not admitted. No
 complete ancestor-prefix traversal is repeated for targets sharing a path.
 The existing transaction-local set remains the only resource; no cross-frame
 state is retained. No checks/capture were run in this source-only window.
-Changed installed qualification and any performance attribution remain pending.
+This was the initial source checkpoint; subsequent installed evidence is below.
 
 ## Complete resource admission closes the body family
 
@@ -63,6 +62,42 @@ All use the original bounded compositor resource; no caller/schema migration is
 needed. Source maps 249/249 native modules and the sole complete-arrangement
 consumer. Existing selection/disposal/size hooks remain unchanged.
 
-Full body/resource and installed motion validation comes once at the END of the
-combined 29/331 source batch, after the public SQLite failure is resolved by its
-owner. No checks or capture accompanied this implementation checkpoint.
+No checks or capture accompanied that implementation checkpoint. Existing
+affected native sanity later passed 17 checks; those checks were not repeated.
+
+## Scoped installed qualification: combined 29/331, run 05
+
+The installed pair used Textual `bf58038114017e266e78761744e6a7868c1006de`,
+Toad `7e529b33dfb8582483cbf49e668f90cd5330d69d`,
+Core `cd150be078c07b9f4b2d1af83e4cd28f1f584597`, native `00c2`,
+and ACP SDK 0.12.1. This is candidate evidence, not verification of the current
+default, which still uses Text28.
+
+Original receipts:
+
+- `/home/ts/wt/toad-viewport-raster-cpu-continuation-20261001/docs/checkpoints/restore-retirement331-installed05-scoped.json`
+- `/home/ts/.cache/agent-scratch/foreground331-retirement-joined-native29-20261002-05/capture/receipt.json`
+- `/home/ts/wt/toad-viewport-raster-cpu-continuation-20261001/.artifacts/staging-restore-retirement331-native29-20261002/source-proof.json`
+
+Saved-history startup, all seven input-focused paging checks, held Up/Down,
+reversal, End and stationary readability were demonstrated. A/B/A retained
+the same eleven prepared body identities, draft and reader position. Moving
+frames at 31–32, 62–63 and 121.6–122.0 seconds remained readable but advanced
+in discrete steps, with repeated positions between advances.
+
+The original recording did NOT complete: its receipt reports an interaction
+budget timeout. Forty-three contact-sheet encodes consumed 158.55 seconds in
+the observer. The existing ReviewTiming owner was corrected separately; no
+product source changed after the recorded Toad head. The failure is retained,
+not converted into a whole-journey PASS. Undo after Ctrl-Z, the final export,
+normal application exit, busy public workload, smoothness/144Hz and matched
+CPU or pixel latency are NOT qualified.
+
+All owned recording clients closed, no owned recorder processes remained,
+cleanup reported no errors, settings were unchanged and no native input rows
+were created. This qualifies shipping the retained-resource/readable-scroll
+checkpoint. Broader performance and workflow work remains active.
+
+Production change against merged Text28: one file, 17 added lines and 4 deleted.
+The transaction-local retained path algorithm and existing subtree resource
+remain the only owners; no additional geometry map or semantic state was added.
