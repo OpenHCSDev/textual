@@ -74,7 +74,9 @@ async def test_full_reflow_replaces_invalidated_scroll_map():
     async with app.run_test() as pilot:
         await pilot.pause()
         compositor = app.screen._compositor
-        compositor.reflow_visible(app.screen, app.screen.size)
+        compositor.reflow_visible(
+            app.screen, app.screen.size, retain_geometry=app.screen._layout_geometry_targets(),
+        )
         assert compositor._full_map_invalidated
         compositor.reflow(app.screen, app.screen.size)
         with patch.object(compositor, "_arrange_root", wraps=compositor._arrange_root) as arrange:
@@ -105,7 +107,9 @@ async def test_layout_geometry_reads_do_not_recursively_rebuild_scene():
         compositor = app.screen._compositor
         # Scrolling invalidates the full map; a later width change needs one
         # full arrangement, not a second one from measurement's geometry read.
-        compositor.reflow_visible(app.screen, app.screen.size)
+        compositor.reflow_visible(
+            app.screen, app.screen.size, retain_geometry=app.screen._layout_geometry_targets(),
+        )
         assert compositor._full_map_invalidated
         with patch.object(compositor, "_arrange_root", wraps=compositor._arrange_root) as arrange:
             compositor.reflow(app.screen, Size(45, 20))

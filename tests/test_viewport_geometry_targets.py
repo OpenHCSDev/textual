@@ -38,10 +38,14 @@ async def test_offscreen_targets_match_full_geometry_without_full_tree_traversal
             history.scroll_to(y=scroll, immediate=True, animate=False)
             screen.refresh(layout=True)
             await pilot.pause()
-            # Explicitly request the targeted viewport transaction: a later
-            # scroll-only pass legitimately keeps only its current viewport.
+            # Both layout and scrolling retain the original declared boxes.
             screen._refresh_layout(app.size)
             compositor = screen._compositor
+            # Scrolling consumes the same original target declaration. Its
+            # fast path must not discard the offscreen box just established.
+            with patch.object(compositor, "reflow_visible", wraps=compositor.reflow_visible) as scroll_reflow:
+                screen._refresh_layout(app.size, scroll=True)
+                assert scroll_reflow.call_count == 1
             assert target in compositor._visible_map
             assert screen.query_one("#row-50") not in compositor._visible_map
             assert len(compositor._visible_map) < 80
@@ -67,6 +71,7 @@ async def test_foreign_and_removed_targets_do_not_enter_the_scene():
         foreign = Static("foreign")
         screen.targets = (target, foreign)
         screen._refresh_layout(app.size)
+        screen._refresh_layout(app.size, scroll=True)
         assert target not in screen._compositor._visible_map
         assert foreign not in screen._compositor._visible_map
         assert not screen._compositor.can_render_subtree(target)
