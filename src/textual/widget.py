@@ -4914,6 +4914,14 @@ class Widget(DOMNode):
     async def broker_event(self, event_name: str, event: events.Event) -> bool:
         return await self.app._broker_event(event_name, event, default_namespace=self)
 
+    async def prepare_input(self, event: events.InputEvent) -> None:
+        """Prepare native resources before the app commits an input target.
+
+        Lazy presentation owners may materialize their existing children and
+        await layout here. The app then resolves the original event against
+        that geometry; widget mouse handlers run after target selection.
+        """
+
     def notify_style_update(self) -> None:
         self._rich_style_cache.clear()
         self._visual_style_cache.clear()
