@@ -1,5 +1,5 @@
 {
-  "qualification": "SOURCE batch PASS; changed installed journey remains Heisenberg-owned, notReady",
+  "qualification": "SCOPED_READY: source batch and joined installed capture/lifecycle; full performance remains open",
   "textual_source": "2e3541265bf3eeab4c128dd22a4d0aacf13f6f81",
   "production_delta": {
     "files": 1,
@@ -91,10 +91,29 @@
     }
   ],
   "limits": [
-    "Real native App and original Toad/body/source/private protocol; explicit source paths using existing installed dependency interpreter. Not changed installed qualification.",
+    "Source checks plus one joined normal installed public saved-history journey; source run metrics remain distinct.",
     "No new environment/provider/public owner restart, no additional physical recording by this contributor.",
     "No source-time metric is a physical latency, CPU attribution or overall performance claim.",
     "Existing4native checks unchanged, not rerun after fixture/Toad producer closure.",
-    "One joined changed installed saved UI recording/profile remains integration owner Heisenberg."
-  ]
+    "Original joined recording complete, observer assessment failure preserved; no recapture or repeated checks."
+  ],
+  "installed": {
+    "recording": "/home/ts/.cache/agent-scratch/retirement325-published27-public-20261002-01/capture",
+    "paired_toad_receipt_head": "4c7dcfb4",
+    "textual": "2e3541265bf3eeab4c128dd22a4d0aacf13f6f81",
+    "toad": "e6ac798e7d4e57065c241430c17ec01728f3b312",
+    "duration_seconds": 119.43070660199737,
+    "warm_checks_passed": 16,
+    "runtime_unchanged": true,
+    "original_owner_unchanged": true,
+    "cleanup_errors": [],
+    "remaining_owned_pids": [],
+    "physical_read_review": [
+      "phase-a-return.png",
+      "phase-idle-done.png"
+    ],
+    "raw_completed": false,
+    "raw_failure": "Missing scroll-travel.jsonl observer; full assessment unavailable",
+    "scope": "Capture/lifecycle and retained warm resources; not FPS/smoothness/full CPU goal"
+  }
 }
