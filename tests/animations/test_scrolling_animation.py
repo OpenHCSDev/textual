@@ -84,13 +84,14 @@ async def test_scroll_replacement_preserves_current_position_and_other_axis() ->
 
         # A deferred operation must not finish the previous destination while
         # it is waiting for the screen's existing after-refresh delivery.
-        window.scroll_to(y=80, duration=10, easing="linear")
+        destination = min(80, window.max_scroll_y)
+        window.scroll_to(y=destination, duration=10, easing="linear")
         assert window.scroll_y == position
         await pilot.pause()
         curve = animator._animations[(id(window), "scroll_y")]
         assert window.scroll_y == position
         assert curve.start_value == position
-        assert curve.end_value == 80
+        assert curve.end_value == destination
 
         # Reversal to the current position ends the old curve instead of
         # silently leaving it to run toward a destination no longer requested.
