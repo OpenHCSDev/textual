@@ -89,10 +89,10 @@ class SubtreeGeometryKey(NamedTuple):
                    layer_order, clip, visible, dock_gutter, screen_size,
                    visible_only, widget.scroll_offset, inherited_layers)
 
-    def current(self, widget: Widget) -> SubtreeGeometryKey:
+    def current(self, widget: Widget, region: Region) -> SubtreeGeometryKey:
         """Rebind this arrangement's source without manufacturing another scene."""
         return self.from_widget(
-            widget, self.virtual_region, widget.region, self.order,
+            widget, self.virtual_region, region, self.order,
             self.layer_order, self.clip, self.visible, self.dock_gutter,
             self.screen_size, self.visible_only, self.inherited_layers,
         )
@@ -240,9 +240,9 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
     def references_retired(self, owner: Widget, retired: set[Widget]) -> bool:
         return not retired.isdisjoint((owner, *self.geometry, *self.widgets, *self.invisible_widgets))
 
-    def paint_geometry(self, root: Widget) -> tuple[Size, CompositorMap]:
-        """Only an intrinsic complete arrangement can paint outside its scene."""
-        raise errors.NoWidget("The subtree has no complete intrinsic paint resource")
+    def paint_resource(self) -> IntrinsicSubtreeGeometry | None:
+        """A placed scene has no complete body paint resource to retain."""
+        return None
 
 
 @dataclass(frozen=True)
@@ -283,6 +283,9 @@ class IntrinsicSubtreeGeometry(SubtreeGeometry[SubtreeMapGeometry]):
                      clip: SceneClip, clips: dict[Widget, SceneClip], root: Widget) -> None:
         for node, entry in self.geometry.items():
             geometry[node], clips[node] = entry.project(self.key, key, clip, root=node is root)
+
+    def paint_resource(self) -> IntrinsicSubtreeGeometry:
+        return self
 
     def paint_geometry(self, root: Widget) -> tuple[Size, CompositorMap]:
         """Use the original untruncated clips under the complete body's bounds."""
@@ -1625,11 +1628,8 @@ class Compositor:
         No replacement scene or other compositor or widget is created.
         Missing, placed or stale resources retain their original live custody.
         """
-        # Commit any existing invalidated geometry through its original owner
-        # before selecting the resource; a geometry query can replace it.
-        _ = root.region
-        resource = self._subtree_geometry.get(root)
-        if resource is None or not resource.matches(resource.key.current(root)):
+        resource = self._renderable_subtree(root)
+        if resource is None:
             raise errors.NoWidget("The subtree has no current intrinsic arrangement")
         size, geometry = resource.paint_geometry(root._render_widget)
         widgets = self._paint_regions(geometry, size.region)
@@ -1637,6 +1637,19 @@ class Compositor:
         chops = self._render_chops(size.region, lambda y: True,
                                   widgets=widgets, cuts=cuts)
         return size, [Strip.join(chop.values()) for chop in chops]
+
+    def _renderable_subtree(self, root: Widget) -> IntrinsicSubtreeGeometry | None:
+        """Select the original valid paint resource without materializing it."""
+        # The original geometry owner may replace its resource during this query.
+        region = root.region
+        resource = self._subtree_geometry.get(root)
+        if resource is None or not resource.matches(resource.key.current(root, region)):
+            return None
+        return resource.paint_resource()
+
+    def can_render_subtree(self, root: Widget) -> bool:
+        """Whether retirement can retain a complete native body image now."""
+        return self._renderable_subtree(root) is not None
 
     def _render_chops(
         self,
