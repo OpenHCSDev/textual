@@ -71,3 +71,42 @@ without changing the product clamp. The final25-check batch passes.
 
 Installed saved-history motion/profile remains the final qualification boundary.
 No smoothness or CPU result is supplied by these source/native checks.
+
+## Scoped installed qualification
+
+Ready for scoped review, not whole performance completion. Installed production
+d052eb133 was verified byte for byte with mergedToad342 source (Toad34402e561),
+Core7dd5c14c, SDK0.12.1 and native9f12. Normal69 installation reused the existing
+owned holder; no new environment/native build/public installation. Full qualified
+Text30/31 ancestry is merged normally into this actual-main-based branch.
+
+Actual public original nra/peer journey recorded124.067s. Original recorder
+793921 and UI793985 closed with cleanupempty; original nra701741/start44956949
+remained identical/alive. Sixteen warm checks and seven input paging checks
+passed, including draft/Undo/reader and22 ready body IDs retained across A/B/A.
+The original receipt remains completed=false: initial before-state/screen exports
+were pending20s, while later required state exports through Undo/after completed.
+Transferred terminal custody does not establish a normal UI exit returncode.
+
+Viewed48 consecutive actual held-PageUp frames36.7318–37.5318 DURING recorder/UI
+lifetime. History/chrome stayed readable, with repeated positions then discrete
+advances: no smoothness acceptance. A-return body was readable after the run.
+Original writer trace1055 flushes/unmatched0: exact key windows Up median17.15/
+p9548.43ms, Down16.94/37.78ms, reverse16.39/28.84ms. Prior342 Up19.62/130.07
+and reverse15.44/61.61ms used different resource admissions/load; this is an
+observed comparison, not a causal speed claim. Writer completion is not changed
+pixels/terminal FPS/input-to-paint. Main marker CPU Up79.63%,Down62.24%,Endidle
+21.28%; marker bounds include observer exports.1339GIL samples/zero reported
+errors; approximate profile/video alignment±0.0696s.
+
+Last10s mid-history and End idle: zero viewport request/admission/materialization/
+retirement/page-extension/scroll; sidebar10publications each, End20zero geometry
+relocations. Full motion/foreground CPU/144Hz and original whole scope stay active.
+
+Exact source/evidence: Toad344 docs/checkpoints/native-animation32-installed-scoped.json
+at11dd6e91. Original raw capture:
+/home/ts/.cache/agent-scratch/scroll-animation32-main-closure-public-20261002-01/capture.
+Source owner output confirms one Animation.stop algorithm, SimpleAnimation and
+ScalarAnimation finish hooks, no concrete force-stop dispatch. The before/after
+NRA source evidence is retained in .artifacts/scroll-animation32-source; AST
+attribute calls alone do not prove runtime resolution. No unchanged rerun.
