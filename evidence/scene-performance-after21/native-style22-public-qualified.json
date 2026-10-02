@@ -438,5 +438,27 @@
       "deleted": 2
     }
   },
-  "production_nonwhitespace_change": "46added/5deleted across3existing files; replaced per-edit damage fanout with original-owner batch, property decisions/descriptors remain canonical"
+  "production_nonwhitespace_change": "46added/5deleted across3existing files; replaced per-edit damage fanout with original-owner batch, property decisions/descriptors remain canonical",
+  "visual_qualification": {
+    "original_assessment": "unreviewed",
+    "original_review_timing": "deferred",
+    "during_run_visual_requirement_met": false,
+    "actual_app_delivery_trace_available": false,
+    "post_run_consecutive_review": {
+      "down_body_hold_ms": 183.3,
+      "down_video_seconds": [
+        43.2833,
+        43.4667
+      ],
+      "down_native_page_keys": 2,
+      "reverse_body_hold_ms": 133.3,
+      "reverse_video_seconds": [
+        62.7167,
+        62.85
+      ],
+      "reverse_native_page_keys": 5,
+      "interpretation": "Pixel holds overlap native keys and page/layout work; profile alignment \u00b169ms. Not a proven causal stack duration or full smoothness qualification. Initial 1s phase holds preceded keys during export. Stationary zero motion is legitimate."
+    },
+    "full_visual_performance_accepted": false
+  }
 }
