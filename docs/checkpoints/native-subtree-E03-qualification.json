@@ -27,5 +27,9 @@
   },
   "remaining_owned_pids": [],
   "cleanup_errors": [],
-  "owner_review": "Heisenberg: idle body loop settled and paint retention engaged; fast scrolling not accepted"
+  "owner_review": "Heisenberg: idle body loop settled and paint retention engaged; fast scrolling not accepted",
+  "owner_qualified_receipt": "/home/ts/wt/toad-viewport-raster-cpu-continuation-20261001/evidence/retained-body-E/public03-feedback-qualified.json",
+  "owner_qualified_receipt_sha256": "5377907cf1d647a870e1dc53204f0be9029583f23ca9b3236381945a6ecac92e",
+  "owner_qualified_source_head": "139744cfd7554901d445cad3638c47c42d3456f2",
+  "timing_boundary": "Live-sheet 82\u201383 labels differ from finalized video timestamps; no exact timed-motion claim."
 }
