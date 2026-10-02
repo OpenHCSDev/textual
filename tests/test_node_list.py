@@ -1,5 +1,6 @@
 import gc
 from weakref import ref
+from unittest.mock import patch
 
 import pytest
 
@@ -240,7 +241,18 @@ async def test_native_cardinality_follows_custody_not_style_or_virtual_parent():
         original_count = app.screen.descendant_count
         branch.display = False
         branch.styles.visibility = "hidden"
-        left.move_child(branch, after=left.children[-1])
+        generation = left._nodes._updates
+        with patch.object(left, "_child_nodes_removed", wraps=left._child_nodes_removed) as release:
+            left.move_child(branch, after=left.children[-1])
+            release.assert_not_called()
+        assert left._nodes._updates == generation + 1
+        generation = left._nodes._updates
+        positions = {node: index for index, node in enumerate(left.children)}
+        with patch.object(left, "refresh", wraps=left.refresh) as refresh:
+            left.move_child(branch, after=left.children[0])
+            left.sort_children(key=positions.__getitem__)
+            refresh.assert_not_called()
+        assert left._nodes._updates == generation
         await pilot.pause()
         assert app.screen.descendant_count == original_count
         check()

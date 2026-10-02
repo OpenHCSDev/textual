@@ -106,19 +106,32 @@ class NodeList(Sequence["Widget"]):
         *,
         key: Callable[[Widget], SupportsRichComparison] | None = None,
         reverse: bool = False,
-    ):
+    ) -> bool:
         """Sort nodes.
 
         Args:
             key: A key function which accepts a widget, or `None` for no key function.
             reverse: Sort in descending order.
         """
-        if key is None:
-            self._nodes.sort(key=attrgetter("sort_order"), reverse=reverse)
-        else:
-            self._nodes.sort(key=key, reverse=reverse)
-
+        ordered = sorted(self._nodes, key=attrgetter("sort_order") if key is None else key,
+                         reverse=reverse)
+        if all(before is after for before, after in zip(self._nodes, ordered)):
+            return False
+        self._nodes[:] = ordered
         self.updated()
+        return True
+
+    def _move(self, child: Widget, target: Widget, *, before: bool) -> bool:
+        """Reorder native custody without releasing or reacquiring a child."""
+        source = self._nodes.index(child)
+        destination = self._nodes.index(target) + (not before)
+        if source < destination:
+            destination -= 1
+        if source == destination:
+            return False
+        self._nodes.insert(destination, self._nodes.pop(source))
+        self.updated()
+        return True
 
     def index(self, widget: Any, start: int = 0, stop: int = sys.maxsize) -> int:
         """Return the index of the given widget.
