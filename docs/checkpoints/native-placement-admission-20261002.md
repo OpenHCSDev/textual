@@ -72,3 +72,20 @@ whole-list pass from ordinary culled scroll admission; it does not establish
 absence of other native layout/paint work or measured CPU/smoothness gains.
 Heisenberg owns the next changed installed saved-UI video/profile with his Toad
 follow-up; no independent recording/provider or repeated Text27 qualification.
+
+## Close retained-target rank reconstruction
+
+The first source checkpoint29fc removed unconditional ranking, but its
+retained-missing branch still reconstructed scratch ordinals across the whole
+source list. The integration owner identified that remaining path before the
+installed gate. It is superseded by one canonical indexed placements sequence
+on the existing DockArrangeResult, constructed once by from_placements at the
+original _arrange producer. No raw/indexed companion sequence is retained.
+
+Full, visible, spatial and retained-target consumers now use that same original
+indexed sequence. iter_placements and its repeated construction are deleted.
+Retained selection still scans original membership when an offscreen target is
+missing, but never rebuilds rank. All production constructors and native test
+readers of the changed field migrate in this coherent change; no scalar alias,
+old-format reader or extra cache. The initial6-check log remains historical;
+this changed complete source batch receives its final affected checks next.

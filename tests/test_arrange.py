@@ -15,8 +15,8 @@ def test_placement_admission_keeps_original_rank_and_retained_targets():
     second = WidgetPlacement(Region(0, 40, 10, 1), NULL_OFFSET, Spacing(), repeated)
     pinned = WidgetPlacement(Region(0, 200, 10, 1), NULL_OFFSET, Spacing(), fixed,
                              order=TOP_Z, fixed=True)
-    result = DockArrangeResult([first, older, second, first, pinned],
-                               {repeated, offscreen, fixed}, Spacing())
+    result = DockArrangeResult.from_placements([first, older, second, first, pinned],
+                                              {repeated, offscreen, fixed}, Spacing())
     # Spatial bucket duplication and equal source placements remain deduplicated;
     # a fixed placement still precedes the queried scrolling placements.
     assert result.get_visible_placements(Region(0, 0, 10, 1)) == [(4, pinned), (0, first)]
@@ -26,6 +26,7 @@ def test_placement_admission_keeps_original_rank_and_retained_targets():
     expected = [(0, first), (1, older), (0, second), (0, first), (4, pinned)]
     assert result.get_visible_placements(Region(0, 0, 10, 1), retain=(offscreen,)) == expected
     assert result.get_visible_placements(Region(0, 0, 10, 300)) == expected
+    assert result.get_visible_placements(Region(0, 0, 10, 300)) is result.placements
     assert result.spatial_map is original_resource
 
 
@@ -49,7 +50,7 @@ async def test_arrange_dock_top():
 
     result = arrange(container, [child, header], Size(80, 24), Size(80, 24))
 
-    assert result.placements == [
+    assert [placement for _, placement in result.placements] == [
         WidgetPlacement(
             Region(0, 0, 80, 1), NULL_OFFSET, Spacing(), header, order=TOP_Z, fixed=True
         ),
@@ -71,7 +72,7 @@ async def test_arrange_dock_left():
     header.styles.width = "10"
 
     result = arrange(container, [child, header], Size(80, 24), Size(80, 24))
-    assert result.placements == [
+    assert [placement for _, placement in result.placements] == [
         WidgetPlacement(
             Region(0, 0, 10, 24),
             NULL_OFFSET,
@@ -98,7 +99,7 @@ async def test_arrange_dock_right():
     header.styles.width = "10"
 
     result = arrange(container, [child, header], Size(80, 24), Size(80, 24))
-    assert result.placements == [
+    assert [placement for _, placement in result.placements] == [
         WidgetPlacement(
             Region(70, 0, 10, 24),
             NULL_OFFSET,
@@ -125,7 +126,7 @@ async def test_arrange_dock_bottom():
     header.styles.height = "1"
 
     result = arrange(container, [child, header], Size(80, 24), Size(80, 24))
-    assert result.placements == [
+    assert [placement for _, placement in result.placements] == [
         WidgetPlacement(
             Region(0, 23, 80, 1),
             NULL_OFFSET,

@@ -962,7 +962,7 @@ class Compositor:
                             retain=retained_paths,
                         )
                     else:
-                        placements = list(arrange_result.iter_placements())
+                        placements = arrange_result.placements
                     total_region = total_region.union(arrange_result.total_region)
 
                     # An offset added to all placements

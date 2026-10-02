@@ -24,8 +24,8 @@ ArrangeResult: TypeAlias = "list[WidgetPlacement]"
 class DockArrangeResult:
     """Result of [Layout.arrange][textual.layout.Layout.arrange]."""
 
-    placements: list[WidgetPlacement]
-    """A `WidgetPlacement` for every widget to describe its location on screen."""
+    placements: list[tuple[int, WidgetPlacement]]
+    """Original first-widget ordinals and their placements, in source order."""
     widgets: set[Widget]
     """A set of widgets in the arrangement."""
     scroll_spacing: Spacing
@@ -33,6 +33,23 @@ class DockArrangeResult:
 
     _spatial_map: SpatialMap[tuple[int, WidgetPlacement]] | None = None
     """A Spatial map to query widget placements."""
+
+    @classmethod
+    def from_placements(
+        cls, placements: list[WidgetPlacement], widgets: set[Widget], scroll_spacing: Spacing,
+    ) -> DockArrangeResult:
+        """Bind rank once when the original arrangement is constructed.
+
+        Duplicate placements for one widget share its first source ordinal.
+        Only this indexed sequence survives; the construction dictionary and
+        layout producer's unindexed list are not companion retained resources.
+        """
+        ordinals: dict[Widget, int] = {}
+        return cls(
+            [(ordinals.setdefault(placement.widget, index), placement)
+             for index, placement in enumerate(placements)],
+            widgets, scroll_spacing,
+        )
 
     @property
     def spatial_map(self) -> SpatialMap[tuple[int, WidgetPlacement]]:
@@ -47,7 +64,7 @@ class DockArrangeResult:
                     placement.overlay,
                     (ordinal, placement),
                 )
-                for ordinal, placement in self.iter_placements()
+                for ordinal, placement in self.placements
             )
 
         return self._spatial_map
@@ -61,17 +78,6 @@ class DockArrangeResult:
         """
         _top, right, bottom, _left = self.scroll_spacing
         return self.spatial_map.total_region.grow((0, right, bottom, 0))
-
-    def iter_placements(self) -> Iterable[tuple[int, WidgetPlacement]]:
-        """Pair original placements with their widget's first source ordinal.
-
-        Duplicate placements for one widget share its original rank. This
-        construction is consumed by the existing spatial resource or a complete
-        arrangement; no companion ordinal map survives the iteration.
-        """
-        ordinals: dict[Widget, int] = {}
-        for index, placement in enumerate(self.placements):
-            yield ordinals.setdefault(placement.widget, index), placement
 
     def get_visible_placements(
         self, region: Region, *, retain: Iterable[Widget] = (),
@@ -87,7 +93,7 @@ class DockArrangeResult:
         """
         if self.total_region in region:
             # Short circuit for when we want all the placements
-            return list(self.iter_placements())
+            return self.placements
         visible_placements = self.spatial_map.get_values_in_region(region)
         overlaps = region.overlaps
         culled_placements = [
@@ -101,7 +107,7 @@ class DockArrangeResult:
             if retained_widgets - visible_widgets:
                 return [
                     (ordinal, placement)
-                    for ordinal, placement in self.iter_placements()
+                    for ordinal, placement in self.placements
                     if placement.widget in visible_widgets or placement.widget in retained_widgets
                 ]
         return culled_placements
