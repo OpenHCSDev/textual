@@ -74,13 +74,7 @@ async def test_foreign_and_removed_targets_do_not_enter_the_scene():
         screen._refresh_layout(app.size, scroll=True)
         assert target not in screen._compositor._visible_map
         assert foreign not in screen._compositor._visible_map
-        for body in (target, foreign):
-            try:
-                screen._compositor.render_subtree_strips(body)
-            except errors.NoWidget:
-                pass
-            else:
-                raise AssertionError("An unmounted body acquired native capture geometry")
+        assert not tuple(screen._compositor.published_geometry((target, foreign)))
 
 
 async def test_capture_requires_publication_while_position_queries_keep_lazy_layout():
@@ -95,12 +89,7 @@ async def test_capture_requires_publication_while_position_queries_keep_lazy_lay
         assert body.is_mounted and body not in compositor._visible_map
         published = compositor._full_map, compositor._visible_map
         with patch.object(compositor, "_arrange_root", side_effect=AssertionError("Capture manufactured a full scene")):
-            try:
-                compositor.render_subtree_strips(body)
-            except errors.NoWidget:
-                pass
-            else:
-                raise AssertionError("An unpublished body acquired native capture geometry")
+            assert not tuple(compositor.published_geometry((body,)))
         assert compositor._full_map is published[0]
         assert compositor._visible_map is published[1]
         # Position queries still acquire the ordinary complete layout.
@@ -119,7 +108,9 @@ async def test_body_capture_descendants_use_original_arrangement_and_screen_coor
         screen.targets = (body,)
         screen._refresh_layout(app.size)
         compositor = screen._compositor
-        bounds = compositor.find_widget(body).region
+        published_body, placement = next(compositor.published_geometry((body,)))
+        assert published_body is body
+        bounds = placement.region
         assert row not in compositor._visible_map
         published = compositor._full_map, compositor._visible_map
         arrange = compositor._arrange_root
@@ -135,7 +126,7 @@ async def test_body_capture_descendants_use_original_arrangement_and_screen_coor
             return render_lines(crop)
 
         with patch.object(compositor, "_arrange_root", side_effect=arrange_body), patch.object(row, "render_lines", side_effect=render_row):
-            size, strips = compositor.render_subtree_strips(body)
+            size, strips = compositor.render_subtree_strips(body, placement)
         assert size == bounds.size
         assert len(strips) == size.height
         assert all(strip.cell_length == size.width for strip in strips)
@@ -152,6 +143,7 @@ async def test_body_capture_descendants_use_original_arrangement_and_screen_coor
         hidden.display = False
         await pilot.pause()
         screen._refresh_layout(app.size)
+        _, placement = next(compositor.published_geometry((body,)))
         published = compositor._full_map, compositor._visible_map
         scoped_misses = []
 
@@ -165,7 +157,7 @@ async def test_body_capture_descendants_use_original_arrangement_and_screen_coor
             return render_lines(crop)
 
         with patch.object(compositor, "_arrange_root", side_effect=arrange_body), patch.object(row, "render_lines", side_effect=render_with_hidden_query):
-            compositor.render_subtree_strips(body)
+            compositor.render_subtree_strips(body, placement)
         assert scoped_misses
         assert compositor._render_geometry is None
         assert compositor._full_map is published[0]
@@ -175,7 +167,7 @@ async def test_body_capture_descendants_use_original_arrangement_and_screen_coor
         # ordinary screen queries with their original publication.
         with patch.object(row, "render_lines", side_effect=ValueError("render failed")):
             try:
-                compositor.render_subtree_strips(body)
+                compositor.render_subtree_strips(body, placement)
             except ValueError as error:
                 assert str(error) == "render failed"
             else:

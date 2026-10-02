@@ -29,24 +29,30 @@ environment, provider operation, independent recording or unchanged gate.
 
 ## Working source checkpoint
 
-One production file,14 added/10 deleted lines. Existing Compositor._get_geometry
-selects the original scoped/current publication. find_widget owns the lazy
-full_map acquisition for ordinary position queries; scoped missing descendants
-retain NoWidget rather than escaping their body arrangement. Existing
-render_subtree_strips acquires the original root MapGeometry once and refuses
-unmounted/unpublished bodies. can_render_subtree and every native caller are
-deleted. There is no new map, flag, registry, type or renderer.
+One production file,40 added/19 deleted lines. Compositor's existing scene
+placement selection is factored once into _get_published_geometry. Ordinary
+position queries select their active body arrangement or that same scene, and
+find_widget alone acquires lazy full_map on an ordinary miss. Scoped missing
+capture descendants retain NoWidget rather than escaping their body arrangement.
 
-The sole Toad caller is MeasuredViewportBody.retire_native_body. Heisenberg owns
-its deletion and the existing BodyMeasurement/DocumentViewport capture cohort
-before asynchronous preparation/pruning, including original layout publication
-for newly mounted bodies. Until that paired source is coherent this checkpoint
-is NOT installed-ready; no tests or extra recording have been run for27.
+published_geometry(roots) yields the original mounted scene placements, not
+copied geometry or eligibility booleans. Current scene publication and a transient
+body rendering arrangement are distinct resources; the latter does not grant
+screen retirement custody. render_subtree_strips(root, root_geometry) requires
+the yielded original placement and consumes it synchronously without selecting
+or checking it again. can_render_subtree and its native callers are deleted.
+There is no old no-resource signature, compatibility alias, map, flag, registry,
+new type or rendering implementation.
 
-Existing native family checks are migrated for the removed method. The final
-batch addresses three concrete risks: unpublished capture must not manufacture
-a whole scene, ordinary position queries must retain lazy layout, and hidden
-capture descendants must not escape to the outer scene. Original complete-body
-coordinates, published-map identity and failed-renderer release remain covered.
-One joined changed saved-UI recording/profile follows the paired source batch;
-323/26 release is independent and frozen proof is preserved.
+Heisenberg owns the sole Toad consumer and original BodyMeasurement/DocumentViewport
+capture-before-await/prune cohort. Matching Toad325 source is e053de88. Native
+callers/tests now acquire the same original resource; no layer/membership/lazy
+query substitutes for capture admission. Source checks follow this coherent
+batch, with one changed installed saved-UI recording/profile owned by Heisenberg.
+323/26 release and frozen proofs remain independent.
+
+The final native batch addresses unpublished capture manufacturing a whole
+scene, ordinary position queries losing lazy layout, hidden capture descendants
+escaping their original arrangement, complete body coordinates, original map
+identity and failed-renderer resource release. Until the matching native/Toad
+batch and installed journey are checked, this checkpoint is NOT installed-ready.

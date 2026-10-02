@@ -1410,6 +1410,10 @@ class Compositor:
                 if placement is None:
                     raise errors.NoWidget("Widget is not in layout")
                 return placement
+        return self._get_published_geometry(widget)
+
+    def _get_published_geometry(self, widget: Widget) -> MapGeometry | None:
+        """Read the original scene placement without arranging or copying it."""
         if self.root is None:
             return None
         if not self._full_map_invalidated:
@@ -1641,20 +1645,33 @@ class Compositor:
         render_strips = [Strip.join(chop.values()) for chop in chops[: size.height]]
         return render_strips
 
-    def render_subtree_strips(self, root: Widget) -> tuple[Size, list[Strip]]:
-        """Paint a complete native body, not its current screen exposure.
+    def published_geometry(
+        self, roots: Iterable[Widget],
+    ) -> Iterator[tuple[Widget, MapGeometry]]:
+        """Borrow the roots' original current placements without arranging.
 
-        The original live widget tree supplies the complete arrangement through
-        this compositor's ordinary layout algorithm. Its bounded geometry cache
-        remains an optimization, not a condition for retaining body paint.
-        The transient complete arrangement uses the same line/chop renderer without
-        replacing any published screen map or constructing another compositor.
+        Unmounted or unpublished roots have no capture resource. Consume each
+        placement synchronously before asynchronous preparation or pruning can
+        change the scene; mounted custody alone does not establish layout.
         """
-        if not root.is_mounted:
-            raise errors.NoWidget("The subtree has no published native layout")
-        root_geometry = self._get_geometry(root)
-        if root_geometry is None:
-            raise errors.NoWidget("The subtree has no published native layout")
+        for root in roots:
+            if not root.is_mounted:
+                continue
+            geometry = self._get_published_geometry(root)
+            if geometry is not None:
+                yield root, geometry
+
+    def render_subtree_strips(
+        self, root: Widget, root_geometry: MapGeometry,
+    ) -> tuple[Size, list[Strip]]:
+        """Paint a body using its borrowed original published placement.
+
+        The caller acquires the placement from published_geometry and consumes
+        it before any await or DOM mutation. Capture never reacquires eligibility
+        or manufactures a scene to decide whether a body can be retired. The
+        same original arrangement/line/chop algorithm supplies complete rows
+        without replacing any published map or constructing another compositor.
+        """
         bounds = root_geometry.region
         geometry, _ = self._arrange_root(
             root, self.size, visible_only=False, root_geometry=root_geometry,
