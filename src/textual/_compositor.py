@@ -710,7 +710,9 @@ class Compositor:
             resized=resized_widgets,
         )
 
-    def reflow_visible(self, parent: Widget, size: Size) -> set[Widget]:
+    def reflow_visible(
+        self, parent: Widget, size: Size, *, retain_geometry: Iterable[Widget],
+    ) -> set[Widget]:
         """Reflow only the visible children.
 
         This is a fast-path for scrolling.
@@ -718,6 +720,7 @@ class Compositor:
         Args:
             parent: The root widget.
             size: Size of the area to be filled.
+            retain_geometry: Original transaction's required geometry targets.
 
         Returns:
             Set of widgets that were exposed by the scroll.
@@ -732,7 +735,9 @@ class Compositor:
 
         # Keep a copy of the old map because we're going to compare it with the update
         old_map = self._visible_map or {}
-        map, widgets = self._arrange_root(parent, size, visible_only=True)
+        map, widgets = self._arrange_root(
+            parent, size, visible_only=True, retain_geometry=retain_geometry,
+        )
 
         # Replace map and widgets
         self._visible_map = map
