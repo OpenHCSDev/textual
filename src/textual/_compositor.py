@@ -1198,15 +1198,7 @@ class Compositor:
         Returns:
             Offset of widget.
         """
-        try:
-            if self._visible_map is not None:
-                try:
-                    return self._visible_map[widget].region.offset
-                except KeyError:
-                    pass
-            return self.full_map[widget].region.offset
-        except KeyError:
-            raise errors.NoWidget("Widget is not in layout")
+        return self.find_widget(widget).region.offset
 
     def get_widget_at(self, x: int, y: int) -> tuple[Widget, Region]:
         """Get the widget under a given coordinate.
@@ -1377,11 +1369,14 @@ class Compositor:
         """
         if self._render_geometry is not None:
             root, geometry = self._render_geometry
-            if root in widget.ancestors_with_self:
-                placement = geometry.get(widget)
-                if placement is None:
-                    raise errors.NoWidget("Widget is not in layout")
+            # The original arrangement already admits its members, including
+            # cover and scrollbar resources. Only a missing query needs its
+            # ancestry to distinguish an omitted descendant from another scene.
+            placement = geometry.get(widget)
+            if placement is not None:
                 return placement
+            if root in widget.ancestors_with_self:
+                raise errors.NoWidget("Widget is not in layout")
         return self._get_published_geometry(widget)
 
     def _get_published_geometry(self, widget: Widget) -> MapGeometry | None:
