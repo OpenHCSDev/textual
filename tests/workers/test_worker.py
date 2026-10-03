@@ -166,6 +166,7 @@ async def test_get_worker() -> None:
 
     async def run_worker() -> Worker:
         worker = get_current_worker()
+        assert worker._task is asyncio.current_task()
         return worker
 
     class WorkerApp(App):
