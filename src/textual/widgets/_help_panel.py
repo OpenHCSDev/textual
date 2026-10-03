@@ -97,7 +97,7 @@ class HelpPanel(Widget):
         self.set_class(focused_widget is not None, "-show-help")
         if focused_widget is not None:
             help: str = ""
-            for node in focused_widget.ancestors_with_self:
+            for node in focused_widget.walk_ancestors(with_self=True):
                 if isinstance(node, Widget) and node.HELP:
                     help = node.HELP
                     break

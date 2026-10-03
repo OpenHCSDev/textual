@@ -1,5 +1,7 @@
 """Moving a retained presentation changes ancestry without restarting its lifetime."""
 
+import asyncio
+
 import pytest
 
 from textual.app import App
@@ -112,12 +114,21 @@ async def test_reparent_preserves_order_and_transfers_pending_frame_callbacks():
         marker = Static("after")
         await destination.mount(marker)
         received = []
-        previous._invoke_later(lambda: received.append(panel.screen), panel)
+        callback_completed = asyncio.Event()
+
+        def after_paint():
+            received.append(panel.screen)
+            callback_completed.set()
+
+        previous._invoke_later(after_paint, panel)
         panel.reparent(destination, before=marker)
         assert list(destination.children) == [panel, marker]
         assert all(sender is not panel for _, sender in previous._callbacks)
         assert any(sender is panel for _, sender in destination._callbacks)
         await pilot.pause()
+        # pause schedules the paint's call_next callbacks; it does not await
+        # them. Observe the original transferred callback, not loop idleness.
+        await callback_completed.wait()
         assert received == [destination]
 
 

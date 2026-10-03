@@ -461,7 +461,7 @@ class Tabs(Widget, can_focus=True):
                 raise self.TabError(
                     f"There is no tab with ID '{before}' to mount before"
                 )
-        elif isinstance(before, Tab) and self not in before.ancestors:
+        elif isinstance(before, Tab) and self not in before.walk_ancestors():
             raise self.TabError(
                 "Request to add a tab before a tab that isn't part of this tab collection"
             )
@@ -471,7 +471,7 @@ class Tabs(Widget, can_focus=True):
                 after = self.query_one(f"#tabs-list > #{after}", Tab)
             except NoMatches:
                 raise self.TabError(f"There is no tab with ID '{after}' to mount after")
-        elif isinstance(after, Tab) and self not in after.ancestors:
+        elif isinstance(after, Tab) and self not in after.walk_ancestors():
             raise self.TabError(
                 "Request to add a tab after a tab that isn't part of this tab collection"
             )

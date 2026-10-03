@@ -726,7 +726,7 @@ class Widget(DOMNode):
         maximized = self.screen.maximized
         if not maximized:
             return False
-        for node in self.ancestors_with_self:
+        for node in self.walk_ancestors(with_self=True):
             if maximized is node:
                 return True
         return False
@@ -771,9 +771,8 @@ class Widget(DOMNode):
         Returns:
             A common ancestor widgets.
         """
-        ancestors1 = widget1.ancestors
-        ancestors2 = set(widget2.ancestors)
-        for node in ancestors1:
+        ancestors2 = set(widget2.walk_ancestors())
+        for node in widget1.walk_ancestors():
             if node in ancestors2:
                 assert isinstance(node, Widget)
                 return node
@@ -1361,7 +1360,7 @@ class Widget(DOMNode):
 
         if style.startswith("."):
             style_name = style[1:]
-            for node in self.ancestors_with_self:
+            for node in self.walk_ancestors(with_self=True):
                 if not isinstance(node, Widget):
                     break
                 try:
@@ -2591,7 +2590,7 @@ class Widget(DOMNode):
     @property
     def container_scroll_offset(self) -> Offset:
         """The scroll offset the nearest container ancestor."""
-        for node in self.ancestors:
+        for node in self.walk_ancestors():
             if isinstance(node, Widget) and node.is_scrollable:
                 return node.scroll_offset
         return Offset()
@@ -2786,7 +2785,7 @@ class Widget(DOMNode):
     def is_scrolling(self) -> bool:
         """Is this widget currently scrolling?"""
         current_time = monotonic()
-        for node in self.ancestors:
+        for node in self.walk_ancestors():
             if not isinstance(node, Widget):
                 break
             if (
@@ -2816,7 +2815,7 @@ class Widget(DOMNode):
             Tuple of layer names.
         """
         layers: tuple[str, ...] = ("default",)
-        for node in self.ancestors_with_self:
+        for node in self.walk_ancestors(with_self=True):
             if not isinstance(node, Widget):
                 break
             if node.styles.has_rule("layers"):
@@ -2873,7 +2872,7 @@ class Widget(DOMNode):
             A widget which contains this widget.
         """
         container: Widget = self
-        for widget in self.ancestors:
+        for widget in self.walk_ancestors():
             if isinstance(widget, Widget) and widget.is_scrollable:
                 return widget
         return container
@@ -4322,7 +4321,7 @@ class Widget(DOMNode):
             if (
                 disabled
                 and screen.focused is not None
-                and self in screen.focused.ancestors_with_self
+                and self in screen.focused.walk_ancestors(with_self=True)
             ):
                 screen.focused.blur()
         except (ScreenStackError, NoActiveAppError, NoScreen):
@@ -4831,7 +4830,7 @@ class Widget(DOMNode):
                         screen.post_message(messages.Update(self))
                 if self._layout_required:
                     self._layout_required = False
-                    for ancestor in self.ancestors:
+                    for ancestor in self.walk_ancestors():
                         if not isinstance(ancestor, Widget):
                             break
                         ancestor._clear_arrangement_cache()

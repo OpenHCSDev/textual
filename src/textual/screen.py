@@ -601,7 +601,7 @@ class Screen(Generic[ScreenResultType], Widget):
             return
         widget = self if self.app.mouse_over is None else self.app.mouse_over
         pointer_shape = "default"
-        for node in widget.ancestors_with_self:
+        for node in widget.walk_ancestors(with_self=True):
             if isinstance(node, Widget):
                 if node.loading:
                     pointer_shape = "wait"
@@ -720,7 +720,7 @@ class Screen(Generic[ScreenResultType], Widget):
             # Clicking Textual system widgets should not focus anything
             return None
 
-        for node in widget.ancestors_with_self:
+        for node in widget.walk_ancestors(with_self=True):
             if isinstance(node, Widget) and node.focusable:
                 return node
         return None
@@ -799,7 +799,7 @@ class Screen(Generic[ScreenResultType], Widget):
         root_node = self.screen
 
         if (focused := self.focused) is not None:
-            for node in focused.ancestors_with_self:
+            for node in focused.walk_ancestors(with_self=True):
                 if node._trap_focus:
                     root_node = node
                     break
@@ -955,7 +955,7 @@ class Screen(Generic[ScreenResultType], Widget):
         if widget.allow_maximize:
             if container:
                 # If we want to maximize the container, look up the dom to find a suitable widget
-                for maximize_widget in widget.ancestors:
+                for maximize_widget in widget.walk_ancestors():
                     if not isinstance(maximize_widget, Widget):
                         break
                     if maximize_widget.allow_maximize:
@@ -1094,8 +1094,8 @@ class Screen(Generic[ScreenResultType], Widget):
             focused: The widget that was focused.
             blurred: The widget that was blurred.
         """
-        entered = set(focused.ancestors_with_self) if focused is not None else set()
-        exited = set(blurred.ancestors_with_self) if blurred is not None else set()
+        entered = set(focused.walk_ancestors(with_self=True)) if focused is not None else set()
+        exited = set(blurred.walk_ancestors(with_self=True)) if blurred is not None else set()
         self.app.stylesheet.update_focus_within(entered ^ exited)
 
     def set_focus(
@@ -1463,7 +1463,7 @@ class Screen(Generic[ScreenResultType], Widget):
         widget: DOMNode = message.widget
         if widget._pruning or widget._closed:
             return
-        for ancestor in message.widget.ancestors:
+        for ancestor in message.widget.walk_ancestors():
             if not isinstance(ancestor, Widget):
                 break
             if ancestor not in self._layout_widgets:
@@ -1717,7 +1717,7 @@ class Screen(Generic[ScreenResultType], Widget):
             pass
         else:
             tooltip_content: RenderableType | None = None
-            for node in widget.ancestors_with_self:
+            for node in widget.walk_ancestors(with_self=True):
                 if not isinstance(node, Widget):
                     break
                 if node.tooltip is not None:
@@ -1890,7 +1890,7 @@ class Screen(Generic[ScreenResultType], Widget):
 
         # We want to find any scrollable regions further up the DOM,
         # and apply auto scrolling if we are in a region at the top or bottom
-        for ancestor in select_widget.ancestors_with_self:
+        for ancestor in select_widget.walk_ancestors(with_self=True):
             if not isinstance(ancestor, Widget):
                 break
             if not ancestor.allow_vertical_scroll:

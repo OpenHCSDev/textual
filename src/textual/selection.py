@@ -315,9 +315,9 @@ class SelectState(NamedTuple):
         screen = start.screen
         if end.screen is not screen:
             return None
-        end_ancestors = set(end.ancestors_with_self)
+        end_ancestors = set(end.walk_ancestors(with_self=True))
         viewport = next(
-            (ancestor for ancestor in start.ancestors
+            (ancestor for ancestor in start.walk_ancestors()
              if isinstance(ancestor, Widget) and ancestor.is_scrollable
              and ancestor in end_ancestors
              and screen.size.region.contains_region(ancestor.content_region)),
@@ -344,7 +344,7 @@ class SelectState(NamedTuple):
         result = sorted(
             (widget for widget in visible
              if not widget.is_container and widget.allow_select
-             and root in widget.ancestors
+             and root in widget.walk_ancestors()
              and bounds.overlaps(widget.content_region)),
             key=attrgetter("_selection_order"),
         )

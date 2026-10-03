@@ -1007,7 +1007,7 @@ class Stylesheet:
         # the outer traversal; they do not start a second descendant walk.
         pending = [
             (root, frozenset()) for root in scope_names
-            if not any(ancestor in scope_names for ancestor in root.ancestors)
+            if not any(ancestor in scope_names for ancestor in root.walk_ancestors())
         ]
         affected = []
         visited: set[DOMNode] = set()
