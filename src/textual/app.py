@@ -3671,6 +3671,10 @@ class App(Generic[ReturnType], DOMNode):
                     self._register(widget, *widget._nodes, cache=cache)
         for widget in new_widgets:
             apply_stylesheet(widget, cache=cache)
+            # Initial styles precede Mount; constructor edits must not call
+            # subclass hooks on an incomplete widget. Registration publishes
+            # the completed style once before its message task starts.
+            widget.notify_style_update()
             widget._start_messages()
 
         if not self._running:

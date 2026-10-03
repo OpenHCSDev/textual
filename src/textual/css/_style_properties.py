@@ -113,8 +113,8 @@ class GenericProperty(Generic[PropertyGetType, PropertySetType]):
     def __set__(self, obj: StylesBase, value: PropertySetType | None) -> None:
         _rich_traceback_omit = True
         if value is None:
-            obj.clear_rule(self.name)
-            obj.refresh(layout=self.layout, children=self.refresh_children)
+            if obj.clear_rule(self.name):
+                obj.refresh(layout=self.layout, children=self.refresh_children)
             return
         new_value = self.validate_value(value)
         if obj.set_rule(self.name, new_value):
@@ -187,8 +187,8 @@ class ScalarProperty:
         """
         _rich_traceback_omit = True
         if value is None:
-            obj.clear_rule(self.name)
-            obj.refresh(layout=True)
+            if obj.clear_rule(self.name):
+                obj.refresh(layout=True)
             return
         if isinstance(value, (int, float)):
             new_value = Scalar(float(value), Unit.CELLS, Unit.WIDTH)
@@ -251,8 +251,8 @@ class ScalarListProperty:
         self, obj: StylesBase, value: str | Iterable[str | float] | None
     ) -> None:
         if value is None:
-            obj.clear_rule(self.name)
-            obj.refresh(layout=True, children=self.refresh_children)
+            if obj.clear_rule(self.name):
+                obj.refresh(layout=True, children=self.refresh_children)
             return
         parse_values: Iterable[str | float]
         if isinstance(value, str):

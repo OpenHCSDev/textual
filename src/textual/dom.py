@@ -1789,7 +1789,7 @@ class DOMNode(MessagePump):
             except DeclarationError as error:
                 raise DeclarationError(error.name, error.token, error.message) from None
             self._inline_styles.merge(new_styles)
-            self.refresh(layout=True)
+            self._inline_styles.refresh(layout=True)
 
         styles = self.styles
         with styles.batch_update():
@@ -1881,10 +1881,10 @@ class DOMNode(MessagePump):
 
         Called by Textual whenever CSS classes / pseudo classes change.
         """
-        try:
+        # A detached node has no final selector ancestry. Its first match
+        # belongs to App._register after attachment, for every class setter.
+        if self.is_attached:
             self.app.update_styles(self, animate=animate)
-        except NoActiveAppError:
-            pass
 
     def add_class(self, *class_names: str, update: bool = True) -> Self:
         """Add class names to this Node.

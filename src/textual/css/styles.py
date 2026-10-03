@@ -1010,6 +1010,9 @@ class Styles(StylesBase):
         node = self.node
         if node is None or not node._is_mounted:
             return
+        # Rule descriptors, inline edits, CSS and animation all publish through
+        # this damage lifetime. Matching an unchanged rule is not a style edit.
+        node.notify_style_update()
         parent_requests = [repaint for _, _, parent, repaint in requests if parent]
         if parent_requests and node._parent is not None:
             node._parent.refresh(repaint=any(parent_requests))
