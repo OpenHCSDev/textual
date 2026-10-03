@@ -13,14 +13,15 @@ focus/busy/sidebar/animation/TC1/T9/T4 scope remains active with Toad continuati
 coherent owner implementation and deletion, then one final batched sanity and
 changed installed real motion/profile path. Preserve original negatives.
 
-Base is actual main940880 plus accepted Text33 ancestry while that PR is
-reviewed. Integrate resulting main normally; no hidden feature-branch base.
+Normally merged actual mainb1a22548e after Text33 landed; no hidden
+feature-branch base.
 Current branch is unqualified WIP, not installed or speed Ready.
 
 ## Implemented startup ownership
 
 MessagePump moves its existing cooperative task boundary from AFTER Compose/
-Mount to BEFORE preprocessing. No additional yield/timer, task factory change,
+Mount into BEFORE Compose, inside the original preprocessing try/finally. App retains its own original boundary before entering its message loop.
+No additional yield/timer, task factory change,
 queue or startup flag. All native callers inherit it: App._register, virtual
 scrollbar App._start_widget, and loading Widget._cover. Caller attachment,
 registration and initial styles finish synchronously before child composition
@@ -35,3 +36,19 @@ was too late. Source04 stack shows this exact nested path. Do not cancel child
 pumps to solve latency: waiter cancellation does not retire admitted children.
 WIP source checkpoint; final batched mount/message/paint checks and installed
 changed saved-history motion remain required. No measured speed claim yet.
+
+## Final coherent native sanity
+
+48 native checks passed3.38s: mount/message/App/focus/inherited paint. Actual
+eager-task App checks sibling initial CSS and task assignment before Compose,
+loading cover post-registration/style before Compose, and original mount/remove
+completion. No mock application or copied startup facts. The first sanity
+command failed an unrelated nocolor expectation because the shell inherited
+NO_COLOR; final subprocess unsets only that variable. Cancellation inside the
+early boundary retains the original _pre_process.finally mounted_event release;
+normal prune still owns original child joins/unmount.
+
+Production7 added/1 deleted across App and MessagePump. This is a published
+working source checkpoint, not installed physical/speed qualification. The
+existing released holder and changed saved-history/channel recording are the
+remaining validation boundary. No unchanged movie rerun or new environment.
