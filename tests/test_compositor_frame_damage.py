@@ -16,7 +16,7 @@ async def test_partial_damage_uses_current_frame_for_spans_and_chops(before,afte
         compositor.reflow(app.screen,after)
         update=compositor.render_partial_update()
         assert update is not None
-        assert len(update.chops)==len(update.chop_ends)==after.height
+        assert len(update.chops)==len(update.cuts)==after.height
         assert all(0<=y<after.height and 0<=left<right<=after.width for y,left,right in update.spans)
         assert 'FRAME_CONTENT' in update.render_segments(app.console)
 
