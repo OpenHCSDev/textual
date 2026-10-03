@@ -47,3 +47,34 @@ async def test_ancestor_measurements_remain_correct_after_child_layout_changes()
         assert container.size.height > old_height
         key = (container._layout_updates, container._geometry_revision, container._nodes._updates)
         assert all(entry[-3:] == key for entry in container._box_model_cache.keys())
+
+
+async def test_cached_box_return_restores_its_original_alignment_constraints():
+    app = App()
+    async with app.run_test() as pilot:
+        child = Static("box")
+        child.styles.width = 4
+        child.styles.height = 1
+        parent = Widget(child)
+        parent.styles.width = "auto"
+        parent.styles.height = "auto"
+        parent.styles.min_width = "50%"
+        parent.styles.align_horizontal = "center"
+        await app.mount(parent)
+        await pilot.pause()
+
+        fraction = Fraction(1)
+        first = parent._get_box_model(Size(80, 20), app.size, fraction, fraction)
+        original_extrema = parent._extrema
+        second = parent._get_box_model(Size(160, 20), app.size, fraction, fraction)
+        assert (first.width, second.width) == (40, 80)
+        assert parent._extrema.min_width == 80
+
+        assert parent._get_box_model(Size(80, 20), app.size, fraction, fraction) is first
+        assert parent._extrema is original_extrema
+        # The arrangement resource may retire independently of retained boxes.
+        # Its native alignment must consume the selected box's original bounds.
+        parent._clear_arrangement_cache()
+        arrangement = parent.arrange(Size(40, 20))
+        placement = next(entry for _, entry in arrangement.placements if entry.widget is child)
+        assert placement.region.x == 18

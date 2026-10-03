@@ -21,3 +21,34 @@ included; no Toad files are authored here.
 AST/source first, coherent implementation then one affected sanity batch.
 Any installed qualification joins Heisenberg's next changed workflow; no repeat
 of qualified391/40 and no measured performance/End/FPS claim.
+
+## Working checkpoint
+
+One production file:7 added/4 deleted. Widget's original bounded16-entry LRU
+retains (BoxModel, original Extrema), and a cache hit selects both. The active
+_extrema remains an original artifact reference for recursive native alignment;
+its value is not re-decoded or calculated by a second policy. Misses select the
+original resolved constraint artifact before auto-size measurement as before.
+Public BoxModel construction/return/unpacking is unchanged. Cache invalidation,
+capacity and presentation retirement release the paired resource together.
+
+Existing Package AST covered249 native and289 Toad modules, zero omissions.
+All private cache reads/writes live in Widget; the sole downstream constraint
+consumer is native _arrange alignment. Native grid/dock/split/resolver callers
+keep their original BoxModel contract. After source records the changed owner;
+other roots are unchanged. AST cannot establish unknown dynamic/private callers.
+
+Final sanity:44 existing box/lifetime/height-arrangement cases passed in3.55s;
+the new real App cache-return case first failed because its test helper read
+DockArrangeResult.placements as unindexed entries. That source contract is now
+(ordinal, WidgetPlacement). The original negative remains, production unchanged.
+Corrected only that consumer; reran only the affected case:1 passed in0.40s.
+Its actual native center alignment is18 cells after A80→B160→A80, with retained
+A model and exact original A Extrema identity. No mock App/protocol or patched
+constraint resolver. The unchanged44 cases were not repeated.
+
+Installed qualification remains pending Heisenberg's next changed393 workflow.
+The original391/40 recording is protected, with no extra movie/provider/env.
+This fixes source-derived cached constraint selection, not a claimed observed
+user alignment failure or measured performance improvement. End, chunky motion,
+channel first paint and the full native performance goal remain open.
