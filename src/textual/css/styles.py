@@ -945,7 +945,9 @@ class Styles(StylesBase):
             for key in old_rules.keys() | rules.keys():
                 value = rules.get(key)
                 if prepared.get_rule(key) != value:
-                    setattr(prepared, key, value)
+                    # Resolve through the live owner's native MRO, including
+                    # property overrides, while normalizing detached values.
+                    getattr(type(self), key).__set__(prepared, value)
             requests = prepared._refresh_batches[-1].copy()
         new_rules = prepared.get_rules()
         if old_rules == new_rules:
