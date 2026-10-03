@@ -44,3 +44,29 @@ Production delta: one file, 28 added / 14 deleted lines. Pattern IMPL-12: remove
 repeated partial lifecycle publication by making the existing App admission own
 the whole incoming tree. AST sites identify static source only; custom dynamic
 receiver overrides cannot be inferred from names alone.
+
+## Batched native sanity
+
+After the coherent source checkpoint, 17 native checks passed in 12.79 seconds:
+test_mount.py, test_widget_mounting.py and test_screen_modes.py. These check
+startup/eager composition, insertion and mount ownership, screen lifecycle, and
+the new incoming-tree case. That case uses an actual App with native widgets:
+each initial notification sees inherited parent color and the later sibling's
+unscoped DEFAULT_CSS declaration, while notification order remains unchanged.
+It uses no widget, stylesheet, protocol or provider replacement.
+
+Source checks reused system Python/installed dependencies with the checkout's
+src on the import path; this is source verification, not an installed wheel gate.
+No environment/build/provider/capture was created. Resource preflight reported
+home 6.2 GiB, RAM available 13.2 GiB and swap used 14.9 GiB; the bounded in-process
+batch reused existing dependencies and completed without a parallel fixture.
+
+NRA before/after source evidence covers all 249 native production modules with
+zero omissions: selected registration/damage declarations and calls 40 -> 39.
+The removed call is recursive full registration/lifecycle publication. All three
+external registration entrypoints remain. Retained before/after source is in
+owner-before.json / owner-after.json; result is in native-sanity.log.
+
+This source checkpoint is not installed Ready. The next joined changed installed
+journey remains Heisenberg's; frozen 393/41 evidence is not reused as changed42
+acceptance. Original IRC End and scrolling-performance gaps remain open.
