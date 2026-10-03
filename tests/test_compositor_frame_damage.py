@@ -162,3 +162,68 @@ async def test_scene_change_retains_both_rectangles_and_native_resize_membership
         assert box in result.shown
         assert box not in result.resized
         assert Region(4, 3, 12, 2) in compositor._dirty_regions
+
+
+async def test_capture_geometry_and_offsets_share_original_scene_custody():
+    """Offset queries must not arrange another scene or admit an omitted child."""
+    from textual import errors
+    from textual.containers import Vertical
+
+    class CaptureApp(App):
+        CSS = """
+        #body { width: 12; height: 4; offset: 5 2; }
+        #spacer { height: 8; }
+        #far { height: 1; }
+        #omitted { display: none; }
+        #outside { dock: bottom; height: 1; }
+        """
+
+        def compose(self):
+            with Vertical(id="body"):
+                yield Static("SPACER", id="spacer")
+                yield Static("CAPTURE_ONLY", id="far")
+                yield Static("OMITTED", id="omitted")
+            yield Static("OTHER_SCENE", id="outside")
+
+    app = CaptureApp()
+    async with app.run_test(size=(40, 12)) as pilot:
+        await pilot.pause()
+        compositor = app.screen._compositor
+        body, far, omitted, outside = (
+            app.query_one(f"#{name}") for name in ("body", "far", "omitted", "outside")
+        )
+        compositor.reflow_visible(app.screen, Size(40, 12), retain_geometry=())
+        publication = compositor._visible_map
+        assert far not in publication
+        [(original, placement)] = compositor.published_geometry((body,))
+        capture, _ = compositor._arrange_root(
+            original, compositor.size, visible_only=False, root_geometry=placement,
+        )
+        assert far in capture and omitted not in capture
+
+        with compositor._using_geometry(body, capture):
+            assert compositor.find_widget(far) is capture[far]
+            assert app.screen.get_offset(far) == capture[far].region.offset
+            assert far.region == capture[far].region
+            assert app.screen.get_offset(outside) == publication[outside].region.offset
+            for read in (compositor.find_widget, app.screen.get_offset):
+                with pytest.raises(errors.NoWidget):
+                    read(omitted)
+            assert compositor._visible_map is publication
+            assert compositor._full_map_invalidated
+
+            # A failed nested paint must restore the enclosing original resource.
+            nested, _ = compositor._arrange_root(
+                far, compositor.size, visible_only=False, root_geometry=capture[far],
+            )
+            with pytest.raises(RuntimeError, match="native renderer failed"):
+                with compositor._using_geometry(far, nested):
+                    assert compositor.find_widget(far) is nested[far]
+                    assert app.screen.get_offset(far) == nested[far].region.offset
+                    raise RuntimeError("native renderer failed")
+            assert compositor.find_widget(far) is capture[far]
+
+        assert compositor._render_geometry is None
+        # An ordinary offscreen query may still arrange the whole native scene.
+        assert compositor.find_widget(far).region == capture[far].region
+        assert not compositor._full_map_invalidated
