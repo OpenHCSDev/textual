@@ -34,7 +34,7 @@ Before evidence also parses all 289 Toad modules without omissions. Native body
 capture, full, partial, inline, SVG and terminal consumers share the same chop
 algorithm; body capture retains its nonzero original coordinate bounds.
 
-### Exact prerequisite graph
+### Exact prerequisite graph and main landing
 
 GitHub42 merged `14baa381` into the retained41 feature branch, not main. Remote
 main is `067a652041` (merged41). This branch normally integrated that main and
@@ -43,6 +43,15 @@ contains42's accepted App registration change (28 added /14 deleted), its test
 and original evidence. No App work was added by43. Parent owns landing that
 accepted prerequisite; it must not silently be discarded or counted as new43
 implementation.
+
+Parent authorized the existing42 owner to correct that graph. A normal merge
+of14baa into main produced `0246a97fe062f156deee683bfb3f67e51cd485b8`.
+`git diff14baa0246` is empty for the ENTIRE tree. Main now contains the exact
+qualified42 source without43. Schrodinger received this receipt;397's qualified
+14baa pin needs no build, repin or rerun. This43 branch normally merged that
+main; its production tree did not change. Current full-main and new43 production
+deltas are therefore both `_compositor.py`42 added /73 deleted. The earlier
+70 added /87 deleted union remains the historical pre-landing comparison.
 
 Validation is pending under the explicit source-only resource instruction.
 Neither source closure nor old396/42 footage qualifies the changed43 output.
