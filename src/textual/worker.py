@@ -382,6 +382,10 @@ class Worker(Generic[ResultType]):
             self.state = WorkerState.RUNNING
             app.log.worker(self)
             try:
+                # Eager task creation must publish the task and its completion
+                # callback before user work can run or cancel its own worker.
+                # Keep this suspension inside the original cancellation owner.
+                await asyncio.sleep(0)
                 self._result = await self.run()
             except asyncio.CancelledError as error:
                 self.state = WorkerState.CANCELLED

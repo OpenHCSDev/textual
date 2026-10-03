@@ -161,11 +161,16 @@ async def test_run_cancel_immediately() -> None:
             await worker.wait()
 
 
-async def test_get_worker() -> None:
+@pytest.mark.parametrize("eager", [False, True])
+async def test_get_worker(eager: bool) -> None:
     """Check get current worker."""
+
+    if eager and not hasattr(asyncio, "eager_task_factory"):
+        pytest.skip("Eager tasks require Python 3.12")
 
     async def run_worker() -> Worker:
         worker = get_current_worker()
+        assert worker._task is asyncio.current_task()
         return worker
 
     class WorkerApp(App):
@@ -173,10 +178,15 @@ async def test_get_worker() -> None:
 
     app = WorkerApp()
     async with app.run_test():
-        worker: Worker[Worker] = Worker(app, run_worker)
-        worker._start(app)
-
-        assert await worker.wait() is worker
+        loop = asyncio.get_running_loop()
+        previous_factory = loop.get_task_factory()
+        try:
+            loop.set_task_factory(asyncio.eager_task_factory if eager else None)
+            worker: Worker[Worker] = Worker(app, run_worker)
+            worker._start(app)
+            assert await worker.wait() is worker
+        finally:
+            loop.set_task_factory(previous_factory)
 
 
 def test_no_active_worker() -> None:
