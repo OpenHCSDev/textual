@@ -4719,7 +4719,11 @@ class Widget(DOMNode):
         await self._close_messages(wait=False)
 
     async def _message_loop_exit(self) -> None:
-        """Clean up DOM tree."""
+        """Close owned execution before dispatching asynchronous teardown hooks."""
+        try:
+            await self._close_messages(wait=False)
+        finally:
+            self.workers.cancel_node(self)
         parent = self._parent
         # Post messages to children, asking them to prune
         children = [*self.children, *self._get_virtual_dom()]
@@ -5098,7 +5102,6 @@ class Widget(DOMNode):
 
     def _on_unmount(self) -> None:
         self._uncover()
-        self.workers.cancel_node(self)
 
     def action_scroll_home(self) -> None:
         if not self._allow_scroll:
