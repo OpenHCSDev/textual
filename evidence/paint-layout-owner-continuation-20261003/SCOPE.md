@@ -45,3 +45,14 @@ final batched validation; not Ready/installed/speed qualification.
 Worker eager startup is a separate source custody lead: task can run inline
 before its assignment. Full cancellation contract must be read before any
 change; no worker throttling/extra scheduler added in this batch.
+
+## Coherent batch sanity
+
+102 native CSS/component/focus/mount checks pass5.74s. Existing component
+checks now require original resource custody while actual color/CSS/ancestry
+changes remain visible. Repeated unsafe focus-within rematching keeps both
+original Styles and topology epochs unchanged; inherited component paint and
+shutdown ownership stay original. This is final source sanity, NOT installed
+motion/CPU acceptance of ad08. The last physicalfilm qualifies35, not36.
+Next affected installed workflow uses the same released holder after preserving
+its current35 proof; no unchanged baseline or new environment/nativecopy.
