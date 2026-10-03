@@ -1,3 +1,9 @@
+# One App frame cadence and full remaining performance
+
+Continue merged37/380 in SAMEcheckouts, no newenvironment/nativecopy. Existing App owns animation and screen timers; make that original owner declare an overridable144Hz target (6.944ms nominal), consume it through Animator/Screen update+selection/Throbber and original visual animation consumers, remove independent60/120 defaults/CLI environment policy. Keep intentional sidebar spinner setting and unrelated clock/poll intervals. Read complete timer/owner/caller family first; no new scheduler/clock/cache/rate mirror. Kepler remains disjoint native style/measurement source help; existing subtree paint→layout invalidation needs semantic ownership closure.
+
+Carry ALL CPU/raster/firstpaint/cold/warm/workerpureprep/IRC+DMbusy/sidebar/animation/3viewport adaptive velocity/reverse/idle/growingEnd/void/focus/draft/undo/TC1/T9/T4/144Hz. Latest actual37film104.560s16warm+7input/37body retention/originalowner unchanged/cleanupempty, personally reviewed exactUpband during SAMEUI before+after livechecks. Bodymovesdiscretely; p95writer47.51ms/UpCPU75.69%, no overallgain. Preserve full rawnegative and previousmovies/profile/UNKNOWN. Sourcefirst coherent wholefamily thenfinalproportionatechecks+onechanged installed path, notunchanged recordings.
+
 # App owns frame cadence
 
 Existing App.MAX_FPS now decodes TEXTUAL_FPS once through original environment codec, default144Hz; App subclass can override the declaration. App.frame_interval derives1/MAX_FPS. Animator consumes it instead of independently defaulting60; Screen update/selection movement+timer consume it instead of module UPDATE_PERIOD/constants.MAX_FPS. Delete old globalconstant and copiedperiod. Toad CLI120 import-time environment policy is deleted; Throbber derives original app period unless its caller supplies a genuine explicit refresh_interval override. Existing sidebar spinner setting remains independent and unchanged.
@@ -9,5 +15,3 @@ Existing refactor-audit Package.load:249native+287Toad+2diffviewmodules,0parse o
 Throbber nullable refresh_interval is an optional explicitconfiguration override, not busy/lifecycle state; absent override derives App directly, no cached selected rate. Original mounted/busy/committedvisibility timer custody is preserved. SidebarProjection config cadence remains its originalsetting. No newtimer/scheduler/cache/clock class, alias or framework.
 
 Source batch WIP published before final batchedsanity/changed installedpath. Current37film is frozen and does NOT qualify this cadence; no claim delivered144Hz, smoothermotion or improvedCPU. Full source/consumer/lifetime performance scope remains active.
-
-Final native batch:40 animation, scrolling-animation, selection and timer deadline/lifetime checks passed in8.23s. These cover continued animation/selection speed and timer disposal, not terminalFPS. TIME-7 default copies are deleted; a new app cadence changes one original App declaration or its explicit override, not three60/120 constants. Installed changed-body/warm/input/motion validation remains outstanding.
