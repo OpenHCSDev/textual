@@ -1,7 +1,7 @@
 # Native arrangement dependency ownership
 
-Stacked on qualified Text39 source95d3; its receipt and installed artifact remain
-frozen. Same isolated checkout, no new environment or recording.
+Normally integrated merged main Text39 `2d1e2efa`; its receipt and installed
+artifact remain frozen. Same isolated checkout, no new environment or recording.
 
 Widget.arrange currently owns _height_arrangement_cache, while
 NativeLayoutHeight.depends calls the same arrangement dependency algorithm
@@ -53,3 +53,7 @@ The original384 profile is partial and proves a matching source path, not a CPU
 share or measured performance gain. Text39's scoped Ready receipt and frozen
 installed source remain unchanged. End, discrete motion and channel first paint
 remain open; this draft does not claim their closure.
+
+Normal main integration298cbe3e9 retained production byte equality with d1bae228c.
+No semantic conflict or affected source change; no repeated checks or recording.
+The two-file follow-up is now based on main rather than the closed Text39 branch.
