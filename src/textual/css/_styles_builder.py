@@ -723,14 +723,16 @@ class StylesBuilder:
         color: Color | None = None
         alpha: float | None = None
 
-        self.styles._rules[f"auto_{name}"] = False  # type: ignore
+        auto_rule = f"auto_{name}"
+        if auto_rule in self.styles:
+            self.styles.set_rule(auto_rule, False)
         for token in tokens:
             if (
-                "background" not in name
-                and token.name == "token"
-                and token.value == "auto"
+                token.name == "token" and token.value == "auto"
             ):
-                self.styles._rules[f"auto_{name}"] = True  # type: ignore
+                if auto_rule not in self.styles:
+                    self.error(name, token, "Automatic color is not declared for this property")
+                self.styles.set_rule(auto_rule, True)
             elif token.name == "scalar":
                 alpha_scalar = Scalar.parse(token.value)
                 if alpha_scalar.unit != Unit.PERCENT:

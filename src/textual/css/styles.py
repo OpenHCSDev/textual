@@ -37,6 +37,7 @@ from textual.css._style_properties import (
     SplitProperty,
     StringEnumProperty,
     StyleFlagsProperty,
+    StyleProperty,
     TransitionsProperty,
 )
 from textual.css.constants import (
@@ -930,6 +931,38 @@ class Styles(StylesBase):
             important=self.important,
         )
 
+    def replace_rules(self, rules: RulesMap) -> None:
+        """Prepare a compiled rule cohort, then publish its values and effects once.
+
+        Imperative setters still publish immediately. Here no live style changes
+        until every descriptor has normalized the complete replacement.
+        """
+        old_rules = self.get_rules()
+        if old_rules == rules:
+            return
+        prepared = Styles(_rules=old_rules.copy())
+        with prepared.batch_update():
+            for key in old_rules.keys() | rules.keys():
+                value = rules.get(key)
+                if prepared.get_rule(key) != value:
+                    # Resolve through the live owner's native MRO, including
+                    # property overrides, while normalizing detached values.
+                    getattr(type(self), key).__set__(prepared, value)
+            requests = prepared._refresh_batches[-1].copy()
+        new_rules = prepared.get_rules()
+        if old_rules == new_rules:
+            return
+        with self.batch_update():
+            # Keep the dictionary identity: get_rule / has_rule are bound to it.
+            self._rules.clear()
+            self._rules.update(new_rules)
+            self._mark_updated()
+            for key in old_rules.keys() | new_rules.keys():
+                if old_rules.get(key) != new_rules.get(key):
+                    descriptor = cast(StyleProperty, getattr(type(self), key))
+                    descriptor.publish(self, new_rules.get(key))
+            self._refresh_batches[-1].extend(requests)
+
     def _mark_updated(self) -> None:
         self._updates += 1
         if (node := self.node) is not None:
@@ -982,15 +1015,18 @@ class Styles(StylesBase):
         Rule writes and their mutation epochs remain immediate. Only pending
         widget damage belongs to this synchronous update lifetime.
         """
+        if self._refresh_batches:
+            # Nested CSS application and rule replacement belong to the same
+            # synchronous mutation. Collect their damage in its original buffer.
+            yield
+            return
         requests: list[tuple[bool, bool, bool, bool]] = []
         self._refresh_batches.append(requests)
         try:
             yield
         finally:
             self._refresh_batches.pop()
-            if self._refresh_batches:
-                self._refresh_batches[-1].extend(requests)
-            elif requests:
+            if requests:
                 self._refresh(requests)
 
     def refresh(
@@ -1010,6 +1046,9 @@ class Styles(StylesBase):
         node = self.node
         if node is None or not node._is_mounted:
             return
+        # Rule descriptors, inline edits, CSS and animation all publish through
+        # this damage lifetime. Matching an unchanged rule is not a style edit.
+        node.notify_style_update()
         parent_requests = [repaint for _, _, parent, repaint in requests if parent]
         if parent_requests and node._parent is not None:
             node._parent.refresh(repaint=any(parent_requests))
