@@ -140,8 +140,20 @@ class DOMNode(MessagePump):
     """The base class for object that can be in the Textual DOM (App and Widget)"""
 
     _subtree_style_revision = 0
+    _geometry_revision = 0
 
-    def _style_rules_updated(self, revision: int) -> None:
+    def _invalidate_subtree_geometry(self) -> None:
+        node: DOMNode | MessagePump | None = self
+        while isinstance(node, DOMNode):
+            node._geometry_revision += 1
+            node = node._parent
+
+    def _style_geometry_updated(self, geometry: bool, source: DOMNode) -> bool:
+        if geometry:
+            self._geometry_revision += 1
+        return geometry
+
+    def _style_rules_updated(self, revision: int, geometry: bool) -> None:
         """Publish the rule owner's mutation to dependent ancestor subtrees.
 
         This is a projection of Styles' mutation epoch, including raw writes
@@ -150,6 +162,7 @@ class DOMNode(MessagePump):
         node: DOMNode | MessagePump | None = self
         while isinstance(node, DOMNode):
             node._subtree_style_revision = revision
+            geometry = node._style_geometry_updated(geometry, self)
             node = node._parent
 
     DEFAULT_CSS: ClassVar[str] = ""

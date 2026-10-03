@@ -953,21 +953,43 @@ class Styles(StylesBase):
         if old_rules == new_rules:
             return
         with self.batch_update():
-            # Keep the dictionary identity: get_rule / has_rule are bound to it.
-            self._rules.clear()
-            self._rules.update(new_rules)
-            self._mark_updated()
-            for key in old_rules.keys() | new_rules.keys():
-                if old_rules.get(key) != new_rules.get(key):
-                    descriptor = cast(StyleProperty, getattr(type(self), key))
-                    descriptor.publish(self, new_rules.get(key))
+            self._update_rules(
+                (key, new_rules.get(key))
+                for key in old_rules.keys() | new_rules.keys()
+            )
             self._refresh_batches[-1].extend(requests)
 
-    def _mark_updated(self) -> None:
+    def _update_rules(self, rules: Iterable[tuple[str, object]]) -> bool:
+        """Commit changed rule values and their declared effects once.
+
+        Resolve descriptors and geometry effects before mutating live values.
+        Raw, imperative and compiled writes share this publication boundary;
+        refresh requests remain with their descriptor or authored batch.
+        """
+        changes = tuple(
+            (cast(StyleProperty, getattr(type(self), key)), key, self._rules.get(key), value)
+            for key, value in rules
+            if self._rules.get(key) != value
+        )
+        if not changes:
+            return False
+        geometry = any(
+            descriptor.affects_geometry(previous, value)
+            for descriptor, key, previous, value in changes
+        )
+        # Preserve dictionary identity: get_rule / has_rule are bound to it.
+        for descriptor, key, previous, value in changes:
+            if value is None:
+                self._rules.pop(key, None)
+            else:
+                self._rules[key] = value  # type: ignore[literal-required]
         self._updates += 1
         if (node := self.node) is not None:
             Styles._revision += 1
-            node._style_rules_updated(Styles._revision)
+            node._style_rules_updated(Styles._revision, geometry)
+            for descriptor, key, previous, value in changes:
+                descriptor.publish(self, value)
+        return True
 
     def clear_rule(self, rule_name: str) -> bool:
         """Removes the rule from the Styles object, as if it had never been set.
@@ -978,10 +1000,7 @@ class Styles(StylesBase):
         Returns:
             ``True`` if a rule was cleared, or ``False`` if it was already not set.
         """
-        changed = self._rules.pop(rule_name, None) is not None  # type: ignore
-        if changed:
-            self._mark_updated()
-        return changed
+        return self._update_rules(((rule_name, None),))
 
     def get_rules(self) -> RulesMap:
         return self._rules.copy()
@@ -996,17 +1015,7 @@ class Styles(StylesBase):
         Returns:
             ``True`` if the rule changed, otherwise ``False``.
         """
-        if value is None:
-            changed = self._rules.pop(rule, None) is not None  # type: ignore
-            if changed:
-                self._mark_updated()
-            return changed
-        current = self._rules.get(rule)
-        self._rules[rule] = value  # type: ignore
-        changed = current != value
-        if changed:
-            self._mark_updated()
-        return changed
+        return self._update_rules(((rule, value),))
 
     @contextmanager
     def batch_update(self) -> Iterator[None]:
@@ -1063,9 +1072,7 @@ class Styles(StylesBase):
 
     def reset(self) -> None:
         """Reset the rules to initial state."""
-        if self._rules:
-            self._rules.clear()  # type: ignore
-            self._mark_updated()
+        self._update_rules((key, None) for key in self._rules)
 
     def merge(self, other: StylesBase) -> None:
         """Merge values from another Styles.
@@ -1076,13 +1083,7 @@ class Styles(StylesBase):
         self.merge_rules(other.get_rules())
 
     def merge_rules(self, rules: RulesMap) -> None:
-        changed = any(
-            rule not in self._rules or self._rules[rule] != value
-            for rule, value in rules.items()
-        )
-        self._rules.update(rules)
-        if changed:
-            self._mark_updated()
+        self._update_rules(rules.items())
 
     def extract_rules(
         self,
