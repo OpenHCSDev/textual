@@ -17,6 +17,7 @@ from typing import (
     Callable,
     ClassVar,
     Iterable,
+    Iterator,
     Mapping,
     Sequence,
     Type,
@@ -143,10 +144,10 @@ class DOMNode(MessagePump):
     _geometry_revision = 0
 
     def _invalidate_subtree_geometry(self) -> None:
-        node: DOMNode | MessagePump | None = self
-        while isinstance(node, DOMNode):
+        for node in self.walk_ancestors(with_self=True):
+            if not isinstance(node, DOMNode):
+                break
             node._geometry_revision += 1
-            node = node._parent
 
     def _style_geometry_updated(self, geometry: bool) -> bool:
         if geometry:
@@ -176,11 +177,11 @@ class DOMNode(MessagePump):
         """
         self._subtree_style_revision = revision
         geometry = self._update_inherited_geometry(geometry)
-        node = self._parent
-        while isinstance(node, DOMNode):
+        for node in self.walk_ancestors():
+            if not isinstance(node, DOMNode):
+                break
             node._subtree_style_revision = revision
             geometry = node._style_geometry_updated(geometry)
-            node = node._parent
 
     DEFAULT_CSS: ClassVar[str] = ""
     """Default TCSS."""
@@ -870,10 +871,12 @@ class DOMNode(MessagePump):
         # Note that self.screen may not be the same as self.app.screen
         from textual.screen import Screen
 
-        node: MessagePump | None = self
         try:
-            while node is not None and not isinstance(node, Screen):
-                node = node._parent
+            node = next(
+                (ancestor for ancestor in self.walk_ancestors(with_self=True)
+                 if isinstance(ancestor, Screen)),
+                None,
+            )
         except AttributeError:
             raise RuntimeError(
                 "Widget is missing attributes; have you called the constructor in your widget class?"
@@ -952,11 +955,11 @@ class DOMNode(MessagePump):
         Returns:
             A list of nodes, where the first item is the App, and the last is this node.
         """
-        result: list[DOMNode] = [self]
+        result: list[DOMNode] = []
         append = result.append
-
-        node: DOMNode = self
-        while isinstance((node := node._parent), DOMNode):
+        for node in self.walk_ancestors(with_self=True):
+            if not isinstance(node, DOMNode):
+                break
             append(node)
         return result[::-1]
 
@@ -1178,7 +1181,8 @@ class DOMNode(MessagePump):
         return self._resolved_paint_state().text_style
 
     def _resolved_paint_state(self) -> PaintState:
-        if type(self).ancestors_with_self is not DOMNode.ancestors_with_self:
+        if (type(self).ancestors_with_self is not DOMNode.ancestors_with_self
+                or type(self).walk_ancestors is not DOMNode.walk_ancestors):
             # Custom ancestry may change independently of native topology or
             # style mutations, including when inherited by a native child.
             state = EMPTY_PAINT._replace(cacheable=False)
@@ -1323,6 +1327,21 @@ class DOMNode(MessagePump):
 
         return (base_background, base_color, background, color)
 
+    def walk_ancestors(self, *, with_self: bool = False) -> Iterator[DOMNode]:
+        """Yield the current parent path, nearest first, as it is consumed.
+
+        Args:
+            with_self: Include this node before its ancestors.
+
+        No ancestor list is built. Each next parent comes from the existing
+        weak link; a detached node has no ancestors. Use the list properties
+        when a complete snapshot or reverse traversal is required.
+        """
+        node: MessagePump | None = self if with_self else self._parent
+        while node is not None:
+            yield cast("DOMNode", node)
+            node = node._parent
+
     @property
     def ancestors_with_self(self) -> list[DOMNode]:
         """A list of ancestor nodes found by tracing a path all the way back to App.
@@ -1333,12 +1352,7 @@ class DOMNode(MessagePump):
         Returns:
             A list of nodes.
         """
-        nodes: list[MessagePump | None] = [self]
-        add_node = nodes.append
-        node: MessagePump | None = self
-        while (node := node._parent) is not None:
-            add_node(node)
-        return cast("list[DOMNode]", nodes)
+        return list(self.walk_ancestors(with_self=True))
 
     @property
     def ancestors(self) -> list[DOMNode]:
@@ -1347,12 +1361,7 @@ class DOMNode(MessagePump):
         Returns:
             A list of nodes.
         """
-        nodes: list[MessagePump | None] = []
-        add_node = nodes.append
-        node: MessagePump | None = self
-        while (node := node._parent) is not None:
-            add_node(node)
-        return cast("list[DOMNode]", nodes)
+        return list(self.walk_ancestors())
 
     def watch(
         self,
@@ -1793,13 +1802,12 @@ class DOMNode(MessagePump):
             raise InvalidQueryFormat(
                 f"Unable to parse {query_selector!r} as a query; check for syntax errors"
             ) from None
-        if base_node.parent is not None:
-            for node in base_node.parent.ancestors_with_self:
-                if not match(selector_set, node):
-                    continue
-                if expect_type is not None and not isinstance(node, expect_type):
-                    continue
-                return node
+        for node in base_node.walk_ancestors():
+            if not match(selector_set, node):
+                continue
+            if expect_type is not None and not isinstance(node, expect_type):
+                continue
+            return node
         raise NoMatches(f"No ancestor matches {selector!r} on {self!r}")
 
     def set_styles(self, css: str | None = None, **update_styles: Any) -> Self:
