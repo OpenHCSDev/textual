@@ -982,15 +982,18 @@ class Styles(StylesBase):
         Rule writes and their mutation epochs remain immediate. Only pending
         widget damage belongs to this synchronous update lifetime.
         """
+        if self._refresh_batches:
+            # Nested CSS application and rule replacement belong to the same
+            # synchronous mutation. Collect their damage in its original buffer.
+            yield
+            return
         requests: list[tuple[bool, bool, bool, bool]] = []
         self._refresh_batches.append(requests)
         try:
             yield
         finally:
             self._refresh_batches.pop()
-            if self._refresh_batches:
-                self._refresh_batches[-1].extend(requests)
-            elif requests:
+            if requests:
                 self._refresh(requests)
 
     def refresh(
