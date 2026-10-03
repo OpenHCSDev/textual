@@ -158,6 +158,32 @@ async def test_ansi_theme():
         assert app.ansi_theme == DIMMED_MONOKAI
 
 
+@pytest.mark.parametrize("theme", ["textual-dark", "ansi-light"])
+async def test_export_screenshot_uses_current_ansi_palette(theme):
+    """The actual composed screen and SVG exporter use the configured palette."""
+    from xml.etree import ElementTree
+
+    class PaletteApp(App):
+        def compose(self):
+            yield Static("export-palette", id="palette")
+
+    app = PaletteApp(ansi_color=True)
+    async with app.run_test() as pilot:
+        app.theme = theme
+        app.ansi_theme_dark = NIGHT_OWLISH
+        app.ansi_theme_light = DIMMED_MONOKAI
+        await pilot.pause()
+        svg = app.export_screenshot()
+        document = ElementTree.fromstring(svg)
+        style = document.find("{http://www.w3.org/2000/svg}style").text
+        text = next(
+            node for node in document.iter("{http://www.w3.org/2000/svg}text")
+            if node.text == "export-palette"
+        )
+        rule = style.split(f".{text.attrib['class']} {{", 1)[1].split("}", 1)[0]
+        assert f"fill: {app.ansi_theme.foreground_color.hex}" in rule
+
+
 async def test_early_exit():
     """Test exiting early doesn't cause issues."""
     from textual.app import App

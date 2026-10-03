@@ -614,12 +614,9 @@ class App(Generic[ReturnType], DOMNode):
         for theme in BUILTIN_THEMES.values():
             self.register_theme(theme)
 
-        ansi_theme = (
-            self.ansi_theme_dark if self.current_theme.dark else self.ansi_theme_light
-        )
         self.set_reactive(App.ansi_color, ansi_color)
         self._filters: list[LineFilter] = [
-            ANSIToTruecolor(ansi_theme, enabled=not self.native_ansi_color)
+            ANSIToTruecolor(self.ansi_theme, enabled=not self.native_ansi_color)
         ]
         environ = dict(os.environ)
         self.no_color = environ.pop("NO_COLOR", None) is not None
@@ -1897,7 +1894,7 @@ class App(Generic[ReturnType], DOMNode):
             full=True, screen_stack=self.app._background_screens, simplify=simplify
         )
         console.print(screen_render)
-        return console.export_svg(title=title or self.title)
+        return console.export_svg(title=title or self.title, theme=self.ansi_theme)
 
     def save_screenshot(
         self,
