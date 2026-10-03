@@ -65,3 +65,47 @@ async def test_cancelling_one_mount_awaiter_does_not_cancel_completion():
     child._mounted_event.set()
     await asyncio.wait_for(second, 1)
     parent.refresh.assert_called_once_with(layout=True)
+
+
+async def test_eager_composition_observes_completed_registration_and_styles():
+    """Compose must not run inside a caller's unfinished mount / cover setup."""
+    from textual.color import Color
+
+    observed = []
+
+    class Probe(Widget):
+        def _post_register(self, app):
+            super()._post_register(app)
+            self.registration_complete = True
+
+        def compose(self):
+            assert self.registration_complete
+            assert self._task is asyncio.current_task()
+            assert self.styles.color == Color.parse("red")
+            if self.id != "cover":
+                assert all(
+                    self.app.query_one(f"#{name}").styles.color == Color.parse("red")
+                    for name in ("first", "second")
+                )
+            observed.append(self.id)
+            return []
+
+    class StartupApp(App):
+        CSS = "Probe { color: red; }"
+
+    loop = asyncio.get_running_loop()
+    previous_factory = loop.get_task_factory()
+    app = StartupApp()
+    try:
+        async with app.run_test() as pilot:
+            loop.set_task_factory(asyncio.eager_task_factory)
+            first, second = Probe(id="first"), Probe(id="second")
+            await app.screen.mount(first, second)
+            first._cover(Probe(id="cover"))
+            await pilot.pause()
+            assert observed == ["first", "second", "cover"]
+            first._uncover()
+            await first.remove()
+            await second.remove()
+    finally:
+        loop.set_task_factory(previous_factory)

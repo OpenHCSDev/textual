@@ -3460,6 +3460,9 @@ class App(Generic[ReturnType], DOMNode):
                     await invoke_ready_callback()
 
             try:
+                # App owns its separate Compose / Mount startup above. Preserve
+                # its original event-loop boundary before processing messages.
+                await asyncio.sleep(0)
                 await self._process_messages_loop()
             except asyncio.CancelledError:
                 pass
