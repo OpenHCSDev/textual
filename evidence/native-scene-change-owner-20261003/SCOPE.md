@@ -60,7 +60,37 @@ The existing resize-frame/caption cases cover all three publication paths;
 Unicode/sparse paint and nonzero body capture check resulting damage consumers.
 No UI/protocol mock or alternate application was introduced.
 
-Source-qualified only. No new film, environment, provider, package mutation or
-installed Ready claim. Recorded399/43 is immutable and does not qualify changed44.
-One later integration-owner changed installed journey remains necessary. This
-follow-up does not hold scoped43/399 shipping or claim measured CPU/FPS gains.
+## Scoped installed qualification from the single changed402/44 run
+
+The same installed run completed in140.423 seconds: all16 warm checks and7 input
+checks passed,38 ready body resources retained, original native owner unchanged,
+runtime unchanged, cleanup remaining/errors empty. No rerun was made. The ordinary
+69-package pair used Coref4a582,Toad613da,Textual3ad603,SDK0.12.1,diff8fa7 and the
+original native89b56/tree4b7f package. Existing normal source/assets/directURL/full
+native trust proof is referenced in READY.json; the installed compositor bytes
+also matched this checkout. Encoder255 remains in the original cleanup receipt;
+UI/st process custody was transferred to installed ObservedProcess, not claimed
+as an explicitly observed exit0.
+
+Input-focused Up writer median/p95/max12.56/29.89/174.74ms; Down10.09/25.30/97.65ms;
+focused-history reversal11.37/22.60/117.73ms. These original writer receipts are
+not input-to-pixel latency, FPS or smoothness proof. The1342-sample GIL profile
+reported0 errors. Its transition groups identify source activity only, never
+CPU time. Kernel phase UI values include diagnostic/observer work; no CPU gain
+is claimed.
+
+Personally viewed original48-frame sheets live-14-7 (Up23.193–23.993s) andlive-21-12
+(Down47.429–48.229s) AFTER the UI had exited. Both supplied /proc entries were
+absent before and after the views. The missing-process branch did not log an
+exact UTC for those first two probes; the following timestamp at19:14:32.777836UTC
+(monotonic530511954891805ns) confirmed both absent. Parent separately found the
+recorder alive earlier while UI was already gone. Encoding-time alive checks
+are not personal DURING inspection. Readable body/chrome, repeated positions
+and discrete advances are visible; no full-body blank is evident in these two
+bands. Personal DURING review remains unestablished. No repeat for optics.
+
+Scoped Ready: original scene damage/resize caller closure and retained saved-UI
+workflow are qualified. Motion remains chunky; full CPU/FPS144Hz, fresh live
+input/receipt/compaction and broader original performance scope remain open.
+Normal current-main merge includes accepted43 and changes no44 production bytes.
+Recorded399/43 and every failed/historical proof remain immutable.
