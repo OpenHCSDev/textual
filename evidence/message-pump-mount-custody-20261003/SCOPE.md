@@ -52,3 +52,28 @@ Production7 added/1 deleted across App and MessagePump. This is a published
 working source checkpoint, not installed physical/speed qualification. The
 existing released holder and changed saved-history/channel recording are the
 remaining validation boundary. No unchanged movie rerun or new environment.
+
+## Changed installed physical qualification
+
+Same existing69holder Core483 comparator/Toada030/Text782/native044 exact
+source/assets verification; input_warm106.122s16warm+7input checks allpass,
+originalowner unchanged/cleanupempty. Original film retained. All3native
+registration consumers share pre-Compose caller-completion behavior, real
+siblingCSS/loadingcover checks48pass. No known new usage regression.
+
+Exactkeydown→keyup writer intervals: Upmedian17.22/p9535.17/max134.55ms;
+reverse16.41/28.34/max82.96. Native writer is not pixelFPS. Current UI marker
+Up76.58%,reverse64.63%,mididle20.87%,Endidle24.0% include diagnostic exports.
+1060GILsamples0errors, alignment±0.07155s. NOcausal comparison/overallgain.
+Current cached-native-return79.465ms writergap differs from original04 cold
+channel workflow1.753561s.
+
+Actual consecutiveframes inspected AFTER run22.6–23.4Up/63.8–64.6reverse/
+End: body readable, repeatedpositions then chunkyadvances; notsmooth. During
+run reviews were staticwarmPNG/operator andidle48frames/parent only, so
+during-moving requirement notmet. Original receipt stays true at its native
+checkscope; scoped qualification does not claim fullperformance acceptance.
+No unchanged rerun. Toad373 installed01-scoped.json contains exactlimits.
+
+Scoped Ready for registration/mount ownership with finalaffectedinstalled
+path. FULL CPU/144Hz/foreground/lazyloading and originalscope remains active.
