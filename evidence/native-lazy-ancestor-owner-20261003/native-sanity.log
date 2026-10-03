@@ -1,0 +1,34 @@
+.........F.....                                                          [100%]
+=================================== FAILURES ===================================
+_____ test_reparent_preserves_order_and_transfers_pending_frame_callbacks ______
+
+    async def test_reparent_preserves_order_and_transfers_pending_frame_callbacks():
+        app = App()
+        async with app.run_test() as pilot:
+            app.add_mode("one", Screen)
+            app.add_mode("two", Screen)
+            await app.switch_mode("one")
+            previous = app.screen
+            panel = Retained(Static("content"))
+            await previous.mount(panel)
+            await app.switch_mode("two")
+            destination = app.screen
+            marker = Static("after")
+            await destination.mount(marker)
+            received = []
+            previous._invoke_later(lambda: received.append(panel.screen), panel)
+            panel.reparent(destination, before=marker)
+            assert list(destination.children) == [panel, marker]
+            assert all(sender is not panel for _, sender in previous._callbacks)
+            assert any(sender is panel for _, sender in destination._callbacks)
+            await pilot.pause()
+>           assert received == [destination]
+E           assert [] == [Screen()]
+E             
+E             Right contains one more item: Screen()
+E             Use -v to get more diff
+
+tests/test_reparent.py:121: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_reparent.py::test_reparent_preserves_order_and_transfers_pending_frame_callbacks
+1 failed, 14 passed in 1.06s

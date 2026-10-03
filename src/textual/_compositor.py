@@ -1375,7 +1375,7 @@ class Compositor:
             placement = geometry.get(widget)
             if placement is not None:
                 return placement
-            if root in widget.ancestors_with_self:
+            if root in widget.walk_ancestors(with_self=True):
                 raise errors.NoWidget("Widget is not in layout")
         return self._get_published_geometry(widget)
 

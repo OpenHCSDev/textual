@@ -180,3 +180,24 @@ def test_layout_dependency_changes_preserve_retained_paint_values():
     parent.styles.color = "blue"
     assert not original.same_paint(leaf._resolved_paint_state())
     assert leaf.visual_style is not visual
+
+
+def test_custom_lazy_ancestry_retains_original_uncacheable_paint_contract():
+    first, second = Widget(), Widget()
+    first.styles.background = "red"
+    second.styles.background = "blue"
+
+    class CustomWalk(Widget):
+        ancestor = first
+
+        def walk_ancestors(self, *, with_self=False):
+            if with_self:
+                yield self
+            yield self.ancestor
+
+    custom, child = CustomWalk(), Widget()
+    child._attach(custom)
+    before = child.rich_style
+    custom.ancestor = second
+    assert custom.rich_style == native_paint(custom)[5]
+    assert child.rich_style != before

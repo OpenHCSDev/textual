@@ -120,7 +120,7 @@ class Signal(Generic[SignalT]):
 
         if not owner.is_attached or owner._pruning:
             return
-        for ancestor_node in owner.ancestors_with_self:
+        for ancestor_node in owner.walk_ancestors(with_self=True):
             if not ancestor_node.is_running:
                 return
 
