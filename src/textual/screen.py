@@ -1101,8 +1101,7 @@ class Screen(Generic[ScreenResultType], Widget):
         """
         entered = set(focused.ancestors_with_self) if focused is not None else set()
         exited = set(blurred.ancestors_with_self) if blurred is not None else set()
-        for node in entered ^ exited:
-            self.app.stylesheet.update_focus_within(node)
+        self.app.stylesheet.update_focus_within(entered ^ exited)
 
     def set_focus(
         self,

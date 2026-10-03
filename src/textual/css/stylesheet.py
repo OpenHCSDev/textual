@@ -172,9 +172,6 @@ class Stylesheet:
         self._path_rules_cache: FIFOCache[tuple, RulesMap] = FIFOCache(4096)
         self._ids_in_rules: set[str] = set()
         self._classes_in_rules: set[str] = set()
-        self._component_cache_safe: dict[str, bool] = {}
-        self._component_rule_classes: dict[str, frozenset[str]] = {}
-        self._component_rule_keys: dict[str, tuple[RuleSet, ...]] = {}
         self._local_display_classes: dict[str, bool] = {}
         self._candidate_rules: FIFOCache[
             frozenset[str], tuple[list[RuleSet], frozenset[str], frozenset[str], tuple[RuleSet, ...]]
@@ -404,9 +401,6 @@ class Stylesheet:
         Raises:
             StylesheetParseError: If there are any CSS related errors.
         """
-        self._component_cache_safe.clear()
-        self._component_rule_classes.clear()
-        self._component_rule_keys.clear()
         self._local_display_classes.clear()
         self._candidate_rules.clear()
         rules: list[RuleSet] = []
@@ -467,9 +461,6 @@ class Stylesheet:
         # Do this in a fresh Stylesheet so if there are errors we don't break self.
         stylesheet = Stylesheet(variables=self._variables)
         self._path_rules_cache.clear()
-        self._component_cache_safe.clear()
-        self._component_rule_classes.clear()
-        self._component_rule_keys.clear()
         self._local_display_classes.clear()
         self._candidate_rules.clear()
         for read_from, (css, is_defaults, tie_breaker, scope) in self.source.items():
@@ -572,6 +563,36 @@ class Stylesheet:
             previous = node
         return tuple(result)
 
+    def _get_candidate_rules(
+        self, selector_names: set[str]
+    ) -> tuple[list[RuleSet], frozenset[str], frozenset[str], tuple[RuleSet, ...]]:
+        """Share declaration planning for widgets and their virtual components.
+
+        Parsing retires this bounded resource. Ancestry and live pseudo-classes
+        are matched by ``apply`` rather than retained in a candidate plan.
+        """
+        # Resolve pending parsing before consulting the rule index or cache.
+        all_rules = self.rules
+        rules_map = self.rules_map
+        selectors = frozenset(rules_map.keys() & selector_names)
+        candidates = self._candidate_rules.get(selectors)
+        if candidates is None:
+            limit_rules = {rule for name in selectors for rule in rules_map[name]}
+            rules = list(filter(limit_rules.__contains__, reversed(all_rules)))
+            all_pseudo_classes = frozenset().union(
+                *(rule.pseudo_classes for rule in rules)
+            )
+            rule_classes = frozenset(
+                selector.name
+                for rule in rules
+                for group in rule.selector_set
+                for selector in group.selectors
+                if selector.type == SelectorType.CLASS
+            )
+            candidates = rules, all_pseudo_classes, rule_classes, tuple(rules)
+            self._candidate_rules[selectors] = candidates
+        return candidates
+
     def apply(
         self,
         node: DOMNode,
@@ -606,26 +627,10 @@ class Stylesheet:
                 # must not force identical newly mounted rows to rematch all rules.
                 cache = {}
 
-            # Compile candidate lists once per selector signature, rather than
-            # scanning the entire stylesheet for every node on each update. This
-            # caches no match result: ancestry and live pseudo-classes are still
-            # evaluated below. Parsing a new stylesheet retires these lists.
-            all_rules = self.rules
+            rules, all_pseudo_classes, rule_classes, rule_key = (
+                self._get_candidate_rules(node._selector_names)
+            )
             rules_map = self.rules_map
-            selectors = frozenset(rules_map.keys() & node._selector_names)
-            candidates = self._candidate_rules.get(selectors)
-            if candidates is None:
-                limit_rules = {rule for name in selectors for rule in rules_map[name]}
-                rules = list(filter(limit_rules.__contains__, reversed(all_rules)))
-                all_pseudo_classes = frozenset().union(*(rule.pseudo_classes for rule in rules))
-                rule_classes = frozenset(
-                    selector.name for rule in rules for group in rule.selector_set
-                    for selector in group.selectors if selector.type == SelectorType.CLASS
-                )
-                rule_key = tuple(rules)
-                self._candidate_rules[selectors] = (rules, all_pseudo_classes, rule_classes, rule_key)
-            else:
-                rules, all_pseudo_classes, rule_classes, rule_key = candidates
             node._has_hover_style = "hover" in all_pseudo_classes
             node._has_focus_within = "focus-within" in all_pseudo_classes
             node._has_order_style = not all_pseudo_classes.isdisjoint(
@@ -772,33 +777,20 @@ class Stylesheet:
             # inherited values still follow its current styles. Positional,
             # focus-within and empty selectors need a fresh match because a
             # sibling/descendant can change without changing this path key.
-            rules = self.rules
-            safe = self._component_cache_safe
-            for component in component_classes:
-                if component not in safe:
-                    names = {"*", "DOMNode", f".{component}"}
-                    component_rules = {
-                        rule for name in self.rules_map.keys() & names
-                        for rule in self.rules_map[name]
-                    }
-                    safe[component] = not any(
-                        rule.pseudo_classes & self._EXCLUDE_PSEUDO_CLASSES_FROM_CACHE
-                        for rule in component_rules
-                    )
-                    self._component_rule_classes[component] = frozenset(
-                        selector.name for rule in component_rules for group in rule.selector_set
-                        for selector in group.selectors if selector.type == SelectorType.CLASS
-                    )
-                    self._component_rule_keys[component] = tuple(
-                        rule for rule in reversed(rules) if rule in component_rules
-                    )
-            if all(safe[component] for component in component_classes):
-                relevant_classes = frozenset().union(*(
-                    self._component_rule_classes[component] for component in component_classes
-                ))
+            component_candidates = [
+                (component, self._get_candidate_rules({"*", "DOMNode", f".{component}"}))
+                for component in sorted(component_classes)
+            ]
+            if all(
+                pseudo_classes.isdisjoint(self._EXCLUDE_PSEUDO_CLASSES_FROM_CACHE)
+                for _, (_, pseudo_classes, _, _) in component_candidates
+            ):
+                relevant_classes = frozenset().union(
+                    *(classes for _, (_, _, classes, _) in component_candidates)
+                )
                 signature = (
-                    tuple((component, self._component_rule_keys[component])
-                          for component in sorted(component_classes)),
+                    tuple((component, rule_key)
+                          for component, (_, _, _, rule_key) in component_candidates),
                     frozenset(component_classes),
                     self._css_path_key(node.css_path_nodes, relevant_classes),
                 )
@@ -812,7 +804,7 @@ class Stylesheet:
             refresh_node = False
             old_component_styles = node._component_styles.copy()
             node._component_styles.clear()
-            for component in sorted(component_classes):
+            for component, _ in component_candidates:
                 virtual_node = DOMNode(classes=component)
                 virtual_node._attach(node)
                 self.apply(virtual_node, animate=False)
@@ -957,7 +949,7 @@ class Stylesheet:
         inherited style. Ordinary widget focus/blur events still update the
         focused controls separately through their existing handlers.
         """
-        self._update_focus_dependencies(root, root.app)
+        self._update_focus_dependencies(((root, root.app),))
 
     def update_widget_focus(self, root: DOMNode) -> None:
         """Update declarations affected by this widget's focus or blur change.
@@ -966,44 +958,59 @@ class Stylesheet:
         just because it received keyboard focus. Ancestor ``focus-within``
         changes are still handled by the screen's focus transition.
         """
-        self._update_focus_dependencies(root, root)
+        self._update_focus_dependencies(((root, root),))
 
-    def update_focus_within(self, root: DOMNode) -> None:
-        """Restyle declaration targets affected by this ancestor's focus state."""
-        self._update_focus_dependencies(root, root, frozenset({"focus-within"}))
+    def update_focus_within(self, roots: Iterable[DOMNode]) -> None:
+        """Restyle one focus transition over its changed ancestor subtrees."""
+        self._update_focus_dependencies(
+            ((root, root) for root in roots), frozenset({"focus-within"})
+        )
 
     def _update_focus_dependencies(
-        self, root: DOMNode, focus_node: DOMNode,
+        self, scopes: Iterable[tuple[DOMNode, DOMNode]],
         pseudo_classes: frozenset[str] = frozenset({"focus", "blur"}),
     ) -> None:
-        """Rematch affected targets; style descriptors own inherited repaint.
+        """Select each scope's targets, then rematch their union once.
 
-        A matching ancestor does not imply every descendant's CSS changed.
-        Color, opacity and other inherited style descriptors already invalidate
-        child presentation. Descendant selectors declare their own target names.
+        Roots retain their original focus declaration and descendant scope.
+        Overlapping ancestors share traversal, while independent branches keep
+        their own applicable names. Actual matching and inherited repaint stay
+        with the existing CSS and style owners.
         """
-        affected_names = {
-            name
-            for rule in self.rules
-            if any(
-                selector.pseudo_classes & pseudo_classes
-                and selector._check(focus_node)
-                for group in rule.selector_set for selector in group.selectors
-            )
-            for name in rule.selector_names
-        }
-        if not affected_names:
+        scopes = tuple(scopes)
+        if not scopes:
             return
+        scope_names: dict[DOMNode, set[str]] = {}
+        for rule in self.rules:
+            for root, focus_node in scopes:
+                if any(
+                    selector.pseudo_classes & pseudo_classes
+                    and selector._check(focus_node)
+                    for group in rule.selector_set for selector in group.selectors
+                ):
+                    scope_names.setdefault(root, set()).update(rule.selector_names)
+        if not scope_names:
+            return
+        # Nested roots acquire their own declaration names when reached through
+        # the outer traversal; they do not start a second descendant walk.
+        pending = [
+            (root, frozenset()) for root in scope_names
+            if not any(ancestor in scope_names for ancestor in root.ancestors)
+        ]
         affected = []
-        pending = [root]
+        visited: set[DOMNode] = set()
         while pending:
-            node = pending.pop()
+            node, inherited_names = pending.pop()
+            if node in visited:
+                continue
+            visited.add(node)
+            names = inherited_names.union(scope_names.get(node, ()))
             component_names = {f".{name}" for name in node._get_component_classes()}
-            if affected_names & (node._selector_names | component_names):
+            if names & (node._selector_names | component_names):
                 affected.append(node)
-            pending.extend(node.children)
+            pending.extend((child, names) for child in node.children)
             if isinstance(node, Widget):
-                pending.extend(node._get_virtual_dom())
+                pending.extend((child, names) for child in node._get_virtual_dom())
         self.update_nodes(affected, animate=True)
 
     def update_nodes(

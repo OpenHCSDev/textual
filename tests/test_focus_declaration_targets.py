@@ -65,6 +65,39 @@ async def test_descendant_only_focus_within_rule_has_no_dependency_on_ancestor_r
         assert target.styles.color.css == "rgb(0,0,255)"
 
 
+async def test_nested_focus_scopes_share_traversal_without_expanding_inner_targets():
+    class FocusApp(App):
+        CSS = """
+        #outer:focus-within #outer-target { color: red; }
+        #inner:focus-within .inner-target { color: green; }
+        """
+
+        def compose(self):
+            with VerticalGroup(id="outer"):
+                yield Label("outer", id="outer-target")
+                yield Label("outside inner", id="outside-inner", classes="inner-target")
+                with VerticalGroup(id="inner"):
+                    yield Button("inside", id="inside")
+                    yield Label("inner", id="inner-target", classes="inner-target")
+
+    app = FocusApp()
+    async with app.run_test() as pilot:
+        app.query_one("#inside").focus()
+        await pilot.pause()
+        outer_target = app.query_one("#outer-target")
+        inner_target = app.query_one("#inner-target")
+        outside_inner = app.query_one("#outside-inner")
+        with patch.object(app.stylesheet, "apply", wraps=app.stylesheet.apply) as restyled:
+            app.stylesheet.update_focus_within(
+                (app.query_one("#outer"), app.query_one("#inner"))
+            )
+        touched = [call.args[0] for call in restyled.call_args_list]
+        assert touched.count(outer_target) == touched.count(inner_target) == 1
+        assert outside_inner not in touched
+        assert outer_target.styles.color == Color.parse("red")
+        assert inner_target.styles.color == Color.parse("green")
+
+
 async def test_instant_style_changes_do_not_materialize_animation_rule_graphs():
     app = App()
     async with app.run_test() as pilot:
