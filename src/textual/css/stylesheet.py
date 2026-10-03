@@ -17,13 +17,12 @@ from rich.text import Text
 
 from textual.cache import FIFOCache, LRUCache
 from textual.css.errors import StylesheetError
-from textual.css.match import _check_selectors
 from textual.css.model import RuleSet, SelectorType
 from textual.css.parse import parse
 from textual.css.styles import RenderStyles, RulesMap, Styles
 from textual.css.tokenize import Token, tokenize_values
 from textual.css.tokenizer import TokenError
-from textual.css.types import CSSLocation, Specificity3, Specificity6
+from textual.css.types import CSSLocation, Specificity6
 from textual.dom import DOMNode
 from textual.markup import parse_style
 from textual.style import Style
@@ -498,23 +497,6 @@ class Stylesheet:
             self.source = stylesheet.source
             self._require_parse = False
 
-    @classmethod
-    def _check_rule(
-        cls, rule_set: RuleSet, css_path_nodes: list[DOMNode]
-    ) -> Iterable[Specificity3]:
-        """Check a rule set, return specificity of applicable rules.
-
-        Args:
-            rule_set: A rule set.
-            css_path_nodes: A list of the nodes from the App to the node being checked.
-
-        Yields:
-            Specificity of any matching selectors.
-        """
-        for selector_set in rule_set.selector_set:
-            if _check_selectors(selector_set.selectors, css_path_nodes):
-                yield selector_set.specificity
-
     # pseudo classes which iterate over multiple nodes
     # These shouldn't be used in a cache key
     _EXCLUDE_PSEUDO_CLASSES_FROM_CACHE: Final[set[str]] = {
@@ -696,7 +678,6 @@ class Stylesheet:
                     self._process_component_classes(node)
                     return
 
-            _check_rule = self._check_rule
             if css_path_nodes is None:
                 css_path_nodes = node.css_path_nodes
 
@@ -708,7 +689,7 @@ class Stylesheet:
             for rule in rules:
                 is_default_rules = rule.is_default_rules
                 tie_breaker = rule.tie_breaker
-                for base_specificity in _check_rule(rule, css_path_nodes):
+                for base_specificity in rule.check(node, css_path_nodes=css_path_nodes):
                     for key, rule_specificity, value in rule.styles.extract_rules(
                         base_specificity, is_default_rules, tie_breaker
                     ):

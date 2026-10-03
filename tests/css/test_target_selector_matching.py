@@ -1,15 +1,14 @@
 """Target-only selectors do not need a CSS ancestry walk or a cached match result."""
 
 from copy import deepcopy
-from itertools import product
 from unittest.mock import PropertyMock, patch
 
 import pytest
 
 from textual.app import App
 from textual.containers import Container
-from textual.css.match import _check_selectors, match
-from textual.css.model import CombinatorType
+from textual.css.match import match
+from textual.css.model import CombinatorType, RuleSet
 from textual.css.parse import parse_selectors
 from textual.dom import DOMNode
 from textual.widgets import Static
@@ -43,17 +42,34 @@ def test_match_parity_across_compounds_children_descendants_and_alternatives():
     leaf = DOMNode(id="leaf", classes="leaf selected")
     middle._attach(root)
     leaf._attach(middle)
-    terms = ("*", "DOMNode", ".selected", ".missing", "#leaf", "DOMNode.leaf")
-    queries = [*terms, *(f"{left}{join}{right}" for left, join, right in product(
-        terms, (" ", " > ", ", "), terms)),
-        ".outer .selected > .leaf", ".outer > .selected .leaf", ".outer > .leaf",
-        ".selected.selected", ".outer > .middle > .leaf"]
-    for node in (root, middle, leaf):
-        for query in queries:
+    expected_queries = {
+        "*": (True, True, True),
+        ".missing": (False, False, False),
+        "#leaf": (False, False, True),
+        ".selected": (True, True, True),
+        # Bare DOMNode has an empty CSS type declaration; subclasses register
+        # their type names through the original __init_subclass__ owner.
+        "DOMNode.leaf": (False, False, False),
+        ".outer .selected": (False, True, True),
+        ".outer > .selected": (False, True, False),
+        ".outer > .leaf": (False, False, False),
+        ".outer .selected > .leaf": (False, False, True),
+        ".outer > .selected .leaf": (False, False, True),
+        ".selected > .selected": (False, True, True),
+        ".selected .selected": (False, True, True),
+        ".outer > .middle > .leaf": (False, False, True),
+        ".middle > .outer": (False, False, False),
+        ".missing, #leaf": (False, False, True),
+        ".outer, .middle": (True, True, False),
+        ".selected.selected": (True, True, True),
+        ".outer.leaf": (False, False, False),
+    }
+    for query, expected in expected_queries.items():
+        for node, target_matches in zip((root, middle, leaf), expected):
             selectors = parse_selectors(query)
-            expected = any(_check_selectors(group.selectors, node.css_path_nodes)
-                           for group in selectors)
-            assert match(iter(selectors), node) == expected, (query, node)
+            assert match(iter(selectors), node) is target_matches, (query, node)
+            assert bool(list(RuleSet(selectors).check(node))) is target_matches, (query, node)
+
 
 
 def test_custom_css_ancestry_remains_authoritative_for_relational_queries():
@@ -70,6 +86,32 @@ def test_custom_css_ancestry_remains_authoritative_for_relational_queries():
     assert match(parse_selectors(".virtual > .leaf"), leaf)
     assert not match(parse_selectors(".physical .leaf"), leaf)
     assert match(parse_selectors("VirtualPath.leaf"), leaf)
+
+
+def test_rules_own_specificity_and_share_only_the_required_original_path():
+    class PathReads(DOMNode):
+        path_reads = 0
+
+        @property
+        def css_path_nodes(self):
+            self.path_reads += 1
+            return super().css_path_nodes
+
+    outer, leaf = DOMNode(classes="outer"), PathReads(id="leaf", classes="leaf")
+    leaf._attach(outer)
+    target_only = RuleSet(parse_selectors(".leaf, #leaf"))
+    assert list(target_only.check(leaf)) == [(0, 1, 0), (1, 0, 0)]
+    assert leaf.path_reads == 0
+
+    mixed = RuleSet(parse_selectors(".leaf, .outer > .leaf, .outer .leaf"))
+    expected = [(0, 1, 0), (0, 2, 0), (0, 2, 0)]
+    assert list(mixed.check(leaf)) == expected
+    assert leaf.path_reads == 1
+    original_path = leaf.css_path_nodes
+    assert list(mixed.check(leaf, css_path_nodes=original_path)) == expected
+    assert leaf.path_reads == 2
+    assert list(RuleSet().check(leaf)) == []
+    assert leaf.path_reads == 2
 
 
 def test_selector_edits_do_not_leave_a_stale_dependency_classification():
