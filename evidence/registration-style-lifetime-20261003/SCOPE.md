@@ -21,3 +21,26 @@ semantic reading. No Toad registration override was found.
 Source implementation precedes one batched affected native sanity check and the
 next joined installed journey. Registration is an observed source path, not a
 measured dominant CPU share. This does not close IRC End or scrolling smoothness.
+
+## Working source checkpoint
+
+App._register owns the entire synchronous admission. Its local traversal returns
+the original descendant/group notification sequence after attachment and CSS
+source collection complete. Initial stylesheet application consumes that sequence
+in reverse, so ancestors commit before descendants. Notification and message
+startup then consume the original sequence. The old recursive _register call,
+which also styled/notified/started each partial subtree, is deleted. The original
+_register_child remains the only attachment/post-register hook; no behavior is
+copied into a new owner.
+
+All production entrypoints share this change: Widget.mount and App's screen/mode
+registration. Virtual scrollbars retain their separate existing _start_widget
+lifetime. Styles._update_rules and DOMNode._update_inherited_geometry retain all
+ordinary mutation/measurement invalidation, including inherited opaque visuals.
+Stylesheet.apply retains component processing and its original shared rule cache.
+No invalidation is skipped, and no retained rendering or semantic state is added.
+
+Production delta: one file, 28 added / 14 deleted lines. Pattern IMPL-12: remove
+repeated partial lifecycle publication by making the existing App admission own
+the whole incoming tree. AST sites identify static source only; custom dynamic
+receiver overrides cannot be inferred from names alone.
