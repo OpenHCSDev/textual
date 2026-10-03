@@ -9,7 +9,7 @@ from textual.css.stylesheet import Stylesheet
 from textual.widgets import Static
 
 
-async def test_identical_rules_keep_notification_without_repainting_scrollbars():
+async def test_identical_rules_keep_paint_and_preparation():
     class ScrollApp(App):
         CSS = "VerticalScroll { height: 4; color: red; } Static { height: 1; }"
 
@@ -29,7 +29,7 @@ async def test_identical_rules_keep_notification_without_repainting_scrollbars()
             with patch.object(scroller, "notify_style_update", wraps=scroller.notify_style_update) as notify:
                 Stylesheet.replace_rules(scroller, rules.copy())
                 repaint.assert_not_called()
-                notify.assert_called_once()
+                notify.assert_not_called()
 
         changed = dict(rules, color=Color.parse("blue"), scrollbar_color=Color.parse("green"))
         with patch.object(scroller.vertical_scrollbar, "refresh", wraps=scroller.vertical_scrollbar.refresh) as repaint:

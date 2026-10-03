@@ -32,7 +32,7 @@ from rich.style import Style
 from rich.text import Text
 from rich.tree import Tree
 
-from textual._context import NoActiveAppError, active_message_pump
+from textual._context import active_message_pump
 from textual._compat import cached_property
 from textual._node_list import NodeList
 from textual._paint_state import EMPTY_PAINT, PaintState, resolve_paint
