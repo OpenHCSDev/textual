@@ -1,8 +1,8 @@
 # Style and geometry source checkpoint
 
-Production source: `021693cedff2cd77eddd257c491e6d1bd4f969d4`, normally
-integrated with main `69954eb38` (Text38). Eight production files: **212 added,
-71 deleted**. This is a source checkpoint, awaiting the single paired installed
+Production source: `95d3b99b8287af866290bc5398c869325d2d2913`, normally
+integrated with main `69954eb38` (Text38). Nine production files: **222 added,
+79 deleted**. This is a source checkpoint, awaiting the single paired installed
 journey with Heisenberg's Toad384. Current default installations are untouched.
 
 ## What owns the work
@@ -77,3 +77,38 @@ or the installed Toad lifecycle. Heisenberg owns the single changed normal69
 pair and real saved-session motion/profile gate. PR355's old source/failed End
 movies remain protected; its limited mount/admission closure is not a speed
 or final-End claim. No independent recording or provider run was performed.
+
+## Delegated cancellation follow-through
+
+The paired lifecycle pilot reported an awaiting worker as
+`WorkerFailed(WorkerCancelled)` during teardown. Its primary held-render timeout
+was separately a fixture task-family boundary: Heisenberg corrected the hold to
+Markdown tasks and retained the original renderer for sidebar/other tasks. That
+timeout does not establish a primary product mount or End failure.
+
+The existing WorkerCancelled declaration now composes WorkerError and
+asyncio.CancelledError. Original Worker._run handles the cancelled outcome
+through its unchanged asynchronous cancellation algorithm; no tuple classifier
+or viewport catch was added. Worker.wait, terminal states and errors retain their
+original public contracts. Generic `except Exception` still matches WorkerError;
+this is not a blanket claim about every MessagePump cancellation route.
+
+Deleted Worker._cancelled's declaration, write and reader. The existing
+cancelled_event owns the request, and is_cancelled derives it. Publish that
+request before task cancellation. A request and a terminal CANCELLED outcome are
+different facts: an awaiting parent may receive cancellation without anyone
+requesting its cancellation. Neither terminal state nor error was copied into
+this request signal.
+
+`worker-cancellation-owner.json` records before/after declaration and consumer
+AST through the existing Package parser across 249 native/288 Toad modules with
+zero omissions. Worker private flag references were all in the original owner;
+unrelated Timer fields and unresolved dynamic receiver identities are explicit
+limits. Existing public catches remain in their actual lifecycle boundaries.
+
+Only the changed worker family was checked afterward: **59 passed in 2.00s**,
+including original real App workers with child cancellation, public wait errors,
+terminal state and request/outcome separation. The prior geometry/paint 140-case
+result remains at its unchanged source boundary. All logs are retained. No
+physical recording has run for this amended source; Heisenberg owns that single
+paired installed qualification next.
