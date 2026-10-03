@@ -523,7 +523,7 @@ class Widget(DOMNode):
         # Regions which need to be transferred from cache to screen
         self._repaint_regions: set[Region] = set()
 
-        self._box_model_cache: LRUCache[object, BoxModel] = LRUCache(16)
+        self._box_model_cache: LRUCache[object, tuple[BoxModel, Extrema]] = LRUCache(16)
         self._box_model_revision: tuple[int | None, ...] | None = None
 
         # Cache the auto content dimensions
@@ -1957,8 +1957,11 @@ class Widget(DOMNode):
             greedy,
             *revision,
         )
-        if cached_box_model := self._box_model_cache.get(cache_key):
-            return cached_box_model
+        if cached_measurement := self._box_model_cache.get(cache_key):
+            # Alignment consumes the same original constraints that produced
+            # this box, including A/B/A returns to a retained cache entry.
+            model, self._extrema = cached_measurement
+            return model
 
         styles = self.styles
         is_border_box = styles.box_sizing == "border-box"
@@ -2068,7 +2071,7 @@ class Widget(DOMNode):
         model = BoxModel(
             content_width + gutter.width, content_height + gutter.height, margin
         )
-        self._box_model_cache[cache_key] = model
+        self._box_model_cache[cache_key] = model, extrema
         return model
 
     @height_dependency(NATIVE_WIDGET_WIDTH)
