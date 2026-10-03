@@ -53,8 +53,33 @@ main; its production tree did not change. Current full-main and new43 production
 deltas are therefore both `_compositor.py`42 added /73 deleted. The earlier
 70 added /87 deleted union remains the historical pre-landing comparison.
 
-Validation is pending under the explicit source-only resource instruction.
-Neither source closure nor old396/42 footage qualifies the changed43 output.
+## Final bounded native sanity
+
+Parent authorized the final proportionate batch after source closure. Existing
+system Python and native source were reused; no environment, provider or film
+was created. Resource check reported warnings (home8.3GiB, RAM18.3GiB available,
+swap9.3GiB used). The run was bounded by45 seconds:
+
+```sh
+PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 timeout45s python -m pytest -q -p no:cacheprovider tests/test_compositor_frame_damage.py
+```
+
+Actual command uses `timeout 45s`. The preserved native-sanity.log reports
+**7 passed in0.69 seconds**, exit0. The batch covers:
+
+- Resize damage remains within the newly published native frame (three cases).
+- Original lazy geometry retains old and new caption damage.
+- Both writers clip a partially selected wide cell without overwriting its
+  untouched half; original segment metadata survives.
+- Actual native App sparse damage borrows the original cuts, leaves unrelated
+  row buckets empty, and publishes the known content only at the selected rows.
+- Actual native App body capture retains nonzero original row coordinates.
+
+No UI or protocol mock was introduced. Production is unchanged from0efe0803.
+These checks do not establish installed readiness or performance. The remaining
+boundary is Heisenberg399's ONE changed paired saved-session physical journey;
+43 does not create another film or hold accepted397/14baa shipping. Neither
+source closure nor old396/42 footage qualifies changed43 output.
 
 Source first: owner-before.json uses NRA Package across native production and
 Toad production, including declarations and references. Read the original scene
