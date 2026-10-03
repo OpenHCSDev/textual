@@ -20,6 +20,28 @@ class PaintState(NamedTuple):
     layered_background: Color
     cacheable: bool = True
 
+    def same_paint(self, other: PaintState) -> bool:
+        """Compare pixels, independently of the resolver's dependency lineage.
+
+        Ancestor visibility or layout edits require fresh dependency resolution,
+        but retained paint remains valid when its resulting values are unchanged.
+        """
+        return (
+            self.background,
+            self.foreground,
+            self.text_style,
+            self.opacity,
+            self.base_background,
+            self.layered_background,
+        ) == (
+            other.background,
+            other.foreground,
+            other.text_style,
+            other.opacity,
+            other.base_background,
+            other.layered_background,
+        )
+
 
 EMPTY_PAINT = PaintState(
     None, -1, Color(0, 0, 0, 0), Color(255, 255, 255, 0),

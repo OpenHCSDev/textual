@@ -154,3 +154,29 @@ def test_style_views_and_unchanged_rules_preserve_paint_until_original_mutation(
     assert initial.has_rule("color")
     initial.reset()
     assert not initial.has_rule("color")
+
+
+def test_layout_dependency_changes_preserve_retained_paint_values():
+    root, parent, leaf = Widget(), Widget(), Widget()
+    parent._parent = root
+    leaf._parent = parent
+    root.styles.color = "red"
+    original = leaf._resolved_paint_state()
+    visual = leaf.visual_style
+
+    # A tab's visibility changes dependency epochs without changing pixels.
+    for visible in (False, True):
+        parent.display = visible
+        current = leaf._resolved_paint_state()
+        assert current is not original
+        assert current != original
+        assert original.same_paint(current)
+        assert leaf.visual_style is visual
+
+    # Real inherited paint changes remain invalidating, including opacity.
+    parent.styles.opacity = .5
+    assert not original.same_paint(leaf._resolved_paint_state())
+    parent.styles.opacity = 1
+    parent.styles.color = "blue"
+    assert not original.same_paint(leaf._resolved_paint_state())
+    assert leaf.visual_style is not visual
