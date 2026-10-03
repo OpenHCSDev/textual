@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
+from bisect import bisect_left, bisect_right
 from contextlib import contextmanager
 from functools import cached_property
 from operator import itemgetter
@@ -38,7 +39,6 @@ from rich.segment import Segment
 from rich.style import Style
 
 from textual import errors
-from textual._cells import cell_len
 from textual._context import visible_screen_stack
 from textual._loop import loop_last
 from textual.geometry import NULL_SPACING, Offset, Region, Size, Spacing
@@ -387,64 +387,47 @@ class ChopsUpdate(CompositorUpdate):
         self,
         chops: Sequence[Mapping[int, Strip | None]],
         spans: list[tuple[int, int, int]],
-        chop_ends: list[list[int]],
+        cuts: list[list[int]],
     ) -> None:
         """A renderable which updates chops (fragments of lines).
 
         Args:
             chops: A mapping of offsets to list of segments, per line.
-            crop: Region to restrict update to.
-            chop_ends: A list of the end offsets for each line
+            spans: Original damaged screen spans.
+            cuts: Original compositor cut boundaries for each line.
         """
         self.chops = chops
         self.spans = spans
-        self.chop_ends = chop_ends
+        self.cuts = cuts
+
+    def _get_line_chops(self, y: int, x1: int, x2: int) -> Iterator[tuple[int, Strip]]:
+        """Clip the original painted chops once for either publication format.
+
+        Strip owns cell splitting, including wide characters and metadata.
+        Borrow the original cuts instead of copying ends for every screen row.
+        """
+        cuts = self.cuts[y]
+        first = max(0, bisect_right(cuts, x1) - 1)
+        last = bisect_left(cuts, x2)
+        for index in range(first, last):
+            x, end = cuts[index], cuts[index + 1]
+            strip = self.chops[y].get(x)
+            if strip is None:
+                continue
+            left, right = max(x, x1), min(end, x2)
+            if left < right:
+                yield left, strip.crop(left - x, right - x)
 
     def __rich_console__(
         self, console: Console, options: ConsoleOptions
     ) -> RenderResult:
         move_to = Control.move_to
         new_line = Segment.line()
-        chops = self.chops
-        chop_ends = self.chop_ends
         last_y = self.spans[-1][0]
-
-        _cell_len = cell_len
         for y, x1, x2 in self.spans:
-            line = chops[y]
-            ends = chop_ends[y]
-            for end, (x, strip) in zip(ends, line.items()):
-                # TODO: crop to x extents
-                if strip is None:
-                    continue
-
-                if x > x2 or end <= x1:
-                    continue
-
-                if x2 > x >= x1 and end <= x2:
-                    yield move_to(x, y).segment
-                    yield from strip
-                    continue
-
-                iter_segments = iter(strip)
-                if x < x1:
-                    for segment in iter_segments:
-                        next_x = x + _cell_len(segment.text)
-                        if next_x > x1:
-                            yield move_to(x, y).segment
-                            yield segment
-                            break
-                        x = next_x
-                else:
-                    yield move_to(x, y).segment
-                if end <= x2:
-                    yield from iter_segments
-                else:
-                    for segment in iter_segments:
-                        if x >= x2:
-                            break
-                        yield segment
-                        x += _cell_len(segment.text)
+            for x, strip in self._get_line_chops(y, x1, x2):
+                yield move_to(x, y).segment
+                yield from strip
 
             if y != last_y:
                 yield new_line
@@ -462,26 +445,10 @@ class ChopsUpdate(CompositorUpdate):
         append = sequences.append
 
         move_to = Control.move_to
-        chops = self.chops
-        chop_ends = self.chop_ends
         last_y = self.spans[-1][0]
 
         for y, x1, x2 in self.spans:
-            line = chops[y]
-            ends = chop_ends[y]
-            for end, (x, strip) in zip(ends, line.items()):
-                if strip is None:
-                    continue
-
-                if x > x2 or end <= x1:
-                    continue
-
-                if x2 > x >= x1 and end <= x2:
-                    append(move_to(x, y).segment.text)
-                    append(strip.render(console))
-                    continue
-
-                strip = strip.crop(0, min(end, x2) - x)
+            for x, strip in self._get_line_chops(y, x1, x2):
                 append(move_to(x, y).segment.text)
                 append(strip.render(console))
 
@@ -1624,8 +1591,7 @@ class Compositor:
         chops = self._render_chops(crop, is_rendered_line,
                                   widgets=self.visible_widgets, cuts=self.cuts,
                                   bounds=screen_region)
-        chop_ends = [cut_set[1:] for cut_set in self.cuts]
-        return ChopsUpdate(chops, spans, chop_ends)
+        return ChopsUpdate(chops, spans, self.cuts)
 
     def render_strips(self, size: Size | None = None) -> list[Strip]:
         """Render to a list of strips.
@@ -1701,7 +1667,11 @@ class Compositor:
         """
         fromkeys = cast("Callable[[list[int]], dict[int, Strip | None]]", dict.fromkeys)
         chops: list[dict[int, Strip | None]]
-        chops = [fromkeys(cut_set[:-1]) for cut_set in cuts]
+        chops = [
+            fromkeys(cut_set[:-1])
+            if crop.y <= y < crop.bottom and is_rendered_line(y) else {}
+            for y, cut_set in enumerate(cuts, bounds.y)
+        ]
         remaining = [len(line) for line in chops]
 
         def render_regions(region: Region) -> Iterable[Region]:
@@ -1716,13 +1686,12 @@ class Compositor:
             for y in region.line_range:
                 row = y - bounds.y
                 spans: set[tuple[int, int]] = set()
-                if remaining[row] and is_rendered_line(y):
+                if remaining[row]:
                     start_x = None
-                    for x, value in chops[row].items():
-                        if x < first:
-                            continue
-                        if x >= last:
-                            break
+                    row_cuts = cuts[row]
+                    for index in range(bisect_left(row_cuts, first), bisect_left(row_cuts, last)):
+                        x = row_cuts[index]
+                        value = chops[row][x]
                         if value is None:
                             if start_x is None:
                                 start_x = x
@@ -1753,12 +1722,12 @@ class Compositor:
             first_cut, last_cut = render_region.column_span
 
             for y, strip in zip(render_region.line_range, strips):
-                if not is_rendered_line(y):
-                    continue
-
                 row = y - bounds.y
                 chops_line = chops[row]
-                final_cuts = [cut for cut in cuts[row] if (last_cut >= cut >= first_cut)]
+                if not chops_line:
+                    continue
+                row_cuts = cuts[row]
+                final_cuts = row_cuts[bisect_left(row_cuts, first_cut):bisect_right(row_cuts, last_cut)]
                 cut_strips = strip.divide([cut - render_x for cut in final_cuts[1:]])
 
                 # Since we are painting front to back, the first segments for a cut "wins"
