@@ -280,3 +280,67 @@ def test_id_validation(identifier: str):
     """Regression tests for https://github.com/Textualize/textual/issues/3954."""
     with pytest.raises(BadIdentifier):
         DOMNode(id=identifier)
+
+
+def test_ancestor_walk_is_lazy_and_does_not_retain_unvisited_weak_parents():
+    from weakref import ref
+
+    root, parent, leaf = DOMNode(), DOMNode(), DOMNode()
+    parent._attach(root)
+    leaf._attach(parent)
+    walk = leaf.walk_ancestors()
+    assert next(walk) is parent
+    root_reference = ref(root)
+    del root
+    assert root_reference() is None
+    assert list(walk) == []
+
+
+def test_ancestor_lists_remain_snapshots_and_lazy_walk_uses_current_parent():
+    first, second, leaf = DOMNode(), DOMNode(), DOMNode()
+    leaf._attach(first)
+    snapshot = leaf.ancestors
+    walk = leaf.walk_ancestors()
+    leaf._attach(second)
+    assert list(walk) == [second]
+    assert snapshot == [first]
+    assert leaf.ancestors_with_self == [leaf, second]
+    assert leaf.css_path_nodes == [second, leaf]
+    leaf._detach()
+    assert list(leaf.walk_ancestors()) == []
+    assert list(leaf.walk_ancestors(with_self=True)) == [leaf]
+    assert leaf.ancestors == [] and leaf.ancestors_with_self == [leaf]
+
+
+async def test_query_ancestor_preserves_native_base_selectors_type_and_order():
+    from textual.app import App
+    from textual.containers import Horizontal, Vertical
+    from textual.css.query import InvalidQueryFormat, NoMatches
+    from textual.widget import Widget
+    from textual.widgets import Static
+
+    class QueryApp(App):
+        def compose(self):
+            with Vertical(id="outer", classes="family"):
+                with Horizontal(id="inner", classes="family"):
+                    yield Static("REAL_NATIVE_CHILD", id="leaf", classes="family")
+
+    app = QueryApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        outer, inner, leaf = (app.query_one(f"#{name}") for name in ("outer", "inner", "leaf"))
+        assert leaf.query_ancestor(".family") is inner
+        assert leaf.query_ancestor(Horizontal) is inner
+        assert leaf.query_ancestor(".family", Vertical) is outer
+        assert leaf.query_ancestor("Vertical > Horizontal.family") is inner
+        assert leaf.query_ancestor(App) is app
+        # App queries use its existing Screen DOM base, not the App itself.
+        assert app.query_ancestor(App) is app
+        assert leaf.select_container is inner
+        assert Widget.get_common_ancestor(leaf, leaf) is inner
+        with pytest.raises(NoMatches):
+            leaf.query_ancestor(".family", Static)
+        with pytest.raises(InvalidQueryFormat):
+            leaf.query_ancestor("foo_bar")
+        with pytest.raises(NoMatches):
+            Static().query_ancestor(Widget)

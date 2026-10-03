@@ -1,24 +1,73 @@
-# Consume native ancestry lazily through the existing DOM owner
+# Native ancestry is owned by DOMNode
 
-Stacked after frozen45 f7683fa772 in the same native checkout. No new environment,
-recording, provider, type, cache, traversal state or parent registry. Heisenberg
-owns Toad405 Body/ViewportPresentation/WindowMembership consumers. This branch
-owns DOMNode and all native short-circuit consumers; frozen45 source is unchanged.
+Source-qualified checkpoint stacked on frozen45 f7683fa77274e6a031c36ac9b9d68b9db1cf57f6.
+Production source is c256b99e02fa2808a5d826556fe523a7c9ccbd48; subsequent
+checks and receipt changes do not alter production. Heisenberg owns Toad405 and
+one joined installed resource/motion/profile qualification. This is not an
+installed-readiness, CPU-gain, FPS or smoothness claim.
 
-Existing DOMNode.walk_ancestors(*, with_self=False) will traverse the original
-weak parent relation on demand, nearest first. Public ancestors and
-ancestors_with_self keep their list contracts and derive the traversal.
-query_ancestor consumes the iterator while retaining original DOM base, TCSS
-parser/matcher, expected type, nearest-match order and detached NoMatches.
-Migrate every native nearest/membership/early-stop consumer; retain deliberate
-reverse/root-index/snapshot collection behavior. No source identity/cycle cache
-or synthetic parent. Existing reparent admission continues owning cycle rejection.
+## What changed
 
-Source-first whole native/dependency AST, then semantic read of the original
-parent lifetime and all consumers. Native custom paint ancestry remains its
-existing override contract. Original402 observed stack edges motivate removal
-of eager ancestor materialization; they do not establish CPU dominance or speed.
-One coherent final batch and changed installed journey joins405 using existing
-native App/recording tools. Do not rerun frozen44/45 checks or402 film, create new
-fixtures/environments, or reason from test failures. Ship a working source
-checkpoint promptly; actual installed qualification remains a distinct boundary.
+DOMNode.walk_ancestors(*, with_self=False) owns nearest-first traversal of the
+original MessagePump weak parent links. Public ancestors/ancestors_with_self
+still return snapshots derived from that owner. query_ancestor and every native
+nearest-match/membership/early-stop consumer now consume the iterator. Screen,
+CSS, selection, component lookup, signal admission, tabs, help and Compositor
+capture membership use the same owner. Native ancestor invalidation, screen
+resolution and CSS path construction no longer carry separate parent loops.
+
+Reverse style/color composition, reparent cycle/root snapshots and complete
+binding-chain snapshots remain collections where their semantics require it.
+Original Widget.reparent owns cycle admission; MessagePump._parent owns weak
+storage. Custom ancestry keeps the original uncacheable paint contract for both
+property and walker overrides. There is no new state, registry, cache or type.
+
+Nine production files: 69 added / 62 deleted relative to frozen45. Frozen45
+Compositor geometry membership refusal remains intact;46 only migrates its
+ancestry consumer. Original402 stack edges show the eager-work call paths, not
+CPU dominance or a measured performance gain.
+
+## Source evidence
+
+Existing NRA/refactor-audit Package/Repository parser enumerated complete native
+and Toad production roots before and after:249 native modules,289 Toad modules,
+zero parse omissions. owner-before.json and owner-after.json retain the sites,
+owners, imports/inheritance and revisions. Native eager ancestry attribute
+syntax sites fell38 to9. Remaining sites are required collections or declaration
+identity checks. There is exactly one walk_ancestors declaration:DOMNode.
+
+The Toad snapshots already contain Heisenberg's migrated405 consumers; they are
+not a pre405 baseline. His selected family reports five eager reads removed,
+six owned walker calls, plus deletion of the protected-parent loop. Other Toad
+syntax sites are outside that family; this receipt does not claim whole-Toad
+zero eager reads. Syntax evidence does not prove dynamic plugin resolution or
+custom descriptor mutation. Original custom ancestry behavior is exercised.
+
+## Final bounded checks
+
+native-sanity.log / native-sanity.exit preserve the original batch:14 passed,
+1 failed,1.06s,exit1. Weak-parent laziness/non-retention, snapshot/detach,
+TCSS selectors/base/expected type/order, custom paint, screen resolution,
+reparent tasks/focus/selection/cycle rejection and CSS parity passed.
+
+The negative was the existing pending-frame callback check, after callback
+custody successfully transferred to the destination. Pilot.pause() waits for
+queued events and calls Screen._on_timer_update(), which schedules the callback
+with call_next; it does not await that callback. Both the timer/callback code
+and reparent callback transfer are unchanged from frozen45. The old check
+asserted completion before observing its original after-paint receipt.
+
+The check now awaits an Event set by that same actual callback; no production
+change, direct callback invocation, forced frame, assertion waiver or increased
+deadline. Only this changed check ran again:native-callback-receipt.log /
+native-callback-receipt.exit,1 passed,0.57s,exit0. Original negative preserved;
+no full-batch repeat. Batch processes terminated normally, no fixture/provider,
+new environment, recording or public mutation.
+
+## Remaining acceptance
+
+Toad405/native45/native46 use the agreed DOMNode API. Heisenberg will pin this
+frozen native production into the existing holder, then perform one installed
+three-body/resource sanity and one actual saved public motion/profile run.
+Native final source qualification is complete; installed qualification and the
+broader CPU/motion goal remain open.
