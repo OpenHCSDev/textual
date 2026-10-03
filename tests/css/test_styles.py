@@ -203,3 +203,25 @@ def test_widget_style_size_fails_if_data_type_is_not_supported(size_dimension_in
 
     with pytest.raises(StyleValueError):
         widget.styles.width = size_dimension_input
+
+
+def test_rule_descriptor_class_access_preserves_native_mro():
+    from textual.css._style_properties import IntegerProperty, StyleProperty
+    from textual.css.styles import RULE_NAMES
+
+    for name in RULE_NAMES:
+        assert isinstance(getattr(Styles, name), StyleProperty)
+
+    class PositiveInteger(IntegerProperty):
+        def validate_value(self, value):
+            return max(1, super().validate_value(value))
+
+    class PositiveStyles(Styles):
+        scrollbar_size_vertical = PositiveInteger(default=1, layout=True)
+
+    styles = PositiveStyles()
+    assert PositiveStyles.scrollbar_size_vertical is PositiveStyles.__dict__["scrollbar_size_vertical"]
+    styles.replace_rules({"scrollbar_size_vertical": 0})
+    assert styles.scrollbar_size_vertical == 1
+    styles.scrollbar_size_vertical = 2
+    assert styles.scrollbar_size_vertical == 2

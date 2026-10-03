@@ -506,9 +506,8 @@ class Widget(DOMNode):
 
         self._visual_style: VisualStyle | None = None
         """Cached style of visual."""
-        self._visual_style_cache_key: int = -1
         self._visual_paint_state = None
-        """Cache busting integer."""
+        """Resolved paint backing the cached visual style."""
 
         self._render_cache = _RenderCache(_null_size, [])
         # Regions which need to be updated (in Widget)
@@ -4390,10 +4389,8 @@ class Widget(DOMNode):
         resolved = self._resolved_paint_state()
         if (
             self._visual_style is None
-            or self._visual_paint_state is not resolved
+            or not resolved.same_paint(self._visual_paint_state)
         ):
-            self._visual_style_cache_key = self.styles._cache_key
-            self._visual_paint_state = resolved
             background, color, style = resolved.background, resolved.foreground, resolved.text_style
             self._visual_style = VisualStyle(
                 background,
@@ -4405,6 +4402,7 @@ class Widget(DOMNode):
                 underline=style.underline,
                 strike=style.strike,
             )
+        self._visual_paint_state = resolved
         return self._visual_style
 
     def get_selection(self, selection: Selection) -> tuple[str, str] | None:

@@ -590,169 +590,172 @@ class Stylesheet:
             animate: Animate changed rules.
             cache: An optional cache when applying a group of nodes.
         """
-        # Dictionary of rule attribute names e.g. "text_background" to list of tuples.
-        # The tuples contain the rule specificity, and the value for that rule.
-        # We can use this to determine, for a given rule, whether we should apply it
-        # or not by examining the specificity. If we have two rules for the
-        # same attribute, then we can choose the most specific rule and use that.
-        rule_attributes: defaultdict[str, list[tuple[Specificity6, object]]]
-        rule_attributes = defaultdict(list)
-        if cache is None:
-            # Initial mounts apply one node at a time. They should still use
-            # the stylesheet's retained path cache; a missing batch dictionary
-            # must not force identical newly mounted rows to rematch all rules.
-            cache = {}
+        # Matching, replacement and virtual components are one native style
+        # publication. Styles owns the notification and dependent damage.
+        with node._css_styles.batch_update():
+            # Dictionary of rule attribute names e.g. "text_background" to list of tuples.
+            # The tuples contain the rule specificity, and the value for that rule.
+            # We can use this to determine, for a given rule, whether we should apply it
+            # or not by examining the specificity. If we have two rules for the
+            # same attribute, then we can choose the most specific rule and use that.
+            rule_attributes: defaultdict[str, list[tuple[Specificity6, object]]]
+            rule_attributes = defaultdict(list)
+            if cache is None:
+                # Initial mounts apply one node at a time. They should still use
+                # the stylesheet's retained path cache; a missing batch dictionary
+                # must not force identical newly mounted rows to rematch all rules.
+                cache = {}
 
-        # Compile candidate lists once per selector signature, rather than
-        # scanning the entire stylesheet for every node on each update. This
-        # caches no match result: ancestry and live pseudo-classes are still
-        # evaluated below. Parsing a new stylesheet retires these lists.
-        all_rules = self.rules
-        rules_map = self.rules_map
-        selectors = frozenset(rules_map.keys() & node._selector_names)
-        candidates = self._candidate_rules.get(selectors)
-        if candidates is None:
-            limit_rules = {rule for name in selectors for rule in rules_map[name]}
-            rules = list(filter(limit_rules.__contains__, reversed(all_rules)))
-            all_pseudo_classes = frozenset().union(*(rule.pseudo_classes for rule in rules))
-            rule_classes = frozenset(
-                selector.name for rule in rules for group in rule.selector_set
-                for selector in group.selectors if selector.type == SelectorType.CLASS
+            # Compile candidate lists once per selector signature, rather than
+            # scanning the entire stylesheet for every node on each update. This
+            # caches no match result: ancestry and live pseudo-classes are still
+            # evaluated below. Parsing a new stylesheet retires these lists.
+            all_rules = self.rules
+            rules_map = self.rules_map
+            selectors = frozenset(rules_map.keys() & node._selector_names)
+            candidates = self._candidate_rules.get(selectors)
+            if candidates is None:
+                limit_rules = {rule for name in selectors for rule in rules_map[name]}
+                rules = list(filter(limit_rules.__contains__, reversed(all_rules)))
+                all_pseudo_classes = frozenset().union(*(rule.pseudo_classes for rule in rules))
+                rule_classes = frozenset(
+                    selector.name for rule in rules for group in rule.selector_set
+                    for selector in group.selectors if selector.type == SelectorType.CLASS
+                )
+                rule_key = tuple(rules)
+                self._candidate_rules[selectors] = (rules, all_pseudo_classes, rule_classes, rule_key)
+            else:
+                rules, all_pseudo_classes, rule_classes, rule_key = candidates
+            node._has_hover_style = "hover" in all_pseudo_classes
+            node._has_focus_within = "focus-within" in all_pseudo_classes
+            node._has_order_style = not all_pseudo_classes.isdisjoint(
+                {"first-of-type", "last-of-type", "first-child", "last-child", "empty"}
             )
-            rule_key = tuple(rules)
-            self._candidate_rules[selectors] = (rules, all_pseudo_classes, rule_classes, rule_key)
-        else:
-            rules, all_pseudo_classes, rule_classes, rule_key = candidates
-        node._has_hover_style = "hover" in all_pseudo_classes
-        node._has_focus_within = "focus-within" in all_pseudo_classes
-        node._has_order_style = not all_pseudo_classes.isdisjoint(
-            {"first-of-type", "last-of-type", "first-child", "last-child", "empty"}
-        )
-        node._has_odd_or_even = (
-            "odd" in all_pseudo_classes or "even" in all_pseudo_classes
-        )
-
-        cache_key: tuple | None = None
-        path_key: tuple | None = None
-        css_path_nodes: list[DOMNode] | None = None
-
-        if cache is not None and all_pseudo_classes.isdisjoint(
-            self._EXCLUDE_PSEUDO_CLASSES_FROM_CACHE
-        ):
-            cache_key = (
-                rule_key,
-                node._parent,
-                (
-                    None
-                    if node._id is None
-                    else (node._id if f"#{node._id}" in rules_map else None)
-                ),
-                node.classes,
-                node._pseudo_classes_cache_key,
-                node._css_type_name,
+            node._has_odd_or_even = (
+                "odd" in all_pseudo_classes or "even" in all_pseudo_classes
             )
-            cached_result: RulesMap | None = cache.get(cache_key)
-            if cached_result is not None:
-                self.replace_rules(node, cached_result, animate=animate)
-                self._process_component_classes(node)
-                return
 
-            # Widgets in repeated rows have distinct parent *instances* but
-            # frequently the same selector/pseudo-class ancestry. A CSS rule
-            # cannot distinguish these paths when positional/focus-within
-            # selectors were excluded above. Share resolved rules within this
-            # update batch rather than matching every one from scratch.
-            css_path_nodes = node.css_path_nodes
-            path_key = (
-                "css_path",
-                rule_key,
-                self._css_path_key(css_path_nodes, rule_classes),
-            )
-            cached_result = cache.get(path_key)
-            if cached_result is None:
-                cached_result = self._path_rules_cache.get(path_key)
-            if cached_result is not None:
-                cache[cache_key] = cached_result
-                cache[path_key] = cached_result
-                self.replace_rules(node, cached_result, animate=animate)
-                self._process_component_classes(node)
-                return
+            cache_key: tuple | None = None
+            path_key: tuple | None = None
+            css_path_nodes: list[DOMNode] | None = None
 
-        _check_rule = self._check_rule
-        if css_path_nodes is None:
-            css_path_nodes = node.css_path_nodes
+            if cache is not None and all_pseudo_classes.isdisjoint(
+                self._EXCLUDE_PSEUDO_CLASSES_FROM_CACHE
+            ):
+                cache_key = (
+                    rule_key,
+                    node._parent,
+                    (
+                        None
+                        if node._id is None
+                        else (node._id if f"#{node._id}" in rules_map else None)
+                    ),
+                    node.classes,
+                    node._pseudo_classes_cache_key,
+                    node._css_type_name,
+                )
+                cached_result: RulesMap | None = cache.get(cache_key)
+                if cached_result is not None:
+                    self.replace_rules(node, cached_result, animate=animate)
+                    self._process_component_classes(node)
+                    return
 
-        # Rules that may be set to the special value `initial`
-        initial: set[str] = set()
-        # Rules in DEFAULT_CSS set to the special value `initial`
-        initial_defaults: set[str] = set()
+                # Widgets in repeated rows have distinct parent *instances* but
+                # frequently the same selector/pseudo-class ancestry. A CSS rule
+                # cannot distinguish these paths when positional/focus-within
+                # selectors were excluded above. Share resolved rules within this
+                # update batch rather than matching every one from scratch.
+                css_path_nodes = node.css_path_nodes
+                path_key = (
+                    "css_path",
+                    rule_key,
+                    self._css_path_key(css_path_nodes, rule_classes),
+                )
+                cached_result = cache.get(path_key)
+                if cached_result is None:
+                    cached_result = self._path_rules_cache.get(path_key)
+                if cached_result is not None:
+                    cache[cache_key] = cached_result
+                    cache[path_key] = cached_result
+                    self.replace_rules(node, cached_result, animate=animate)
+                    self._process_component_classes(node)
+                    return
 
-        for rule in rules:
-            is_default_rules = rule.is_default_rules
-            tie_breaker = rule.tie_breaker
-            for base_specificity in _check_rule(rule, css_path_nodes):
-                for key, rule_specificity, value in rule.styles.extract_rules(
-                    base_specificity, is_default_rules, tie_breaker
-                ):
-                    if value is None:
-                        if is_default_rules:
-                            initial_defaults.add(key)
+            _check_rule = self._check_rule
+            if css_path_nodes is None:
+                css_path_nodes = node.css_path_nodes
+
+            # Rules that may be set to the special value `initial`
+            initial: set[str] = set()
+            # Rules in DEFAULT_CSS set to the special value `initial`
+            initial_defaults: set[str] = set()
+
+            for rule in rules:
+                is_default_rules = rule.is_default_rules
+                tie_breaker = rule.tie_breaker
+                for base_specificity in _check_rule(rule, css_path_nodes):
+                    for key, rule_specificity, value in rule.styles.extract_rules(
+                        base_specificity, is_default_rules, tie_breaker
+                    ):
+                        if value is None:
+                            if is_default_rules:
+                                initial_defaults.add(key)
+                            else:
+                                initial.add(key)
+                        rule_attributes[key].append((rule_specificity, value))
+
+            if rule_attributes:
+                # For each rule declared for this node, keep only the most specific one
+                get_first_item = itemgetter(0)
+                node_rules: RulesMap = cast(
+                    RulesMap,
+                    {
+                        name: max(specificity_rules, key=get_first_item)[1]
+                        for name, specificity_rules in rule_attributes.items()
+                    },
+                )
+
+                # Set initial values
+                for initial_rule_name in initial:
+                    # Rules with a value of None should be set to the default value
+                    if node_rules[initial_rule_name] is None:  # type: ignore[literal-required]
+                        # Exclude non default values
+                        # rule[0] is the specificity, rule[0][0] is 0 for default rules
+                        default_rules = [
+                            rule
+                            for rule in rule_attributes[initial_rule_name]
+                            if not rule[0][0]
+                        ]
+                        if default_rules:
+                            # There is a default value
+                            new_value = max(default_rules, key=get_first_item)[1]
+                            node_rules[initial_rule_name] = new_value  # type: ignore[literal-required]
                         else:
-                            initial.add(key)
-                    rule_attributes[key].append((rule_specificity, value))
+                            # No default value
+                            initial_defaults.add(initial_rule_name)
 
-        if rule_attributes:
-            # For each rule declared for this node, keep only the most specific one
-            get_first_item = itemgetter(0)
-            node_rules: RulesMap = cast(
-                RulesMap,
-                {
-                    name: max(specificity_rules, key=get_first_item)[1]
-                    for name, specificity_rules in rule_attributes.items()
-                },
-            )
+                # Rules in DEFAULT_CSS set to initial
+                for initial_rule_name in initial_defaults:
+                    if node_rules[initial_rule_name] is None:  # type: ignore[literal-required]
+                        default_rules = [
+                            rule
+                            for rule in rule_attributes[initial_rule_name]
+                            if rule[0][0]
+                        ]
+                        if default_rules:
+                            # There is a default value
+                            rule_value = max(default_rules, key=get_first_item)[1]
+                        else:
+                            rule_value = getattr(_DEFAULT_STYLES, initial_rule_name)
+                        node_rules[initial_rule_name] = rule_value  # type: ignore[literal-required]
 
-            # Set initial values
-            for initial_rule_name in initial:
-                # Rules with a value of None should be set to the default value
-                if node_rules[initial_rule_name] is None:  # type: ignore[literal-required]
-                    # Exclude non default values
-                    # rule[0] is the specificity, rule[0][0] is 0 for default rules
-                    default_rules = [
-                        rule
-                        for rule in rule_attributes[initial_rule_name]
-                        if not rule[0][0]
-                    ]
-                    if default_rules:
-                        # There is a default value
-                        new_value = max(default_rules, key=get_first_item)[1]
-                        node_rules[initial_rule_name] = new_value  # type: ignore[literal-required]
-                    else:
-                        # No default value
-                        initial_defaults.add(initial_rule_name)
-
-            # Rules in DEFAULT_CSS set to initial
-            for initial_rule_name in initial_defaults:
-                if node_rules[initial_rule_name] is None:  # type: ignore[literal-required]
-                    default_rules = [
-                        rule
-                        for rule in rule_attributes[initial_rule_name]
-                        if rule[0][0]
-                    ]
-                    if default_rules:
-                        # There is a default value
-                        rule_value = max(default_rules, key=get_first_item)[1]
-                    else:
-                        rule_value = getattr(_DEFAULT_STYLES, initial_rule_name)
-                    node_rules[initial_rule_name] = rule_value  # type: ignore[literal-required]
-
-            if cache_key is not None:
-                cache[cache_key] = node_rules
-                if path_key is not None:
-                    cache[path_key] = node_rules
-                    self._path_rules_cache[path_key] = node_rules
-            self.replace_rules(node, node_rules, animate=animate)
-        self._process_component_classes(node)
+                if cache_key is not None:
+                    cache[cache_key] = node_rules
+                    if path_key is not None:
+                        cache[path_key] = node_rules
+                        self._path_rules_cache[path_key] = node_rules
+                self.replace_rules(node, node_rules, animate=animate)
+            self._process_component_classes(node)
 
     def _process_component_classes(self, node: DOMNode) -> None:
         """Process component classes for the given node.
@@ -822,7 +825,7 @@ class Stylesheet:
                     refresh_node = True
                 node._component_styles[component] = component_styles
             if refresh_node:
-                node.refresh()
+                node._css_styles.refresh()
             node._component_css_signature = signature
 
     @classmethod
@@ -864,6 +867,7 @@ class Stylesheet:
                 get_new_render_rule = new_render_rules.get
                 animator = node.app.animator
                 base = node.styles.base
+                immediate_keys: list[str] = []
                 for key in modified_rule_keys:
                     # Get old and new render rules
                     old_render_value = get_current_render_rule(key)
@@ -891,18 +895,18 @@ class Stylesheet:
                                 easing=easing,
                             )
                             continue
-                    # Default is to set value (if new_value is None, rule will be removed)
-                    setattr(base_styles, key, new_value)
+                    # Future animation writes remain imperative; publish the
+                    # nonanimated part as one complete current rule cohort.
+                    immediate_keys.append(key)
+                immediate_rules = base_styles.get_rules()
+                for key in immediate_keys:
+                    if (value := rules.get(key)) is None:
+                        immediate_rules.pop(key, None)
+                    else:
+                        immediate_rules[key] = value
+                base_styles.replace_rules(immediate_rules)
             else:
-                # Not animated, so we apply the rules directly
-                get_rule = rules.get
-                get_current_rule = base_styles.get_rule
-
-                for key in modified_rule_keys:
-                    value = get_rule(key)
-                    if get_current_rule(key) != value:
-                        setattr(base_styles, key, value)
-        node.notify_style_update()
+                base_styles.replace_rules(rules)
 
     def references_class(self, class_name: str) -> bool:
         """Check parsed declarations, including ancestor/compound selectors."""
@@ -941,7 +945,10 @@ class Stylesheet:
             animate: Enable CSS animation.
         """
 
-        self.update_nodes(root.walk_children(with_self=True), animate=animate)
+        # A whole stylesheet/theme reload also changes inputs outside matched
+        # declarations (highlighting and component renderers). Keep that explicit
+        # refresh distinct from ordinary class/pseudo-class rematching.
+        self.update_nodes(root.walk_children(with_self=True), animate=animate, refresh=True)
 
     def update_app_focus(self, root: DOMNode) -> None:
         """Restyle only subtrees whose rules can depend on application focus.
@@ -999,18 +1006,24 @@ class Stylesheet:
                 pending.extend(node._get_virtual_dom())
         self.update_nodes(affected, animate=True)
 
-    def update_nodes(self, nodes: Iterable[DOMNode], animate: bool = False) -> None:
+    def update_nodes(
+        self, nodes: Iterable[DOMNode], animate: bool = False, *, refresh: bool = False
+    ) -> None:
         """Update styles for nodes.
 
         Args:
             nodes: Nodes to update.
             animate: Enable CSS animation.
+            refresh: Publish a whole stylesheet reload, even for equal rules.
         """
         cache: dict[tuple, RulesMap] = {}
         apply = self.apply
 
         for node in nodes:
-            apply(node, animate=animate, cache=cache)
+            with node._css_styles.batch_update():
+                if refresh:
+                    node._css_styles.refresh()
+                apply(node, animate=animate, cache=cache)
             if isinstance(node, Widget) and node.is_scrollable:
                 show_vertical_scrollbar = (
                     node.show_vertical_scrollbar and node.scrollbar_size_vertical
