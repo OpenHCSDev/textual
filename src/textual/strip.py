@@ -292,11 +292,13 @@ class Strip:
             strips: An iterable of Strips.
 
         Returns:
-            A new combined strip.
+            A combined strip. A sole input of the requested class is reused.
         """
         join_strips = [
             strip for strip in strips if strip is not None and strip.cell_count
         ]
+        if len(join_strips) == 1 and type(join_strips[0]) is cls:
+            return join_strips[0]
         segments = [segment for strip in join_strips for segment in strip._segments]
         cell_length: int | None = None
         if any([strip._cell_length is None for strip in join_strips]):
