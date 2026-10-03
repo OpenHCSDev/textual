@@ -1,6 +1,6 @@
 # Keep box constraints with the original cached measurement
 
-Same native checkout, stacked on qualified Text40. Its source0ab, Ready receipt
+Same native checkout, normally integrated merged main/Text40. Its source0ab, Ready receipt
 and installed artifacts remain frozen. No new environment/native build/movie.
 
 Widget._get_box_model retains BoxModel in its existing bounded LRU, but selects
@@ -52,3 +52,8 @@ The original391/40 recording is protected, with no extra movie/provider/env.
 This fixes source-derived cached constraint selection, not a claimed observed
 user alignment failure or measured performance improvement. End, chunky motion,
 channel first paint and the full native performance goal remain open.
+
+Normal main/Text40 integration uses862da48c; production remains byte-equal
+with the qualified-source follow-up d6ddd054c. No semantic conflict, new native
+checks or repeated capture. The existing joined393/41 qualification waits only
+for release of the parent/Sch588 borrowed holder, which was not modified.
