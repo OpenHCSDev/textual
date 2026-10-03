@@ -867,6 +867,7 @@ class Stylesheet:
                 get_new_render_rule = new_render_rules.get
                 animator = node.app.animator
                 base = node.styles.base
+                immediate_keys: list[str] = []
                 for key in modified_rule_keys:
                     # Get old and new render rules
                     old_render_value = get_current_render_rule(key)
@@ -894,17 +895,18 @@ class Stylesheet:
                                 easing=easing,
                             )
                             continue
-                    # Default is to set value (if new_value is None, rule will be removed)
-                    setattr(base_styles, key, new_value)
+                    # Future animation writes remain imperative; publish the
+                    # nonanimated part as one complete current rule cohort.
+                    immediate_keys.append(key)
+                immediate_rules = base_styles.get_rules()
+                for key in immediate_keys:
+                    if (value := rules.get(key)) is None:
+                        immediate_rules.pop(key, None)
+                    else:
+                        immediate_rules[key] = value
+                base_styles.replace_rules(immediate_rules)
             else:
-                # Not animated, so we apply the rules directly
-                get_rule = rules.get
-                get_current_rule = base_styles.get_rule
-
-                for key in modified_rule_keys:
-                    value = get_rule(key)
-                    if get_current_rule(key) != value:
-                        setattr(base_styles, key, value)
+                base_styles.replace_rules(rules)
 
     def references_class(self, class_name: str) -> bool:
         """Check parsed declarations, including ancestor/compound selectors."""

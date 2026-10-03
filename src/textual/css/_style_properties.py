@@ -71,7 +71,14 @@ PropertySetType = TypeVar("PropertySetType")
 EnumType = TypeVar("EnumType", covariant=True)
 
 
-class GenericProperty(Generic[PropertyGetType, PropertySetType]):
+class StyleProperty:
+    """Node effects of a descriptor after its rule value has been published."""
+
+    def publish(self, obj: StylesBase, value: object | None) -> None:
+        """Apply node effects; ordinary rule descriptors need only refresh damage."""
+
+
+class GenericProperty(StyleProperty, Generic[PropertyGetType, PropertySetType]):
     """Descriptor that abstracts away common machinery for other style descriptors.
 
     Args:
@@ -136,7 +143,7 @@ class BooleanProperty(GenericProperty[bool, bool]):
         return bool(value)
 
 
-class ScalarProperty:
+class ScalarProperty(StyleProperty):
     """Descriptor for getting and setting scalar properties. Scalars are numeric values with a unit, e.g. "50vh"."""
 
     def __init__(
@@ -227,7 +234,7 @@ class ScalarProperty:
             obj.refresh(layout=True)
 
 
-class ScalarListProperty:
+class ScalarListProperty(StyleProperty):
     """Descriptor for lists of scalars.
 
     Args:
@@ -274,7 +281,7 @@ class ScalarListProperty:
             obj.refresh(layout=True, children=self.refresh_children)
 
 
-class BoxProperty:
+class BoxProperty(StyleProperty):
     """Descriptor for getting and setting outlines and borders along a single edge.
     For example "border-right", "outline-bottom", etc.
     """
@@ -391,7 +398,7 @@ class Edges(NamedTuple):
         )
 
 
-class BorderProperty:
+class BorderProperty(StyleProperty):
     """Descriptor for getting and setting full borders and outlines.
 
     Args:
@@ -519,7 +526,7 @@ class BorderProperty:
         check_refresh()
 
 
-class KeylineProperty:
+class KeylineProperty(StyleProperty):
     """Descriptor for getting and setting keyline information."""
 
     def __get__(
@@ -536,7 +543,7 @@ class KeylineProperty:
                 obj.refresh(layout=True)
 
 
-class SpacingProperty:
+class SpacingProperty(StyleProperty):
     """Descriptor for getting and setting spacing properties (e.g. padding and margin)."""
 
     def __set_name__(self, owner: StylesBase, name: str) -> None:
@@ -590,7 +597,7 @@ class SpacingProperty:
                 obj.refresh(layout=True)
 
 
-class DockProperty:
+class DockProperty(StyleProperty):
     """Descriptor for getting and setting the dock property. The dock property
     allows you to specify which edge you want to fix a Widget to.
     """
@@ -621,7 +628,7 @@ class DockProperty:
             obj.refresh(layout=True)
 
 
-class SplitProperty:
+class SplitProperty(StyleProperty):
     """Descriptor for getting and setting the split property.
     The split property allows you to specify which edge you want to split.
     """
@@ -652,7 +659,7 @@ class SplitProperty:
             obj.refresh(layout=True)
 
 
-class LayoutProperty:
+class LayoutProperty(StyleProperty):
     """Descriptor for getting and setting layout."""
 
     def __set_name__(self, owner: StylesBase, name: str) -> None:
@@ -705,7 +712,7 @@ class LayoutProperty:
             obj.refresh(layout=True, children=True)
 
 
-class OffsetProperty:
+class OffsetProperty(StyleProperty):
     """Descriptor for getting and setting the offset property.
     Offset consists of two values, x and y, that a widget's position
     will be adjusted by before it is rendered.
@@ -777,7 +784,7 @@ class OffsetProperty:
                 obj.refresh(layout=True, repaint=False)
 
 
-class StringEnumProperty(Generic[EnumType]):
+class StringEnumProperty(StyleProperty, Generic[EnumType]):
     """Descriptor for getting and setting string properties and ensuring that the set
     value belongs in the set of valid values.
 
@@ -824,76 +831,53 @@ class StringEnumProperty(Generic[EnumType]):
         """
         return obj.get_rule(self.name, self._default)  # type: ignore
 
-    def _before_refresh(self, obj: StylesBase, value: str | None) -> None:
-        """Do any housekeeping before asking for a layout refresh after a value change."""
+    def publish(self, obj: StylesBase, value: object | None) -> None:
+        node = obj.node
+        if node is None:
+            return
+        if self._display and node.parent:
+            node._nodes.updated()
+        if self._pointer and value is not None:
+            from textual.dom import NoScreen
+
+            try:
+                node.screen.update_pointer_shape()
+            except NoScreen:
+                pass
 
     def __set__(self, obj: StylesBase, value: EnumType | None = None):
-        """Set the string property and ensure it is in the set of allowed values.
-
-        Args:
-            obj: The `Styles` object.
-            value: The string value to set the property to.
-
-        Raises:
-            StyleValueError: If the value is not in the set of valid values.
-        """
+        """Validate, publish the value, then update its node and damage."""
         _rich_traceback_omit = True
-        if value is None:
-            if obj.clear_rule(self.name):
-                self._before_refresh(obj, value)
-                obj.refresh(
-                    layout=self._layout,
-                    children=self._refresh_children,
-                    parent=self._refresh_parent,
-                )
-
-                if self._display:
-                    node = obj.node
-                    if node is not None and node.parent:
-                        node._nodes.updated()
-
-        else:
-            if value not in self._valid_values:
-                raise StyleValueError(
-                    f"{self.name} must be one of {friendly_list(self._valid_values)} (received {value!r})",
-                    help_text=string_enum_help_text(
-                        self.name,
-                        valid_values=list(self._valid_values),
-                        context="inline",
-                    ),
-                )
-            if obj.set_rule(self.name, value):
-                if self._display and obj.node is not None:
-                    node = obj.node
-                    if node.parent:
-                        node._nodes.updated()
-
-                self._before_refresh(obj, value)
-                obj.refresh(
-                    layout=self._layout,
-                    children=self._refresh_children,
-                    parent=self._refresh_parent,
-                )
-                if self._pointer and obj.node is not None:
-                    from textual.dom import NoScreen
-
-                    try:
-                        obj.node.screen.update_pointer_shape()
-                    except NoScreen:
-                        pass
+        if value is not None and value not in self._valid_values:
+            raise StyleValueError(
+                f"{self.name} must be one of {friendly_list(self._valid_values)} (received {value!r})",
+                help_text=string_enum_help_text(
+                    self.name,
+                    valid_values=list(self._valid_values),
+                    context="inline",
+                ),
+            )
+        if obj.set_rule(self.name, value):
+            self.publish(obj, value)
+            obj.refresh(
+                layout=self._layout,
+                children=self._refresh_children,
+                parent=self._refresh_parent,
+            )
 
 
 class OverflowProperty(StringEnumProperty):
     """Descriptor for overflow styles that forces widgets to refresh scrollbars."""
 
-    def _before_refresh(self, obj: StylesBase, value: str | None) -> None:
+    def publish(self, obj: StylesBase, value: object | None) -> None:
+        super().publish(obj, value)
         from textual.widget import Widget  # Avoid circular import
 
         if isinstance(obj.node, Widget):
             obj.node._refresh_scrollbars()
 
 
-class NameProperty:
+class NameProperty(StyleProperty):
     """Descriptor for getting and setting name properties."""
 
     def __set_name__(self, owner: StylesBase, name: str) -> None:
@@ -932,7 +916,7 @@ class NameProperty:
                 obj.refresh(layout=True)
 
 
-class NameListProperty:
+class NameListProperty(StyleProperty):
     def __set_name__(self, owner: StylesBase, name: str) -> None:
         self.name = name
 
@@ -956,7 +940,7 @@ class NameListProperty:
                 obj.refresh(layout=True)
 
 
-class ColorProperty:
+class ColorProperty(StyleProperty):
     """Descriptor for getting and setting color properties."""
 
     def __init__(self, default_color: Color | str) -> None:
@@ -1029,24 +1013,23 @@ class ScrollbarColorProperty(ColorProperty):
     """A descriptor to set scrollbar color(s)."""
 
     def __set__(self, obj: StylesBase, color: Color | str | None) -> None:
+        previous = obj.get_rule(self.name)
         super().__set__(obj, color)
+        if previous != obj.get_rule(self.name):
+            self.publish(obj, color)
 
-        if obj.node is None:
-            return
-
+    def publish(self, obj: StylesBase, value: object | None) -> None:
         from textual.widget import Widget
 
         if isinstance(obj.node, Widget):
             widget = obj.node
-
             if widget.show_horizontal_scrollbar:
                 widget.horizontal_scrollbar.refresh()
-
             if widget.show_vertical_scrollbar:
                 widget.vertical_scrollbar.refresh()
 
 
-class StyleFlagsProperty:
+class StyleFlagsProperty(StyleProperty):
     """Descriptor for getting and set style flag properties (e.g. ``bold italic underline``)."""
 
     def __set_name__(self, owner: StylesBase, name: str) -> None:
@@ -1110,7 +1093,7 @@ class StyleFlagsProperty:
                 obj.refresh(children=True)
 
 
-class TransitionsProperty:
+class TransitionsProperty(StyleProperty):
     """Descriptor for getting transitions properties"""
 
     def __get__(
@@ -1139,7 +1122,7 @@ class TransitionsProperty:
             obj.set_rule("transitions", transitions.copy())
 
 
-class FractionalProperty:
+class FractionalProperty(StyleProperty):
     """Property that can be set either as a float (e.g. 0.1) or a
     string percentage (e.g. '10%'). Values will be clamped to the range (0, 1).
     """
@@ -1197,7 +1180,7 @@ class FractionalProperty:
             obj.refresh(children=self.children)
 
 
-class AlignProperty:
+class AlignProperty(StyleProperty):
     """Combines the horizontal and vertical alignment properties into a single property."""
 
     def __set_name__(self, owner: StylesBase, name: str) -> None:
@@ -1219,7 +1202,7 @@ class AlignProperty:
         setattr(obj, self.vertical, vertical)
 
 
-class HatchProperty:
+class HatchProperty(StyleProperty):
     """Property to expose hatch style."""
 
     def __get__(

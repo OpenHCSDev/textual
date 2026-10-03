@@ -4,6 +4,7 @@ import weakref
 from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass, field
 from functools import partial
+from inspect import getattr_static
 from operator import attrgetter
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, Iterable, Iterator, Literal, cast
 
@@ -37,6 +38,7 @@ from textual.css._style_properties import (
     SplitProperty,
     StringEnumProperty,
     StyleFlagsProperty,
+    StyleProperty,
     TransitionsProperty,
 )
 from textual.css.constants import (
@@ -929,6 +931,36 @@ class Styles(StylesBase):
             _rules=self.get_rules(),
             important=self.important,
         )
+
+    def replace_rules(self, rules: RulesMap) -> None:
+        """Prepare a compiled rule cohort, then publish its values and effects once.
+
+        Imperative setters still publish immediately. Here no live style changes
+        until every descriptor has normalized the complete replacement.
+        """
+        old_rules = self.get_rules()
+        if old_rules == rules:
+            return
+        prepared = Styles(_rules=old_rules.copy())
+        with prepared.batch_update():
+            for key in old_rules.keys() | rules.keys():
+                value = rules.get(key)
+                if prepared.get_rule(key) != value:
+                    setattr(prepared, key, value)
+            requests = prepared._refresh_batches[-1].copy()
+        new_rules = prepared.get_rules()
+        if old_rules == new_rules:
+            return
+        with self.batch_update():
+            # Keep the dictionary identity: get_rule / has_rule are bound to it.
+            self._rules.clear()
+            self._rules.update(new_rules)
+            self._mark_updated()
+            for key in old_rules.keys() | new_rules.keys():
+                if old_rules.get(key) != new_rules.get(key):
+                    descriptor = cast(StyleProperty, getattr_static(type(self), key))
+                    descriptor.publish(self, new_rules.get(key))
+            self._refresh_batches[-1].extend(requests)
 
     def _mark_updated(self) -> None:
         self._updates += 1
