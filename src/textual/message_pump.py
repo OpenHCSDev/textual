@@ -598,6 +598,10 @@ class MessagePump(metaclass=_MessagePumpMeta):
         self._running = True
         try:
             with self._context():
+                # Registration owns attachment and initial styles before this
+                # task owns Compose / Mount. Eager task creation must not run
+                # child composition recursively inside the registering caller.
+                await asyncio.sleep(0)
                 if not await self._pre_process():
                     return
                 try:
@@ -675,7 +679,6 @@ class MessagePump(metaclass=_MessagePumpMeta):
         """Process messages until the queue is closed."""
         _rich_traceback_guard = True
         self._thread_id = threading.get_ident()
-        await asyncio.sleep(0)
         while not self._closed:
             try:
                 message = await self._get_message()
