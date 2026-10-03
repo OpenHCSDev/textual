@@ -1,0 +1,43 @@
+.........F.........                                                      [100%]
+=================================== FAILURES ===================================
+___ test_match_parity_across_compounds_children_descendants_and_alternatives ___
+
+    def test_match_parity_across_compounds_children_descendants_and_alternatives():
+        root = DOMNode(id="root", classes="outer selected")
+        middle = DOMNode(classes="middle selected")
+        leaf = DOMNode(id="leaf", classes="leaf selected")
+        middle._attach(root)
+        leaf._attach(middle)
+        expected_queries = {
+            "*": (True, True, True),
+            ".missing": (False, False, False),
+            "#leaf": (False, False, True),
+            ".selected": (True, True, True),
+            "DOMNode.leaf": (False, False, True),
+            ".outer .selected": (False, True, True),
+            ".outer > .selected": (False, True, False),
+            ".outer > .leaf": (False, False, False),
+            ".outer .selected > .leaf": (False, False, True),
+            ".outer > .selected .leaf": (False, False, True),
+            ".selected > .selected": (False, True, True),
+            ".selected .selected": (False, True, True),
+            ".outer > .middle > .leaf": (False, False, True),
+            ".middle > .outer": (False, False, False),
+            ".missing, #leaf": (False, False, True),
+            ".outer, .middle": (True, True, False),
+            ".selected.selected": (True, True, True),
+            ".outer.leaf": (False, False, False),
+        }
+        for query, expected in expected_queries.items():
+            for node, target_matches in zip((root, middle, leaf), expected):
+                selectors = parse_selectors(query)
+>               assert match(iter(selectors), node) is target_matches, (query, node)
+E               AssertionError: ('DOMNode.leaf', DOMNode(id='leaf', classes='selected leaf'))
+E               assert False is True
+E                +  where False = match(<tuple_iterator object at 0x7f533e12fd60>, DOMNode(id='leaf', classes='selected leaf'))
+E                +    where <tuple_iterator object at 0x7f533e12fd60> = iter((<SelectorSet 'DOMNode.leaf' (0, 1, 1)>,))
+
+tests/css/test_target_selector_matching.py:68: AssertionError
+=========================== short test summary info ============================
+FAILED tests/css/test_target_selector_matching.py::test_match_parity_across_compounds_children_descendants_and_alternatives
+1 failed, 18 passed in 1.02s

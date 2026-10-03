@@ -47,7 +47,9 @@ def test_match_parity_across_compounds_children_descendants_and_alternatives():
         ".missing": (False, False, False),
         "#leaf": (False, False, True),
         ".selected": (True, True, True),
-        "DOMNode.leaf": (False, False, True),
+        # Bare DOMNode has an empty CSS type declaration; subclasses register
+        # their type names through the original __init_subclass__ owner.
+        "DOMNode.leaf": (False, False, False),
         ".outer .selected": (False, True, True),
         ".outer > .selected": (False, True, False),
         ".outer > .leaf": (False, False, False),
