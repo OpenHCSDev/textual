@@ -656,19 +656,7 @@ class Compositor:
         self._cuts = None
         self.widgets = widgets
 
-        # Contains widgets + geometry for every widget that changed (added, removed, or updated)
-        changes = map.items() ^ old_map.items()
-
-        # Widgets in both new and old
-        common_widgets = old_widgets & new_widgets
-
-        self._damage_geometry(changes, parent)
-
-        resized_widgets = {
-            widget
-            for widget, (region, *_) in changes
-            if (widget in common_widgets and old_map[widget].region.size != region.size)
-        }
+        resized_widgets = self._damage_geometry(old_map, map, parent)
         return ReflowResult(
             hidden=hidden_widgets,
             shown=shown_widgets,
@@ -714,22 +702,40 @@ class Compositor:
 
         exposed_widgets = map.keys() - old_map.keys()
 
-        # Contains widgets + geometry for every widget that changed (added, removed, or updated)
-        changes = map.items() ^ old_map.items()
-
-        self._damage_geometry(changes, parent)
+        self._damage_geometry(old_map, map, parent)
 
         return exposed_widgets
 
-    def _damage_geometry(self, changes: Iterable[tuple[Widget, MapGeometry]], owner: Widget) -> None:
-        """Retain scene damage and admit its original owner to native idle."""
-        if self.size.region not in self._dirty_regions:
-            self._dirty_regions.update(
-                region for _, geometry in changes
-                if (region := geometry.clip.intersection(geometry.region))
-            )
+    def _damage_geometry(
+        self, before: Mapping[Widget, MapGeometry], after: Mapping[Widget, MapGeometry],
+        owner: Widget,
+    ) -> set[Widget]:
+        """Derive damage and resized membership from the original scene change.
+
+        Compare each new placement with its previous one. Retain both clipped
+        rectangles without hashing complete geometry records into temporary
+        sets; the same comparison supplies normal reflow's resize notification.
+        """
+        resized: set[Widget] = set()
+        track_damage = self.size.region not in self._dirty_regions
+        for widget, geometry in after.items():
+            previous = before.get(widget)
+            if previous == geometry:
+                continue
+            if previous is not None:
+                if previous.region.size != geometry.region.size:
+                    resized.add(widget)
+                if track_damage and (region := previous.visible_region):
+                    self._dirty_regions.add(region)
+            if track_damage and (region := geometry.visible_region):
+                self._dirty_regions.add(region)
+        if track_damage:
+            for widget, geometry in before.items():
+                if widget not in after and (region := geometry.visible_region):
+                    self._dirty_regions.add(region)
         if self._dirty_regions:
             owner.check_idle()
+        return resized
 
     @property
     def full_map(self) -> CompositorMap:
@@ -743,7 +749,7 @@ class Compositor:
             # from its original visible coordinates before replacing the map;
             # a later reflow can no longer recover that previous geometry.
             previous = self._visible_map if self._visible_map is not None else self._full_map
-            self._damage_geometry(map.items() ^ previous.items(), self.root)
+            self._damage_geometry(previous, map, self.root)
             self._full_map = map
             self._full_map_invalidated = False
             self._visible_widgets = None
