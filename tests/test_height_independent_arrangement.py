@@ -6,6 +6,7 @@ import pytest
 
 from textual.app import App
 from textual.containers import VerticalGroup
+from textual.color import Color
 from textual.css.scalar import Scalar, Unit
 from textual.geometry import Size
 from textual.layouts.vertical import VerticalLayout
@@ -245,3 +246,66 @@ async def test_unknown_layout_hooks_and_scalars_remain_context_sensitive():
             parent._clear_arrangement_cache()
             first = parent.arrange(Size(40, 10))
             assert parent.arrange(Size(40, 100)) is not first
+
+
+async def test_paint_rules_preserve_native_content_geometry_across_raw_writes():
+    app = App()
+    async with app.run_test() as pilot:
+        child = Static("unchanged wrapped content " * 6)
+        parent = CachedArrangement(child)
+        await app.mount(parent)
+        await pilot.pause()
+        style = child.styles.inline
+        for mutate in (
+            lambda: style.set_rule("color", Color.parse("red")),
+            lambda: style.clear_rule("color"),
+            lambda: style.merge_rules({"color": Color.parse("blue")}),
+            lambda: style.replace_rules({"color": Color.parse("green")}),
+            style.reset,
+        ):
+            arrangement = parent.arrange(Size(40, 100))
+            model = parent._get_box_model(Size(40, 100), app.size, Fraction(40), Fraction(100))
+            paint_revision = parent._subtree_style_revision
+            mutate()
+            assert parent._subtree_style_revision != paint_revision
+            assert parent.arrange(Size(40, 100)) is arrangement
+            assert parent._get_box_model(Size(40, 100), app.size, Fraction(40), Fraction(100)) is model
+
+
+async def test_custom_renderer_keeps_paint_rules_as_measurement_inputs():
+    class StyleMeasuredContent(Static):
+        def render(self):
+            return "one\ntwo\nthree" if self.styles.color == Color.parse("red") else "one"
+
+    app = App()
+    async with app.run_test() as pilot:
+        child = StyleMeasuredContent()
+        child.styles.color = "red"
+        parent = CachedArrangement(child)
+        await app.mount(parent)
+        await pilot.pause()
+        size = Size(40, 100)
+        fraction = Fraction(40)
+        before = child._get_box_model(size, app.size, fraction, fraction)
+        assert before.height == 3
+        child.styles.inline.set_rule("color", Color.parse("blue"))
+        after = child._get_box_model(size, app.size, fraction, fraction)
+        assert after.height == 1
+
+
+async def test_raw_display_rule_publishes_original_native_child_selection():
+    app = App()
+    async with app.run_test() as pilot:
+        first, second = Static("first"), Static("second")
+        first.styles.height, second.styles.height = 3, 4
+        parent = CachedArrangement(first, second)
+        await app.mount(parent)
+        await pilot.pause()
+        size = Size(40, 100)
+        assert parent.get_content_height(size, app.size, size.width) == 7
+        second.styles.inline.set_rule("display", "none")
+        assert second not in parent.displayed_children
+        assert parent.get_content_height(size, app.size, size.width) == 3
+        second.styles.inline.clear_rule("display")
+        assert second in parent.displayed_children
+        assert parent.get_content_height(size, app.size, size.width) == 7

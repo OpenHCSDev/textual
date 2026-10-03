@@ -1917,11 +1917,14 @@ class Widget(DOMNode):
         cache_container, cache_height_fraction = container, height_fraction
         if self.CACHE_HEIGHT_INDEPENDENT_BOX and not self._box_depends_on_available_height():
             # The class/method/layout declarations proved these two inputs unused.
-            # Include subtree and immediate-parent inputs before idle propagation,
+            # Include the immediate parent's actual auto-size inputs before idle,
             # and retire prior epochs rather than accumulating stale aliases.
             parent = self._parent
-            revision += (self._parent_revision,
-                         None if parent is None else parent._geometry_revision)
+            revision += (
+                self._parent_revision,
+                parent is not None and parent.styles.is_auto_width,
+                parent is not None and parent.styles.is_auto_height,
+            )
             cache_container = container.with_height(0)
             cache_height_fraction = Fraction(0)
         if revision != self._box_model_revision:
