@@ -3666,22 +3666,36 @@ class App(Generic[ReturnType], DOMNode):
         else:
             widget_list = widgets
 
+        def register(
+            parent: DOMNode,
+            widgets: Iterable[Widget],
+            before: int | None,
+            after: int | None,
+        ) -> list[Widget]:
+            registered: list[Widget] = []
+            siblings: list[Widget] = []
+            for widget in widgets:
+                widget._closing = False
+                widget._closed = False
+                widget._pruning = False
+                if not isinstance(widget, Widget):
+                    raise AppError(f"Can't register {widget!r}; expected a Widget instance")
+                if widget not in self._registry:
+                    siblings.append(widget)
+                    self._register_child(parent, widget, before, after)
+                    if widget._nodes:
+                        registered.extend(register(widget, widget._nodes, None, None))
+            registered.extend(siblings)
+            return registered
+
+        # Complete topology and DEFAULT_CSS before matching any initial node.
+        # The registration sequence keeps descendants before their parent,
+        # as required by the original notification / message-start lifetime.
+        new_widgets = register(parent, widget_list, before, after)
         apply_stylesheet = self.stylesheet.apply
-        new_widgets: list[Widget] = []
-        add_new_widget = new_widgets.append
-        for widget in widget_list:
-            widget._closing = False
-            widget._closed = False
-            widget._pruning = False
-            if not isinstance(widget, Widget):
-                raise AppError(f"Can't register {widget!r}; expected a Widget instance")
-            if widget not in self._registry:
-                add_new_widget(widget)
-                self._register_child(parent, widget, before, after)
-                if widget._nodes:
-                    self._register(widget, *widget._nodes, cache=cache)
-        for widget in new_widgets:
+        for widget in reversed(new_widgets):
             apply_stylesheet(widget, cache=cache)
+        for widget in new_widgets:
             # Initial styles precede Mount; constructor edits must not call
             # subclass hooks on an incomplete widget. Registration publishes
             # the completed style once before its message task starts.
