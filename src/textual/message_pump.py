@@ -598,12 +598,13 @@ class MessagePump(metaclass=_MessagePumpMeta):
         self._running = True
         try:
             with self._context():
-                if not await self._pre_process():
-                    return
                 try:
-                    await self._process_messages_loop()
-                except CancelledError:
-                    pass
+                    if not await self._pre_process():
+                        return
+                    try:
+                        await self._process_messages_loop()
+                    except CancelledError:
+                        pass
                 finally:
                     self._running = False
                     try:

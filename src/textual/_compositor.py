@@ -67,7 +67,6 @@ CompositorMap: TypeAlias = "dict[Widget, MapGeometry]"
 class SubtreeGeometryKey(NamedTuple):
     geometry_revision: int
     nodes_revision: int
-    styles_key: object
     virtual_region: Region
     region: Region
     order: tuple
@@ -87,7 +86,6 @@ class SubtreeGeometryKey(NamedTuple):
                     inherited_layers: tuple) -> SubtreeGeometryKey:
         """Bind original placement inputs to the widget's current native source."""
         return cls(widget._geometry_revision, widget._nodes._updates,
-                   (widget.styles._cache_key, widget._subtree_style_revision),
                    virtual_region, region, order,
                    layer_order, clip, visible, dock_gutter, screen_size,
                    visible_only, widget.scroll_offset, inherited_layers)

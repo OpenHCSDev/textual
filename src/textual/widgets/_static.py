@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from textual.content import Content
+
 if TYPE_CHECKING:
     from textual.app import RenderResult
 
@@ -81,6 +83,19 @@ class Static(Widget, inherit_bindings=False):
             A rich renderable.
         """
         return self.visual
+
+    def _render_styles_sensitive(self) -> bool:
+        """Only original Content has the native rule-measurement contract.
+
+        Unknown renderers, visual getters and Visual implementations may derive
+        content from paint rules. Keep their geometry lifetime conservative.
+        Do not create or re-render a visual merely to classify a rule mutation.
+        """
+        return (
+            type(self).render is not Static.render
+            or type(self).visual is not Static.visual
+            or type(self.__dict__.get("_Static__visual")) is not Content
+        )
 
     def update(self, content: VisualType = "", *, layout: bool = True) -> None:
         """Update the widget's content area with a string, a Visual (such as [Content][textual.content.Content]), or a [Rich renderable](https://rich.readthedocs.io/en/latest/protocol.html).

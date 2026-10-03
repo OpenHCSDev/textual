@@ -25,7 +25,7 @@ async def test_obsolete_measurement_revisions_are_released_without_losing_width_
             models = {width: measured(width) for width in widths}
             for width, model in models.items():
                 assert measured(width) is model, "Same-revision width result should remain reusable"
-            expected = (widget._layout_updates, widget.styles._cache_key, widget._nodes._updates)
+            expected = (widget._layout_updates, widget._geometry_revision, widget._nodes._updates)
             assert all(key[-3:] == expected for key in widget._box_model_cache.keys()), (
                 "Unreachable previous-generation box models retained", list(widget._box_model_cache.keys())
             )
@@ -45,5 +45,5 @@ async def test_ancestor_measurements_remain_correct_after_child_layout_changes()
         await pilot.pause()
         assert container._layout_updates > before
         assert container.size.height > old_height
-        key = (container._layout_updates, container.styles._cache_key, container._nodes._updates)
+        key = (container._layout_updates, container._geometry_revision, container._nodes._updates)
         assert all(entry[-3:] == key for entry in container._box_model_cache.keys())

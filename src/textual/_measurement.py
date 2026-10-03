@@ -19,6 +19,14 @@ class HeightDependency(ABC):
     def box_depends(self, widget: Widget) -> bool:
         return self.depends(widget) or widget._has_relative_children_height
 
+    def styles_sensitive(self, widget: Widget) -> bool:
+        """Unknown measurements may read any rule, not just native box inputs.
+
+        Available-height independence alone makes no claim about style inputs.
+        Native algorithms below supply their narrower source relationship.
+        """
+        return True
+
 
 class ContextHeight(HeightDependency):
     def depends(self, widget: Widget) -> bool:
@@ -50,6 +58,13 @@ class NativeWidgetMeasurementHeight(HeightDependency):
             return True
         return self.layout_dependency(widget).box_depends(widget)
 
+    def styles_sensitive(self, widget: Widget) -> bool:
+        if not widget.is_container:
+            return widget._render_styles_sensitive()
+        if not widget._native_measurement_layout_hooks:
+            return True
+        return self.layout_dependency(widget).styles_sensitive(widget)
+
 
 class NativeWidgetHeight(NativeWidgetMeasurementHeight):
     def layout_dependency(self, widget: Widget) -> HeightDependency:
@@ -59,6 +74,16 @@ class NativeWidgetHeight(NativeWidgetMeasurementHeight):
 class NativeWidgetWidth(NativeWidgetMeasurementHeight):
     def layout_dependency(self, widget: Widget) -> HeightDependency:
         return widget.layout._content_width_dependency
+
+    def styles_sensitive(self, widget: Widget) -> bool:
+        if widget.is_container and widget._native_measurement_layout_hooks:
+            from textual.layout import Layout
+
+            # Native optimal-width measurement selects the same arrangement.
+            # A custom width method retains its independently declared inputs.
+            if type(widget.layout).get_content_width is Layout.get_content_width:
+                return NATIVE_LAYOUT_HEIGHT.styles_sensitive(widget)
+        return super().styles_sensitive(widget)
 
 
 class NativeLayoutHeight(HeightDependency):
@@ -72,8 +97,27 @@ class NativeLayoutHeight(HeightDependency):
             return True
         return widget.layout._arrangement_height_dependency.box_depends(widget)
 
+    def styles_sensitive(self, widget: Widget) -> bool:
+        if not widget._native_measurement_layout_hooks:
+            return True
+        return widget.layout._arrangement_height_dependency.styles_sensitive(widget)
+
 
 class FlowHeight(HeightDependency):
+    def styles_sensitive(self, widget: Widget) -> bool:
+        # Native placement consumes declared geometry rules and child boxes.
+        # Original rule publication owns descendant measurement invalidation;
+        # querying native ancestors must not walk those children again.
+        from textual.widget import Widget
+
+        # A custom hook can be independent of incoming height while reading
+        # paint rules. Only the original native no-op hooks narrow this fact.
+        return (
+            type(widget).arrange is not Widget.arrange
+            or type(widget).pre_layout is not Widget.pre_layout
+            or type(widget).process_layout is not Widget.process_layout
+        )
+
     def depends(self, widget: Widget) -> bool:
         styles = widget.styles
         if (not widget._native_measurement_layout_hooks
@@ -97,7 +141,11 @@ class FlowHeight(HeightDependency):
     box_depends = depends
 
 
-class StreamHeight(HeightDependency):
+class StreamHeight(FlowHeight):
+    # Stream/Grid share the native child-input relation, but keep the original
+    # general box operation. Reuse its one implementation, not Flow's box proof.
+    box_depends = HeightDependency.box_depends
+
     def depends(self, widget: Widget) -> bool:
         # Stream measures content directly, even when a child's CSS box height
         # is fixed. A box proof alone cannot certify this operation.
@@ -111,7 +159,9 @@ def _scalar_uses_height(scalar: Scalar, *, height_fraction: bool = False) -> boo
             or (height_fraction and unit is Unit.FRACTION))
 
 
-class GridHeight(HeightDependency):
+class GridHeight(FlowHeight):
+    box_depends = HeightDependency.box_depends
+
     def depends(self, widget: Widget) -> bool:
         styles = widget.styles
         rows, columns = styles.grid_rows or (), styles.grid_columns or ()
@@ -164,7 +214,7 @@ def height_dependency(policy: HeightDependency) -> Callable[[Function], Function
 def _local_box_inputs(widget: Widget) -> tuple[bool, bool, bool]:
     """Resolve local scalar dependencies once per owning style generation."""
     styles = widget.styles
-    revision = styles._cache_key
+    revision = widget._geometry_revision
     cached = widget.__dict__.get("_height_style_dependency_cache")
     if cached is not None and cached[0] == revision:
         return cached[1]

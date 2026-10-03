@@ -92,6 +92,14 @@ class StyleProperty(Generic[PropertyGetType]):
     def publish(self, obj: StylesBase, value: object | None) -> None:
         """Apply node effects; ordinary rule descriptors need only refresh damage."""
 
+    def affects_geometry(self, previous: object | None, value: object | None) -> bool:
+        """Whether this mutation changes native placement or measurement inputs.
+
+        Undeclared/custom descriptors remain conservative. The rule owner calls
+        this for raw writes too, independently of scheduled repaint damage.
+        """
+        return True
+
 
 class GenericProperty(StyleProperty[PropertyGetType], Generic[PropertyGetType, PropertySetType]):
     """Descriptor that abstracts away common machinery for other style descriptors.
@@ -123,6 +131,9 @@ class GenericProperty(StyleProperty[PropertyGetType], Generic[PropertyGetType, P
         """
         # Raise StyleValueError here
         return cast(PropertyGetType, value)
+
+    def affects_geometry(self, previous: object | None, value: object | None) -> bool:
+        return self.layout
 
     def __set_name__(self, owner: StylesBase, name: str) -> None:
         self.name = name
@@ -301,6 +312,11 @@ class BoxProperty(StyleProperty[tuple[EdgeType, Color]]):
     For example "border-right", "outline-bottom", etc.
     """
 
+    def affects_geometry(self, previous: object | None, value: object | None) -> bool:
+        previous_edge = bool(previous and normalize_border_value(previous)[0])
+        current_edge = bool(value and normalize_border_value(value)[0])
+        return previous_edge != current_edge
+
     def __init__(self, default_color: Color) -> None:
         self._default_color = default_color
 
@@ -367,10 +383,8 @@ class BoxProperty(StyleProperty[tuple[EdgeType, Color]]):
             current_value: tuple[str, Color] = cast(
                 "tuple[str, Color]", obj.get_rule(self.name)
             )
-            has_edge = bool(current_value and current_value[0])
-            new_edge = bool(_type)
             if obj.set_rule(self.name, new_value):
-                obj.refresh(layout=has_edge != new_edge)
+                obj.refresh(layout=self.affects_geometry(current_value, new_value))
 
 
 @rich.repr.auto
@@ -873,7 +887,6 @@ class StringEnumProperty(StyleProperty[EnumType], Generic[EnumType]):
                 ),
             )
         if obj.set_rule(self.name, value):
-            self.publish(obj, value)
             obj.refresh(
                 layout=self._layout,
                 children=self._refresh_children,
@@ -883,6 +896,9 @@ class StringEnumProperty(StyleProperty[EnumType], Generic[EnumType]):
 
 class OverflowProperty(StringEnumProperty):
     """Descriptor for overflow styles that forces widgets to refresh scrollbars."""
+
+    def affects_geometry(self, previous: object | None, value: object | None) -> bool:
+        return True
 
     def publish(self, obj: StylesBase, value: object | None) -> None:
         super().publish(obj, value)
@@ -958,6 +974,9 @@ class NameListProperty(StyleProperty[tuple[str, ...]]):
 class ColorProperty(StyleProperty[Color]):
     """Descriptor for getting and setting color properties."""
 
+    def affects_geometry(self, previous: object | None, value: object | None) -> bool:
+        return False
+
     def __init__(self, default_color: Color | str) -> None:
         self._default_color = Color.parse(default_color)
 
@@ -1027,12 +1046,6 @@ class ColorProperty(StyleProperty[Color]):
 class ScrollbarColorProperty(ColorProperty):
     """A descriptor to set scrollbar color(s)."""
 
-    def __set__(self, obj: StylesBase, color: Color | str | None) -> None:
-        previous = obj.get_rule(self.name)
-        super().__set__(obj, color)
-        if previous != obj.get_rule(self.name):
-            self.publish(obj, color)
-
     def publish(self, obj: StylesBase, value: object | None) -> None:
         from textual.widget import Widget
 
@@ -1046,6 +1059,9 @@ class ScrollbarColorProperty(ColorProperty):
 
 class StyleFlagsProperty(StyleProperty[Style]):
     """Descriptor for getting and set style flag properties (e.g. ``bold italic underline``)."""
+
+    def affects_geometry(self, previous: object | None, value: object | None) -> bool:
+        return False
 
     def __set_name__(self, owner: StylesBase, name: str) -> None:
         self.name = name
@@ -1111,6 +1127,9 @@ class StyleFlagsProperty(StyleProperty[Style]):
 class TransitionsProperty(StyleProperty[dict[str, Transition]]):
     """Descriptor for getting transitions properties"""
 
+    def affects_geometry(self, previous: object | None, value: object | None) -> bool:
+        return False
+
     def get_value(
         self, obj: StylesBase, objtype: type[StylesBase] | None = None
     ) -> dict[str, Transition]:
@@ -1141,6 +1160,9 @@ class FractionalProperty(StyleProperty[float]):
     """Property that can be set either as a float (e.g. 0.1) or a
     string percentage (e.g. '10%'). Values will be clamped to the range (0, 1).
     """
+
+    def affects_geometry(self, previous: object | None, value: object | None) -> bool:
+        return False
 
     def __init__(self, default: float = 1.0, children: bool = False):
         """
@@ -1219,6 +1241,9 @@ class AlignProperty(StyleProperty[tuple[AlignHorizontal, AlignVertical]]):
 
 class HatchProperty(StyleProperty[tuple[str, Color] | Literal['none']]):
     """Property to expose hatch style."""
+
+    def affects_geometry(self, previous: object | None, value: object | None) -> bool:
+        return False
 
     def get_value(
         self, obj: StylesBase, type: type[StylesBase]
