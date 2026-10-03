@@ -461,11 +461,9 @@ class BorderProperty:
 
         if border is None:
             clear_rule = obj.clear_rule
-            clear_rule(top)
-            clear_rule(right)
-            clear_rule(bottom)
-            clear_rule(left)
-            check_refresh()
+            changed = [clear_rule(rule) for rule in (top, right, bottom, left)]
+            if any(changed):
+                check_refresh()
             return
         elif border == "none":
             set_rule = obj.set_rule
