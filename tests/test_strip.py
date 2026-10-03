@@ -69,6 +69,43 @@ def test_join() -> None:
     assert list(strip) == [Segment("foo"), Segment("bar")]
 
 
+def test_join_preserves_original_wide_row_metadata_and_render_resources():
+    style = Style(color="red", link="https://example.com/row", meta={"@click": "open_row"})
+    original = Strip([Segment("界", style), Segment("x", style)], 3)
+    console = Console(force_terminal=True)
+    rendered = original.render(console)
+    cropped = original.crop(0, 2)
+    original.divide([2, 3])
+
+    joined = Strip.join(iter((None, Strip([], 0), original, None)))
+    assert joined is original
+    assert joined.text == "界x" and joined.cell_length == 3
+    assert joined.render(console) == rendered
+    assert joined.crop(0, 2) is cropped
+    assert all(segment.style.meta["@click"] == "open_row" for segment in joined)
+    assert all(segment.style.link == "https://example.com/row" for segment in joined)
+
+    appended = Strip.join((joined, Strip([Segment("z", style)], 1)))
+    assert appended.text == "界xz" and appended.cell_length == 4
+    assert original.text == "界x" and original.cell_length == 3
+
+
+def test_join_retains_requested_factory_and_empty_value_contract():
+    class RowStrip(Strip):
+        pass
+
+    plain = Strip([Segment("value")], 5)
+    specialized = RowStrip.join((plain,))
+    assert type(specialized) is RowStrip and specialized is not plain
+    assert RowStrip.join((None, specialized)) is specialized
+    normalized = Strip.join((specialized,))
+    assert type(normalized) is Strip and normalized is not specialized
+    assert list(normalized) == list(plain)
+    empty = RowStrip.join(iter((None, Strip([], 0), None)))
+    assert type(empty) is RowStrip and empty.cell_length == 0
+    assert list(empty) == []
+
+
 def test_bool() -> None:
     assert not Strip([])
     assert Strip([Segment("foo")])
