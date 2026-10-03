@@ -140,16 +140,46 @@ class DOMNode(MessagePump):
     """The base class for object that can be in the Textual DOM (App and Widget)"""
 
     _subtree_style_revision = 0
+    _geometry_revision = 0
 
-    def _style_rules_updated(self, revision: int) -> None:
+    def _invalidate_subtree_geometry(self) -> None:
+        node: DOMNode | MessagePump | None = self
+        while isinstance(node, DOMNode):
+            node._geometry_revision += 1
+            node = node._parent
+
+    def _style_geometry_updated(self, geometry: bool) -> bool:
+        if geometry:
+            self._geometry_revision += 1
+        return geometry
+
+    def _get_virtual_dom(self) -> Iterable[Widget]:
+        """Additional child resources supplied by the original concrete owner."""
+        return ()
+
+    def _update_inherited_geometry(self, geometry: bool) -> bool:
+        """Retire affected measurements once, then propagate their result.
+
+        A paint rule can change an opaque descendant's rendered dimensions.
+        Visit the source subtree before native ancestor publication; do not
+        merely discover sensitivity while leaving those resources current.
+        """
+        for child in (*self.children, *self._get_virtual_dom()):
+            geometry = child._update_inherited_geometry(False) or geometry
+        return self._style_geometry_updated(geometry)
+
+    def _style_rules_updated(self, revision: int, geometry: bool) -> None:
         """Publish the rule owner's mutation to dependent ancestor subtrees.
 
         This is a projection of Styles' mutation epoch, including raw writes
         which do not schedule refresh. Unrelated sibling branches are untouched.
         """
-        node: DOMNode | MessagePump | None = self
+        self._subtree_style_revision = revision
+        geometry = self._update_inherited_geometry(geometry)
+        node = self._parent
         while isinstance(node, DOMNode):
             node._subtree_style_revision = revision
+            geometry = node._style_geometry_updated(geometry)
             node = node._parent
 
     DEFAULT_CSS: ClassVar[str] = ""

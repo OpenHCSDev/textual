@@ -327,13 +327,21 @@ class Widget(DOMNode):
     _content_width_dependency: ClassVar[HeightDependency] = NATIVE_WIDGET_WIDTH
     _native_box_measurement: ClassVar[bool] = True
     _native_measurement_layout_hooks: ClassVar[bool] = True
-    _geometry_revision = 0
 
-    def _invalidate_subtree_geometry(self) -> None:
-        node = self
-        while isinstance(node, Widget):
-            node._geometry_revision += 1
-            node = node._parent
+    def _render_styles_sensitive(self) -> bool:
+        """Unknown rendering can turn any style input into measured content."""
+        return True
+
+    def _style_geometry_updated(self, geometry: bool) -> bool:
+        geometry = super()._style_geometry_updated(
+            geometry or self._content_height_dependency.styles_sensitive(self)
+            or self._content_width_dependency.styles_sensitive(self),
+        )
+        if geometry:
+            self.clear_cached_dimensions()
+            self._layout_cache.clear()
+            self._clear_arrangement_cache()
+        return geometry
 
     DEFAULT_CSS = """
     Widget{
@@ -1404,7 +1412,7 @@ class Widget(DOMNode):
         viewport = self.screen.size
         cache_key: tuple[object, ...] = (size, viewport, self._nodes._updates, self._layout_updates, optimal)
         if self.CACHE_HEIGHT_INDEPENDENT_ARRANGEMENT:
-            epoch = (self._subtree_style_revision, self._nodes._updates,
+            epoch = (self._nodes._updates,
                      self._geometry_revision, self._layout_updates)
             proof = self.__dict__.get("_height_arrangement_cache")
             if proof is None or proof[0] != epoch:
@@ -1872,7 +1880,7 @@ class Widget(DOMNode):
 
     def _box_depends_on_available_height(self) -> bool:
         nodes = self.__dict__.get("_nodes")
-        epoch = (self._subtree_style_revision, nodes._updates if nodes is not None else 0,
+        epoch = (nodes._updates if nodes is not None else 0,
                  self._geometry_revision, self._layout_updates)
         cached = self.__dict__.get("_height_dependency_cache")
         if cached is not None and cached[0] == epoch:
@@ -1903,17 +1911,19 @@ class Widget(DOMNode):
             The size and margin for this widget.
         """
         nodes = self.__dict__.get("_nodes")
-        revision = (self._layout_updates, self.styles._cache_key,
+        revision = (self._layout_updates, self._geometry_revision,
                     nodes._updates if nodes is not None else 0)
         cache_container, cache_height_fraction = container, height_fraction
         if self.CACHE_HEIGHT_INDEPENDENT_BOX and not self._box_depends_on_available_height():
             # The class/method/layout declarations proved these two inputs unused.
-            # Include subtree and immediate-parent inputs before idle propagation,
+            # Include the immediate parent's actual auto-size inputs before idle,
             # and retire prior epochs rather than accumulating stale aliases.
             parent = self._parent
-            revision += (self._subtree_style_revision, self._geometry_revision,
-                         self._parent_revision,
-                         None if parent is None else parent.styles._cache_key)
+            revision += (
+                self._parent_revision,
+                parent is not None and parent.styles.is_auto_width,
+                parent is not None and parent.styles.is_auto_height,
+            )
             cache_container = container.with_height(0)
             cache_height_fraction = Fraction(0)
         if revision != self._box_model_revision:
@@ -4711,7 +4721,11 @@ class Widget(DOMNode):
         await self._close_messages(wait=False)
 
     async def _message_loop_exit(self) -> None:
-        """Clean up DOM tree."""
+        """Close owned execution before dispatching asynchronous teardown hooks."""
+        try:
+            await self._close_messages(wait=False)
+        finally:
+            self.workers.cancel_node(self)
         parent = self._parent
         # Post messages to children, asking them to prune
         children = [*self.children, *self._get_virtual_dom()]
@@ -5090,7 +5104,6 @@ class Widget(DOMNode):
 
     def _on_unmount(self) -> None:
         self._uncover()
-        self.workers.cancel_node(self)
 
     def action_scroll_home(self) -> None:
         if not self._allow_scroll:
