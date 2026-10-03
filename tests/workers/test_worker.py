@@ -245,3 +245,30 @@ async def test_wait_without_start():
         worker = Worker(app, work)
         with pytest.raises(WorkerError):
             await worker.wait()
+
+
+async def test_delegated_worker_cancellation_preserves_native_outcome():
+    started = asyncio.Event()
+    pending = asyncio.Event()
+
+    async def child_work():
+        started.set()
+        await pending.wait()
+
+    app = App()
+    async with app.run_test():
+        child = app.run_worker(child_work())
+        await started.wait()
+        parent = app.run_worker(child.wait())
+        child.cancel()
+        with pytest.raises(WorkerCancelled):
+            await parent.wait()
+        assert child.state is WorkerState.CANCELLED
+        assert parent.state is WorkerState.CANCELLED
+        assert isinstance(parent.error, WorkerCancelled)
+        assert isinstance(parent.error, WorkerError)
+        assert isinstance(parent.error, asyncio.CancelledError)
+        # The parent received a cancellation outcome; no one requested that
+        # parent's cancellation. Preserve these different original facts.
+        assert not parent.is_cancelled
+        assert not parent.cancelled_event.is_set()

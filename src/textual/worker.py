@@ -60,8 +60,12 @@ class DeadlockError(WorkerError):
     """The operation would result in a deadlock."""
 
 
-class WorkerCancelled(WorkerError):
-    """The worker was cancelled and did not complete."""
+class WorkerCancelled(WorkerError, asyncio.CancelledError):
+    """A worker cancellation is also cancellation of work awaiting its result.
+
+    Keep the domain error contract while letting native asynchronous cancellation
+    consumers handle this outcome through their original shared algorithm.
+    """
 
 
 def get_current_worker() -> Worker:
@@ -178,7 +182,6 @@ class Worker(Generic[ResultType]):
         self._error: BaseException | None = None
         self._completed_steps: int = 0
         self._total_steps: int | None = None
-        self._cancelled: bool = False
         self._created_time = monotonic()
         self._result: ResultType | None = None
         self._task: asyncio.Task | None = None
@@ -211,11 +214,11 @@ class Worker(Generic[ResultType]):
 
     @property
     def is_cancelled(self) -> bool:
-        """Has the work been cancelled?
+        """Was cancellation requested?
 
-        Note that cancelled work may still be running.
+        The request is distinct from the terminal outcome; work may still run.
         """
-        return self._cancelled
+        return self.cancelled_event.is_set()
 
     @property
     def is_running(self) -> bool:
@@ -434,10 +437,9 @@ class Worker(Generic[ResultType]):
 
     def cancel(self) -> None:
         """Cancel the task."""
-        self._cancelled = True
+        self.cancelled_event.set()
         if self._task is not None:
             self._task.cancel()
-        self.cancelled_event.set()
 
     async def wait(self) -> ResultType:
         """Wait for the work to complete.
