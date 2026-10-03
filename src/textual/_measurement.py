@@ -90,7 +90,7 @@ class NativeLayoutHeight(HeightDependency):
     def depends(self, widget: Widget) -> bool:
         # Conservatively require a declaration for the arranger too. Even the
         # fixed-zero branch need not opt unknown/custom layout hooks into reuse.
-        return arrangement_depends_on_available_height(widget)
+        return widget._arrangement_depends_on_available_height()
 
     def box_depends(self, widget: Widget) -> bool:
         if _arrangement_wrapper_uses_height(widget):
@@ -266,9 +266,3 @@ def _arrangement_wrapper_uses_height(widget: Widget) -> bool:
         return True
     return any(child.styles.is_docked or child.styles.is_split
                or child.styles.overlay == "screen" for child in widget.displayed_children)
-
-
-def arrangement_depends_on_available_height(widget: Widget) -> bool:
-    """Prove the complete native dock/alignment/flow arrangement, not just boxes."""
-    return (_arrangement_wrapper_uses_height(widget)
-            or widget.layout._arrangement_height_dependency.depends(widget))

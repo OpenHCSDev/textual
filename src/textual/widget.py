@@ -57,7 +57,7 @@ from textual._easing import DEFAULT_SCROLL_EASING
 from textual._extrema import Extrema
 from textual._measurement import (
     CONTEXT_HEIGHT, INDEPENDENT_HEIGHT, NATIVE_WIDGET_HEIGHT, NATIVE_WIDGET_WIDTH,
-    HeightDependency, arrangement_depends_on_available_height,
+    HeightDependency, _arrangement_wrapper_uses_height,
     box_depends_on_available_height, height_dependency,
 )
 from textual.message_pump import MessagePump
@@ -1412,14 +1412,7 @@ class Widget(DOMNode):
         viewport = self.screen.size
         cache_key: tuple[object, ...] = (size, viewport, self._nodes._updates, self._layout_updates, optimal)
         if self.CACHE_HEIGHT_INDEPENDENT_ARRANGEMENT:
-            epoch = (self._nodes._updates,
-                     self._geometry_revision, self._layout_updates)
-            proof = self.__dict__.get("_height_arrangement_cache")
-            if proof is None or proof[0] != epoch:
-                self._arrangement_cache.clear()
-                proof = epoch, arrangement_depends_on_available_height(self)
-                self._height_arrangement_cache = proof
-            independent = not proof[1]
+            independent = not self._arrangement_depends_on_available_height()
             cache_key = ((size.with_height(0) if independent else size), *cache_key[1:], independent)
         cached_result = self._arrangement_cache.get(cache_key)
         if cached_result is not None:
@@ -1877,6 +1870,26 @@ class Widget(DOMNode):
             )
         if app.debug:
             app.call_next(self.preflight_checks)
+
+    def _arrangement_depends_on_available_height(self) -> bool:
+        """Own the same complete dependency for arrangement and measurement.
+
+        A native auto-size query may ask before arranging. Both questions read
+        this original resource, invalidated by the same child/style/layout
+        inputs, rather than walking the dependency subtree twice.
+        """
+        epoch = (self._nodes._updates,
+                 self._geometry_revision, self._layout_updates)
+        proof = self.__dict__.get("_height_arrangement_cache")
+        if proof is None or proof[0] != epoch:
+            self._arrangement_cache.clear()
+            dependent = (
+                _arrangement_wrapper_uses_height(self)
+                or self.layout._arrangement_height_dependency.depends(self)
+            )
+            proof = epoch, dependent
+            self._height_arrangement_cache = proof
+        return proof[1]
 
     def _box_depends_on_available_height(self) -> bool:
         nodes = self.__dict__.get("_nodes")

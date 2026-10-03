@@ -22,3 +22,34 @@ Heisenberg's next changed workflow, never a repeat of frozen384.
 
 Heisenberg owns Toad/recording; Kepler owns native Widget/measurement consumers.
 Full End, smoothness, channel first paint and CPU closure remain open.
+
+## Working source checkpoint
+
+Two production files: 23 added /16 deleted. Existing Widget now acquires its
+original _height_arrangement_cache once per child-list, geometry and layout
+epoch. NativeLayoutHeight.depends and Widget.arrange both consume that answer.
+The standalone arrangement_depends_on_available_height algorithm and import
+are deleted. The original presentation-retirement path still releases this
+resource. Flow/Grid/Stream and custom hook declarations keep their existing
+polymorphic algorithms; the separate box-dependency question is not collapsed
+into arrangement dependency.
+
+The before/after AST uses existing Package/ParsedModule across 249 native and
+288 Toad production modules, zero parse omissions. The former free algorithm
+has no remaining declaration/import/call; one Widget acquisition method and
+one original resource write remain. AST does not establish dynamic receiver or
+MRO resolution. Instance monkeypatches are outside the existing class-bound
+measurement contract; no new compatibility path was introduced.
+
+One affected final native sanity batch: 68 passed in4.97s. It exercises native
+height/box/arrangement equivalence, grid tracks/extrema, inherited and structural
+invalidations, unknown/custom hooks and cache retirement. Initial invocation
+named a nonexistent test file, ran zero tests and is retained separately; this
+was a command error, not a source behavior failure. No assertions were weakened,
+no test harness or environment was created, no UI/provider run repeated.
+
+Qualification remains pending Heisenberg's next changed installed workflow.
+The original384 profile is partial and proves a matching source path, not a CPU
+share or measured performance gain. Text39's scoped Ready receipt and frozen
+installed source remain unchanged. End, discrete motion and channel first paint
+remain open; this draft does not claim their closure.
