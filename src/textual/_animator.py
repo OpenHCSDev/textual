@@ -228,12 +228,11 @@ class BoundAnimator:
 class Animator:
     """An object to manage updates to a given attribute over a period of time."""
 
-    def __init__(self, app: App, frames_per_second: int = 60) -> None:
+    def __init__(self, app: App) -> None:
         """Initialise the animator object.
 
         Args:
             app: The application that owns the animator.
-            frames_per_second: The number of frames/second to run the animation at.
         """
         self._animations: dict[AnimationKey, Animation] = {}
         """Dictionary that maps animation keys to the corresponding animation instances."""
@@ -243,7 +242,7 @@ class Animator:
         """The app that owns the animator object."""
         self._timer = Timer(
             app,
-            1 / frames_per_second,
+            app.frame_interval,
             name="Animator",
             callback=self,
             pause=True,

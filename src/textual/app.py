@@ -390,6 +390,12 @@ class App(Generic[ReturnType], DOMNode):
     DEFAULT_MODE: ClassVar[str] = "_default"
     """Name of the default mode."""
 
+    MAX_FPS: ClassVar[int] = constants._get_environ_int("TEXTUAL_FPS", 144, minimum=1)
+    """Target frame cadence, overridable by TEXTUAL_FPS or an App subclass.
+
+    This is a scheduling target, not a measured terminal presentation rate.
+    """
+
     SCREENS: ClassVar[dict[str, Callable[[], Screen[Any]]]] = {}
     """Screens associated with the app for the lifetime of the app."""
 
@@ -568,6 +574,11 @@ class App(Generic[ReturnType], DOMNode):
 
     ansi_color: Reactive[bool | None] = Reactive(None)
     """Allow ANSI colors in UI?"""
+
+    @property
+    def frame_interval(self) -> float:
+        """Shared interval for the app's animation and presentation timers."""
+        return 1 / self.MAX_FPS
 
     def __init__(
         self,
