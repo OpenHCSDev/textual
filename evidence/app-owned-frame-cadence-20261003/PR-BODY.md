@@ -15,3 +15,11 @@ Existing refactor-audit Package.load:249native+287Toad+2diffviewmodules,0parse o
 Throbber nullable refresh_interval is an optional explicitconfiguration override, not busy/lifecycle state; absent override derives App directly, no cached selected rate. Original mounted/busy/committedvisibility timer custody is preserved. SidebarProjection config cadence remains its originalsetting. No newtimer/scheduler/cache/clock class, alias or framework.
 
 Source batch WIP published before final batchedsanity/changed installedpath. Current37film is frozen and does NOT qualify this cadence; no claim delivered144Hz, smoothermotion or improvedCPU. Full source/consumer/lifetime performance scope remains active.
+
+## Changed installed qualification
+
+Normal69 installed Coref109/Toad026bbea3/Text2fff/native915 source+allassets/directURLs/nativefulltrust match. Original public read-only nra saved-history run completed105.343s:16warm+7input checks,41readybody resources retained, originalowner/runtime unchanged,cleanupempty. First exactheldUp48consecutive frames personally viewed DURING sameUIalive before+after; Down/reverse/Areturn/Endidle reviewedAFTER. History readable but discrete/repeated positions, notsmooth.
+
+ExactheldUp nativewriter median12.77/p9526.86/max178.17ms (previous37median17.73/p9547.51); Down11.54/27.90,reverse12.17/23.95.1235flushes/0unmatched. Writer≠pixelFPS/inputpixel latency. MarkerUIcpu78.88/73.14/74.85%,Endidle22.30, includesexports/backgroundthreads; no CPUgain, publicworkloadnotfrozen.1082reportedGILsamples0errors,approxalignment±.08659s. Target144Hz is declared scheduling intent, not measured terminaldelivery.
+
+Rawreceipt unchanged; separate installed01-scoped.json/source-proof capture exactlimits including transferredterminalidentity notexplicitUIexit0. Native40checks8.23s plus installedbusy2000rowstablegeometry. ScopedReady sharedcadence+actualinput/warmworkflow, fullperformance remains active; no unchangedrecording.
