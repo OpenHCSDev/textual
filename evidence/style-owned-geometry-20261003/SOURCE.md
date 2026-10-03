@@ -1,8 +1,8 @@
 # Style and geometry source checkpoint
 
-Production source: `2e8735a95a98589f036e3776a9cbeca19c0f8db9`, normally
-integrated with main `69954eb38` (Text38). Eight production files: **197 added,
-70 deleted**. This is a source checkpoint, awaiting the single paired installed
+Production source: `021693cedff2cd77eddd257c491e6d1bd4f969d4`, normally
+integrated with main `69954eb38` (Text38). Eight production files: **212 added,
+71 deleted**. This is a source checkpoint, awaiting the single paired installed
 journey with Heisenberg's Toad384. Current default installations are untouched.
 
 ## What owns the work
@@ -17,12 +17,14 @@ journey with Heisenberg's Toad384. Current default installations are untouched.
   descriptors and StringEnums remain conservative: native Content measurement
   reads wrapping/overflow even when the descriptor schedules only repaint.
 - The original `_geometry_revision` declaration now lives on the common DOM
-  ancestor, replacing Widget's declaration. Existing style publication carries
-  the original mutation owner into native measurement hooks. Inherited source
-  sensitivity is checked at the changed owner; native ancestors reuse the
-  propagated result instead of traversing unrelated siblings again. Unknown
-  custom measurements remain sensitive even when independent of available
-  height. No cache, registry, second counter or retained policy flag was added.
+  ancestor, replacing Widget's declaration. Existing style publication now
+  retires source-subtree measurement resources once, including original virtual
+  children, and aggregates the result into the ancestor publication. The old
+  recursive Flow sensitivity query is deleted: it could discover an opaque
+  child's sensitivity without retiring that child's actual cached resources.
+  Native ancestors do not rescan siblings. Unknown custom measurements and
+  layout hooks remain sensitive even when independent of available height.
+  No cache, registry, second counter or retained policy flag was added.
 - Widget arrangement/box/height proofs and `SubtreeGeometryKey` consume that
   original geometry resource. A box key reads its parent's actual auto-width
   and auto-height inputs, not unrelated changes in the parent's whole subtree.
@@ -30,7 +32,9 @@ journey with Heisenberg's Toad384. Current default installations are untouched.
   original visual getter and an already-retained original Content visual.
   Unknown/custom/unmaterialized visuals stay conservative; classification
   does not invoke render or create a visual. Flow/Grid/Stream share the original
-  source-sensitivity operation while preserving their distinct box algorithms.
+  local source-sensitivity operation while preserving their distinct box
+  algorithms. Only original native pre_layout/process_layout hooks narrow
+  style inputs; declaring incoming-height independence alone does not.
 - The global Styles paint epoch and DOM subtree paint epoch are retained.
   Toad RetainedPaint/PaintState consumers are unchanged: geometry validity
   does not substitute for pixel validity.
@@ -60,13 +64,16 @@ hooks were read semantically; their default remains conservative.
 One affected sanity batch covers raw rule presence/publication, inherited
 paint, native color-only geometry reuse, custom renderer measurement, raw
 native display projection, structural/box/subtree reuse, mount/unmount and
-worker custody. Exact final source: **138 passed in 6.51 seconds** using existing
+worker custody. Exact final source: **140 passed in 6.35 seconds** using existing
 system Python, with no new environment. The first **135 passed / 3 failed** log
 is retained. It exposed a stored-initial/removal distinction and overly broad
 parent-key invalidation; source was corrected without weakening assertions.
+The intermediate 138/139 passing results are retained at their actual source
+boundary. Source review then completed inherited opaque-child invalidation and
+custom layout-hook provenance; the final batch includes both affected paths.
 
 These checks do not prove visible FPS, CPU improvement, complete End behavior
 or the installed Toad lifecycle. Heisenberg owns the single changed normal69
 pair and real saved-session motion/profile gate. PR355's old source/failed End
 movies remain protected; its limited mount/admission closure is not a speed
-or final-End claim. No additional recording/provider run is authorized here.
+or final-End claim. No independent recording or provider run was performed.

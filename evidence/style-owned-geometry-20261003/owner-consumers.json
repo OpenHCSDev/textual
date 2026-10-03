@@ -1102,6 +1102,355 @@
           "name": "_render_styles_sensitive"
         }
       ]
+    },
+    {
+      "root": "/home/ts/wt/textual-native-subtree-strips-20261002/src/textual",
+      "revision": "021693cedff2cd77eddd257c491e6d1bd4f969d4",
+      "phase": "completed_inherited_owner",
+      "parsed_modules": 249,
+      "omissions": [],
+      "sites": [
+        {
+          "path": "src/textual/_compositor.py",
+          "line": 88,
+          "kind": "Load",
+          "name": "_geometry_revision",
+          "expression": "widget._geometry_revision"
+        },
+        {
+          "path": "src/textual/_measurement.py",
+          "line": 22,
+          "kind": "method",
+          "name": "styles_sensitive"
+        },
+        {
+          "path": "src/textual/_measurement.py",
+          "line": 61,
+          "kind": "method",
+          "name": "styles_sensitive"
+        },
+        {
+          "path": "src/textual/_measurement.py",
+          "line": 78,
+          "kind": "method",
+          "name": "styles_sensitive"
+        },
+        {
+          "path": "src/textual/_measurement.py",
+          "line": 100,
+          "kind": "method",
+          "name": "styles_sensitive"
+        },
+        {
+          "path": "src/textual/_measurement.py",
+          "line": 107,
+          "kind": "method",
+          "name": "styles_sensitive"
+        },
+        {
+          "path": "src/textual/_measurement.py",
+          "line": 217,
+          "kind": "Load",
+          "name": "_geometry_revision",
+          "expression": "widget._geometry_revision"
+        },
+        {
+          "path": "src/textual/_measurement.py",
+          "line": 66,
+          "kind": "Load",
+          "name": "styles_sensitive",
+          "expression": "self.layout_dependency(widget).styles_sensitive"
+        },
+        {
+          "path": "src/textual/_measurement.py",
+          "line": 86,
+          "kind": "Load",
+          "name": "styles_sensitive",
+          "expression": "super().styles_sensitive"
+        },
+        {
+          "path": "src/textual/_measurement.py",
+          "line": 103,
+          "kind": "Load",
+          "name": "styles_sensitive",
+          "expression": "widget.layout._arrangement_height_dependency.styles_sensitive"
+        },
+        {
+          "path": "src/textual/_measurement.py",
+          "line": 63,
+          "kind": "Load",
+          "name": "_render_styles_sensitive",
+          "expression": "widget._render_styles_sensitive"
+        },
+        {
+          "path": "src/textual/_measurement.py",
+          "line": 85,
+          "kind": "Load",
+          "name": "styles_sensitive",
+          "expression": "NATIVE_LAYOUT_HEIGHT.styles_sensitive"
+        },
+        {
+          "path": "src/textual/css/styles.py",
+          "line": 961,
+          "kind": "method",
+          "name": "_update_rules"
+        },
+        {
+          "path": "src/textual/css/styles.py",
+          "line": 1009,
+          "kind": "Load",
+          "name": "_update_rules",
+          "expression": "self._update_rules"
+        },
+        {
+          "path": "src/textual/css/styles.py",
+          "line": 1026,
+          "kind": "Load",
+          "name": "_update_rules",
+          "expression": "self._update_rules"
+        },
+        {
+          "path": "src/textual/css/styles.py",
+          "line": 1083,
+          "kind": "Load",
+          "name": "_update_rules",
+          "expression": "self._update_rules"
+        },
+        {
+          "path": "src/textual/css/styles.py",
+          "line": 1094,
+          "kind": "Load",
+          "name": "_update_rules",
+          "expression": "self._update_rules"
+        },
+        {
+          "path": "src/textual/css/styles.py",
+          "line": 956,
+          "kind": "Load",
+          "name": "_update_rules",
+          "expression": "self._update_rules"
+        },
+        {
+          "path": "src/textual/css/styles.py",
+          "line": 995,
+          "kind": "Load",
+          "name": "_style_rules_updated",
+          "expression": "node._style_rules_updated"
+        },
+        {
+          "path": "src/textual/css/stylesheet.py",
+          "line": 1025,
+          "kind": "Load",
+          "name": "_get_virtual_dom",
+          "expression": "node._get_virtual_dom"
+        },
+        {
+          "path": "src/textual/dom.py",
+          "line": 145,
+          "kind": "method",
+          "name": "_invalidate_subtree_geometry"
+        },
+        {
+          "path": "src/textual/dom.py",
+          "line": 151,
+          "kind": "method",
+          "name": "_style_geometry_updated"
+        },
+        {
+          "path": "src/textual/dom.py",
+          "line": 156,
+          "kind": "method",
+          "name": "_get_virtual_dom"
+        },
+        {
+          "path": "src/textual/dom.py",
+          "line": 160,
+          "kind": "method",
+          "name": "_update_inherited_geometry"
+        },
+        {
+          "path": "src/textual/dom.py",
+          "line": 171,
+          "kind": "method",
+          "name": "_style_rules_updated"
+        },
+        {
+          "path": "src/textual/dom.py",
+          "line": 142,
+          "kind": "declaration",
+          "name": "_subtree_style_revision"
+        },
+        {
+          "path": "src/textual/dom.py",
+          "line": 143,
+          "kind": "declaration",
+          "name": "_geometry_revision"
+        },
+        {
+          "path": "src/textual/dom.py",
+          "line": 177,
+          "kind": "Store",
+          "name": "_subtree_style_revision",
+          "expression": "self._subtree_style_revision"
+        },
+        {
+          "path": "src/textual/dom.py",
+          "line": 148,
+          "kind": "Store",
+          "name": "_geometry_revision",
+          "expression": "node._geometry_revision"
+        },
+        {
+          "path": "src/textual/dom.py",
+          "line": 153,
+          "kind": "Store",
+          "name": "_geometry_revision",
+          "expression": "self._geometry_revision"
+        },
+        {
+          "path": "src/textual/dom.py",
+          "line": 169,
+          "kind": "Load",
+          "name": "_style_geometry_updated",
+          "expression": "self._style_geometry_updated"
+        },
+        {
+          "path": "src/textual/dom.py",
+          "line": 178,
+          "kind": "Load",
+          "name": "_update_inherited_geometry",
+          "expression": "self._update_inherited_geometry"
+        },
+        {
+          "path": "src/textual/dom.py",
+          "line": 181,
+          "kind": "Store",
+          "name": "_subtree_style_revision",
+          "expression": "node._subtree_style_revision"
+        },
+        {
+          "path": "src/textual/dom.py",
+          "line": 182,
+          "kind": "Load",
+          "name": "_style_geometry_updated",
+          "expression": "node._style_geometry_updated"
+        },
+        {
+          "path": "src/textual/dom.py",
+          "line": 167,
+          "kind": "Load",
+          "name": "_get_virtual_dom",
+          "expression": "self._get_virtual_dom"
+        },
+        {
+          "path": "src/textual/dom.py",
+          "line": 168,
+          "kind": "Load",
+          "name": "_update_inherited_geometry",
+          "expression": "child._update_inherited_geometry"
+        },
+        {
+          "path": "src/textual/widget.py",
+          "line": 331,
+          "kind": "method",
+          "name": "_render_styles_sensitive"
+        },
+        {
+          "path": "src/textual/widget.py",
+          "line": 335,
+          "kind": "method",
+          "name": "_style_geometry_updated"
+        },
+        {
+          "path": "src/textual/widget.py",
+          "line": 1445,
+          "kind": "method",
+          "name": "_get_virtual_dom"
+        },
+        {
+          "path": "src/textual/widget.py",
+          "line": 336,
+          "kind": "Load",
+          "name": "_style_geometry_updated",
+          "expression": "super()._style_geometry_updated"
+        },
+        {
+          "path": "src/textual/widget.py",
+          "line": 1443,
+          "kind": "Load",
+          "name": "_invalidate_subtree_geometry",
+          "expression": "self._invalidate_subtree_geometry"
+        },
+        {
+          "path": "src/textual/widget.py",
+          "line": 1884,
+          "kind": "Load",
+          "name": "_geometry_revision",
+          "expression": "self._geometry_revision"
+        },
+        {
+          "path": "src/textual/widget.py",
+          "line": 1914,
+          "kind": "Load",
+          "name": "_geometry_revision",
+          "expression": "self._geometry_revision"
+        },
+        {
+          "path": "src/textual/widget.py",
+          "line": 4527,
+          "kind": "Load",
+          "name": "_invalidate_subtree_geometry",
+          "expression": "self._invalidate_subtree_geometry"
+        },
+        {
+          "path": "src/textual/widget.py",
+          "line": 1416,
+          "kind": "Load",
+          "name": "_geometry_revision",
+          "expression": "self._geometry_revision"
+        },
+        {
+          "path": "src/textual/widget.py",
+          "line": 4562,
+          "kind": "Load",
+          "name": "_invalidate_subtree_geometry",
+          "expression": "self._invalidate_subtree_geometry"
+        },
+        {
+          "path": "src/textual/widget.py",
+          "line": 337,
+          "kind": "Load",
+          "name": "styles_sensitive",
+          "expression": "self._content_height_dependency.styles_sensitive"
+        },
+        {
+          "path": "src/textual/widget.py",
+          "line": 338,
+          "kind": "Load",
+          "name": "styles_sensitive",
+          "expression": "self._content_width_dependency.styles_sensitive"
+        },
+        {
+          "path": "src/textual/widget.py",
+          "line": 1789,
+          "kind": "Load",
+          "name": "_get_virtual_dom",
+          "expression": "node._get_virtual_dom"
+        },
+        {
+          "path": "src/textual/widget.py",
+          "line": 4731,
+          "kind": "Load",
+          "name": "_get_virtual_dom",
+          "expression": "self._get_virtual_dom"
+        },
+        {
+          "path": "src/textual/widgets/_static.py",
+          "line": 87,
+          "kind": "method",
+          "name": "_render_styles_sensitive"
+        }
+      ]
     }
   ],
   "limits": [
