@@ -46,6 +46,16 @@ class _ComponentStyles(RenderStyles):
         self._component_node = node
         node.styles = proxy(self)
 
+    def rematch(self, stylesheet: Stylesheet) -> bool:
+        """Apply current declarations to the original component node.
+
+        The native styles own mutation counters. Equal rematches neither attach
+        another virtual node nor manufacture a style or topology change.
+        """
+        previous = self._cache_key
+        stylesheet.apply(self._component_node, animate=False)
+        return self._cache_key != previous
+
 
 class StylesheetParseError(StylesheetError):
     """Raised when the stylesheet could not be parsed."""
@@ -800,22 +810,24 @@ class Stylesheet:
                     return
             else:
                 signature = None
-            # Create virtual nodes that exist to extract styles
-            refresh_node = False
-            old_component_styles = node._component_styles.copy()
-            node._component_styles.clear()
+            # Keep the original virtual nodes, including on the uncached path.
+            # Live matching changes rules, not the component's native custody.
+            retired = node._component_styles.keys() - component_classes
+            refresh_node = bool(retired)
+            for component in retired:
+                del node._component_styles[component]
             for component, _ in component_candidates:
-                virtual_node = DOMNode(classes=component)
-                virtual_node._attach(node)
-                self.apply(virtual_node, animate=False)
-                component_styles = _ComponentStyles(virtual_node)
-                if (
-                    not refresh_node
-                    and old_component_styles.get(component) != component_styles
-                ):
-                    # If the styles have changed we want to refresh the node
+                component_styles = cast(
+                    _ComponentStyles | None, node._component_styles.get(component)
+                )
+                if component_styles is None:
+                    virtual_node = DOMNode(classes=component)
+                    virtual_node._attach(node)
+                    component_styles = _ComponentStyles(virtual_node)
+                    node._component_styles[component] = component_styles
                     refresh_node = True
-                node._component_styles[component] = component_styles
+                changed = component_styles.rematch(self)
+                refresh_node = refresh_node or changed
             if refresh_node:
                 node._css_styles.refresh()
             node._component_css_signature = signature
