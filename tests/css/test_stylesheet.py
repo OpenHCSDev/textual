@@ -228,14 +228,14 @@ async def test_component_style_reuses_unchanged_node_but_tracks_css_and_ancestry
         badge.add_class("alert")
         await pilot.pause()
         assert badge.get_component_styles("badge--label").color == Color.parse("blue")
-        assert badge._component_styles["badge--label"] is not original
+        assert badge._component_styles["badge--label"] is original
         updated = badge._component_styles["badge--label"]
         stylesheet.add_source("Badge.alert > .badge--label { color: green; }",
                               read_from=("badge-test", "override"))
         stylesheet.parse()
         stylesheet.apply(badge)
         assert badge.get_component_styles("badge--label").color == Color.parse("green")
-        assert badge._component_styles["badge--label"] is not updated
+        assert badge._component_styles["badge--label"] is updated
         stylesheet.add_source("#unused-right Badge.alert > .badge--label { color: yellow; }",
                               read_from=("badge-test", "ancestor"))
         stylesheet.parse()
@@ -248,6 +248,9 @@ async def test_component_style_reuses_unchanged_node_but_tracks_css_and_ancestry
 
 
 async def test_component_style_keeps_focus_within_on_uncached_path():
+    from textual.css.styles import Styles
+    from textual.message_pump import MessagePump
+
     class Badge(Static):
         COMPONENT_CLASSES = {"badge--label"}
 
@@ -262,8 +265,12 @@ async def test_component_style_keeps_focus_within_on_uncached_path():
         await pilot.pause()
         badge = app.query_one(Badge)
         previous = badge._component_styles["badge--label"]
+        previous_node = previous.node
+        epochs = Styles._revision, MessagePump._tree_revision
         app.stylesheet.apply(badge)
-        assert badge._component_styles["badge--label"] is not previous
+        assert badge._component_styles["badge--label"] is previous
+        assert previous.node is previous_node
+        assert (Styles._revision, MessagePump._tree_revision) == epochs
         assert badge._component_css_signature is None
 
 
