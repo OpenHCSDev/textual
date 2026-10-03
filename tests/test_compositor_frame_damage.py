@@ -124,3 +124,41 @@ async def test_body_capture_keeps_original_nonzero_row_coordinates():
         size, strips = compositor.render_subtree_strips(original, placement)
         assert size == Size(12, 3)
         assert [strip.text.rstrip() for strip in strips] == ["ABC界DEF", "SECOND_ROW", "THIRD_ROW"]
+
+
+async def test_scene_change_retains_both_rectangles_and_native_resize_membership():
+    """Movement, resizing, hide and show consume original native scene records."""
+    from textual.geometry import Region
+
+    class SceneApp(App):
+        CSS = "#box { width: 8; height: 2; offset: 2 1; }"
+
+        def compose(self):
+            yield Static("SOURCE", id="box")
+
+    app = SceneApp()
+    async with app.run_test(size=(40, 12)) as pilot:
+        await pilot.pause()
+        compositor = app.screen._compositor
+        box = app.query_one("#box")
+        assert box.region == Region(2, 1, 8, 2)
+        compositor._dirty_regions.clear()
+        box.styles.width = 12
+        box.styles.offset = (4, 3)
+        result = compositor.reflow(app.screen, Size(40, 12))
+        assert box in result.resized
+        assert {Region(2, 1, 8, 2), Region(4, 3, 12, 2)} <= compositor._dirty_regions
+
+        compositor._dirty_regions.clear()
+        box.display = False
+        result = compositor.reflow(app.screen, Size(40, 12))
+        assert box in result.hidden
+        assert box not in result.resized
+        assert Region(4, 3, 12, 2) in compositor._dirty_regions
+
+        compositor._dirty_regions.clear()
+        box.display = True
+        result = compositor.reflow(app.screen, Size(40, 12))
+        assert box in result.shown
+        assert box not in result.resized
+        assert Region(4, 3, 12, 2) in compositor._dirty_regions
