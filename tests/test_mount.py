@@ -109,3 +109,37 @@ async def test_eager_composition_observes_completed_registration_and_styles():
             await second.remove()
     finally:
         loop.set_task_factory(previous_factory)
+
+
+async def test_initial_notifications_observe_complete_tree_styles_and_css_sources():
+    """Initial resource acquisition follows the complete registration's styles."""
+    from textual.color import Color
+
+    observed = []
+
+    class Probe(Widget):
+        def notify_style_update(self):
+            super().notify_style_update()
+            if self.id and not self.is_mounted:
+                assert self.rich_style.color == Color.parse("red").rich_color
+                assert self.app.query_one("#left").rich_style.italic
+                observed.append(self.id)
+
+    class LaterDeclaration(Probe):
+        SCOPED_CSS = False
+        DEFAULT_CSS = "#left { text-style: italic; }"
+
+    class RegistrationApp(App):
+        CSS = "#parent-a, #parent-b { color: red; }"
+
+    app = RegistrationApp()
+    async with app.run_test():
+        left, right, last = Probe(id="left"), Probe(id="right"), Probe(id="last")
+        first = Probe(id="parent-a")
+        second = LaterDeclaration(id="parent-b")
+        first._add_children(left, right)
+        second._add_children(last)
+        await app.mount(first, second)
+        assert observed == ["left", "right", "last", "parent-a", "parent-b"]
+        assert list(app.screen.children) == [first, second]
+        assert list(first.children) == [left, right]
