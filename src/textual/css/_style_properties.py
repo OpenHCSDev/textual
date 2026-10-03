@@ -18,6 +18,7 @@ from typing import (
     Sequence,
     TypeVar,
     cast,
+    overload,
 )
 
 import rich.errors
@@ -71,14 +72,28 @@ PropertySetType = TypeVar("PropertySetType")
 EnumType = TypeVar("EnumType", covariant=True)
 
 
-class StyleProperty:
+class StyleProperty(Generic[PropertyGetType]):
     """Node effects of a descriptor after its rule value has been published."""
+
+    @overload
+    def __get__(self, obj: None, objtype: type[StylesBase] | None = None) -> StyleProperty[PropertyGetType]: ...
+
+    @overload
+    def __get__(self, obj: StylesBase, objtype: type[StylesBase] | None = None) -> PropertyGetType: ...
+
+    def __get__(self, obj: StylesBase | None, objtype: type[StylesBase] | None = None):
+        """Let native class lookup select the descriptor; bound lookup reads its value."""
+        return self if obj is None else self.get_value(obj, objtype)
+
+    def get_value(self, obj: StylesBase, objtype: type[StylesBase] | None = None) -> PropertyGetType:
+        """Read the bound value supplied by the concrete rule descriptor."""
+        raise NotImplementedError
 
     def publish(self, obj: StylesBase, value: object | None) -> None:
         """Apply node effects; ordinary rule descriptors need only refresh damage."""
 
 
-class GenericProperty(StyleProperty, Generic[PropertyGetType, PropertySetType]):
+class GenericProperty(StyleProperty[PropertyGetType], Generic[PropertyGetType, PropertySetType]):
     """Descriptor that abstracts away common machinery for other style descriptors.
 
     Args:
@@ -112,7 +127,7 @@ class GenericProperty(StyleProperty, Generic[PropertyGetType, PropertySetType]):
     def __set_name__(self, owner: StylesBase, name: str) -> None:
         self.name = name
 
-    def __get__(
+    def get_value(
         self, obj: StylesBase, objtype: type[StylesBase] | None = None
     ) -> PropertyGetType:
         return obj.get_rule(self.name, self.default)  # type: ignore[return-value]
@@ -143,7 +158,7 @@ class BooleanProperty(GenericProperty[bool, bool]):
         return bool(value)
 
 
-class ScalarProperty(StyleProperty):
+class ScalarProperty(StyleProperty[Scalar | None]):
     """Descriptor for getting and setting scalar properties. Scalars are numeric values with a unit, e.g. "50vh"."""
 
     def __init__(
@@ -160,7 +175,7 @@ class ScalarProperty(StyleProperty):
     def __set_name__(self, owner: StylesBase, name: str) -> None:
         self.name = name
 
-    def __get__(
+    def get_value(
         self, obj: StylesBase, objtype: type[StylesBase] | None = None
     ) -> Scalar | None:
         """Get the scalar property.
@@ -234,7 +249,7 @@ class ScalarProperty(StyleProperty):
             obj.refresh(layout=True)
 
 
-class ScalarListProperty(StyleProperty):
+class ScalarListProperty(StyleProperty[tuple[Scalar, ...] | None]):
     """Descriptor for lists of scalars.
 
     Args:
@@ -249,7 +264,7 @@ class ScalarListProperty(StyleProperty):
     def __set_name__(self, owner: StylesBase, name: str) -> None:
         self.name = name
 
-    def __get__(
+    def get_value(
         self, obj: StylesBase, objtype: type[StylesBase] | None = None
     ) -> tuple[Scalar, ...] | None:
         return obj.get_rule(self.name)  # type: ignore[return-value]
@@ -281,7 +296,7 @@ class ScalarListProperty(StyleProperty):
             obj.refresh(layout=True, children=self.refresh_children)
 
 
-class BoxProperty(StyleProperty):
+class BoxProperty(StyleProperty[tuple[EdgeType, Color]]):
     """Descriptor for getting and setting outlines and borders along a single edge.
     For example "border-right", "outline-bottom", etc.
     """
@@ -295,7 +310,7 @@ class BoxProperty(StyleProperty):
         self._type = _type
         self.edge = edge
 
-    def __get__(
+    def get_value(
         self, obj: StylesBase, objtype: type[StylesBase] | None = None
     ) -> tuple[EdgeType, Color]:
         """Get the box property.
@@ -398,7 +413,7 @@ class Edges(NamedTuple):
         )
 
 
-class BorderProperty(StyleProperty):
+class BorderProperty(StyleProperty[Edges]):
     """Descriptor for getting and setting full borders and outlines.
 
     Args:
@@ -418,7 +433,7 @@ class BorderProperty(StyleProperty):
         )
         self._get_properties = attrgetter(*self._properties)
 
-    def __get__(
+    def get_value(
         self, obj: StylesBase, objtype: type[StylesBase] | None = None
     ) -> Edges:
         """Get the border.
@@ -526,10 +541,10 @@ class BorderProperty(StyleProperty):
         check_refresh()
 
 
-class KeylineProperty(StyleProperty):
+class KeylineProperty(StyleProperty['tuple[CanvasLineType, Color]']):
     """Descriptor for getting and setting keyline information."""
 
-    def __get__(
+    def get_value(
         self, obj: StylesBase, objtype: type[StylesBase] | None = None
     ) -> tuple[CanvasLineType, Color]:
         return obj.get_rule("keyline", ("none", TRANSPARENT))  # type: ignore[return-value]
@@ -543,13 +558,13 @@ class KeylineProperty(StyleProperty):
                 obj.refresh(layout=True)
 
 
-class SpacingProperty(StyleProperty):
+class SpacingProperty(StyleProperty[Spacing]):
     """Descriptor for getting and setting spacing properties (e.g. padding and margin)."""
 
     def __set_name__(self, owner: StylesBase, name: str) -> None:
         self.name = name
 
-    def __get__(
+    def get_value(
         self, obj: StylesBase, objtype: type[StylesBase] | None = None
     ) -> Spacing:
         """Get the Spacing.
@@ -597,12 +612,12 @@ class SpacingProperty(StyleProperty):
                 obj.refresh(layout=True)
 
 
-class DockProperty(StyleProperty):
+class DockProperty(StyleProperty[DockEdge]):
     """Descriptor for getting and setting the dock property. The dock property
     allows you to specify which edge you want to fix a Widget to.
     """
 
-    def __get__(
+    def get_value(
         self, obj: StylesBase, objtype: type[StylesBase] | None = None
     ) -> DockEdge:
         """Get the Dock property.
@@ -628,12 +643,12 @@ class DockProperty(StyleProperty):
             obj.refresh(layout=True)
 
 
-class SplitProperty(StyleProperty):
+class SplitProperty(StyleProperty[DockEdge]):
     """Descriptor for getting and setting the split property.
     The split property allows you to specify which edge you want to split.
     """
 
-    def __get__(
+    def get_value(
         self, obj: StylesBase, objtype: type[StylesBase] | None = None
     ) -> DockEdge:
         """Get the Split property.
@@ -659,13 +674,13 @@ class SplitProperty(StyleProperty):
             obj.refresh(layout=True)
 
 
-class LayoutProperty(StyleProperty):
+class LayoutProperty(StyleProperty['Layout | None']):
     """Descriptor for getting and setting layout."""
 
     def __set_name__(self, owner: StylesBase, name: str) -> None:
         self.name = name
 
-    def __get__(
+    def get_value(
         self, obj: StylesBase, objtype: type[StylesBase] | None = None
     ) -> Layout | None:
         """
@@ -712,7 +727,7 @@ class LayoutProperty(StyleProperty):
             obj.refresh(layout=True, children=True)
 
 
-class OffsetProperty(StyleProperty):
+class OffsetProperty(StyleProperty[ScalarOffset]):
     """Descriptor for getting and setting the offset property.
     Offset consists of two values, x and y, that a widget's position
     will be adjusted by before it is rendered.
@@ -721,7 +736,7 @@ class OffsetProperty(StyleProperty):
     def __set_name__(self, owner: StylesBase, name: str) -> None:
         self.name = name
 
-    def __get__(
+    def get_value(
         self, obj: StylesBase, objtype: type[StylesBase] | None = None
     ) -> ScalarOffset:
         """Get the offset.
@@ -784,7 +799,7 @@ class OffsetProperty(StyleProperty):
                 obj.refresh(layout=True, repaint=False)
 
 
-class StringEnumProperty(StyleProperty, Generic[EnumType]):
+class StringEnumProperty(StyleProperty[EnumType], Generic[EnumType]):
     """Descriptor for getting and setting string properties and ensuring that the set
     value belongs in the set of valid values.
 
@@ -817,7 +832,7 @@ class StringEnumProperty(StyleProperty, Generic[EnumType]):
     def __set_name__(self, owner: StylesBase, name: str) -> None:
         self.name = name
 
-    def __get__(
+    def get_value(
         self, obj: StylesBase, objtype: type[StylesBase] | None = None
     ) -> EnumType:
         """Get the string property, or the default value if it's not set.
@@ -877,13 +892,13 @@ class OverflowProperty(StringEnumProperty):
             obj.node._refresh_scrollbars()
 
 
-class NameProperty(StyleProperty):
+class NameProperty(StyleProperty[str]):
     """Descriptor for getting and setting name properties."""
 
     def __set_name__(self, owner: StylesBase, name: str) -> None:
         self.name = name
 
-    def __get__(self, obj: StylesBase, objtype: type[StylesBase] | None) -> str:
+    def get_value(self, obj: StylesBase, objtype: type[StylesBase] | None) -> str:
         """Get the name property.
 
         Args:
@@ -916,11 +931,11 @@ class NameProperty(StyleProperty):
                 obj.refresh(layout=True)
 
 
-class NameListProperty(StyleProperty):
+class NameListProperty(StyleProperty[tuple[str, ...]]):
     def __set_name__(self, owner: StylesBase, name: str) -> None:
         self.name = name
 
-    def __get__(
+    def get_value(
         self, obj: StylesBase, objtype: type[StylesBase] | None = None
     ) -> tuple[str, ...]:
         return obj.get_rule(self.name, ())  # type: ignore[return-value]
@@ -940,7 +955,7 @@ class NameListProperty(StyleProperty):
                 obj.refresh(layout=True)
 
 
-class ColorProperty(StyleProperty):
+class ColorProperty(StyleProperty[Color]):
     """Descriptor for getting and setting color properties."""
 
     def __init__(self, default_color: Color | str) -> None:
@@ -949,7 +964,7 @@ class ColorProperty(StyleProperty):
     def __set_name__(self, owner: StylesBase, name: str) -> None:
         self.name = name
 
-    def __get__(
+    def get_value(
         self, obj: StylesBase, objtype: type[StylesBase] | None = None
     ) -> Color:
         """Get a ``Color``.
@@ -1029,13 +1044,13 @@ class ScrollbarColorProperty(ColorProperty):
                 widget.vertical_scrollbar.refresh()
 
 
-class StyleFlagsProperty(StyleProperty):
+class StyleFlagsProperty(StyleProperty[Style]):
     """Descriptor for getting and set style flag properties (e.g. ``bold italic underline``)."""
 
     def __set_name__(self, owner: StylesBase, name: str) -> None:
         self.name = name
 
-    def __get__(
+    def get_value(
         self, obj: StylesBase, objtype: type[StylesBase] | None = None
     ) -> Style:
         """Get the ``Style``.
@@ -1093,10 +1108,10 @@ class StyleFlagsProperty(StyleProperty):
                 obj.refresh(children=True)
 
 
-class TransitionsProperty(StyleProperty):
+class TransitionsProperty(StyleProperty[dict[str, Transition]]):
     """Descriptor for getting transitions properties"""
 
-    def __get__(
+    def get_value(
         self, obj: StylesBase, objtype: type[StylesBase] | None = None
     ) -> dict[str, Transition]:
         """Get a mapping of properties to the transitions applied to them.
@@ -1122,7 +1137,7 @@ class TransitionsProperty(StyleProperty):
             obj.set_rule("transitions", transitions.copy())
 
 
-class FractionalProperty(StyleProperty):
+class FractionalProperty(StyleProperty[float]):
     """Property that can be set either as a float (e.g. 0.1) or a
     string percentage (e.g. '10%'). Values will be clamped to the range (0, 1).
     """
@@ -1140,7 +1155,7 @@ class FractionalProperty(StyleProperty):
     def __set_name__(self, owner: StylesBase, name: str) -> None:
         self.name = name
 
-    def __get__(self, obj: StylesBase, type: type[StylesBase]) -> float:
+    def get_value(self, obj: StylesBase, type: type[StylesBase]) -> float:
         """Get the property value as a float between 0 and 1.
 
         Args:
@@ -1180,14 +1195,14 @@ class FractionalProperty(StyleProperty):
             obj.refresh(children=self.children)
 
 
-class AlignProperty(StyleProperty):
+class AlignProperty(StyleProperty[tuple[AlignHorizontal, AlignVertical]]):
     """Combines the horizontal and vertical alignment properties into a single property."""
 
     def __set_name__(self, owner: StylesBase, name: str) -> None:
         self.horizontal = f"{name}_horizontal"
         self.vertical = f"{name}_vertical"
 
-    def __get__(
+    def get_value(
         self, obj: StylesBase, type: type[StylesBase]
     ) -> tuple[AlignHorizontal, AlignVertical]:
         horizontal = getattr(obj, self.horizontal)
@@ -1202,10 +1217,10 @@ class AlignProperty(StyleProperty):
         setattr(obj, self.vertical, vertical)
 
 
-class HatchProperty(StyleProperty):
+class HatchProperty(StyleProperty[tuple[str, Color] | Literal['none']]):
     """Property to expose hatch style."""
 
-    def __get__(
+    def get_value(
         self, obj: StylesBase, type: type[StylesBase]
     ) -> tuple[str, Color] | Literal["none"]:
         return obj.get_rule("hatch")  # type: ignore[return-value]

@@ -4,7 +4,6 @@ import weakref
 from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass, field
 from functools import partial
-from inspect import getattr_static
 from operator import attrgetter
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, Iterable, Iterator, Literal, cast
 
@@ -958,7 +957,7 @@ class Styles(StylesBase):
             self._mark_updated()
             for key in old_rules.keys() | new_rules.keys():
                 if old_rules.get(key) != new_rules.get(key):
-                    descriptor = cast(StyleProperty, getattr_static(type(self), key))
+                    descriptor = cast(StyleProperty, getattr(type(self), key))
                     descriptor.publish(self, new_rules.get(key))
             self._refresh_batches[-1].extend(requests)
 
