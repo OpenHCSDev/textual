@@ -9,7 +9,6 @@ from textual.css.scalar import Scalar, Unit
 
 if TYPE_CHECKING:
     from textual.widget import Widget
-    from textual.dom import DOMNode
 
 
 class HeightDependency(ABC):
@@ -20,7 +19,7 @@ class HeightDependency(ABC):
     def box_depends(self, widget: Widget) -> bool:
         return self.depends(widget) or widget._has_relative_children_height
 
-    def styles_sensitive(self, widget: Widget, source: DOMNode) -> bool:
+    def styles_sensitive(self, widget: Widget) -> bool:
         """Unknown measurements may read any rule, not just native box inputs.
 
         Available-height independence alone makes no claim about style inputs.
@@ -59,12 +58,12 @@ class NativeWidgetMeasurementHeight(HeightDependency):
             return True
         return self.layout_dependency(widget).box_depends(widget)
 
-    def styles_sensitive(self, widget: Widget, source: DOMNode) -> bool:
+    def styles_sensitive(self, widget: Widget) -> bool:
         if not widget.is_container:
             return widget._render_styles_sensitive()
         if not widget._native_measurement_layout_hooks:
             return True
-        return self.layout_dependency(widget).styles_sensitive(widget, source)
+        return self.layout_dependency(widget).styles_sensitive(widget)
 
 
 class NativeWidgetHeight(NativeWidgetMeasurementHeight):
@@ -76,15 +75,15 @@ class NativeWidgetWidth(NativeWidgetMeasurementHeight):
     def layout_dependency(self, widget: Widget) -> HeightDependency:
         return widget.layout._content_width_dependency
 
-    def styles_sensitive(self, widget: Widget, source: DOMNode) -> bool:
+    def styles_sensitive(self, widget: Widget) -> bool:
         if widget.is_container and widget._native_measurement_layout_hooks:
             from textual.layout import Layout
 
             # Native optimal-width measurement selects the same arrangement.
             # A custom width method retains its independently declared inputs.
             if type(widget.layout).get_content_width is Layout.get_content_width:
-                return NATIVE_LAYOUT_HEIGHT.styles_sensitive(widget, source)
-        return super().styles_sensitive(widget, source)
+                return NATIVE_LAYOUT_HEIGHT.styles_sensitive(widget)
+        return super().styles_sensitive(widget)
 
 
 class NativeLayoutHeight(HeightDependency):
@@ -98,26 +97,25 @@ class NativeLayoutHeight(HeightDependency):
             return True
         return widget.layout._arrangement_height_dependency.box_depends(widget)
 
-    def styles_sensitive(self, widget: Widget, source: DOMNode) -> bool:
+    def styles_sensitive(self, widget: Widget) -> bool:
         if not widget._native_measurement_layout_hooks:
             return True
-        return widget.layout._arrangement_height_dependency.styles_sensitive(widget, source)
+        return widget.layout._arrangement_height_dependency.styles_sensitive(widget)
 
 
 class FlowHeight(HeightDependency):
-    def styles_sensitive(self, widget: Widget, source: DOMNode) -> bool:
-        if not widget._native_measurement_layout_hooks:
-            return True
-        # The original owner may change inherited rules used by descendants.
-        # At native ancestors, the changed child's geometry result has already
-        # propagated; unrelated sibling measurements did not change inputs.
-        if widget is not source:
-            return False
-        return any(
-            not child._native_box_measurement
-            or child._content_height_dependency.styles_sensitive(child, child)
-            or child._content_width_dependency.styles_sensitive(child, child)
-            for child in widget.displayed_children
+    def styles_sensitive(self, widget: Widget) -> bool:
+        # Native placement consumes declared geometry rules and child boxes.
+        # Original rule publication owns descendant measurement invalidation;
+        # querying native ancestors must not walk those children again.
+        from textual.widget import Widget
+
+        # A custom hook can be independent of incoming height while reading
+        # paint rules. Only the original native no-op hooks narrow this fact.
+        return (
+            type(widget).arrange is not Widget.arrange
+            or type(widget).pre_layout is not Widget.pre_layout
+            or type(widget).process_layout is not Widget.process_layout
         )
 
     def depends(self, widget: Widget) -> bool:

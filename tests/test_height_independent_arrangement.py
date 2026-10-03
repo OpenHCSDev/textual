@@ -8,7 +8,8 @@ from textual.app import App
 from textual.containers import VerticalGroup
 from textual.color import Color
 from textual.css.scalar import Scalar, Unit
-from textual.geometry import Size
+from textual.geometry import Offset, Size
+from textual._measurement import INDEPENDENT_HEIGHT, height_dependency
 from textual.layouts.vertical import VerticalLayout
 from textual.widgets import Static
 
@@ -309,3 +310,47 @@ async def test_raw_display_rule_publishes_original_native_child_selection():
         second.styles.inline.clear_rule("display")
         assert second in parent.displayed_children
         assert parent.get_content_height(size, app.size, size.width) == 7
+
+
+async def test_inherited_paint_mutation_retires_opaque_descendant_measurements():
+    class InheritedStyleContent(Static):
+        CACHE_HEIGHT_INDEPENDENT_BOX = True
+
+        def render(self):
+            color = self.rich_style.color.get_truecolor()
+            return "one\ntwo\nthree" if color == (255, 0, 0) else "one"
+
+    app = App()
+    async with app.run_test() as pilot:
+        child = InheritedStyleContent()
+        parent = CachedArrangement(child)
+        parent.styles.color = "red"
+        await app.mount(parent)
+        await pilot.pause()
+        size = Size(40, 100)
+        fraction = Fraction(40)
+        assert child._get_box_model(size, app.size, fraction, fraction).height == 3
+        # No refresh or idle propagation: the original inherited rule mutation
+        # must retire the child's existing render/dimension/box resources too.
+        parent.styles.inline.set_rule("color", Color.parse("blue"))
+        assert child._get_box_model(size, app.size, fraction, fraction).height == 1
+
+
+async def test_height_independent_custom_layout_hook_remains_style_sensitive():
+    class StyledPlacement(CachedArrangement):
+        @height_dependency(INDEPENDENT_HEIGHT)
+        def process_layout(self, placements):
+            offset = Offset(0, 2 if self.styles.color == Color.parse("red") else 0)
+            return [placement._replace(region=placement.region.translate(offset))
+                    for placement in placements]
+
+    app = App()
+    async with app.run_test() as pilot:
+        parent = StyledPlacement(Static("one"))
+        parent.styles.color = "red"
+        await app.mount(parent)
+        await pilot.pause()
+        size = Size(40, 100)
+        assert parent.arrange(size).placements[0][1].region.y == 2
+        parent.styles.inline.set_rule("color", Color.parse("blue"))
+        assert parent.arrange(size).placements[0][1].region.y == 0

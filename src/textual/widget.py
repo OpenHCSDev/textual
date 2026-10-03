@@ -332,11 +332,10 @@ class Widget(DOMNode):
         """Unknown rendering can turn any style input into measured content."""
         return True
 
-    def _style_geometry_updated(self, geometry: bool, source: DOMNode) -> bool:
+    def _style_geometry_updated(self, geometry: bool) -> bool:
         geometry = super()._style_geometry_updated(
-            geometry or self._content_height_dependency.styles_sensitive(self, source)
-            or self._content_width_dependency.styles_sensitive(self, source),
-            source,
+            geometry or self._content_height_dependency.styles_sensitive(self)
+            or self._content_width_dependency.styles_sensitive(self),
         )
         if geometry:
             self.clear_cached_dimensions()
