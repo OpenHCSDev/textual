@@ -636,6 +636,10 @@ class MessagePump(metaclass=_MessagePumpMeta):
         # These events must occur in this order, and at the start.
 
         try:
+            # Registration owns attachment and initial styles before this
+            # task owns Compose / Mount. Keep the existing scheduling boundary
+            # inside preprocessing's completion lifetime, even on cancellation.
+            await asyncio.sleep(0)
             await self._dispatch_message(events.Compose())
             if self._prevented_messages_on_mount:
                 with self.prevent(*self._prevented_messages_on_mount):
@@ -675,7 +679,6 @@ class MessagePump(metaclass=_MessagePumpMeta):
         """Process messages until the queue is closed."""
         _rich_traceback_guard = True
         self._thread_id = threading.get_ident()
-        await asyncio.sleep(0)
         while not self._closed:
             try:
                 message = await self._get_message()
