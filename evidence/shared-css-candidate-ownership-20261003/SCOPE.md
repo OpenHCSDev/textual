@@ -17,3 +17,22 @@ Sourceexistingowner/allconsumers first, coherentbatch then finalsanity and
 onechanged installed realmotion/profile last, not unchangedfilm/newenvironment.
 Baseactualmainb1a22548 plusqualified34ancestry untilparentmerge; integrate
 resultingmain normally. Public372publisheractive,no newpubliccapture.
+
+## Published implementation batch
+
+Stylesheet._get_candidate_rules now owns declaration planning for native
+widgets and virtual components through the original bounded FIFO. Deleted all
+three component planning maps, their parse/reparse invalidations and duplicated
+rule selection. Per-component selector sets, unsafe pseudo rules, live matching,
+ancestry, retained component style ownership and original parse invalidation remain.
+Kepler contribution joined: Screen sends one changed-ancestor cohort; existing
+Stylesheet focus methods preserve per-root target names, traverse overlapping
+subtrees once, and publish one update_nodes union. All three focus consumers
+migrated. No persistent focus graph or new match/cache authority.
+
+NRA parser covers249 native+287 Toad modules,0 omissions. First attempt with
+Python3.11 failed on PEP695; corrected using existing3.14 holder, no zero claim
+from the failed attempt. Runtime dynamic selector resolution still requires
+final checks; source member census is not dynamic proof. Working source published
+before checks, not Ready or a speed claim. Final affected native CSS/component/
+focus checks then one changed installed public motion/profile at correct epoch.
