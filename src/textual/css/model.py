@@ -189,23 +189,62 @@ class SelectorSet:
         for selector, next_selector in zip(self.selectors, self.selectors[1:]):
             selector.advance = int(next_selector.combinator != SAME)
 
-    def check(self, node: DOMNode) -> bool:
+    @property
+    def is_compound(self) -> bool:
+        """Whether this declaration addresses one target without an ancestor."""
+        selectors = self.selectors
+        return bool(selectors) and (
+            selectors[0].combinator is CombinatorType.DESCENDENT
+            and all(selector.combinator is CombinatorType.SAME for selector in selectors[1:])
+        )
+
+    def check(
+        self, node: DOMNode, *, css_path_nodes: list[DOMNode] | None = None
+    ) -> bool:
         """Match this declaration, walking CSS ancestry only when it is needed.
 
         A single compound selector must match the target itself. Its checks
         still own dynamic pseudo-class semantics (including inherited state);
-        neither their results nor a live DOM path are cached here.
+        neither their results nor a live DOM path are cached here. A stylesheet
+        pass may lend its already acquired path for relational matching.
         """
         selectors = self.selectors
-        if selectors and selectors[0].combinator is CombinatorType.DESCENDENT:
-            if len(selectors) == 1:
-                return selectors[0].check(node)
-            if all(selector.combinator is CombinatorType.SAME for selector in selectors[1:]):
-                return all(selector.check(node) for selector in selectors)
+        if self.is_compound:
+            return all(selector.check(node) for selector in selectors)
 
-        from textual.css.match import _check_selectors
+        if css_path_nodes is None:
+            css_path_nodes = node.css_path_nodes
 
-        return _check_selectors(selectors, node.css_path_nodes)
+        target = css_path_nodes[-1]
+        path_count = len(css_path_nodes)
+        selector_count = len(selectors)
+        stack: list[tuple[int, int]] = [(0, 0)]
+        push = stack.append
+        pop = stack.pop
+
+        while stack:
+            selector_index, node_index = stack[-1]
+            if selector_index == selector_count or node_index == path_count:
+                pop()
+            else:
+                path_node = css_path_nodes[node_index]
+                selector = selectors[selector_index]
+                if selector.combinator is CombinatorType.DESCENDENT:
+                    if selector.check(path_node):
+                        if path_node is target and selector_index == selector_count - 1:
+                            return True
+                        stack[-1] = (selector_index + 1, node_index + selector.advance)
+                        push((selector_index, node_index + 1))
+                    else:
+                        stack[-1] = (selector_index, node_index + 1)
+                else:
+                    if selector.check(path_node):
+                        if path_node is target and selector_index == selector_count - 1:
+                            return True
+                        stack[-1] = (selector_index + 1, node_index + selector.advance)
+                    else:
+                        pop()
+        return False
 
     @property
     def css(self) -> str:
@@ -265,6 +304,20 @@ class RuleSet:
 
     def __hash__(self):
         return id(self)
+
+    def check(
+        self, node: DOMNode, *, css_path_nodes: list[DOMNode] | None = None
+    ) -> Iterable[Specificity3]:
+        """Yield the declared specificity of each matching selector group.
+
+        An original stylesheet path may be shared across this pass; it remains
+        a borrowed resource, while the selector declarations own matching.
+        """
+        for selector_set in self.selector_set:
+            if css_path_nodes is None and not selector_set.is_compound:
+                css_path_nodes = node.css_path_nodes
+            if selector_set.check(node, css_path_nodes=css_path_nodes):
+                yield selector_set.specificity
 
     @classmethod
     def _selector_to_css(cls, selectors: list[Selector]) -> str:

@@ -8,6 +8,7 @@ import pytest
 from textual.app import App, ComposeResult
 from textual.color import Color
 from textual.containers import Container
+from textual.css.model import RuleSet
 from textual.css.stylesheet import CssSource, Stylesheet, StylesheetParseError
 from textual.css.tokenizer import TokenError
 from textual.css.transition import Transition
@@ -151,7 +152,7 @@ async def test_css_path_cache_reuses_equivalent_rows_without_crossing_hover():
         # share an ancestry cache key even when their classes look identical.
         cache = {}
         app.stylesheet._path_rules_cache.clear()
-        with patch.object(app.stylesheet, "_check_rule", wraps=app.stylesheet._check_rule) as check:
+        with patch.object(RuleSet, "check", autospec=True, side_effect=RuleSet.check) as check:
             app.stylesheet.apply(first, cache=cache)
             called = check.call_count
             assert called
@@ -163,7 +164,7 @@ async def test_css_path_cache_reuses_equivalent_rows_without_crossing_hover():
         await pilot.hover(app.query_one("#two", Container))
         await pilot.pause()
         app.query_one("#two", Container).mouse_hover = True
-        with patch.object(app.stylesheet, "_check_rule", wraps=app.stylesheet._check_rule) as check:
+        with patch.object(RuleSet, "check", autospec=True, side_effect=RuleSet.check) as check:
             app.stylesheet.apply(second, cache=cache)
             assert check.call_count > 0, "Ancestor hover must invalidate the path key"
         assert second.styles.color == Color.parse("blue")
@@ -186,7 +187,7 @@ async def test_css_path_cache_hits_across_equivalent_parent_instances():
         assert first.parent is not second.parent
         cache = {}
         app.stylesheet._path_rules_cache.clear()
-        with patch.object(app.stylesheet, "_check_rule", wraps=app.stylesheet._check_rule) as check:
+        with patch.object(RuleSet, "check", autospec=True, side_effect=RuleSet.check) as check:
             app.stylesheet.apply(first, cache=cache)
             called = check.call_count
             assert called

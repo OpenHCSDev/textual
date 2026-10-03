@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 from textual.app import App, ComposeResult
 from textual.color import Color
+from textual.css.model import RuleSet
 from textual.css.stylesheet import Stylesheet
 from textual.dom import DOMNode
 from textual.widgets import Static
@@ -15,7 +16,7 @@ def test_unrelated_source_keeps_match_cache_but_relevant_source_invalidates():
     node = DOMNode(classes="item")
     sheet.apply(node)
     sheet.add_source(".unrelated { color: blue; }", read_from=("new-widget", ""))
-    with patch.object(sheet, "_check_rule", wraps=sheet._check_rule) as matching:
+    with patch.object(RuleSet, "check", autospec=True, side_effect=RuleSet.check) as matching:
         sheet.apply(node)
         matching.assert_not_called()
     assert node.styles.color == Color.parse("red")
