@@ -1,0 +1,47 @@
+.......F.....................................                            [100%]
+=================================== FAILURES ===================================
+______ test_cached_box_return_restores_its_original_alignment_constraints ______
+
+    async def test_cached_box_return_restores_its_original_alignment_constraints():
+        app = App()
+        async with app.run_test() as pilot:
+            child = Static("box")
+            child.styles.width = 4
+            child.styles.height = 1
+            parent = Widget(child)
+            parent.styles.width = "auto"
+            parent.styles.height = "auto"
+            parent.styles.min_width = "50%"
+            parent.styles.align_horizontal = "center"
+            await app.mount(parent)
+            await pilot.pause()
+    
+            fraction = Fraction(1)
+            first = parent._get_box_model(Size(80, 20), app.size, fraction, fraction)
+            original_extrema = parent._extrema
+            second = parent._get_box_model(Size(160, 20), app.size, fraction, fraction)
+            assert (first.width, second.width) == (40, 80)
+            assert parent._extrema.min_width == 80
+    
+            assert parent._get_box_model(Size(80, 20), app.size, fraction, fraction) is first
+            assert parent._extrema is original_extrema
+            # The arrangement resource may retire independently of retained boxes.
+            # Its native alignment must consume the selected box's original bounds.
+            parent._clear_arrangement_cache()
+            arrangement = parent.arrange(Size(40, 20))
+>           placement = next(entry for entry in arrangement.placements if entry.widget is child)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_box_model_cache_lifetime.py:79: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+.0 = <list_iterator object at 0x7fd4727e0610>
+
+>   placement = next(entry for entry in arrangement.placements if entry.widget is child)
+                                                                  ^^^^^^^^^^^^
+E   AttributeError: 'tuple' object has no attribute 'widget'
+
+tests/test_box_model_cache_lifetime.py:79: AttributeError
+=========================== short test summary info ============================
+FAILED tests/test_box_model_cache_lifetime.py::test_cached_box_return_restores_its_original_alignment_constraints
+1 failed, 44 passed in 3.55s
