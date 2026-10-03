@@ -68,15 +68,10 @@ from textual.widgets import Tooltip
 from textual.widgets._toast import ToastRack
 
 if TYPE_CHECKING:
-    from typing_extensions import Final
-
     from textual.command import Provider
 
     # Unused & ignored imports are needed for the docs to link to these objects:
     from textual.message_pump import MessagePump
-
-# Screen updates will be batched so that they don't happen more often than 60 times per second:
-UPDATE_PERIOD: Final[float] = 1 / constants.MAX_FPS
 
 ScreenResultType = TypeVar("ScreenResultType")
 """The result type of a screen."""
@@ -357,7 +352,7 @@ class Screen(Generic[ScreenResultType], Widget):
         """Timer used to perform updates."""
         if self.__update_timer is None:
             self.__update_timer = self.set_interval(
-                UPDATE_PERIOD, self._on_timer_update, name="screen_update", pause=True
+                self.app.frame_interval, self._on_timer_update, name="screen_update", pause=True
             )
         return self.__update_timer
 
@@ -1848,7 +1843,7 @@ class Screen(Generic[ScreenResultType], Widget):
 
         # Lines to scroll per frame (may be fractional)
         lines_to_scroll = (
-            direction * (self.app.SELECT_AUTO_SCROLL_SPEED / constants.MAX_FPS) * speed
+            direction * self.app.SELECT_AUTO_SCROLL_SPEED * self.app.frame_interval * speed
         )
         # Callable to perform scroll
         scroll_callback = partial(_auto_scroll_y, widget, lines_to_scroll)
@@ -1857,7 +1852,7 @@ class Screen(Generic[ScreenResultType], Widget):
         # before the first frame can paint. Begin on the next timer tick: it
         # is one frame away, and continuing to hold at the edge still scrolls.
         self._auto_select_scroll_timer = self.set_interval(
-            1 / constants.MAX_FPS, scroll_callback
+            self.app.frame_interval, scroll_callback
         )
 
     def _stop_auto_scroll(self) -> None:

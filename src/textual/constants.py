@@ -143,9 +143,6 @@ PRESS: Final[str] = get_environ("TEXTUAL_PRESS", "")
 SHOW_RETURN: Final[bool] = _get_environ_bool("TEXTUAL_SHOW_RETURN")
 """Write the return value on exit."""
 
-MAX_FPS: Final[int] = _get_environ_int("TEXTUAL_FPS", 60, minimum=1)
-"""Maximum frames per second for updates."""
-
 COLOR_SYSTEM: Final[str | None] = get_environ("TEXTUAL_COLOR_SYSTEM", "auto")
 """Force color system override."""
 
