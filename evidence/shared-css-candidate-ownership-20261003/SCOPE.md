@@ -36,3 +36,20 @@ from the failed attempt. Runtime dynamic selector resolution still requires
 final checks; source member census is not dynamic proof. Working source published
 before checks, not Ready or a speed claim. Final affected native CSS/component/
 focus checks then one changed installed public motion/profile at correct epoch.
+
+## Final source sanity
+
+102 joined native checks pass5.95s: candidate matching/specificity, component
+ancestry/reparent/reparse and unsafe focus-within, inherited paint, nested focus
+subtree scope, native app/widget focus and mount completion. The nested focus
+check catches unrelated branch expansion and duplicate target publication.
+No isolated per-file test loop. First invocation could not start pytest in the
+production-only holder; corrected to the existing system test interpreter
+without changing installed packages or creating an environment.
+
+After NRA census249 native+287 Toad,0 omissions: one candidate declaration
+planner with two consumers; no remaining3 component maps; one Screen focus
+cohort boundary and3 Stylesheet focus callers. Dynamic matching still runs
+natively. Source2 production files89+/83−; unchanged installed physical proof
+is not qualification of these new bytes. Changed matching installed motion/CPU
+validation remains outstanding; no measured gain or Ready claim yet.
