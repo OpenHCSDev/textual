@@ -52,3 +52,28 @@ frontier, no cache/map/type, no source/receipt/follow semantic bypass.
 This is a working source checkpoint, not App/live qualified. Final coherent
 controls and changed installed workflow follow with the Toad integration owner;
 no old film or environment/package launch was made for this source pass.
+
+## Complete caller closure and final native App batch
+
+App's existing refresh forwards to the current Screen. App therefore overrides
+the same _request_layout hook to forward already-invalidated style publication;
+its public refresh(layout=True) still retires actual Screen content inputs.
+The mounted-App control verifies source retirement once and actual Screen
+publication, preventing a silent App-level lost-layout regression.
+
+Screen's remaining flag writes belong to its native frame lifetime: _on_layout
+joins child Layout messages, _on_timer_update consumes the admitted reflow, and
+inactive presentation retirement requests reconstruction of released resources.
+Screen prevents Widget's default idle handler and consumes its own pending work.
+Those decisions remain with Screen. No unrelated flag/map/lifetime is unified.
+
+The native family closes IMPL-13/BOUND-2: scheduling uses the existing layout
+publication owner instead of repeating its source-retirement algorithm. Four
+production files change 23 added/24 deleted lines; no source counters removed.
+The existing programmatic-style App batch plus two concrete lifetime controls
+passed 14 cases in 1.60s. They cover native grid/align children, cohort atomicity,
+offset retained paint/hits, raw-style synchronous geometry invalidation without
+unsolicited layout, separate frame publication, actual new-content height/paint,
+and App-to-Screen layout delivery. This is source App qualification, not an
+installed Toad recording or demonstrated CPU gain. The changed installed workflow
+remains with Heisenberg's existing holder after its current F4 lease is returned.

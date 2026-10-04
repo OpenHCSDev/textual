@@ -5,6 +5,52 @@ from textual.containers import Grid
 from textual.widgets import Label
 
 
+async def test_style_publication_preserves_source_and_content_lifetimes():
+    """A frame request must not retire measurements twice or hide new content."""
+    from textual.css.scalar import Scalar
+
+    app = App()
+    async with app.run_test(size=(40, 12)) as pilot:
+        widget = Label("one")
+        await app.mount(widget)
+        await pilot.pause()
+        updates = widget._layout_updates
+        geometry = app.screen._geometry_revision
+        widget._inline_styles.set_rule("width", Scalar.parse("12"))
+        assert widget._layout_updates == updates + 1
+        assert app.screen._geometry_revision > geometry
+        assert not widget._layout_required
+        widget._inline_styles.refresh(layout=True, repaint=False)
+        assert widget._layout_updates == updates + 1
+        await pilot.pause()
+        assert widget.size.width == 12
+
+        updates = widget._layout_updates
+        geometry = app.screen._geometry_revision
+        widget.update("one\ntwo\nthree")
+        assert widget._layout_updates == updates + 1
+        assert app.screen._geometry_revision > geometry
+        await pilot.pause()
+        assert widget.size.height == 3
+        assert "three" in widget.render_line(2).text
+
+
+async def test_app_style_publication_keeps_current_screen_layout():
+    """App style damage must reach its current Screen without retiring it twice."""
+    app = App()
+    async with app.run_test(size=(40, 12)) as pilot:
+        widget = Label("current screen")
+        await app.mount(widget)
+        await pilot.pause()
+        updates = app.screen._layout_updates
+        app.styles.padding = (1, 2)
+        assert app.screen._layout_updates == updates + 1
+        assert app.screen._layout_required
+        await pilot.pause()
+        assert not app.screen._layout_required
+        assert widget in app.screen._compositor.visible_widgets
+
+
 @pytest.mark.parametrize(
     "style, value",
     [
