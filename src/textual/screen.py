@@ -1216,13 +1216,16 @@ class Screen(Generic[ScreenResultType], Widget):
         # stack before rendering any rows, including an invalidated backdrop.
         background_screens = app._background_screens
         screens = (*background_screens, self) if self is app.screen else (self,)
+        if self is app.screen and app.is_inline:
+            # Height acquisition can invalidate a body's captured width.
+            # Complete that geometry read before asking its scene to paint.
+            inline_height = app._get_inline_height()
         if not all(screen._prepare_compositor_refresh() for screen in screens):
             self._repaint_required = True
             return
 
         if self is app.screen:
             if app.is_inline:
-                inline_height = app._get_inline_height()
                 clear = (
                     app._previous_inline_height is not None
                     and inline_height < app._previous_inline_height
