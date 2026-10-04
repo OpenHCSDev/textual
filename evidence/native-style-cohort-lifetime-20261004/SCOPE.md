@@ -51,3 +51,29 @@ recorded. No own Toad edits; Heisenberg owns sidebar/Sash/runway consumers.
 **Installed qualification remains pending**: one joined actual sidebar width-drag/
 scroll and saved-history body motion with Heisenberg. Source controls do not prove
 visible drag latency or overall CPU gain. Frozen52 source is carried unchanged.
+
+## Ordered descriptor correction before installation
+
+The initial frozen dee585 wheel and its116-pass result remain immutable. A later
+source pass found a missing contract: native keyword descriptors include
+composites (border/outline/align/content_align/overflow), while compiled RulesMap
+stores their components. Unioning old raw components with requested composites
+then iterating a set could overwrite a freshly normalized composite with an old
+component. Composite clearNone also must invoke its descriptor, not compare an
+absent composite raw key. No old movie or runtime failure was inferred.
+
+Corrected production `871b791d` extends EXISTING Styles.replace_rules: normalize
+complete raw replacement changes FIRST, then every requested descriptor in
+keyword insertion order; both use the SAME MRO normalization loop, detached
+validation/damage resource, one original _update_rules live publication. No
+new algorithm/family, descriptor-name dispatch or second source authority.
+Compiled callers still pass their genuine raw replacement; DOM passes genuine
+ordered keyword inputs separately. Imperative setters remain immediate.
+
+Changed final batch: **55 passed1.54s** at871b, testing composite overwrite/
+authored precedence/clear/atomic invalid rejection plus native geometry/cache,
+normalized no-op, compiled replacement/descriptor MRO. Old116 sourcef30 result
+is retained separately, not represented as a new run on871b. Final native AST
+249modules/zero omissions; dynamic plugin dispatch limits remain explicit.
+One corrected wheel replaces052d for the same sole joined installed sidebar/
+runway journey. No second film, provider or environment. Installed pending.
