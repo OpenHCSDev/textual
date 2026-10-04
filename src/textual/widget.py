@@ -2828,18 +2828,18 @@ class Widget(DOMNode):
 
     @property
     def layers(self) -> tuple[str, ...]:
-        """Layers of from parent.
+        """Names from the outermost authored layer declaration, or the default."""
+        order = self._get_layer_order(self.walk_ancestors(with_self=True))
+        return ("default",) if order is None else order
 
-        Returns:
-            Tuple of layer names.
-        """
-        layers: tuple[str, ...] = ("default",)
-        for node in self.walk_ancestors(with_self=True):
+    def _get_layer_order(self, sources: Iterable[DOMNode]) -> tuple[str, ...] | None:
+        order = None
+        for node in sources:
             if not isinstance(node, Widget):
                 break
             if node.styles.has_rule("layers"):
-                layers = node.styles.layers
-        return layers
+                order = node.styles.layers
+        return order
 
     @property
     def link_style(self) -> Style:

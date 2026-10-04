@@ -58,7 +58,7 @@ async def test_point_hits_follow_layer_clip_visibility_and_scene_changes():
 async def test_reflow_releases_recursive_closures_without_gc():
     app = App()
     names = {"Compositor._arrange_root.<locals>.add_widget",
-             "Compositor._arrange_root.<locals>.get_layers"}
+             "Compositor._arrange_root.<locals>.arrange_widget"}
 
     def retained_closures():
         return {id(value) for value in gc.get_objects()
@@ -207,6 +207,26 @@ async def test_layer_inheritance_updates_between_reflows():
         await pilot.pause()
         geometry = app.screen._compositor.full_map
         assert geometry[low].order > geometry[high].order
+
+        # Capturing a nested root must inherit the same original declaration
+        # outside its scope, including explicit empty and duplicate public names.
+        for names in ((), ("default",), ("low", "high", "low")):
+            outer.styles.layers = names
+            assert inner.layers == names
+            await pilot.pause()
+            compositor = app.screen._compositor
+            geometry = compositor.full_map
+            captured, _ = compositor._arrange_root(
+                inner, app.screen.size, visible_only=False,
+                root_geometry=geometry[inner],
+            )
+            assert captured[low].order == geometry[low].order
+            assert captured[high].order == geometry[high].order
+
+        detached = Container()
+        assert detached.layers == ("default",)
+        detached.styles.layers = ("high", "low", "high")
+        assert detached.layers == ("high", "low", "high")
 
 
 async def test_custom_widget_layers_are_respected():
