@@ -1829,10 +1829,8 @@ class DOMNode(MessagePump):
             self._inline_styles.merge(new_styles)
             self._inline_styles.refresh(layout=True)
 
-        styles = self.styles
-        with styles.batch_update():
-            for key, value in update_styles.items():
-                setattr(styles, key, value)
+        if update_styles:
+            self._inline_styles.replace_rules(self._inline_styles.get_rules(), **update_styles)
         return self
 
     def has_class(self, *class_names: str) -> bool:
