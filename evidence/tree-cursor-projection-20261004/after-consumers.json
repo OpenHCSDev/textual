@@ -1,5 +1,5 @@
 {
-  "head": "5007e2786b7d61c22be3816449d90b31e5ad6192",
+  "head": "d0c11d918f59fbf9e71d1fb0fdb67975421479a2",
   "modules": 249,
   "omissions": [],
   "sites": [
@@ -307,47 +307,53 @@
       "path": "src/textual/widgets/_tree.py",
       "line": 1476,
       "expression": "self.cursor_line",
-      "context": "Store"
+      "context": "Load"
     },
     {
       "path": "src/textual/widgets/_tree.py",
-      "line": 1481,
-      "expression": "self._tree_lines",
-      "context": "Load"
+      "line": 1477,
+      "expression": "self.cursor_line",
+      "context": "Store"
     },
     {
       "path": "src/textual/widgets/_tree.py",
       "line": 1482,
-      "expression": "self.cursor_line",
-      "context": "Store"
-    },
-    {
-      "path": "src/textual/widgets/_tree.py",
-      "line": 1487,
       "expression": "self._tree_lines",
       "context": "Load"
     },
     {
       "path": "src/textual/widgets/_tree.py",
-      "line": 1490,
+      "line": 1483,
       "expression": "self.cursor_line",
       "context": "Store"
     },
     {
       "path": "src/textual/widgets/_tree.py",
-      "line": 1498,
+      "line": 1488,
+      "expression": "self._tree_lines",
+      "context": "Load"
+    },
+    {
+      "path": "src/textual/widgets/_tree.py",
+      "line": 1491,
       "expression": "self.cursor_line",
       "context": "Store"
     },
     {
       "path": "src/textual/widgets/_tree.py",
-      "line": 1503,
+      "line": 1499,
       "expression": "self.cursor_line",
       "context": "Store"
     },
     {
       "path": "src/textual/widgets/_tree.py",
-      "line": 1512,
+      "line": 1504,
+      "expression": "self.cursor_line",
+      "context": "Store"
+    },
+    {
+      "path": "src/textual/widgets/_tree.py",
+      "line": 1513,
       "expression": "self.cursor_line",
       "context": "Store"
     },
@@ -407,19 +413,13 @@
     },
     {
       "path": "src/textual/widgets/_tree.py",
-      "line": 1477,
+      "line": 1478,
       "expression": "self.cursor_line",
       "context": "Load"
     },
     {
       "path": "src/textual/widgets/_tree.py",
-      "line": 1483,
-      "expression": "self.cursor_line",
-      "context": "Load"
-    },
-    {
-      "path": "src/textual/widgets/_tree.py",
-      "line": 1488,
+      "line": 1484,
       "expression": "self.cursor_line",
       "context": "Load"
     },
@@ -427,17 +427,17 @@
       "path": "src/textual/widgets/_tree.py",
       "line": 1489,
       "expression": "self.cursor_line",
-      "context": "Store"
-    },
-    {
-      "path": "src/textual/widgets/_tree.py",
-      "line": 1491,
-      "expression": "self.cursor_line",
       "context": "Load"
     },
     {
       "path": "src/textual/widgets/_tree.py",
-      "line": 1496,
+      "line": 1490,
+      "expression": "self.cursor_line",
+      "context": "Store"
+    },
+    {
+      "path": "src/textual/widgets/_tree.py",
+      "line": 1492,
       "expression": "self.cursor_line",
       "context": "Load"
     },
@@ -445,35 +445,41 @@
       "path": "src/textual/widgets/_tree.py",
       "line": 1497,
       "expression": "self.cursor_line",
+      "context": "Load"
+    },
+    {
+      "path": "src/textual/widgets/_tree.py",
+      "line": 1498,
+      "expression": "self.cursor_line",
       "context": "Store"
     },
     {
       "path": "src/textual/widgets/_tree.py",
-      "line": 1499,
+      "line": 1500,
       "expression": "self.cursor_line",
       "context": "Load"
     },
     {
       "path": "src/textual/widgets/_tree.py",
-      "line": 1504,
+      "line": 1505,
       "expression": "self.cursor_line",
       "context": "Load"
     },
     {
       "path": "src/textual/widgets/_tree.py",
-      "line": 1513,
+      "line": 1514,
       "expression": "self.cursor_line",
       "context": "Load"
     },
     {
       "path": "src/textual/widgets/_tree.py",
-      "line": 1532,
+      "line": 1533,
       "expression": "self.cursor_line",
       "context": "Load"
     },
     {
       "path": "src/textual/widgets/_tree.py",
-      "line": 1601,
+      "line": 1602,
       "expression": "self.move_cursor",
       "context": "Load"
     },
@@ -545,55 +551,43 @@
     },
     {
       "path": "src/textual/widgets/_tree.py",
-      "line": 1476,
+      "line": 1483,
       "expression": "self.cursor_line",
       "context": "Load"
     },
     {
       "path": "src/textual/widgets/_tree.py",
-      "line": 1476,
-      "expression": "self.cursor_line",
-      "context": "Load"
-    },
-    {
-      "path": "src/textual/widgets/_tree.py",
-      "line": 1482,
-      "expression": "self.cursor_line",
-      "context": "Load"
-    },
-    {
-      "path": "src/textual/widgets/_tree.py",
-      "line": 1518,
+      "line": 1519,
       "expression": "self._tree_lines",
       "context": "Load"
     },
     {
       "path": "src/textual/widgets/_tree.py",
-      "line": 1518,
+      "line": 1519,
       "expression": "self.cursor_line",
       "context": "Load"
     },
     {
       "path": "src/textual/widgets/_tree.py",
-      "line": 1535,
+      "line": 1536,
       "expression": "self._tree_lines",
       "context": "Load"
     },
     {
       "path": "src/textual/widgets/_tree.py",
-      "line": 1535,
+      "line": 1536,
       "expression": "self.cursor_line",
       "context": "Load"
     },
     {
       "path": "src/textual/widgets/_tree.py",
-      "line": 1546,
+      "line": 1547,
       "expression": "self.move_cursor",
       "context": "Load"
     },
     {
       "path": "src/textual/widgets/_tree.py",
-      "line": 1552,
+      "line": 1553,
       "expression": "self.move_cursor",
       "context": "Load"
     },
@@ -617,25 +611,25 @@
     },
     {
       "path": "src/textual/widgets/_tree.py",
-      "line": 1560,
+      "line": 1561,
       "expression": "self.move_cursor",
       "context": "Load"
     },
     {
       "path": "src/textual/widgets/_tree.py",
-      "line": 1562,
+      "line": 1563,
       "expression": "self.move_cursor",
       "context": "Load"
     },
     {
       "path": "src/textual/widgets/_tree.py",
-      "line": 1574,
+      "line": 1575,
       "expression": "self.move_cursor",
       "context": "Load"
     },
     {
       "path": "src/textual/widgets/_tree.py",
-      "line": 1572,
+      "line": 1573,
       "expression": "self.move_cursor",
       "context": "Load"
     },
