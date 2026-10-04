@@ -214,7 +214,7 @@ def height_dependency(policy: HeightDependency) -> Callable[[Function], Function
 def _local_box_inputs(widget: Widget) -> tuple[bool, bool, bool]:
     """Resolve local scalar dependencies once per owning style generation."""
     styles = widget.styles
-    revision = widget._geometry_revision
+    revision = styles._cache_key
     cached = widget.__dict__.get("_height_style_dependency_cache")
     if cached is not None and cached[0] == revision:
         return cached[1]
