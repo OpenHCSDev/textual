@@ -1457,7 +1457,7 @@ class Markdown(Widget):
                     if removed:
                         await self.mount_all(batch)
                     else:
-                        with self.app.batch_update():
+                        async with self.batch():
                             await markdown_block.remove()
                             await self.mount_all(batch)
                         removed = True
@@ -1534,7 +1534,7 @@ class Markdown(Widget):
                         end + start_line,
                     )
 
-                with self.app.batch_update():
+                async with self.batch():
                     if existing_blocks and new_blocks:
                         last_block = existing_blocks[-1]
                         last_block.source_range = new_blocks[0].source_range
