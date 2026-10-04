@@ -37,12 +37,14 @@ async def test_reparent_preserves_widget_tasks_and_updates_native_ancestry():
         child = panel.query_one("#body", Static)
         tasks = panel._task, child._task
         red = child.styles.color
+        app.screen.selections = {child: SELECT_ALL}
         first.query_one("#shared")  # Warm the native selector cache.
         panel.reparent(second)
         await pilot.pause()
         assert panel.parent is second and panel.screen is app.screen
         assert not first.query("#shared") and second.query_one("#shared") is panel
         assert panel.query_one("#body") is child and child.content == "unchanged model"
+        assert app.screen.selections == {child: SELECT_ALL}
         assert (panel._task, child._task) == tasks
         assert panel.mounts == 1 and panel.unmounts == 0
         assert child.styles.color != red

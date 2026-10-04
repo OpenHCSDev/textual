@@ -4,6 +4,7 @@ from textual.app import App
 from textual.await_remove import AwaitRemove
 from textual.containers import VerticalGroup
 from textual.screen import Screen
+from textual.selection import SELECT_ALL
 from textual.widgets import Static
 import pytest
 
@@ -43,6 +44,48 @@ async def test_pending_removal_retires_each_original_scene_and_cover():
             release.set()
             await removal
         assert all(node._closed for node, _ in retiring)
+
+
+async def test_pending_removal_revokes_pointer_intent_but_keeps_surviving_selection():
+    entered, release = asyncio.Event(), asyncio.Event()
+
+    class SlowText(Static):
+        async def on_unmount(self):
+            entered.set()
+            await release.wait()
+
+    app = App()
+    async with app.run_test(size=(50, 12)) as pilot:
+        try:
+            retiring = SlowText("selected source", id="retiring")
+            survivor = Static("surviving source", id="survivor")
+            parent = VerticalGroup(retiring, survivor)
+            await app.mount(parent)
+            await pilot.pause()
+            assert await pilot.mouse_down(retiring, offset=(0, 0))
+            assert await pilot.mouse_up(retiring, offset=(4, 0))
+            screen = app.screen
+            state = screen._select_state
+            assert state is not None and state.start.content_widget is retiring
+            assert state.start.container is parent and state.is_attached_to_dom
+            screen.selections = {**screen.selections, survivor: SELECT_ALL}
+            retiring.capture_mouse()
+            removal = retiring.remove()
+            try:
+                assert screen._select_state is None
+                assert app.mouse_captured is None
+                assert app.mouse_over is not retiring and app.hover_over is not retiring
+                assert screen.selections == {survivor: SELECT_ALL}
+                await asyncio.wait_for(entered.wait(), 1)
+                screen._flush_pending_selection()
+                assert screen.selections == {survivor: SELECT_ALL}
+            finally:
+                release.set()
+                await removal
+            assert parent.is_attached and not state.is_attached_to_dom
+            assert screen.get_selected_text() == "surviving source"
+        finally:
+            release.set()
 
 
 @pytest.mark.parametrize("layout", ["vertical", "stream"])
