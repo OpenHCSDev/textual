@@ -513,16 +513,20 @@ class Compositor:
         while len(self._subtree_geometry) > capacity:
             self._subtree_geometry.pop(next(iter(self._subtree_geometry)))
 
+    def _invalidate_render_projection(self) -> None:
+        """Retire layer and line projections of the original scene map."""
+        self._visible_widgets = None
+        self._layers = None
+        self._cuts = None
+
     def clear(self) -> None:
         """Remove all references to widgets (used when the screen closes)."""
         self.root = None
         self._full_map.clear()
         self._full_map_invalidated = True
         self._visible_map = None
-        self._layers = None
+        self._invalidate_render_projection()
         self.widgets.clear()
-        self._visible_widgets = None
-        self._cuts = None
         self._dirty_regions.clear()
         self._subtree_geometry.clear()
 
@@ -551,9 +555,7 @@ class Compositor:
         self.widgets.difference_update(widgets)
         if changed:
             self._full_map_invalidated = True
-            self._visible_widgets = None
-            self._layers = None
-            self._cuts = None
+            self._invalidate_render_projection()
 
     @classmethod
     def _regions_to_spans(
@@ -615,9 +617,7 @@ class Compositor:
             Hidden, shown, and resized widgets.
         """
         previous_map = self._visible_map if visible_only and self._visible_map is not None else self._full_map
-        self._cuts = None
-        self._layers = None
-        self._visible_widgets = None
+        self._invalidate_render_projection()
         self._visible_map = None
         self.root = parent
         self.size = size
@@ -646,9 +646,7 @@ class Compositor:
         self._full_map_invalidated = visible_only
         # Measuring widgets may inspect geometry and populate presentation
         # caches from the previous committed map. Publish only the new map.
-        self._visible_widgets = None
-        self._layers = None
-        self._cuts = None
+        self._invalidate_render_projection()
         self.widgets = widgets
 
         resized_widgets = self._damage_geometry(old_map, map, parent)
@@ -673,9 +671,7 @@ class Compositor:
         Returns:
             Set of widgets that were exposed by the scroll.
         """
-        self._cuts = None
-        self._layers = None
-        self._visible_widgets = None
+        self._invalidate_render_projection()
         self._full_map_invalidated = True
         self.root = parent
         self.size = size
@@ -688,9 +684,7 @@ class Compositor:
 
         # Replace map and widgets
         self._visible_map = map
-        self._visible_widgets = None
-        self._layers = None
-        self._cuts = None
+        self._invalidate_render_projection()
         self.widgets = widgets
 
         exposed_widgets = map.keys() - old_map.keys()
@@ -745,10 +739,8 @@ class Compositor:
             self._damage_geometry(previous, map, self.root)
             self._full_map = map
             self._full_map_invalidated = False
-            self._visible_widgets = None
             self._visible_map = None
-            self._layers = None
-            self._cuts = None
+            self._invalidate_render_projection()
 
         return self._full_map
 

@@ -1,8 +1,48 @@
+import asyncio
+
 from textual.app import App
+from textual.await_remove import AwaitRemove
 from textual.containers import VerticalGroup
 from textual.screen import Screen
 from textual.widgets import Static
 import pytest
+
+
+async def test_pending_removal_retires_each_original_scene_and_cover():
+    release = asyncio.Event()
+
+    class SlowUnmount(VerticalGroup):
+        async def on_unmount(self):
+            await release.wait()
+
+    app = App()
+    async with app.run_test() as pilot:
+        first, second = Screen(), Screen()
+        retiring = []
+        scenes = []
+        for scene in (first, second):
+            await app.push_screen(scene)
+            node = SlowUnmount(Static("old source"))
+            await scene.mount(node)
+            node.loading = True
+            await pilot.pause()
+            cover = node._render_widget
+            assert cover is not node
+            assert cover in scene._compositor.visible_widgets
+            retiring.append((node, cover))
+            scenes.append(scene)
+        removal = AwaitRemove.prune(*(node for node, _ in retiring))
+        try:
+            for scene, (node, cover) in zip(scenes, retiring):
+                assert node._pruning and not node._closed
+                assert cover not in scene._compositor.full_map
+                assert cover not in scene._compositor.visible_widgets
+                assert node not in scene._compositor.full_map
+                assert not node.display
+        finally:
+            release.set()
+            await removal
+        assert all(node._closed for node, _ in retiring)
 
 
 @pytest.mark.parametrize("layout", ["vertical", "stream"])
