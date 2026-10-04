@@ -338,10 +338,31 @@ class Widget(DOMNode):
             or self._content_width_dependency.styles_sensitive(self),
         )
         if geometry:
-            self.clear_cached_dimensions()
-            self._layout_cache.clear()
-            self._clear_arrangement_cache()
+            self._measurement_updated()
         return geometry
+
+    def _measurement_updated(self) -> None:
+        """Retire measurements at their original source mutation."""
+        self._layout_updates += 1
+        self.clear_cached_dimensions()
+        self._layout_cache.clear()
+        self._clear_arrangement_cache()
+
+    def _invalidate_layout(self) -> None:
+        """Publish changed layout inputs before the idle Layout notification.
+
+        Scene placement still invalidates every enclosing capture. Measurement
+        propagation retains the original fixed-size ancestor boundary; scrolling
+        changes only the scene and never enters this source lifetime.
+        """
+        self._invalidate_subtree_geometry()
+        self._measurement_updated()
+        for ancestor in self.walk_ancestors():
+            if not isinstance(ancestor, Widget):
+                break
+            ancestor._measurement_updated()
+            if not ancestor.styles.auto_dimensions:
+                break
 
     DEFAULT_CSS = """
     Widget{
@@ -1432,7 +1453,7 @@ class Widget(DOMNode):
         # cached placements. Inactive parents may never arrange again.
         self._clear_arrangement_cache()
         self.layout.clear_cache()
-        self._invalidate_subtree_geometry()
+        self._invalidate_layout()
 
     def _get_virtual_dom(self) -> Iterable[Widget]:
         """Get widgets not part of the DOM.
@@ -1877,8 +1898,7 @@ class Widget(DOMNode):
         this original resource, invalidated by the same child/style/layout
         inputs, rather than walking the dependency subtree twice.
         """
-        epoch = (self._nodes._updates,
-                 self._geometry_revision, self._layout_updates)
+        epoch = (self._nodes._updates, self._layout_updates)
         proof = self.__dict__.get("_height_arrangement_cache")
         if proof is None or proof[0] != epoch:
             self._arrangement_cache.clear()
@@ -1892,8 +1912,7 @@ class Widget(DOMNode):
 
     def _box_depends_on_available_height(self) -> bool:
         nodes = self.__dict__.get("_nodes")
-        epoch = (nodes._updates if nodes is not None else 0,
-                 self._geometry_revision, self._layout_updates)
+        epoch = (nodes._updates if nodes is not None else 0, self._layout_updates)
         cached = self.__dict__.get("_height_dependency_cache")
         if cached is not None and cached[0] == epoch:
             return cached[1]
@@ -1923,7 +1942,7 @@ class Widget(DOMNode):
             The size and margin for this widget.
         """
         nodes = self.__dict__.get("_nodes")
-        revision = (self._layout_updates, self._geometry_revision,
+        revision = (self._layout_updates,
                     nodes._updates if nodes is not None else 0)
         cache_container, cache_height_fraction = container, height_fraction
         if self.CACHE_HEIGHT_INDEPENDENT_BOX and not self._box_depends_on_available_height():
@@ -4574,10 +4593,9 @@ class Widget(DOMNode):
         """
 
         if layout:
-            self._invalidate_subtree_geometry()
+            self._invalidate_layout()
         if layout and not self._layout_required:
             self._layout_required = True
-            self._layout_updates += 1
 
         if recompose:
             self._recompose_required = True
@@ -4830,13 +4848,6 @@ class Widget(DOMNode):
                         screen.post_message(messages.Update(self))
                 if self._layout_required:
                     self._layout_required = False
-                    for ancestor in self.walk_ancestors():
-                        if not isinstance(ancestor, Widget):
-                            break
-                        ancestor._clear_arrangement_cache()
-                        ancestor._layout_updates += 1
-                        if not ancestor.styles.auto_dimensions:
-                            break
                     screen.post_message(messages.Layout(self))
 
     def focus(self, scroll_visible: bool = True) -> Self:
