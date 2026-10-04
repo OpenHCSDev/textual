@@ -17,7 +17,6 @@ from typing import TYPE_CHECKING, Generic, Iterable, Iterator, TypeVar, cast, ov
 
 import rich.repr
 
-from textual._context import active_app
 from textual.await_remove import AwaitRemove
 from textual.css.errors import DeclarationError, TokenError
 from textual.css.match import match
@@ -411,8 +410,7 @@ class DOMQuery(Generic[QueryType]):
         Returns:
             An awaitable object that waits for the widgets to be removed.
         """
-        app = active_app.get()
-        return app._prune(*self.nodes, parent=self._node)
+        return AwaitRemove.prune(*self.nodes, parent=self._node)
 
     def set_styles(
         self, css: str | None = None, **update_styles

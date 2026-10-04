@@ -527,12 +527,15 @@ class Compositor:
         self._subtree_geometry.clear()
 
     def discard_widgets(self, widgets: set[Widget]) -> None:
-        """Release retired scene objects while preserving their repaint damage.
+        """Retire original widgets, their covers and chrome, retaining damage.
 
-        Geometry invalidation alone leaves the old full map and derived layer
-        projections owning removed widgets indefinitely on inactive screens.
-        Damage needs rectangles, not the retired widget trees that occupied them.
+        Maps and captured arrangements release paint before native teardown.
         """
+        widgets = {
+            member
+            for owner in widgets
+            for member in (owner, owner._render_widget, *owner._get_virtual_dom())
+        }
         for owner, resource in tuple(self._subtree_geometry.items()):
             if resource.references_retired(owner, widgets):
                 del self._subtree_geometry[owner]
@@ -541,10 +544,9 @@ class Compositor:
             if mapping is None:
                 continue
             for widget in widgets:
-                geometry = mapping.pop(widget, None)
-                if geometry is not None:
+                if (geometry := mapping.pop(widget, None)) is not None:
                     changed = True
-                    if region := geometry.region.intersection(geometry.clip):
+                    if region := geometry.visible_region:
                         self._dirty_regions.add(region)
         self.widgets.difference_update(widgets)
         if changed:

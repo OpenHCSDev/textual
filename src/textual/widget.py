@@ -4620,7 +4620,7 @@ class Widget(DOMNode):
         Returns:
             An awaitable object that waits for the widget to be removed.
         """
-        await_remove = self.app._prune(self, parent=self._parent)
+        await_remove = AwaitRemove.prune(self, parent=self._parent)
         return await_remove
 
     def remove_children(
@@ -4647,7 +4647,7 @@ class Widget(DOMNode):
             ]
         else:
             children_to_remove = selector
-        await_remove = self.app._prune(*children_to_remove, parent=self)
+        await_remove = AwaitRemove.prune(*children_to_remove, parent=self)
         return await_remove
 
     @asynccontextmanager

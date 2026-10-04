@@ -113,7 +113,7 @@ from textual.keys import (
     _normalize_key_list,
     format_key,
 )
-from textual.messages import CallbackType, Prune
+from textual.messages import CallbackType
 from textual.notifications import Notification, Notifications, Notify, SeverityLevel
 from textual.reactive import Reactive
 from textual.renderables.blank import Blank
@@ -3755,7 +3755,7 @@ class App(Generic[ReturnType], DOMNode):
         for stack in tuple(self._screen_stacks.values()):
             for stack_screen in reversed(stack):
                 if stack_screen._running:
-                    await self._prune(stack_screen)
+                    await AwaitRemove.prune(stack_screen)
             stack.clear()
         self._installed_screens.clear()
         self._modes.clear()
@@ -4400,58 +4400,6 @@ class App(Generic[ReturnType], DOMNode):
         # Required by textual-web to manage focus in a web page.
         self.app_focus = False
         self.screen.refresh_bindings()
-
-    def _prune(self, *nodes: Widget, parent: DOMNode | None = None) -> AwaitRemove:
-        """Prune nodes from DOM.
-
-        Args:
-            parent: Parent node.
-
-        Returns:
-            Optional awaitable.
-        """
-        if not nodes:
-            return AwaitRemove([])
-        pruning_nodes: set[Widget] = {*nodes}
-        for node in nodes:
-            node.post_message(Prune())
-            pruning_nodes.update(node.walk_children(with_self=True))
-
-        try:
-            screen = nodes[0].screen
-        except (ScreenStackError, NoScreen):
-            screen = None
-        else:
-            if screen.focused and screen.focused in pruning_nodes:
-                screen._reset_focus(screen.focused, list(pruning_nodes))
-        pruning_screen = screen
-
-        for node in pruning_nodes:
-            node._pruning = True
-
-        def post_mount() -> None:
-            """Called after removing children."""
-
-            if pruning_screen is not None:
-                pruning_screen._forget_pruned_widgets(pruning_nodes)
-
-            if parent is not None:
-                try:
-                    screen = parent.screen
-                except (ScreenStackError, NoScreen):
-                    pass
-                else:
-                    if screen._running and screen.is_current:
-                        self._update_mouse_over(screen)
-                finally:
-                    parent.refresh(layout=True)
-
-        await_complete = AwaitRemove(
-            [task for node in nodes if (task := node._task) is not None],
-            post_mount,
-        )
-        await_complete.call_when_ready(self)
-        return await_complete
 
     def _watch_app_focus(self, focus: bool) -> None:
         """Respond to changes in app focus."""
