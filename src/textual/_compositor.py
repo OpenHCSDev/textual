@@ -17,7 +17,6 @@ from abc import ABC, abstractmethod
 from bisect import bisect_left, bisect_right
 from contextlib import contextmanager
 from functools import cached_property
-from operator import itemgetter
 from types import MappingProxyType
 from typing import (
     TYPE_CHECKING,
@@ -769,23 +768,22 @@ class Compositor:
         """
 
         if self._visible_widgets is None:
-            map = (
-                self._visible_map
-                if self._visible_map is not None
-                else (self._full_map or {})
-            )
-            self._visible_widgets = self._paint_regions(map, self.size.region)
+            self._visible_widgets = self._paint_regions(self.layers, self.size.region)
         return self._visible_widgets
 
     @staticmethod
-    def _paint_regions(geometry: Mapping[Widget, MapGeometry], bounds: Region
+    def _ordered_geometry(geometry: Mapping[Widget, MapGeometry]
+                          ) -> list[tuple[Widget, MapGeometry]]:
+        """Order the original screen or captured geometry front to back once."""
+        return sorted(geometry.items(), key=lambda item: item[1].order, reverse=True)
+
+    @staticmethod
+    def _paint_regions(layers: Iterable[tuple[Widget, MapGeometry]], bounds: Region
                        ) -> dict[Widget, tuple[Region, Region]]:
-        """The same native front-to-back order for a screen or intrinsic body."""
-        regions = [(entry.order, widget, entry.region, entry.clip)
-                   for widget, entry in geometry.items()
-                   if bounds.overlaps(entry.region) and entry.clip.overlaps(entry.region)]
-        regions.sort(key=itemgetter(0), reverse=True)
-        return {widget: (region, clip) for _, widget, region, clip in regions}
+        """Clip the original ordered cohort without acquiring its order again."""
+        return {widget: (entry.region, entry.clip)
+                for widget, entry in layers
+                if bounds.overlaps(entry.region) and entry.clip.overlaps(entry.region)}
 
     def _arrange_root(
         self, root: Widget, size: Size, visible_only: bool = True,
@@ -1141,9 +1139,7 @@ class Compositor:
         """Get widgets and geometry in layer order."""
         map = self._visible_map if self._visible_map is not None else self._full_map
         if self._layers is None:
-            self._layers = sorted(
-                map.items(), key=lambda item: item[1].order, reverse=True
-            )
+            self._layers = self._ordered_geometry(map)
         return self._layers
 
     @property
@@ -1460,22 +1456,14 @@ class Compositor:
         _rich_traceback_guard = True
 
         _Region = Region
-
-        if crop:
-            crop_overlaps = crop.overlaps
-            widget_regions = [
-                (widget, region, clip)
-                for widget, (region, clip) in widgets.items()
-                if crop_overlaps(clip)
-            ]
-        else:
-            widget_regions = [
-                (widget, region, clip)
-                for widget, (region, clip) in widgets.items()
-            ]
-
         intersection = _Region.intersection
-        for widget, region, clip in widget_regions:
+        # The supplied paint mapping owns this synchronous ordered cohort.
+        # Screen invalidation replaces that resource; it does not mutate it.
+        # Capture supplies its own detached cohort. Neither needs another list
+        # of all scene members before the first exposed row can be rendered.
+        for widget, (region, clip) in widgets.items():
+            if crop and not crop.overlaps(clip):
+                continue
             if crop is not None:
                 # Partial updates only need the damaged rows. Keep horizontal
                 # clip boundaries intact: compositor chops are aligned to those
@@ -1589,10 +1577,11 @@ class Compositor:
         crop = Region.from_union(update_regions)
         spans = list(self._regions_to_spans(update_regions))
         is_rendered_line = {y for y, _, _ in spans}.__contains__
+        cuts = self.cuts
         chops = self._render_chops(crop, is_rendered_line,
-                                  widgets=self.visible_widgets, cuts=self.cuts,
+                                  widgets=self.visible_widgets, cuts=cuts,
                                   bounds=screen_region)
-        return ChopsUpdate(chops, spans, self.cuts)
+        return ChopsUpdate(chops, spans, cuts)
 
     def render_strips(self, size: Size | None = None) -> list[Strip]:
         """Render to a list of strips.
@@ -1642,7 +1631,7 @@ class Compositor:
         geometry, _ = self._arrange_root(
             root, self.size, visible_only=False, root_geometry=root_geometry,
         )
-        widgets = self._paint_regions(geometry, bounds)
+        widgets = self._paint_regions(self._ordered_geometry(geometry), bounds)
         cuts = self._cuts_for_regions(bounds, widgets)
         with self._using_geometry(root, geometry):
             chops = self._render_chops(bounds, lambda y: True,

@@ -43,6 +43,6 @@ async def test_horizontal_occlusion_skips_covered_cells_with_native_render_parit
         covered = Region(offset, 0, width, 12)
         assert all(not crop.overlaps(covered) for crop in background.crops)
         original = compositor._get_renders
-        with patch.object(compositor, "_get_renders", lambda crop=None, render_regions=None: original(crop)):
+        with patch.object(compositor, "_get_renders", lambda crop=None, render_regions=None, *, widgets: original(crop, widgets=widgets)):
             reference = compositor.render_strips()
         assert optimized == reference

@@ -209,7 +209,7 @@ async def test_covered_widgets_skip_rendering_without_changing_output():
             render.assert_not_called()
             original = compositor._get_renders
             # Render every layer as before, using the exact same geometry.
-            with patch.object(compositor, "_get_renders", lambda crop=None, render_regions=None: original(crop)):
+            with patch.object(compositor, "_get_renders", lambda crop=None, render_regions=None, *, widgets: original(crop, widgets=widgets)):
                 reference = compositor.render_strips()
             assert render.call_count > 0
         assert optimized == reference
@@ -252,7 +252,7 @@ async def test_partial_redraw_requests_only_damaged_vertical_rows(rows):
             # Native whole-height rendering must generate identical terminal
             # operations/metadata for the same dirty spans, including x clipping.
             original = compositor._get_renders
-            with patch.object(compositor, "_get_renders", lambda crop=None, render_regions=None: original(None)):
+            with patch.object(compositor, "_get_renders", lambda crop=None, render_regions=None, *, widgets: original(None, widgets=widgets)):
                 compositor._dirty_regions = damage.copy()
                 expected = compositor.render_partial_update()
             assert actual.render_segments(app.console) == expected.render_segments(app.console)
@@ -288,6 +288,6 @@ async def test_partly_covered_widgets_render_only_exposed_rows():
         actual = compositor.render_strips()
         assert widget.requested_rows == [*range(4), *range(16, 20)]
         original = compositor._get_renders
-        with patch.object(compositor, "_get_renders", lambda crop=None, render_regions=None: original(crop)):
+        with patch.object(compositor, "_get_renders", lambda crop=None, render_regions=None, *, widgets: original(crop, widgets=widgets)):
             expected = compositor.render_strips()
         assert actual == expected
