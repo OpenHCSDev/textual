@@ -812,10 +812,13 @@ class Compositor:
             )
         layer_order = root_geometry.order[-1][2]
         no_clip = RootSceneClip(root_geometry.region)
-        # Layer names normally inherit from the outermost declaring ancestor.
-        # Resolve that once per node for this reflow, instead of rebuilding an
-        # ancestors list and a layer dictionary for every nested widget.
-        inherited_layers: dict[Widget, dict[str, int] | None] = {}
+        # Widget owns layer inheritance. Acquire external ancestry only at the
+        # root, then carry that original declaration through this traversal.
+        root_layers = root._get_layer_order()
+        root_layer_order = (
+            None if root_layers is None
+            else {name: index for index, name in enumerate(root_layers)}
+        )
         default_layers = {"default": 0}
         retained_paths: set[Widget] = set()
         if visible_only:
@@ -834,16 +837,6 @@ class Compositor:
                 if node is root or node in retained_paths:
                     retained_paths.update(path)
 
-        def get_layers(widget: Widget) -> dict[str, int] | None:
-            if widget in inherited_layers:
-                return inherited_layers[widget]
-            parent = widget.parent
-            layers = get_layers(parent) if isinstance(parent, Widget) else None  # noqa: F821 -- closure cleared only after traversal
-            if layers is None and widget.styles.has_rule("layers"):
-                layers = {name: index for index, name in enumerate(widget.styles.layers)}
-            inherited_layers[widget] = layers
-            return layers
-
         def arrange_widget(
             widget: Widget,
             virtual_region: Region,
@@ -854,6 +847,8 @@ class Compositor:
             visible: bool,
             dock_gutter: Spacing,
             complete: bool,
+            layer_names: tuple[str, ...] | None,
+            inherited_layers: Mapping[str, int] | None,
             _MapGeometry: type[MapGeometry] = MapGeometry,
         ) -> None:
             """Called recursively to place a widget and its children in the map.
@@ -943,8 +938,7 @@ class Compositor:
                     ]
 
                     if type(widget).layers is Widget.layers:
-                        resolved_layers = get_layers(widget)  # noqa: F821 -- closure cleared only after traversal
-                        layers_to_index = default_layers if resolved_layers is None else resolved_layers
+                        layers_to_index = default_layers if inherited_layers is None else inherited_layers
                     else:
                         # Preserve custom widget layer policies.
                         layers_to_index = {
@@ -1001,6 +995,8 @@ class Compositor:
                                 visible,
                                 arrange_result.scroll_spacing,
                                 complete,
+                                layer_names,
+                                inherited_layers,
                             )
                 else:
                     if widget._anchored and not widget._anchor_released:
@@ -1053,25 +1049,34 @@ class Compositor:
                     dock_gutter,
                 ), clip)
 
-        def add_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter, complete):
+        def add_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter, complete,
+                       layer_names, inherited_layers):
             nonlocal map, widgets, invisible_widgets
+            resolved_layers = widget._inherit_layer_order(layer_names)
+            if resolved_layers is not layer_names:
+                # Only a newly reached declaration needs a rank projection.
+                # The owner either returns inherited unchanged or authored names.
+                inherited_layers = {
+                    name: index for index, name in enumerate(cast(tuple[str, ...], resolved_layers))
+                }
+            layer_names = resolved_layers
             if (not self.max_subtree_geometry_entries or not widget.CACHE_SUBTREE_GEOMETRY
                     or not widget._is_mounted):
-                arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter, complete)  # noqa: F821 -- closure cleared after traversal
+                arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
+                               complete, layer_names, inherited_layers)  # noqa: F821 -- closure cleared after traversal
                 return
-            inherited = get_layers(widget)  # noqa: F821 -- closure cleared after traversal
             resource_type = widget.subtree_geometry_resource()
             complete = resource_type.complete_arrangement(complete)
             # Retention requires an uncropped path only for partial resources.
             # Complete native arrangements already own every descendant box.
             if widget in retained_paths and not complete:
                 arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
-                               complete)  # noqa: F821 -- closure cleared after traversal
+                               complete, layer_names, inherited_layers)  # noqa: F821 -- closure cleared after traversal
                 return
             key = SubtreeGeometryKey.from_widget(widget,
                    virtual_region, region, order, layer_order, clip.region, visible, dock_gutter,
                    size, visible_only and not complete,
-                   tuple(inherited.items()) if inherited is not None else ())
+                   tuple(inherited_layers.items()) if inherited_layers is not None else ())
             cached = self._subtree_geometry.get(widget)
             if cached is not None and cached.matches(key):
                 cached.restore_into(map, widgets, invisible_widgets, key, clip, clips, widget._render_widget)
@@ -1087,7 +1092,7 @@ class Compositor:
             map, widgets, invisible_widgets = {}, set(), set()
             try:
                 arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
-                               complete)  # noqa: F821 -- closure cleared after traversal
+                               complete, layer_names, inherited_layers)  # noqa: F821 -- closure cleared after traversal
                 geometry = map
                 added_widgets, added_invisible = frozenset(widgets), frozenset(invisible_widgets)
             finally:
@@ -1114,6 +1119,8 @@ class Compositor:
                 True,
                 root_geometry.dock_gutter,
                 False,
+                root_layers,
+                root_layer_order,
             )
         finally:
             self._arranging = False
@@ -1121,7 +1128,7 @@ class Compositor:
             # their closure cells, keeping old maps and entire widget trees
             # alive until cyclic GC. Reflow is finished, so break those local
             # recursion links before returning the authoritative scene map.
-            del add_widget, arrange_widget, get_layers
+            del add_widget, arrange_widget
         widgets -= invisible_widgets
         return map, widgets
 

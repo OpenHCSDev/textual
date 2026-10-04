@@ -2833,13 +2833,33 @@ class Widget(DOMNode):
         Returns:
             Tuple of layer names.
         """
-        layers: tuple[str, ...] = ("default",)
+        order = self._get_layer_order()
+        return ("default",) if order is None else order
+
+    def _inherit_layer_order(
+        self, inherited: tuple[str, ...] | None,
+    ) -> tuple[str, ...] | None:
+        """Resolve the outermost authored declaration in native tree order.
+
+        An explicitly empty declaration still owns the order. Custom ``layers``
+        overrides remain local arrangement policy, as before; they do not
+        replace the underlying inherited style declaration.
+        """
+        if inherited is None and self.styles.has_rule("layers"):
+            return self.styles.layers
+        return inherited
+
+    def _get_layer_order(self) -> tuple[str, ...] | None:
+        """Acquire original ancestry once at an external traversal boundary."""
+        ancestry: list[Widget] = []
         for node in self.walk_ancestors(with_self=True):
             if not isinstance(node, Widget):
                 break
-            if node.styles.has_rule("layers"):
-                layers = node.styles.layers
-        return layers
+            ancestry.append(node)
+        order = None
+        for node in reversed(ancestry):
+            order = node._inherit_layer_order(order)
+        return order
 
     @property
     def link_style(self) -> Style:
