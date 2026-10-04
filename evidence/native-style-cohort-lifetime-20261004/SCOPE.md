@@ -77,3 +77,40 @@ is retained separately, not represented as a new run on871b. Final native AST
 249modules/zero omissions; dynamic plugin dispatch limits remain explicit.
 One corrected wheel replaces052d for the same sole joined installed sidebar/
 runway journey. No second film, provider or environment. Installed pending.
+
+## F0 layer owner correction and unchanged style contract
+
+Parent ratchet on original f830 reported actual Widget +20/Compositor +7.
+That source is superseded by normally integrated52 correction87baaf79 in53
+source a818dcfd. Existing Widget folds original sources once; public/root/local
+admission share the one behavior. Deleted _inherit_layer_order, ancestry snapshot/
+reverse walk and all carried layer_names parameters/readers. One derived rank
+resource reaches arrangement and original subtree key. Authored empty/duplicate
+public names, outermost source, external-root boundary and custom override remain.
+No unrelated deletions, threshold changes, compatibility or new class/cache/map.
+
+Complete corrected native AST249 plus tests460: zero omissions, one source fold
+with exactly three production consumers; replaced declarations/parameters zero.
+AST cannot prove dynamic custom-property resolution; original native dispatch and
+actual outcome controls cover that boundary. Changed coherent real App/resource
+batch: **35 passed3.00s**, layer inheritance/source change/custom/empty/duplicate,
+external capture/cache invalidation and ordered style/atomicity/MRO. No new UI,
+protocol/state substitutes, provider, environment or unchanged whole movie.
+
+Packaged original ratchet: allpositive deltasZERO against main919. GodClassExcess
+Widget0, Compositor-2, Styles-6, DOMNode-2. Hosted main Debt ratchets bothSUCCESS:
+52 head87baaf79 run37178850625;53 heada818dcfd run37178898954. Wider old native
+matrix remains outside this requested F0 scope; no exemptions/admin settings.
+
+Corrected normal wheel dfbd8fcbd37221f3c7934a8e7d7cd141bb592b1f0e35e9f034bffafe8e7f2a5a:
+all266 packaged files exact Git/WT, same backend/dependencies. No installed write;
+style22 remains SchF1's purpose. The original422 App/physical qualification and
+14 original hashes are retained by the unchanged52 scoped receipt. Physical
+completed flags remainFALSE due clipped peer; no16warm/fullABA/Undo/IRC claim.
+Kepler18-8 band was SIDEBAR during sameUI life; HeisactualUpDURING, Down/reverse
+AFTER. Seven original input/drag/scroll/End phases passed; no causal speed claim.
+
+F0-CORRECTION-READY.json separates changed source real App controls from historical
+installed a52 source. This is a useful corrected source checkpoint; remaining
+installed receiving confirmation may reuse the existing holder without a second
+film. Full native performance remains active.
