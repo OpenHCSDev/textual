@@ -1830,12 +1830,7 @@ class DOMNode(MessagePump):
             self._inline_styles.refresh(layout=True)
 
         if update_styles:
-            # Normalize the requested cohort through the same descriptor MRO
-            # as compiled rules, then publish its values and effects once.
-            # A refresh batch alone still publishes every field separately.
-            rules = self._inline_styles.get_rules()
-            rules.update(update_styles)
-            self._inline_styles.replace_rules(rules)
+            self._inline_styles.replace_rules(self._inline_styles.get_rules() | update_styles)
         return self
 
     def has_class(self, *class_names: str) -> bool:
