@@ -76,8 +76,10 @@ async def test_style_batch_keeps_child_damage_separate_and_flushes_interrupted_e
                     parent.styles.color = "green"
             refresh.assert_called_once_with(layout=False, repaint=True)
         assert child.rich_style.color == Color.parse("green").rich_color
-        with pytest.raises(StyleValueError):
-            parent.set_styles(color="red", text_style="bold", align_horizontal="invalid")
+        with pytest.raises(StyleValueError), parent.styles.batch_update():
+            parent.styles.color = "red"
+            parent.styles.text_style = "bold"
+            parent.styles.align_horizontal = "invalid"
         assert child.rich_style.color == Color.parse("red").rich_color
         assert child.rich_style.bold
         # An interrupted edit must release the lifetime for later individual edits.
