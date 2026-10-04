@@ -63,3 +63,33 @@ new environment, native copies, installed writes or provider calls.
 **Source-qualified draft; installed changed-path qualification pending** the
 next meaningful joined Heisenberg workflow. No CPU gain, dominance, smoothness,
 physical FPS or 144Hz claim. Existing 51/420 original evidence remains frozen.
+
+## Original joined422 installed qualification
+
+**Scoped installed Ready for review**, using corrected native53a52e5b/wheela805
+which includes this unchanged52source. Original installed App contracts passed
+retained A/B/A/editorUndo/shellclose, native left/right pointer+slider sidebar
+controls, rapidcoldPageDown/End and bounded preparation/runway. Original physical
+seven input checks and drag/scroll/Up/Down/reverse/End completed.
+
+The actual raw journey **FAILED** at peer click: the target was clipped outside
+the captured roster after sidebar-up, although sidebar-down showed it. No16warm
+or full physical A/B/A/Undo/IRC pass. Both raw completed flags remainFALSE; no
+replay, new movie or oracle relaxation. Original owner identity unchanged; owned
+cleanup remaining/errors empty; transferredUI custody/encoder255 preserved.
+All14original keeper hashes matched; source proof records exact339Core/319Toad/
+266Text/3Diff files, Core611d416/native2ea/SDK.12.1/normal69.
+
+Heis reviewed actualUp52.7559..53.5559DURING originalUI; Down/reverseAFTER.
+Kepler personally reviewed18-8SIDEBAR32.2385..33.0385 while sameUI alive,
+notUp; earlier personal-up filenames are corrected by original live_review
+phase. Selected bands show painted body/chrome with repeatedpositions/stepped
+movement. Up writer23.05median/63.44p95/205.67worstms; Down13.22/27.12/
+222.82; observer-inclusiveCPU76.06/64.23%, unmatched workloads. No causal
+gain/smoothness/FPS/144Hz claim. Last10s idle zero viewport churn is separate
+from full idle marker18.60%UI. Fullnativeperformance remainsactive.
+
+F0 main normally integrated WITHOUT native source change. Required Debt ratchet
+must pass before merge; this installed receipt cannot waive any growth. Full
+native suite remainsdeferred. Existing holder/code imports handed back toSchF1;
+no ongoing borrowed package/App/client/native claim from this qualification.
