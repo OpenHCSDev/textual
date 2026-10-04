@@ -168,14 +168,37 @@ class SelectState(NamedTuple):
     end: SelectEnd | None = None
     """Describes the select end."""
 
+    def _walk_involved_widgets(self) -> Iterator[Widget]:
+        """Original containers and content referenced by the pointer endpoints."""
+        for endpoint in (self.start, self.end):
+            if endpoint is not None:
+                yield endpoint.container
+                if endpoint.content_widget is not None:
+                    yield endpoint.content_widget
+
+    @property
     def is_attached_to_dom(self) -> bool:
         """Are the widgets involved attached to the DOM?"""
-        # This may return False if the widgets have been removed since selection started
-        if not self.start.container.is_attached:
-            return False
-        if self.end is not None and not self.end.container.is_attached:
-            return False
-        return True
+        return all(widget.is_attached for widget in self._walk_involved_widgets())
+
+    def references_retired(self, widgets: set[Widget]) -> bool:
+        """Whether removing these resources retires the pointer intent."""
+        return any(widget in widgets for widget in self._walk_involved_widgets())
+
+    def selections(self) -> dict[Widget, Selection]:
+        """Project the completed pointer intent into original content ranges."""
+        assert self.end is not None
+        if self.is_single_content_widget:
+            start_offset, end_offset = self.content_offsets
+            assert self.start.content_widget is not None
+            return {
+                self.start.content_widget: Selection.from_offsets(
+                    start_offset, end_offset + (1, 0)
+                )
+            }
+        selections = {widget: SELECT_ALL for widget in self._walk_selected_widgets()}
+        self._apply_content_selections(selections)
+        return selections
 
     @property
     def is_single_content_widget(self) -> bool:

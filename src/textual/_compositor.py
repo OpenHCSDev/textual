@@ -513,26 +513,33 @@ class Compositor:
         while len(self._subtree_geometry) > capacity:
             self._subtree_geometry.pop(next(iter(self._subtree_geometry)))
 
+    def _invalidate_render_projection(self) -> None:
+        """Retire layer and line projections of the original scene map."""
+        self._visible_widgets = None
+        self._layers = None
+        self._cuts = None
+
     def clear(self) -> None:
         """Remove all references to widgets (used when the screen closes)."""
         self.root = None
         self._full_map.clear()
         self._full_map_invalidated = True
         self._visible_map = None
-        self._layers = None
+        self._invalidate_render_projection()
         self.widgets.clear()
-        self._visible_widgets = None
-        self._cuts = None
         self._dirty_regions.clear()
         self._subtree_geometry.clear()
 
-    def discard_widgets(self, widgets: set[Widget]) -> None:
-        """Release retired scene objects while preserving their repaint damage.
+    def discard_widgets(self, widgets: set[Widget]) -> set[Widget]:
+        """Retire original widgets, their covers and chrome, retaining damage.
 
-        Geometry invalidation alone leaves the old full map and derived layer
-        projections owning removed widgets indefinitely on inactive screens.
-        Damage needs rectangles, not the retired widget trees that occupied them.
+        Maps and captured arrangements release paint before native teardown.
         """
+        widgets = {
+            member
+            for owner in widgets
+            for member in (owner, owner._render_widget, *owner._get_virtual_dom())
+        }
         for owner, resource in tuple(self._subtree_geometry.items()):
             if resource.references_retired(owner, widgets):
                 del self._subtree_geometry[owner]
@@ -541,17 +548,15 @@ class Compositor:
             if mapping is None:
                 continue
             for widget in widgets:
-                geometry = mapping.pop(widget, None)
-                if geometry is not None:
+                if (geometry := mapping.pop(widget, None)) is not None:
                     changed = True
-                    if region := geometry.region.intersection(geometry.clip):
+                    if region := geometry.visible_region:
                         self._dirty_regions.add(region)
         self.widgets.difference_update(widgets)
         if changed:
             self._full_map_invalidated = True
-            self._visible_widgets = None
-            self._layers = None
-            self._cuts = None
+            self._invalidate_render_projection()
+        return widgets
 
     @classmethod
     def _regions_to_spans(
@@ -613,9 +618,7 @@ class Compositor:
             Hidden, shown, and resized widgets.
         """
         previous_map = self._visible_map if visible_only and self._visible_map is not None else self._full_map
-        self._cuts = None
-        self._layers = None
-        self._visible_widgets = None
+        self._invalidate_render_projection()
         self._visible_map = None
         self.root = parent
         self.size = size
@@ -644,9 +647,7 @@ class Compositor:
         self._full_map_invalidated = visible_only
         # Measuring widgets may inspect geometry and populate presentation
         # caches from the previous committed map. Publish only the new map.
-        self._visible_widgets = None
-        self._layers = None
-        self._cuts = None
+        self._invalidate_render_projection()
         self.widgets = widgets
 
         resized_widgets = self._damage_geometry(old_map, map, parent)
@@ -671,9 +672,7 @@ class Compositor:
         Returns:
             Set of widgets that were exposed by the scroll.
         """
-        self._cuts = None
-        self._layers = None
-        self._visible_widgets = None
+        self._invalidate_render_projection()
         self._full_map_invalidated = True
         self.root = parent
         self.size = size
@@ -686,9 +685,7 @@ class Compositor:
 
         # Replace map and widgets
         self._visible_map = map
-        self._visible_widgets = None
-        self._layers = None
-        self._cuts = None
+        self._invalidate_render_projection()
         self.widgets = widgets
 
         exposed_widgets = map.keys() - old_map.keys()
@@ -743,10 +740,8 @@ class Compositor:
             self._damage_geometry(previous, map, self.root)
             self._full_map = map
             self._full_map_invalidated = False
-            self._visible_widgets = None
             self._visible_map = None
-            self._layers = None
-            self._cuts = None
+            self._invalidate_render_projection()
 
         return self._full_map
 

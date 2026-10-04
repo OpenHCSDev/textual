@@ -4,7 +4,7 @@ import asyncio
 
 from textual.app import App, ComposeResult
 from textual.containers import Vertical
-from textual.screen import Screen
+from textual.screen import ModalScreen, Screen
 from textual.widgets import Label
 
 
@@ -95,3 +95,34 @@ async def test_refresh_callback_queue_survives_a_batch_between_callbacks() -> No
             assert not completed.is_set()
         await asyncio.wait_for(completed.wait(), 1)
         assert order == ["first", "second"]
+
+
+async def test_translucent_foreground_respects_background_resource_admission() -> None:
+    class SourceScreen(ObservedScreen):
+        def _prepare_compositor_refresh(self) -> bool:
+            return (not self.query_one("#holder").lock.is_locked
+                    and super()._prepare_compositor_refresh())
+
+    class SourceApp(BatchPaintApp):
+        def get_default_screen(self) -> Screen:
+            return SourceScreen()
+
+    app = SourceApp()
+    async with app.run_test(size=(50, 12)) as pilot:
+        holder = app.query_one("#holder", Vertical)
+        source = app.screen
+        await app.push_screen(ModalScreen())
+        await pilot.pause()
+        assert source in app._background_screens
+        foreground = app.screen
+        async with holder.lock:
+            foreground._compositor._dirty_regions.add(foreground.size.region)
+            damage = set(foreground._compositor._dirty_regions)
+            app.frames.clear()
+            foreground._compositor_refresh()
+            assert not app.frames
+            assert foreground._compositor._dirty_regions == damage
+            assert foreground._repaint_required
+        foreground._compositor_refresh()
+        assert app.frames
+        assert not foreground._compositor._dirty_regions

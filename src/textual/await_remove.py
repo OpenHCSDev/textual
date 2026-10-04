@@ -15,7 +15,10 @@ from textual._debug import get_caller_file_and_line
 from textual._types import CallbackType
 
 if TYPE_CHECKING:
+    from textual.dom import DOMNode
     from textual.message_pump import MessagePump
+    from textual.screen import Screen
+    from textual.widget import Widget
 
 
 @rich.repr.auto
@@ -31,6 +34,58 @@ class AwaitRemove:
         self._completion: Future[None] | None = None
         self._finisher: Task[None] | None = None
         self._scheduled = False
+
+    @classmethod
+    def prune(cls, *nodes: Widget, parent: DOMNode | None = None) -> AwaitRemove:
+        """Retire native scenes before awaiting their original node teardown."""
+        from textual.app import ScreenStackError
+        from textual.dom import NoScreen
+        from textual.messages import Prune
+
+        if not nodes:
+            return cls([])
+        app = nodes[0].app
+        pruning_nodes: set[Widget] = set(nodes)
+        for node in nodes:
+            node.post_message(Prune())
+            pruning_nodes.update(node.walk_children(with_self=True))
+        scenes: dict[Screen, set[Widget]] = {}
+        for node in pruning_nodes:
+            try:
+                screen = node.screen
+            except (ScreenStackError, NoScreen):
+                continue
+            scenes.setdefault(screen, set()).add(node)
+        for screen, members in scenes.items():
+            if screen.focused and screen.focused in members:
+                screen._reset_focus(screen.focused, list(members))
+        for node in pruning_nodes:
+            node._pruning = True
+        for node in nodes:
+            # Pruning changes display before NodeList custody is released.
+            # Retire its existing projections so lazy layout cannot reinsert it.
+            node._nodes.updated()
+            node._invalidate_layout()
+        for screen, members in scenes.items():
+            screen._forget_pruned_widgets(members)
+
+        def post_remove() -> None:
+            if parent is not None:
+                try:
+                    screen = parent.screen
+                except (ScreenStackError, NoScreen):
+                    pass
+                else:
+                    if screen._running and screen.is_current:
+                        app._update_mouse_over(screen)
+                finally:
+                    parent.refresh(layout=True)
+
+        removal = cls(
+            [task for node in nodes if (task := node._task) is not None], post_remove
+        )
+        removal.call_when_ready(app)
+        return removal
 
     def __rich_repr__(self) -> rich.repr.Result:
         yield "tasks", self._tasks

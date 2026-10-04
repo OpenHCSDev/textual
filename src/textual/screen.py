@@ -52,7 +52,7 @@ from textual.css.query import NoMatches, QueryType
 from textual.css.styles import PointerShape
 from textual.dom import DOMNode
 from textual.errors import NoWidget
-from textual.geometry import Offset, Region, Shape, Size
+from textual.geometry import Offset, Region, Size
 from textual.keys import key_to_character
 from textual.layout import DockArrangeResult
 from textual.message_pump import MessagePumpClosed
@@ -62,7 +62,6 @@ from textual.renderables.blank import Blank
 from textual.selection import SELECT_ALL, SelectEnd, Selection, SelectStart, SelectState
 from textual.signal import Signal
 from textual.timer import Timer
-from textual.walk import walk_selectable_widgets
 from textual.widget import Widget
 from textual.widgets import Tooltip
 from textual.widgets._toast import ToastRack
@@ -1198,9 +1197,10 @@ class Screen(Generic[ScreenResultType], Widget):
     def _prepare_compositor_refresh(self) -> bool:
         """Prepare an admitted scene; return False while it cannot be painted.
 
-        This hook runs after batch admission, before any compositor damage is
-        consumed. Deferred preparation retains the existing repaint intent;
-        the scene owner arranges its next refresh through the update timer.
+        Terminal refresh calls this hook for every screen it will composite,
+        after batch admission and before consuming any compositor damage.
+        Deferred preparation retains the existing repaint intent; the scene
+        owner arranges its next refresh through the update timer.
         """
         return True
 
@@ -1210,13 +1210,21 @@ class Screen(Generic[ScreenResultType], Widget):
         app = self.app
         if app._batch_count:
             return
-        if not self._prepare_compositor_refresh():
+        # A translucent foreground renders its backdrops through BackgroundScreen,
+        # without entering those screens' refresh methods. Admit that same visible
+        # stack before rendering any rows, including an invalidated backdrop.
+        background_screens = app._background_screens
+        screens = (*background_screens, self) if self is app.screen else (self,)
+        if self is app.screen and app.is_inline:
+            # Height acquisition can invalidate a body's captured width.
+            # Complete that geometry read before asking its scene to paint.
+            inline_height = app._get_inline_height()
+        if not all(screen._prepare_compositor_refresh() for screen in screens):
             self._repaint_required = True
             return
 
-        if app.is_inline:
-            if self is app.screen:
-                inline_height = app._get_inline_height()
+        if self is app.screen:
+            if app.is_inline:
                 clear = (
                     app._previous_inline_height is not None
                     and inline_height < app._previous_inline_height
@@ -1225,36 +1233,27 @@ class Screen(Generic[ScreenResultType], Widget):
                     self,
                     self._compositor.render_inline(
                         app.size.with_height(inline_height),
-                        screen_stack=app._background_screens,
+                        screen_stack=background_screens,
                         clear=clear,
                     ),
                 )
                 app._previous_inline_height = inline_height
-                self._dirty_widgets.clear()
                 self._compositor._dirty_regions.clear()
-            elif (
-                self in self.app._background_screens and self._compositor._dirty_regions
-            ):
-                app.screen.refresh(*self._compositor._dirty_regions)
-                self._compositor._dirty_regions.clear()
-                self._dirty_widgets.clear()
-
-        else:
-            if self is app.screen:
-                # Top screen
+            else:
                 update = self._compositor.render_update(
-                    screen_stack=app._background_screens
+                    screen_stack=background_screens
                 )
                 app._display(self, update)
-                self._dirty_widgets.clear()
-            elif (
-                self in self.app._background_screens and self._compositor._dirty_regions
-            ):
+            self._dirty_widgets.clear()
+        elif self in background_screens and self._compositor._dirty_regions:
+            if app.is_inline:
+                app.screen.refresh(*self._compositor._dirty_regions)
+            else:
                 self._set_dirty(*self._compositor._dirty_regions)
                 app.screen.refresh(*self._compositor._dirty_regions)
                 self._repaint_required = True
-                self._compositor._dirty_regions.clear()
-                self._dirty_widgets.clear()
+            self._compositor._dirty_regions.clear()
+            self._dirty_widgets.clear()
         app._update_mouse_over(self)
 
     def _on_timer_update(self) -> None:
@@ -1486,14 +1485,34 @@ class Screen(Generic[ScreenResultType], Widget):
         self.check_idle()
 
     def _forget_pruned_widgets(self, widgets: set[Widget]) -> None:
+        """Retire original scene and interaction resources before teardown."""
+        widgets = self._forget_widget_geometry(widgets)
+        self._retire_selection(widgets)
+        self.app._retire_pointer_widgets(widgets)
+
+    def _retire_selection(self, widgets: set[Widget]) -> None:
+        """Keep surviving ranges without retaining a removed pointer endpoint."""
+        self.selections = {
+            widget: selection
+            for widget, selection in self.selections.items()
+            if widget not in widgets
+        }
+        if (
+            self._select_state is not None
+            and self._select_state.references_retired(widgets)
+        ):
+            self._select_state = None
+
+    def _forget_widget_geometry(self, widgets: set[Widget]) -> set[Widget]:
         """Retire scene and queued damage owners without dropping repaint regions."""
-        self._compositor.discard_widgets(widgets)
+        widgets = self._compositor.discard_widgets(widgets)
         self._dirty_widgets.difference_update(widgets)
         for ancestor, children in tuple(self._layout_widgets.items()):
             if ancestor in widgets:
                 self._layout_widgets.pop(ancestor)
             else:
                 children.difference_update(widgets)
+        return widgets
 
     def _get_inline_height(self, size: Size) -> int:
         """Get the inline height (number of lines to display when running inline mode).
@@ -2067,48 +2086,14 @@ class Screen(Generic[ScreenResultType], Widget):
         if not selecting:
             self._stop_auto_scroll()
 
-    @classmethod
-    def _collect_select_widgets(
-        cls,
-        selection_bounds: Shape,
-        container: Widget,
-        start_widget: Widget,
-        end_widget: Widget,
-    ) -> list[Widget]:
-        """Get widgets between two widgets in select order.
-
-        Args:
-            selection_bounds: A shape defining the selection bounds.
-            container: A parent widgets.
-            start_widget: First widget.
-            end_widget: Second widget.
-
-        Returns:
-            Widgets between start and end, in select sort order.
-        """
-
-        widgets = list(
-            walk_selectable_widgets(
-                container,
-                selection_bounds,
-                {start_widget, end_widget},
-            )
-        )
-
-        index1: int | None = None
-        try:
-            index1 = widgets.index(start_widget)
-        except ValueError:
-            pass
-
-        index2: int | None = None
-        try:
-            index2 = widgets.index(end_widget) + 1
-        except ValueError:
-            pass
-
-        results = widgets[index1:index2]
-        return results
+    def _interaction_widgets(self) -> Iterator[Widget]:
+        """Borrow current interaction custody without projecting selected ranges."""
+        yield from self.selections
+        if self._select_state is not None:
+            yield from self._select_state._walk_involved_widgets()
+        for widget in (self.focused, self.app.mouse_captured):
+            if widget is not None:
+                yield widget
 
     def _watch__select_state(self, select_state: SelectState | None) -> None:
         """Respond to user-initiated selection change.
@@ -2151,12 +2136,9 @@ class Screen(Generic[ScreenResultType], Widget):
 
     def _apply_selection_state(self, select_state: SelectState | None) -> None:
         """Calculate widget selections from the current pointer state."""
+        self._selecting = select_state is not None
         if select_state is None:
-            # Nothing selected so nothing todo
-            self._selecting = False
             return
-        else:
-            self._selecting = True
 
         if select_state.end is None:
             # Pointer hasn't yet moved
@@ -2167,27 +2149,7 @@ class Screen(Generic[ScreenResultType], Widget):
             self._select_state = None
             return
 
-        # Simple case where select starts and ends on the same widgets
-        if select_state.is_single_content_widget:
-            start_index, end_offset = select_state.content_offsets
-            assert select_state.start.content_widget is not None
-            self.selections = {
-                select_state.start.content_widget: Selection.from_offsets(
-                    start_index,
-                    end_offset + (1, 0),
-                )
-            }
-            return
-
-        # Select all the widgets
-        select_all = SELECT_ALL
-        selections = {
-            widget: select_all for widget in select_state._walk_selected_widgets()
-        }
-        select_state._apply_content_selections(selections)
-
-        # Update selections
-        self.selections = selections
+        self.selections = select_state.selections()
 
     def dismiss(self, result: ScreenResultType | None = None) -> AwaitComplete:
         """Dismiss the screen, optionally with a result.
