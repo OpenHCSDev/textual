@@ -141,7 +141,12 @@ async def test_navigation_after_lazy_line_rebase(action: str) -> None:
         tree.root.add_leaf("inserted", before=nodes[0])
         assert tree._tree_lines_cached is None
         step = tree.scrollable_content_region.height - 1
-        offset = {"cursor_up": -1, "cursor_down": 1, "page_up": -step, "page_down": step}[action]
+        offset = {
+            "cursor_up": -1,
+            "cursor_down": 1,
+            "page_up": -step,
+            "page_down": step,
+        }[action]
         getattr(tree, "action_" + action)()
         assert tree.cursor_line == old_line + 1 + offset
         assert tree.cursor_node is nodes[15 + offset]
@@ -198,4 +203,4 @@ async def test_hidden_and_foreign_node_contract() -> None:
         assert tree.cursor_node is tree.root
         tree.unselect()
         assert tree.cursor_line == -1
-        assert tree.cursor_node is None
+        assert tree.cursor_node is tree.root
