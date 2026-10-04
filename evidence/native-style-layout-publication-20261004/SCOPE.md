@@ -11,10 +11,10 @@ Use the existing style-notification / Widget layout publication family to carry
 already-published style requests. Keep source mutation owned by Styles and ordinary
 Widget input mutation owned by its current public refresh contract. Delete repeated
 retirement from style scheduling, not legitimate layout or actual content writes in
-leaf notify hooks. All native and Toad overrides/callers must migrate coherently;
+leaf notify hooks. All original native/Toad overrides retain their public contract; scheduling callers migrate coherently;
 no new mirror, cache, flag, typed wrapper, scene map, timer or alternate renderer.
-Public/custom override contracts require explicit source review before selecting a
-hook signature; a new keyword cannot silently break existing subclass hooks.
+The existing public style callback keeps its signature and behavior; source review
+rejected introducing a new keyword to existing subclass callbacks.
 
 Native ownership: Widget/DOM style-to-layout scheduling, Styles notification callers,
 original native widget overrides. Heisenberg owns Toad source/admission/preparation/
@@ -28,3 +28,27 @@ measurement. Read all declarations, writes and hooks before implementation. Cohe
 family implementation first; affected controls and one changed installed user path
 last with the workflow owner. No old film, new worktree/environment/native copy or
 parallel measurement project. Full structural UI responsiveness remains active.
+
+## Working owner implementation
+
+Existing Widget now owns `_request_layout(required: bool = True)`: it joins the
+actual native `_layout_required` work flag without retiring source inputs or
+triggering idle on its own. DOMNode supplies the non-rendered no-op hook. Public
+Widget.refresh(layout=True) still calls synchronous _invalidate_layout FIRST, then
+requests the original Layout publication and preserves its ordinary idle/paint
+lifetime. Styles._refresh requests that same publication after existing authored
+source invalidation, then retains original paint/idle/notify behavior. Child
+inherited refresh requests and DOMNode.reset_styles use the same owner. The third
+foreign flag write was reset_styles, not a _refresh_styles method.
+
+No notify_style_update signature changes: all nine native/eight Toad leaf hooks
+retain their independent content/style/worker preparation behavior. New content
+mutations in those hooks may legitimately invalidate again; only treating the
+same style-frame request as another input mutation is deleted. BodyMeasurement's
+synchronous invalidation/participation change remains untouched, as do its genuine
+refresh(layout=True) tree publication consumers. No copied frame flags or source
+frontier, no cache/map/type, no source/receipt/follow semantic bypass.
+
+This is a working source checkpoint, not App/live qualified. Final coherent
+controls and changed installed workflow follow with the Toad integration owner;
+no old film or environment/package launch was made for this source pass.

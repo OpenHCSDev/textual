@@ -702,11 +702,11 @@ class DOMNode(MessagePump):
         _rich_traceback_omit = True
         Reactive._initialize_object(self)
 
-    def notify_style_update(self) -> None:
-        """Called after styles are updated.
+    def _request_layout(self, required: bool = True) -> None:
+        """Non-rendered DOM nodes have no layout publication."""
 
-        Implement this in a subclass if you want to clear any cached data when the CSS is reloaded.
-        """
+    def notify_style_update(self) -> None:
+        """Clear subclass resources after original styles change."""
 
     @property
     def _node_bases(self) -> Sequence[Type[DOMNode]]:
@@ -1410,7 +1410,7 @@ class DOMNode(MessagePump):
             node._css_styles.reset()
             if isinstance(node, Widget):
                 node._set_dirty()
-                node._layout_required = True
+                node._request_layout()
 
     def _add_child(self, node: Widget) -> None:
         """Add a new child node.

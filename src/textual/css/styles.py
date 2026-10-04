@@ -1061,17 +1061,16 @@ class Styles(StylesBase):
         parent_requests = [repaint for _, _, parent, repaint in requests if parent]
         if parent_requests and node._parent is not None:
             node._parent.refresh(repaint=any(parent_requests))
-        node.refresh(
-            layout=any(layout for layout, _, _, _ in requests),
-            repaint=any(repaint for _, _, _, repaint in requests),
-        )
+        node._request_layout(any(layout for layout, _, _, _ in requests))
+        node.refresh(repaint=any(repaint for _, _, _, repaint in requests))
         child_requests = [(layout, repaint) for layout, children, _, repaint in requests if children]
         if child_requests:
             child_layout = any(layout for layout, _ in child_requests)
             child_repaint = any(repaint for _, repaint in child_requests)
             for child in node.walk_children(with_self=False, reverse=True):
                 child.notify_style_update()
-                child.refresh(layout=child_layout, repaint=child_repaint)
+                child._request_layout(child_layout)
+                child.refresh(repaint=child_repaint)
 
     def reset(self) -> None:
         """Reset the rules to initial state."""
