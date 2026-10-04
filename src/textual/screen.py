@@ -1486,14 +1486,34 @@ class Screen(Generic[ScreenResultType], Widget):
         self.check_idle()
 
     def _forget_pruned_widgets(self, widgets: set[Widget]) -> None:
+        """Retire original scene and interaction resources before teardown."""
+        widgets = self._forget_widget_geometry(widgets)
+        self._retire_selection(widgets)
+        self.app._retire_pointer_widgets(widgets)
+
+    def _retire_selection(self, widgets: set[Widget]) -> None:
+        """Keep surviving ranges without retaining a removed pointer endpoint."""
+        self.selections = {
+            widget: selection
+            for widget, selection in self.selections.items()
+            if widget not in widgets
+        }
+        if (
+            self._select_state is not None
+            and self._select_state.references_retired(widgets)
+        ):
+            self._select_state = None
+
+    def _forget_widget_geometry(self, widgets: set[Widget]) -> set[Widget]:
         """Retire scene and queued damage owners without dropping repaint regions."""
-        self._compositor.discard_widgets(widgets)
+        widgets = self._compositor.discard_widgets(widgets)
         self._dirty_widgets.difference_update(widgets)
         for ancestor, children in tuple(self._layout_widgets.items()):
             if ancestor in widgets:
                 self._layout_widgets.pop(ancestor)
             else:
                 children.difference_update(widgets)
+        return widgets
 
     def _get_inline_height(self, size: Size) -> int:
         """Get the inline height (number of lines to display when running inline mode).
@@ -2151,12 +2171,9 @@ class Screen(Generic[ScreenResultType], Widget):
 
     def _apply_selection_state(self, select_state: SelectState | None) -> None:
         """Calculate widget selections from the current pointer state."""
+        self._selecting = select_state is not None
         if select_state is None:
-            # Nothing selected so nothing todo
-            self._selecting = False
             return
-        else:
-            self._selecting = True
 
         if select_state.end is None:
             # Pointer hasn't yet moved
@@ -2167,27 +2184,7 @@ class Screen(Generic[ScreenResultType], Widget):
             self._select_state = None
             return
 
-        # Simple case where select starts and ends on the same widgets
-        if select_state.is_single_content_widget:
-            start_index, end_offset = select_state.content_offsets
-            assert select_state.start.content_widget is not None
-            self.selections = {
-                select_state.start.content_widget: Selection.from_offsets(
-                    start_index,
-                    end_offset + (1, 0),
-                )
-            }
-            return
-
-        # Select all the widgets
-        select_all = SELECT_ALL
-        selections = {
-            widget: select_all for widget in select_state._walk_selected_widgets()
-        }
-        select_state._apply_content_selections(selections)
-
-        # Update selections
-        self.selections = selections
+        self.selections = select_state.selections()
 
     def dismiss(self, result: ScreenResultType | None = None) -> AwaitComplete:
         """Dismiss the screen, optionally with a result.

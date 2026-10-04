@@ -1807,8 +1807,7 @@ class Widget(DOMNode):
         if old_screen is not new_screen:
             if focused is not None:
                 old_screen.set_focus(None)
-            old_screen.selections = {node: selection for node, selection in old_screen.selections.items()
-                                     if node not in nodes}
+            old_screen._retire_selection(nodes)
             retained_callbacks = []
             for callback, sender in old_screen._callbacks:
                 if sender in nodes:
@@ -1816,7 +1815,7 @@ class Widget(DOMNode):
                 else:
                     retained_callbacks.append((callback, sender))
             old_screen._callbacks[:] = retained_callbacks
-        old_screen._forget_pruned_widgets(nodes)
+        old_screen._forget_widget_geometry(nodes)
         previous._nodes._remove(self)
         self._attach(parent)
         if before is None:

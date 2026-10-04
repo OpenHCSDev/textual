@@ -3229,6 +3229,16 @@ class App(Generic[ReturnType], DOMNode):
 
         self.call_after_refresh(check_mouse)
 
+    def _retire_pointer_widgets(self, widgets: set[Widget]) -> None:
+        """Release only pointer resources belonging to the retired scene cohort."""
+        if self.mouse_captured in widgets:
+            self.capture_mouse(None)
+        if self.mouse_over in widgets or self.hover_over in widgets:
+            self._set_mouse_over(
+                None if self.mouse_over in widgets else self.mouse_over,
+                None if self.hover_over in widgets else self.hover_over,
+            )
+
     def capture_mouse(self, widget: Widget | None) -> None:
         """Send all mouse events to the given widget or disable mouse capture.
 

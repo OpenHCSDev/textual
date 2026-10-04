@@ -530,7 +530,7 @@ class Compositor:
         self._dirty_regions.clear()
         self._subtree_geometry.clear()
 
-    def discard_widgets(self, widgets: set[Widget]) -> None:
+    def discard_widgets(self, widgets: set[Widget]) -> set[Widget]:
         """Retire original widgets, their covers and chrome, retaining damage.
 
         Maps and captured arrangements release paint before native teardown.
@@ -556,6 +556,7 @@ class Compositor:
         if changed:
             self._full_map_invalidated = True
             self._invalidate_render_projection()
+        return widgets
 
     @classmethod
     def _regions_to_spans(
