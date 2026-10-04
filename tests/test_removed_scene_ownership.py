@@ -21,7 +21,8 @@ async def test_inactive_scene_releases_removed_geometry_and_arrangements(layout)
         compositor.full_map
         compositor.visible_widgets
         compositor.layers
-        compositor.layers_visible
+        retired_offset = removed.region.offset
+        list(compositor.get_widgets_at(*retired_offset))
         parent.arrange(parent.size)
         assert removed in compositor._full_map
         await app.push_screen(Screen())
@@ -40,8 +41,8 @@ async def test_inactive_scene_releases_removed_geometry_and_arrangements(layout)
         assert removed not in compositor.widgets
         assert removed not in compositor.visible_widgets
         assert all(widget is not removed for widget, _ in compositor.layers)
-        assert all(widget is not removed for line in compositor.layers_visible
-                   for widget, _, _ in line)
+        assert all(widget is not removed
+                   for widget, _ in compositor.get_widgets_at(*retired_offset))
         await app.pop_screen()
         await pilot.pause()
         assert survivor in compositor.visible_widgets

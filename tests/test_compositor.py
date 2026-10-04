@@ -7,6 +7,54 @@ from types import FunctionType
 import pytest
 
 
+async def test_point_hits_follow_layer_clip_visibility_and_scene_changes():
+    from textual.errors import NoWidget
+
+    class PointApp(App):
+        CSS = """
+        #pane { width: 8; height: 4; offset: 2 2; layers: back front; }
+        #back, #front { width: 12; height: 3; }
+        #back { layer: back; }
+        #front { layer: front; }
+        """
+
+        def compose(self):
+            yield Container(Static("back", id="back"), Static("front", id="front"), id="pane")
+
+    app = PointApp()
+    async with app.run_test(size=(20, 10)) as pilot:
+        await pilot.pause()
+        pane = app.query_one("#pane")
+        back = app.query_one("#back")
+        front = app.query_one("#front")
+        compositor = app.screen._compositor
+
+        assert compositor.get_widget_at(3, 2) == (front, front.region)
+        assert [widget for widget, _ in compositor.get_widgets_at(3, 2)] == [
+            front, back, pane, app.screen,
+        ]
+        # Children extend beyond their container; those cells belong to Screen.
+        assert compositor.get_widget_at(10, 2)[0] is app.screen
+        assert compositor.get_widget_at(3, 6)[0] is app.screen
+        for x, y in [(-1, 2), (20, 2), (3, -1), (3, 10)]:
+            assert list(compositor.get_widgets_at(x, y)) == []
+            with pytest.raises(NoWidget):
+                compositor.get_widget_at(x, y)
+
+        front.visible = False
+        await pilot.pause()
+        assert compositor.get_widget_at(3, 2)[0] is back
+        assert all(widget is not front for widget, _ in compositor.get_widgets_at(3, 2))
+        front.visible = True
+        pane.styles.offset = (4, 3)
+        await pilot.pause()
+        assert compositor.get_widget_at(3, 2)[0] is app.screen
+        assert compositor.get_widget_at(5, 3)[0] is front
+        await front.remove()
+        await pilot.pause()
+        assert compositor.get_widget_at(5, 3)[0] is back
+
+
 async def test_reflow_releases_recursive_closures_without_gc():
     app = App()
     names = {"Compositor._arrange_root.<locals>.add_widget",
