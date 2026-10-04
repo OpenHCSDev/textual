@@ -1,0 +1,36 @@
+F.................                                                       [100%]
+=================================== FAILURES ===================================
+________ test_point_hits_follow_layer_clip_visibility_and_scene_changes ________
+
+    async def test_point_hits_follow_layer_clip_visibility_and_scene_changes():
+        from textual.errors import NoWidget
+    
+        class PointApp(App):
+            CSS = """
+            #pane { width: 8; height: 4; offset: 2 2; layers: back front; }
+            #back, #front { width: 12; height: 3; }
+            #back { layer: back; }
+            #front { layer: front; offset: 0 -3; }
+            """
+    
+            def compose(self):
+                yield Container(Static("back", id="back"), Static("front", id="front"), id="pane")
+    
+        app = PointApp()
+        async with app.run_test(size=(20, 10)) as pilot:
+            await pilot.pause()
+            pane = app.query_one("#pane")
+            back = app.query_one("#back")
+            front = app.query_one("#front")
+            compositor = app.screen._compositor
+    
+>           assert compositor.get_widget_at(3, 2) == (front, front.region)
+E           AssertionError: assert (Static(id='b...12, height=3)) == (Static(id='f...12, height=3))
+E             
+E             At index 0 diff: Static(id='back') != Static(id='front')
+E             Use -v to get more diff
+
+tests/test_compositor.py:32: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_compositor.py::test_point_hits_follow_layer_clip_visibility_and_scene_changes
+1 failed, 17 passed in 3.32s

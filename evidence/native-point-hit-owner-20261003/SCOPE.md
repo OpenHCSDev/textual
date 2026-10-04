@@ -37,3 +37,46 @@ protect overlapping and clipped hits, hidden widgets, live scroll/reflow,
 retirement, hover/focus/click/selection and screen edges in actual native Apps.
 One changed installed journey joins Heisenberg's next meaningful source batch;
 no old415 film/check repeat. Full motion/CPU/144Hz/IRC/DM/cold-warm scope stays open.
+
+## Working source and final controls
+
+Production commit `ad30eda1f8937f909bc80aa84ff1a91b63a7bb2f`: one native
+production file, **5 added /44 deleted**. `get_widgets_at` is the sole point
+membership algorithm. `get_widget_at` consumes its first result and retains
+NoWidget. Membership uses the original region and clip directly; no per-widget
+intersection allocation or per-row expansion is required by a point query.
+The retired row property, its field and all seven invalidation writes are gone.
+Existing layer, visible-region and scene lifetime resources remain the owners.
+The source-retirement control now warms and reads those actual point APIs.
+No Toad, Screen, CSS or callback source changed.
+
+Before/after AST: native249 modules, targeted sites70→55; Toad288 modules,
+24 unchanged targeted sites; zero parse omissions. Row-property/field sites
+15→0 across both production roots. Native Screen/App routing, pointer hover,
+focus, tooltip, styles and content offsets keep their original APIs; Toad's
+sidebar and menu use those same APIs. Static names cannot prove dynamic plugin
+resolution, and removed internal compositor rows have no compatibility reader.
+
+Final native controls ran in one bounded original-App/Pilot batch: **17 passed,
+one fixture failed in3.32s**. Original `_arrange._build_layers`/`arrange` lays
+out each layer separately; the new fixture had incorrectly applied an extra
+−3 vertical offset to the front layer. Corrected only that fixture and reran
+only that failed control: **1 passed in0.51s**. Production bytes did not change.
+The initial log/exit and corrected log/exit are retained separately. No whole
+batch repeat, synthetic geometry, mocked compositor, backend or protocol path.
+
+The18 qualified cases detect these concrete risks:
+
+- overlapping front-to-back hits, container clip and screen edge errors;
+- hidden, moved and retired widgets continuing to receive input;
+- inactive vertical/stream scenes retaining removed widgets or old paint;
+- click/hover/mouse-down/mouse-up selecting covered rather than visible widgets;
+- native ancestor focus and OptionList hover enter/leave routing regressions;
+- TextArea cursor targeting and double-width text-selection offsets.
+
+Existing system Python/dependencies only; the headroom warning was proportionate
+to one bounded3.32s batch and its0.51s fixture correction. No new environment,
+installed-prefix mutation, provider input, recorder or public owner action.
+The next changed Heisenberg frame-callback/Toad journey supplies installed
+qualification. Draft/source-qualified only; no speed, CPU, FPS or smoothness
+claim and no repeat of the already-qualified415/49 film.

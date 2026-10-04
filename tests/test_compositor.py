@@ -15,7 +15,7 @@ async def test_point_hits_follow_layer_clip_visibility_and_scene_changes():
         #pane { width: 8; height: 4; offset: 2 2; layers: back front; }
         #back, #front { width: 12; height: 3; }
         #back { layer: back; }
-        #front { layer: front; offset: 0 -3; }
+        #front { layer: front; }
         """
 
         def compose(self):
