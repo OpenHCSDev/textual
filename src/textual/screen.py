@@ -1244,10 +1244,11 @@ class Screen(Generic[ScreenResultType], Widget):
                 app._display(self, update)
             self._dirty_widgets.clear()
         elif self in background_screens and self._compositor._dirty_regions:
-            if not app.is_inline:
+            if app.is_inline:
+                app.screen.refresh(*self._compositor._dirty_regions)
+            else:
                 self._set_dirty(*self._compositor._dirty_regions)
-            app.screen.refresh(*self._compositor._dirty_regions)
-            if not app.is_inline:
+                app.screen.refresh(*self._compositor._dirty_regions)
                 self._repaint_required = True
             self._compositor._dirty_regions.clear()
             self._dirty_widgets.clear()
