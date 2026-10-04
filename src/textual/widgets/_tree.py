@@ -158,6 +158,7 @@ class TreeNode(Generic[TreeDataType]):
     @property
     def line(self) -> int:
         """The line number for this node, or -1 if it is not displayed."""
+        self._tree._tree_lines
         return self._line
 
     @property
@@ -968,6 +969,7 @@ class Tree(Generic[TreeDataType], ScrollView, can_focus=True):
             node: A tree node, or None to reset cursor.
             animate: Enable animation
         """
+        self._tree_lines
         previous_cursor_line = self.cursor_line
         self.cursor_line = -1 if node is None else node._line
         if node is not None and self.cursor_node is not None:
@@ -986,13 +988,12 @@ class Tree(Generic[TreeDataType], ScrollView, can_focus=True):
         Raises:
             IndexError: If the line doesn't exist.
         """
-        if self.cursor_line == line:
-            return
         try:
             node = self._tree_lines[line].node
         except IndexError:
             raise IndexError(f"No line no. {line} in the tree")
-        self.move_cursor(node, animate=animate)
+        if self.cursor_line != line:
+            self.move_cursor(node, animate=animate)
 
     def select_node(self, node: TreeNode[TreeDataType] | None) -> None:
         """Move the cursor to the given node and select it, or reset cursor.
@@ -1205,6 +1206,7 @@ class Tree(Generic[TreeDataType], ScrollView, can_focus=True):
             node: Node to scroll into view.
             animate: Animate scrolling.
         """
+        self._tree_lines
         line = node._line
         if line != -1:
             self.scroll_to_line(line, animate=animate)
@@ -1470,22 +1472,19 @@ class Tree(Generic[TreeDataType], ScrollView, can_focus=True):
 
     def action_cursor_up(self) -> None:
         """Move the cursor up one node."""
-        if self.cursor_line == -1:
-            self.cursor_line = self.last_line
-        else:
-            self.cursor_line -= 1
+        last_line = self.last_line
+        self.cursor_line = last_line if self.cursor_line == -1 else self.cursor_line - 1
         self.scroll_to_line(self.cursor_line, animate=False)
 
     def action_cursor_down(self) -> None:
         """Move the cursor down one node."""
-        if self.cursor_line == -1:
-            self.cursor_line = 0
-        else:
-            self.cursor_line += 1
+        self._tree_lines
+        self.cursor_line = max(0, self.cursor_line + 1)
         self.scroll_to_line(self.cursor_line, animate=False)
 
     def action_page_down(self) -> None:
         """Move the cursor down a page's-worth of nodes."""
+        self._tree_lines
         if self.cursor_line == -1:
             self.cursor_line = 0
         self.cursor_line += self.scrollable_content_region.height - 1
@@ -1493,8 +1492,9 @@ class Tree(Generic[TreeDataType], ScrollView, can_focus=True):
 
     def action_page_up(self) -> None:
         """Move the cursor up a page's-worth of nodes."""
+        last_line = self.last_line
         if self.cursor_line == -1:
-            self.cursor_line = self.last_line
+            self.cursor_line = last_line
         self.cursor_line -= self.scrollable_content_region.height - 1
         self.scroll_to_line(self.cursor_line)
 
