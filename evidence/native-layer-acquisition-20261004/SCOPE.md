@@ -93,3 +93,26 @@ F0 main normally integrated WITHOUT native source change. Required Debt ratchet
 must pass before merge; this installed receipt cannot waive any growth. Full
 native suite remainsdeferred. Existing holder/code imports handed back toSchF1;
 no ongoing borrowed package/App/client/native claim from this qualification.
+
+## F0 correction: one source fold and one carried resource
+
+Parent's original packaged ratchet against main919 reported Compositor +7 and
+Widget +20. This supersedes the earlier source-qualified assessment; original
+installed422 evidence does not waive growth and remains unchanged.
+
+Widget._get_layer_order now folds supplied original sources in native leaf-to-root
+order, keeping the last (outermost) authored declaration. Public layers supplies
+its lazy ancestry; root acquisition supplies the same traversal; descendant
+admission supplies its one local source only while no ancestor declaration owns
+rank order. The same behavior handles explicit empty orders and the Widget/App
+boundary. Public duplicate names remain exact; rank projection preserves their
+last ordinal. Custom layers property dispatch remains local arrangement policy.
+
+Deleted _inherit_layer_order, the temporary ancestry list/reverse walk and every
+layer_names parameter/caller. Native traversal carries only the original derived
+rank mapping; cache keys snapshot that resource. No new type, registry, map,
+compatibility path or policy change. The corrected property documentation describes
+the actual outermost contract; no unrelated class behavior is removed to offset
+metrics. Relative main919, Widget has no class-span growth and Compositor shrinks
+by two lines. Before/after packaged ratchet and changed App controls remain the
+final required confirmation, not a source-only Ready claim.

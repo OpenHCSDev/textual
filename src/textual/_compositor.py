@@ -814,7 +814,7 @@ class Compositor:
         no_clip = RootSceneClip(root_geometry.region)
         # Widget owns layer inheritance. Acquire external ancestry only at the
         # root, then carry that original declaration through this traversal.
-        root_layers = root._get_layer_order()
+        root_layers = root._get_layer_order(root.walk_ancestors(with_self=True))
         root_layer_order = (
             None if root_layers is None
             else {name: index for index, name in enumerate(root_layers)}
@@ -847,7 +847,6 @@ class Compositor:
             visible: bool,
             dock_gutter: Spacing,
             complete: bool,
-            layer_names: tuple[str, ...] | None,
             inherited_layers: Mapping[str, int] | None,
             _MapGeometry: type[MapGeometry] = MapGeometry,
         ) -> None:
@@ -995,7 +994,6 @@ class Compositor:
                                 visible,
                                 arrange_result.scroll_spacing,
                                 complete,
-                                layer_names,
                                 inherited_layers,
                             )
                 else:
@@ -1050,20 +1048,14 @@ class Compositor:
                 ), clip)
 
         def add_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter, complete,
-                       layer_names, inherited_layers):
+                       inherited_layers):
             nonlocal map, widgets, invisible_widgets
-            resolved_layers = widget._inherit_layer_order(layer_names)
-            if resolved_layers is not layer_names:
-                # Only a newly reached declaration needs a rank projection.
-                # The owner either returns inherited unchanged or authored names.
-                inherited_layers = {
-                    name: index for index, name in enumerate(cast(tuple[str, ...], resolved_layers))
-                }
-            layer_names = resolved_layers
+            if inherited_layers is None and (order_names := widget._get_layer_order((widget,))) is not None:
+                inherited_layers = {name: index for index, name in enumerate(order_names)}
             if (not self.max_subtree_geometry_entries or not widget.CACHE_SUBTREE_GEOMETRY
                     or not widget._is_mounted):
                 arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
-                               complete, layer_names, inherited_layers)  # noqa: F821 -- closure cleared after traversal
+                               complete, inherited_layers)  # noqa: F821 -- closure cleared after traversal
                 return
             resource_type = widget.subtree_geometry_resource()
             complete = resource_type.complete_arrangement(complete)
@@ -1071,7 +1063,7 @@ class Compositor:
             # Complete native arrangements already own every descendant box.
             if widget in retained_paths and not complete:
                 arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
-                               complete, layer_names, inherited_layers)  # noqa: F821 -- closure cleared after traversal
+                               complete, inherited_layers)  # noqa: F821 -- closure cleared after traversal
                 return
             key = SubtreeGeometryKey.from_widget(widget,
                    virtual_region, region, order, layer_order, clip.region, visible, dock_gutter,
@@ -1092,7 +1084,7 @@ class Compositor:
             map, widgets, invisible_widgets = {}, set(), set()
             try:
                 arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
-                               complete, layer_names, inherited_layers)  # noqa: F821 -- closure cleared after traversal
+                               complete, inherited_layers)  # noqa: F821 -- closure cleared after traversal
                 geometry = map
                 added_widgets, added_invisible = frozenset(widgets), frozenset(invisible_widgets)
             finally:
@@ -1119,7 +1111,6 @@ class Compositor:
                 True,
                 root_geometry.dock_gutter,
                 False,
-                root_layers,
                 root_layer_order,
             )
         finally:

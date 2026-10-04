@@ -2828,37 +2828,17 @@ class Widget(DOMNode):
 
     @property
     def layers(self) -> tuple[str, ...]:
-        """Layers of from parent.
-
-        Returns:
-            Tuple of layer names.
-        """
-        order = self._get_layer_order()
+        """Names from the outermost authored layer declaration, or the default."""
+        order = self._get_layer_order(self.walk_ancestors(with_self=True))
         return ("default",) if order is None else order
 
-    def _inherit_layer_order(
-        self, inherited: tuple[str, ...] | None,
-    ) -> tuple[str, ...] | None:
-        """Resolve the outermost authored declaration in native tree order.
-
-        An explicitly empty declaration still owns the order. Custom ``layers``
-        overrides remain local arrangement policy, as before; they do not
-        replace the underlying inherited style declaration.
-        """
-        if inherited is None and self.styles.has_rule("layers"):
-            return self.styles.layers
-        return inherited
-
-    def _get_layer_order(self) -> tuple[str, ...] | None:
-        """Acquire original ancestry once at an external traversal boundary."""
-        ancestry: list[Widget] = []
-        for node in self.walk_ancestors(with_self=True):
+    def _get_layer_order(self, sources: Iterable[DOMNode]) -> tuple[str, ...] | None:
+        order = None
+        for node in sources:
             if not isinstance(node, Widget):
                 break
-            ancestry.append(node)
-        order = None
-        for node in reversed(ancestry):
-            order = node._inherit_layer_order(order)
+            if node.styles.has_rule("layers"):
+                order = node.styles.layers
         return order
 
     @property
