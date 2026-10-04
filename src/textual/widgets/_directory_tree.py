@@ -271,10 +271,9 @@ class DirectoryTree(Tree[DirEntry]):
 
             # Track node that was highlighted before reloading.
             highlighted_path: None | Path = None
-            if self.cursor_line > -1:
-                highlighted_node = self.get_node_at_line(self.cursor_line)
-                if highlighted_node is not None and highlighted_node.data is not None:
-                    highlighted_path = highlighted_node.data.path
+            highlighted_node = self.cursor_node
+            if highlighted_node is not None and highlighted_node.data is not None:
+                highlighted_path = highlighted_node.data.path
 
             if node.data is not None:
                 self.reset_node(

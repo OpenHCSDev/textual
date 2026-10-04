@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
 from textual import on
 from textual.app import App, ComposeResult
 from textual.widgets import Tree
@@ -100,3 +102,105 @@ async def test_select_node_reset() -> None:
             ("NodeHighlighted", 1),  # From the `tree.move_cursor` call
             ("NodeHighlighted", 0),  # From the call to `tree.select_node(None)`
         ]
+
+
+@pytest.mark.parametrize("operation", ["move", "select", "line", "scroll"])
+async def test_unbuilt_offscreen_node(operation: str) -> None:
+    """A mounted source mutation precedes rendering; intent must use its new line."""
+    async with TreeApp().run_test(size=(40, 8)) as pilot:
+        tree = pilot.app.query_one(Tree)
+        for index in range(30):
+            target = tree.root.add_leaf(str(index))
+        assert target._line == -1
+        assert tree._tree_lines_cached is None
+        if operation == "move":
+            tree.move_cursor(target)
+        elif operation == "select":
+            tree.select_node(target)
+        elif operation == "line":
+            tree.cursor_line = target.line
+        else:
+            tree.scroll_to_node(target, animate=False)
+        assert target._line == 31
+        if operation != "scroll":
+            assert tree.cursor_node is target
+        await pilot.pause()
+        if operation != "line":
+            assert tree.scroll_y > 0
+        assert pilot.app._exception is None
+
+
+@pytest.mark.parametrize("action", ["cursor_up", "cursor_down", "page_up", "page_down"])
+async def test_navigation_after_lazy_line_rebase(action: str) -> None:
+    """Navigation starts at the selected node's rebuilt line, not its old ordinal."""
+    async with TreeApp().run_test(size=(40, 8)) as pilot:
+        tree = pilot.app.query_one(Tree)
+        nodes = [tree.root.add_leaf(str(index)) for index in range(30)]
+        tree.move_cursor(nodes[15])
+        old_line = tree.cursor_line
+        tree.root.add_leaf("inserted", before=nodes[0])
+        assert tree._tree_lines_cached is None
+        step = tree.scrollable_content_region.height - 1
+        offset = {
+            "cursor_up": -1,
+            "cursor_down": 1,
+            "page_up": -step,
+            "page_down": step,
+        }[action]
+        getattr(tree, "action_" + action)()
+        assert tree.cursor_line == old_line + 1 + offset
+        assert tree.cursor_node is nodes[15 + offset]
+        assert pilot.app._exception is None
+
+
+async def test_move_to_line_after_lazy_rebase() -> None:
+    """The equality shortcut must compare the new projection's cursor ordinal."""
+    async with TreeApp().run_test() as pilot:
+        tree = pilot.app.query_one(Tree)
+        target = pilot.app.node
+        tree.move_cursor(target)
+        previous_line = tree.cursor_line
+        inserted = tree.root.add_leaf("inserted", before=target)
+        tree.move_cursor_to_line(previous_line)
+        assert tree.cursor_node is inserted
+        assert pilot.app._exception is None
+
+
+async def test_remount_restores_original_node_data() -> None:
+    """Replacing the native Tree preserves external selection without a frame wait."""
+    async with TreeApp().run_test() as pilot:
+        tree = pilot.app.query_one(Tree)
+        original_data = object()
+        await tree.remove()
+        replacement = Tree("replacement")
+        target = replacement.root.add_leaf("selected", data=original_data)
+        replacement.root.expand()
+        await pilot.app.screen.mount(replacement)
+        replacement.root.add_leaf("new source")
+        replacement.move_cursor(target)
+        assert replacement.cursor_node is target
+        assert replacement.cursor_node.data is original_data
+        assert replacement.get_node_at_line(replacement.cursor_line) is target
+        assert pilot.app._exception is None
+
+
+async def test_hidden_and_foreign_node_contract() -> None:
+    """Projection acquisition does not reveal branches or acquire another Tree."""
+    async with TreeApp().run_test() as pilot:
+        tree = pilot.app.query_one(Tree)
+        branch = tree.root.add("closed")
+        hidden = branch.add_leaf("hidden")
+        tree.move_cursor(hidden)
+        assert tree.cursor_node is tree.root
+        assert branch.is_collapsed
+        assert hidden._line == -1
+        unrelated = Tree("unrelated")
+        foreign = unrelated.root.add_leaf("foreign")
+        tree.move_cursor(foreign)
+        assert tree.cursor_node is tree.root
+        assert unrelated._tree_lines_cached is None
+        tree.move_cursor(None)
+        assert tree.cursor_node is tree.root
+        tree.unselect()
+        assert tree.cursor_line == -1
+        assert tree.cursor_node is tree.root
