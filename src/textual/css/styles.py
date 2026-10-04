@@ -1069,7 +1069,10 @@ class Styles(StylesBase):
         parent_requests = [repaint for _, _, parent, repaint in requests if parent]
         if parent_requests and node._parent is not None:
             node._parent.refresh(repaint=any(parent_requests))
-        node.refresh(layout=any(layout for layout, _, _, _ in requests))
+        node.refresh(
+            layout=any(layout for layout, _, _, _ in requests),
+            repaint=any(repaint for _, _, _, repaint in requests),
+        )
         child_requests = [(layout, repaint) for layout, children, _, repaint in requests if children]
         if child_requests:
             child_layout = any(layout for layout, _ in child_requests)

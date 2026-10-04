@@ -1829,10 +1829,13 @@ class DOMNode(MessagePump):
             self._inline_styles.merge(new_styles)
             self._inline_styles.refresh(layout=True)
 
-        styles = self.styles
-        with styles.batch_update():
-            for key, value in update_styles.items():
-                setattr(styles, key, value)
+        if update_styles:
+            # Normalize the requested cohort through the same descriptor MRO
+            # as compiled rules, then publish its values and effects once.
+            # A refresh batch alone still publishes every field separately.
+            rules = self._inline_styles.get_rules()
+            rules.update(update_styles)
+            self._inline_styles.replace_rules(rules)
         return self
 
     def has_class(self, *class_names: str) -> bool:
