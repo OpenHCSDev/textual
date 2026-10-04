@@ -4,6 +4,7 @@ import weakref
 from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass, field
 from functools import partial
+from itertools import chain
 from operator import attrgetter
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, Iterable, Iterator, Literal, cast
 
@@ -931,23 +932,17 @@ class Styles(StylesBase):
             important=self.important,
         )
 
-    def replace_rules(self, rules: RulesMap) -> None:
-        """Prepare a compiled rule cohort, then publish its values and effects once.
-
-        Imperative setters still publish immediately. Here no live style changes
-        until every descriptor has normalized the complete replacement.
-        """
+    def replace_rules(self, rules: RulesMap, **update_styles: Any) -> None:
+        """Normalize replacement rules then ordered edits, publishing once."""
         old_rules = self.get_rules()
-        if old_rules == rules:
+        if old_rules == rules and not update_styles:
             return
         prepared = Styles(_rules=old_rules.copy())
         with prepared.batch_update():
-            for key in old_rules.keys() | rules.keys():
-                value = rules.get(key)
-                if prepared.get_rule(key) != value:
-                    # Resolve through the live owner's native MRO, including
-                    # property overrides, while normalizing detached values.
-                    getattr(type(self), key).__set__(prepared, value)
+            replacements = ((key, rules.get(key)) for key in old_rules.keys() | rules.keys()
+                            if old_rules.get(key) != rules.get(key))
+            for key, value in chain(replacements, update_styles.items()):
+                getattr(type(self), key).__set__(prepared, value)
             requests = prepared._refresh_batches[-1].copy()
         new_rules = prepared.get_rules()
         if old_rules == new_rules:

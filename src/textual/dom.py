@@ -1830,7 +1830,7 @@ class DOMNode(MessagePump):
             self._inline_styles.refresh(layout=True)
 
         if update_styles:
-            self._inline_styles.replace_rules(self._inline_styles.get_rules() | update_styles)
+            self._inline_styles.replace_rules(self._inline_styles.get_rules(), **update_styles)
         return self
 
     def has_class(self, *class_names: str) -> bool:

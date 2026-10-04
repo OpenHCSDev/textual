@@ -152,3 +152,37 @@ async def test_offset_only_cohort_moves_native_scene_without_repainting_content(
         compositor = app.screen._compositor
         assert compositor.get_widget_at(widget.region.x, widget.region.y)[0] is widget
         assert compositor.get_widget_at(before.x, before.y)[0] is not widget
+
+
+async def test_keyword_composites_override_components_in_authored_order():
+    from textual.color import Color
+    from textual.css.errors import StyleValueError
+
+    app = App()
+    async with app.run_test(size=(40, 12)) as pilot:
+        widget = Label("composite content")
+        await app.mount(widget)
+        await pilot.pause()
+        widget.set_styles(border=("solid", "red"), align=("left", "top"))
+        updates = widget._inline_styles._updates
+        widget.set_styles(border=("double", "blue"), align=("right", "bottom"))
+        assert widget._inline_styles._updates == updates + 1
+        assert widget.styles.align == ("right", "bottom")
+        assert all(edge == ("double", Color.parse("blue")) for edge in widget.styles.border)
+        widget.set_styles(border=("solid", "red"), border_top=("double", "green"))
+        assert widget.styles.border_top == ("double", Color.parse("green"))
+        assert widget.styles.border_bottom == ("solid", Color.parse("red"))
+        widget.set_styles(border_top=("double", "green"), border=("solid", "red"))
+        assert all(edge == ("solid", Color.parse("red")) for edge in widget.styles.border)
+        before = widget._inline_styles.get_rules()
+        updates = widget._inline_styles._updates
+        with pytest.raises(StyleValueError):
+            widget.set_styles(border=("double", "blue"), align=("right", "invalid"))
+        assert widget._inline_styles.get_rules() == before
+        assert widget._inline_styles._updates == updates
+        widget.set_styles(border=None, align=("center", "middle"))
+        assert not any(widget._inline_styles.has_rule(name) for name in
+                       ("border_top", "border_right", "border_bottom", "border_left"))
+        assert widget.styles.align == ("center", "middle")
+        await pilot.pause()
+        assert widget in app.screen._compositor.visible_widgets
