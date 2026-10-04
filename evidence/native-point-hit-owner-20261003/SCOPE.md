@@ -52,7 +52,7 @@ No Toad, Screen, CSS or callback source changed.
 
 Before/after AST: native249 modules, targeted sites70→55; Toad288 modules,
 24 unchanged targeted sites; zero parse omissions. Row-property/field sites
-15→0 across both production roots. Native Screen/App routing, pointer hover,
+16→0 across both production roots. Native Screen/App routing, pointer hover,
 focus, tooltip, styles and content offsets keep their original APIs; Toad's
 sidebar and menu use those same APIs. Static names cannot prove dynamic plugin
 resolution, and removed internal compositor rows have no compatibility reader.
