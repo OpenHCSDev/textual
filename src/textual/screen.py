@@ -1198,9 +1198,10 @@ class Screen(Generic[ScreenResultType], Widget):
     def _prepare_compositor_refresh(self) -> bool:
         """Prepare an admitted scene; return False while it cannot be painted.
 
-        This hook runs after batch admission, before any compositor damage is
-        consumed. Deferred preparation retains the existing repaint intent;
-        the scene owner arranges its next refresh through the update timer.
+        Terminal refresh calls this hook for every screen it will composite,
+        after batch admission and before consuming any compositor damage.
+        Deferred preparation retains the existing repaint intent; the scene
+        owner arranges its next refresh through the update timer.
         """
         return True
 
@@ -1210,12 +1211,17 @@ class Screen(Generic[ScreenResultType], Widget):
         app = self.app
         if app._batch_count:
             return
-        if not self._prepare_compositor_refresh():
+        # A translucent foreground renders its backdrops through BackgroundScreen,
+        # without entering those screens' refresh methods. Admit that same visible
+        # stack before rendering any rows, including an invalidated backdrop.
+        background_screens = app._background_screens
+        screens = (*background_screens, self) if self is app.screen else (self,)
+        if not all(screen._prepare_compositor_refresh() for screen in screens):
             self._repaint_required = True
             return
 
-        if app.is_inline:
-            if self is app.screen:
+        if self is app.screen:
+            if app.is_inline:
                 inline_height = app._get_inline_height()
                 clear = (
                     app._previous_inline_height is not None
@@ -1225,36 +1231,26 @@ class Screen(Generic[ScreenResultType], Widget):
                     self,
                     self._compositor.render_inline(
                         app.size.with_height(inline_height),
-                        screen_stack=app._background_screens,
+                        screen_stack=background_screens,
                         clear=clear,
                     ),
                 )
                 app._previous_inline_height = inline_height
-                self._dirty_widgets.clear()
                 self._compositor._dirty_regions.clear()
-            elif (
-                self in self.app._background_screens and self._compositor._dirty_regions
-            ):
-                app.screen.refresh(*self._compositor._dirty_regions)
-                self._compositor._dirty_regions.clear()
-                self._dirty_widgets.clear()
-
-        else:
-            if self is app.screen:
-                # Top screen
+            else:
                 update = self._compositor.render_update(
-                    screen_stack=app._background_screens
+                    screen_stack=background_screens
                 )
                 app._display(self, update)
-                self._dirty_widgets.clear()
-            elif (
-                self in self.app._background_screens and self._compositor._dirty_regions
-            ):
+            self._dirty_widgets.clear()
+        elif self in background_screens and self._compositor._dirty_regions:
+            if not app.is_inline:
                 self._set_dirty(*self._compositor._dirty_regions)
-                app.screen.refresh(*self._compositor._dirty_regions)
+            app.screen.refresh(*self._compositor._dirty_regions)
+            if not app.is_inline:
                 self._repaint_required = True
-                self._compositor._dirty_regions.clear()
-                self._dirty_widgets.clear()
+            self._compositor._dirty_regions.clear()
+            self._dirty_widgets.clear()
         app._update_mouse_over(self)
 
     def _on_timer_update(self) -> None:
