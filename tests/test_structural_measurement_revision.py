@@ -27,9 +27,9 @@ async def test_nested_admission_invalidates_intrinsic_box_before_idle_delivery()
         added = Static("Second")
         added.styles.height = 4
         receipt = inner.mount(added)
-        # No idle event has propagated the descendant's layout notification.
-        # The already-published native child structure is still authoritative.
-        assert outer._layout_updates == previous_layout
+        # Source publication retires measurements before idle delivers Layout.
+        # The already-published native child structure is authoritative.
+        assert outer._layout_updates > previous_layout
         assert outer.get_content_height(size, app.size, size.width) == 7
         assert measure() == 7, "Parent box reused geometry from the preceding child structure"
         await receipt

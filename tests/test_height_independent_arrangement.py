@@ -5,7 +5,7 @@ from fractions import Fraction
 import pytest
 
 from textual.app import App
-from textual.containers import VerticalGroup
+from textual.containers import ScrollableContainer, VerticalGroup
 from textual.color import Color
 from textual.css.scalar import Scalar, Unit
 from textual.geometry import Offset, Size
@@ -17,6 +17,60 @@ from textual.widgets import Static
 class CachedArrangement(VerticalGroup):
     CACHE_HEIGHT_INDEPENDENT_ARRANGEMENT = True
     CACHE_HEIGHT_INDEPENDENT_BOX = True
+
+
+async def test_scroll_preserves_measurements_and_source_changes_retire_before_idle():
+    class CachedScrollable(ScrollableContainer):
+        CACHE_HEIGHT_INDEPENDENT_ARRANGEMENT = True
+        CACHE_HEIGHT_INDEPENDENT_BOX = True
+
+    app = App()
+    async with app.run_test(size=(60, 20)) as pilot:
+        child = Static("content")
+        child.styles.height = 20
+        parent = CachedScrollable(child)
+        parent.styles.width, parent.styles.height = 40, 4
+        await app.mount(parent)
+        await pilot.pause()
+        assert parent.max_scroll_y > 2
+
+        size = parent.container_size
+        first = parent.arrange(size)
+        box = parent._get_box_model(size, app.size, Fraction(40), Fraction(4))
+        dependency = parent.__dict__["_height_arrangement_cache"]
+        source_epoch, scene_epoch = parent._layout_updates, parent._geometry_revision
+        parent.scroll_to(y=2, animate=False, immediate=True)
+        assert parent.scroll_y == 2
+        assert parent._geometry_revision > scene_epoch
+        assert parent._layout_updates == source_epoch
+        assert parent.arrange(size) is first
+        assert parent.__dict__["_height_arrangement_cache"] is dependency
+        assert parent._get_box_model(size, app.size, Fraction(40), Fraction(4)) is box
+        await pilot.pause()
+        assert parent.arrange(size) is first
+
+        # Authored source mutation must be visible before its Layout message.
+        child.styles.base.set_rule("height", Scalar.parse("21"))
+        assert parent._layout_updates > source_epoch
+        assert parent.arrange(size) is not first
+        before = parent.arrange(size)
+        source_epoch, scene_epoch = parent._layout_updates, parent._geometry_revision
+        child.update("new content")
+        assert parent._layout_updates > source_epoch
+        assert parent._geometry_revision > scene_epoch
+        assert parent.arrange(size) is not before
+        await pilot.pause()
+
+        # Retained-body participation uses the same source owner without
+        # scheduling a separate repaint or waiting for native idle delivery.
+        before = parent.arrange(size)
+        source_epoch, scene_epoch = parent._layout_updates, app.screen._geometry_revision
+        flags = parent._layout_required, parent._repaint_required
+        parent._invalidate_layout()
+        assert parent._layout_updates > source_epoch
+        assert app.screen._geometry_revision > scene_epoch
+        assert (parent._layout_required, parent._repaint_required) == flags
+        assert parent.arrange(size) is not before
 
 
 async def test_unrelated_style_and_topology_changes_preserve_subtree_reuse():

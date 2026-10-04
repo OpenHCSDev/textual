@@ -1,0 +1,34 @@
+..............................................................F......... [ 97%]
+..                                                                       [100%]
+=================================== FAILURES ===================================
+_____ test_nested_admission_invalidates_intrinsic_box_before_idle_delivery _____
+
+    async def test_nested_admission_invalidates_intrinsic_box_before_idle_delivery():
+        app = App()
+        async with app.run_test() as pilot:
+            first = Static("First")
+            first.styles.height = 3
+            inner = VerticalGroup(first)
+            outer = VerticalGroup(inner)
+            await app.mount(outer)
+            await pilot.pause()
+            size = Size(40, 20)
+    
+            def measure():
+                return outer._get_box_model(size, app.size, Fraction(40), Fraction(20)).height
+    
+            assert measure() == 3
+            previous_layout = outer._layout_updates
+            added = Static("Second")
+            added.styles.height = 4
+            receipt = inner.mount(added)
+            # No idle event has propagated the descendant's layout notification.
+            # The already-published native child structure is still authoritative.
+>           assert outer._layout_updates == previous_layout
+E           assert 6 == 5
+E            +  where 6 = VerticalGroup()._layout_updates
+
+tests/test_structural_measurement_revision.py:32: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_structural_measurement_revision.py::test_nested_admission_invalidates_intrinsic_box_before_idle_delivery
+1 failed, 73 passed in 5.82s
