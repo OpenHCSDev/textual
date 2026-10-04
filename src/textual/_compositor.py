@@ -498,8 +498,6 @@ class Compositor:
         # Regions that require an update
         self._dirty_regions: set[Region] = set()
 
-        # Mapping of line numbers on to lists of widget and regions
-        self._layers_visible: list[list[tuple[Widget, Region, Region]]] | None = None
         self._subtree_geometry: dict[Widget, SubtreeGeometry] = {}
         self.max_subtree_geometry_entries = max_subtree_geometry_entries
 
@@ -524,7 +522,6 @@ class Compositor:
         self._layers = None
         self.widgets.clear()
         self._visible_widgets = None
-        self._layers_visible = None
         self._cuts = None
         self._dirty_regions.clear()
         self._subtree_geometry.clear()
@@ -554,7 +551,6 @@ class Compositor:
             self._full_map_invalidated = True
             self._visible_widgets = None
             self._layers = None
-            self._layers_visible = None
             self._cuts = None
 
     @classmethod
@@ -619,7 +615,6 @@ class Compositor:
         previous_map = self._visible_map if visible_only and self._visible_map is not None else self._full_map
         self._cuts = None
         self._layers = None
-        self._layers_visible = None
         self._visible_widgets = None
         self._visible_map = None
         self.root = parent
@@ -651,7 +646,6 @@ class Compositor:
         # caches from the previous committed map. Publish only the new map.
         self._visible_widgets = None
         self._layers = None
-        self._layers_visible = None
         self._cuts = None
         self.widgets = widgets
 
@@ -679,7 +673,6 @@ class Compositor:
         """
         self._cuts = None
         self._layers = None
-        self._layers_visible = None
         self._visible_widgets = None
         self._full_map_invalidated = True
         self.root = parent
@@ -695,7 +688,6 @@ class Compositor:
         self._visible_map = map
         self._visible_widgets = None
         self._layers = None
-        self._layers_visible = None
         self._cuts = None
         self.widgets = widgets
 
@@ -754,7 +746,6 @@ class Compositor:
             self._visible_widgets = None
             self._visible_map = None
             self._layers = None
-            self._layers_visible = None
             self._cuts = None
 
         return self._full_map
@@ -1142,33 +1133,6 @@ class Compositor:
             self._layers = self._ordered_geometry(map)
         return self._layers
 
-    @property
-    def layers_visible(self) -> list[list[tuple[Widget, Region, Region]]]:
-        """Visible widgets and regions in layers order.
-
-        Returns:
-            Lists visible widgets per layer. Widgets are give as a tuple of
-            (WIDGET, CROPPED_REGION, REGION). CROPPED_REGION is clipped by
-            the container.
-
-        """
-
-        if self._layers_visible is None:
-            layers_visible: list[list[tuple[Widget, Region, Region]]]
-            layers_visible = [[] for y in range(self.size.height)]
-            layers_visible_appends = [layer.append for layer in layers_visible]
-            intersection = Region.intersection
-            _range = range
-            for widget, (region, clip) in self.visible_widgets.items():
-                cropped_region = intersection(region, clip)
-                _x, region_y, _width, region_height = cropped_region
-                if region_height:
-                    widget_location = (widget, cropped_region, region)
-                    for y in _range(region_y, region_y + region_height):
-                        layers_visible_appends[y](widget_location)
-            self._layers_visible = layers_visible
-        return self._layers_visible
-
     def __contains__(self, widget: Widget) -> bool:
         """Check if the widget was included in the last update.
 
@@ -1210,11 +1174,8 @@ class Compositor:
             A tuple of the widget and its region.
         """
 
-        contains = Region.contains
-        if len(self.layers_visible) > y >= 0:
-            for widget, cropped_region, region in self.layers_visible[int(y)]:
-                if contains(cropped_region, x, y) and widget.visible:
-                    return widget, region
+        for hit in self.get_widgets_at(x, y):
+            return hit
         raise errors.NoWidget(f"No widget under screen coordinate ({x}, {y})")
 
     def get_widgets_at(self, x: int, y: int) -> Iterable[tuple[Widget, Region]]:
@@ -1228,9 +1189,9 @@ class Compositor:
             Sequence of (WIDGET, REGION) tuples.
         """
         contains = Region.contains
-        if len(self.layers_visible) > y >= 0:
-            for widget, cropped_region, region in self.layers_visible[y]:
-                if contains(cropped_region, x, y) and widget.visible:
+        if self.size.height > y >= 0:
+            for widget, (region, clip) in self.visible_widgets.items():
+                if contains(region, x, y) and contains(clip, x, y) and widget.visible:
                     yield widget, region
 
     def get_style_at(self, x: int, y: int) -> Style:
