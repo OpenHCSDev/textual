@@ -1,0 +1,34 @@
+name: Debt ratchet
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: debt-ratchet-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  debt-ratchet:
+    name: Debt ratchet
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Install the packaged ratchet pinned by Toad main
+        # Same Core source as Toad's tool.uv.sources.agent-comms.rev.
+        run: python -m pip install --disable-pip-version-check 'agent-comms @ git+https://github.com/OpenHCSDev/agent-comms.git@d41601c16d74e9e3e4195b6527fb218b8fe14af9'
+      - name: Reject increases in production debt
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: agent-comms-ratchet --root src/textual --base "$PR_BASE" --head "$PR_HEAD"
