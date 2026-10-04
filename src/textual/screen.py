@@ -52,7 +52,7 @@ from textual.css.query import NoMatches, QueryType
 from textual.css.styles import PointerShape
 from textual.dom import DOMNode
 from textual.errors import NoWidget
-from textual.geometry import Offset, Region, Shape, Size
+from textual.geometry import Offset, Region, Size
 from textual.keys import key_to_character
 from textual.layout import DockArrangeResult
 from textual.message_pump import MessagePumpClosed
@@ -62,7 +62,6 @@ from textual.renderables.blank import Blank
 from textual.selection import SELECT_ALL, SelectEnd, Selection, SelectStart, SelectState
 from textual.signal import Signal
 from textual.timer import Timer
-from textual.walk import walk_selectable_widgets
 from textual.widget import Widget
 from textual.widgets import Tooltip
 from textual.widgets._toast import ToastRack
@@ -2087,48 +2086,14 @@ class Screen(Generic[ScreenResultType], Widget):
         if not selecting:
             self._stop_auto_scroll()
 
-    @classmethod
-    def _collect_select_widgets(
-        cls,
-        selection_bounds: Shape,
-        container: Widget,
-        start_widget: Widget,
-        end_widget: Widget,
-    ) -> list[Widget]:
-        """Get widgets between two widgets in select order.
-
-        Args:
-            selection_bounds: A shape defining the selection bounds.
-            container: A parent widgets.
-            start_widget: First widget.
-            end_widget: Second widget.
-
-        Returns:
-            Widgets between start and end, in select sort order.
-        """
-
-        widgets = list(
-            walk_selectable_widgets(
-                container,
-                selection_bounds,
-                {start_widget, end_widget},
-            )
-        )
-
-        index1: int | None = None
-        try:
-            index1 = widgets.index(start_widget)
-        except ValueError:
-            pass
-
-        index2: int | None = None
-        try:
-            index2 = widgets.index(end_widget) + 1
-        except ValueError:
-            pass
-
-        results = widgets[index1:index2]
-        return results
+    def _interaction_widgets(self) -> Iterator[Widget]:
+        """Borrow current interaction custody without projecting selected ranges."""
+        yield from self.selections
+        if self._select_state is not None:
+            yield from self._select_state._walk_involved_widgets()
+        for widget in (self.focused, self.app.mouse_captured):
+            if widget is not None:
+                yield widget
 
     def _watch__select_state(self, select_state: SelectState | None) -> None:
         """Respond to user-initiated selection change.

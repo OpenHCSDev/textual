@@ -63,6 +63,9 @@ async def test_pending_removal_revokes_pointer_intent_but_keeps_surviving_select
             await app.mount(parent)
             await pilot.pause()
             assert await pilot.mouse_down(retiring, offset=(0, 0))
+            assert not app.screen.selections
+            assert app.screen._select_state.end is None
+            assert retiring in app.screen._interaction_widgets()
             assert await pilot.mouse_up(retiring, offset=(4, 0))
             screen = app.screen
             state = screen._select_state
