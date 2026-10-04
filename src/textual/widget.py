@@ -349,11 +349,9 @@ class Widget(DOMNode):
         self._clear_arrangement_cache()
 
     def _invalidate_layout(self) -> None:
-        """Publish changed layout inputs before the idle Layout notification.
+        """Retire authored layout inputs before requesting a frame.
 
-        Scene placement still invalidates every enclosing capture. Measurement
-        propagation retains the original fixed-size ancestor boundary; scrolling
-        changes only the scene and never enters this source lifetime.
+        Capture invalidation spans ancestors; measurement stops at fixed size.
         """
         self._invalidate_subtree_geometry()
         self._measurement_updated()
@@ -4594,8 +4592,7 @@ class Widget(DOMNode):
 
         if layout:
             self._invalidate_layout()
-        if layout and not self._layout_required:
-            self._layout_required = True
+            self._request_layout()
 
         if recompose:
             self._recompose_required = True
@@ -4961,6 +4958,9 @@ class Widget(DOMNode):
         await layout here. The app then resolves the original event against
         that geometry; widget mouse handlers run after target selection.
         """
+
+    def _request_layout(self, required: bool = True) -> None:
+        self._layout_required |= required
 
     def notify_style_update(self) -> None:
         self._rich_style_cache.clear()

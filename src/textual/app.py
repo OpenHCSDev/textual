@@ -3799,6 +3799,10 @@ class App(Generic[ReturnType], DOMNode):
         self._begin_batch()  # Prevent repaint / layout while shutting down
         self._message_queue.put_nowait(None)
 
+    def _request_layout(self, required: bool = True) -> None:
+        if self._screen_stack:
+            self.screen._request_layout(required)
+
     def refresh(
         self,
         *,
@@ -3806,15 +3810,11 @@ class App(Generic[ReturnType], DOMNode):
         layout: bool = False,
         recompose: bool = False,
     ) -> Self:
-        """Refresh the entire screen.
+        """Refresh the current screen and return this App.
 
-        Args:
-            repaint: Repaint the widget (will call render() again).
-            layout: Also layout widgets in the view.
-            recompose: Re-compose the widget (will remove and re-mount children).
-
-        Returns:
-            The `App` instance.
+        ``layout=True`` retires actual screen layout inputs; style scheduling
+        uses _request_layout after its source has already changed. ``repaint``
+        invalidates rendered content; ``recompose`` removes and mounts children.
         """
         if recompose:
             self._recompose_required = recompose
