@@ -49,9 +49,9 @@ synchronous invalidation/participation change remains untouched, as do its genui
 refresh(layout=True) tree publication consumers. No copied frame flags or source
 frontier, no cache/map/type, no source/receipt/follow semantic bypass.
 
-This is a working source checkpoint, not App/live qualified. Final coherent
-controls and changed installed workflow follow with the Toad integration owner;
-no old film or environment/package launch was made for this source pass.
+The first published checkpoint was source-only. The completed native App batch
+is recorded below; installed Toad qualification remains pending. No old film or
+environment/package launch was made for this source pass.
 
 ## Complete caller closure and final native App batch
 
@@ -77,3 +77,8 @@ unsolicited layout, separate frame publication, actual new-content height/paint,
 and App-to-Screen layout delivery. This is source App qualification, not an
 installed Toad recording or demonstrated CPU gain. The changed installed workflow
 remains with Heisenberg's existing holder after its current F4 lease is returned.
+
+The original packaged F0 ratchet exits 0 against main c1c1: no admitted
+measure grows; Styles GodClassExcess decreases by one, all other deltas zero.
+App/DOM/Widget source-to-frame hooks replace existing family work; no waiver,
+threshold or scanner change. Hosted Debt must bind the final published head.
