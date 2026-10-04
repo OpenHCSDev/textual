@@ -33,9 +33,15 @@ async def test_pending_unmount_does_not_block_unrelated_native_input():
         await app.mount(prompt, retiring)
         prompt.focus()
         await pilot.pause()
+        compositor = app.screen._compositor
+        assert retiring in compositor.visible_widgets
         removal = retiring.remove()
         try:
             await asyncio.wait_for(entered.wait(), 1)
+            # Retirement must precede delayed Unmount, including lazy map reads.
+            assert not retiring.display
+            assert retiring not in compositor.full_map
+            assert retiring not in compositor.visible_widgets
             app._driver.send_message(Key("x", "x"))
             await asyncio.wait_for(received.wait(), .5)
             assert not release.is_set()
