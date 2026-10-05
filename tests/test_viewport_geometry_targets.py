@@ -34,7 +34,7 @@ async def test_cached_overlay_and_fixed_children_match_the_original_scene():
     body = CachedBody(
         Static("Fixed heading", id="fixed-heading"),
         Static("Screen overlay", id="screen-overlay"),
-        *(Static(f"Source row {index}") for index in range(80)),
+        *(Static(f"Source row {index}", id=f"source-row-{index}") for index in range(80)),
         id="cached-body",
     )
 
@@ -65,13 +65,16 @@ async def test_cached_overlay_and_fixed_children_match_the_original_scene():
             expected, _ = Compositor(max_subtree_geometry_entries=0)._arrange_root(
                 screen, app.size, visible_only=False,
             )
-            admitted = [(node, entry) for node, entry in expected.items()
-                        if node is body or entry.visible_region.overlaps(app.size.region)]
-            assert all(compositor._visible_map[node] == entry for node, entry in admitted)
+            paint = compositor._paint_regions(compositor._ordered_geometry(expected), app.size.region)
+            admitted = {node: expected[node] for node in paint}
+            admitted[body] = expected[body]  # The original explicit geometry target.
+            for node, entry in admitted.items():
+                assert node in compositor._visible_map, (position, node.id, entry)
+                assert compositor._visible_map[node] == entry
             actual_layers = compositor._ordered_geometry(compositor._visible_map)
             expected_layers = compositor._ordered_geometry(expected)
-            assert [(node, entry) for node, entry in actual_layers if node in dict(admitted)] == [
-                (node, entry) for node, entry in expected_layers if node in dict(admitted)
+            assert [(node, entry) for node, entry in actual_layers if node in admitted] == [
+                (node, entry) for node, entry in expected_layers if node in admitted
             ]
 
 
