@@ -452,17 +452,29 @@ class ChopsUpdate(CompositorUpdate):
         self.spans = spans
         self.cuts = cuts
 
+    @staticmethod
+    def _span_cuts(
+        spans: Iterable[tuple[int, int, int]], cuts: list[list[int]], y_origin: int,
+    ) -> Iterator[tuple[int, int, int]]:
+        """Select original cut cells touched by damage, including wide edges.
+
+        Paint admission and both publication formats use the same cells. A
+        span inside a cell still requires that whole strip before final crop.
+        """
+        for y, x1, x2 in spans:
+            line_cuts = cuts[y - y_origin]
+            first = max(0, bisect_right(line_cuts, x1) - 1)
+            last = bisect_left(line_cuts, x2)
+            for index in range(first, last):
+                yield y, line_cuts[index], line_cuts[index + 1]
+
     def _get_line_chops(self, y: int, x1: int, x2: int) -> Iterator[tuple[int, Strip]]:
         """Clip the original painted chops once for either publication format.
 
         Strip owns cell splitting, including wide characters and metadata.
         Borrow the original cuts instead of copying ends for every screen row.
         """
-        cuts = self.cuts[y]
-        first = max(0, bisect_right(cuts, x1) - 1)
-        last = bisect_left(cuts, x2)
-        for index in range(first, last):
-            x, end = cuts[index], cuts[index + 1]
+        for _, x, end in self._span_cuts(((y, x1, x2),), self.cuts, 0):
             strip = self.chops[y].get(x)
             if strip is None:
                 continue
@@ -1544,7 +1556,7 @@ class Compositor:
         screen_region = self.size.region
         self._dirty_regions.clear()
         crop = screen_region
-        chops = self._render_chops(crop, lambda y: True,
+        chops = self._render_chops(crop, self._regions_to_spans((screen_region,)),
                                   widgets=self.visible_widgets, cuts=self.cuts,
                                   bounds=screen_region)
         render_strips: list[Iterable[Strip]]
@@ -1574,9 +1586,8 @@ class Compositor:
             return None
         crop = Region.from_union(update_regions)
         spans = list(self._regions_to_spans(update_regions))
-        is_rendered_line = {y for y, _, _ in spans}.__contains__
         cuts = self.cuts
-        chops = self._render_chops(crop, is_rendered_line,
+        chops = self._render_chops(crop, spans,
                                   widgets=self.visible_widgets, cuts=cuts,
                                   bounds=screen_region)
         return ChopsUpdate(chops, spans, cuts)
@@ -1592,7 +1603,8 @@ class Compositor:
         """
         if size is None:
             size = self.size
-        chops = self._render_chops(size.region, lambda y: True,
+        rows = Region(0, 0, self.size.width, min(size.height, self.size.height))
+        chops = self._render_chops(size.region, self._regions_to_spans((rows,)),
                                   widgets=self.visible_widgets, cuts=self.cuts,
                                   bounds=self.size.region)
         render_strips = [Strip.join(chop.values()) for chop in chops[: size.height]]
@@ -1632,14 +1644,14 @@ class Compositor:
         widgets = self._paint_regions(self._ordered_geometry(geometry), bounds)
         cuts = self._cuts_for_regions(bounds, widgets)
         with self._using_geometry(root, geometry):
-            chops = self._render_chops(bounds, lambda y: True,
+            chops = self._render_chops(bounds, self._regions_to_spans((bounds,)),
                                       widgets=widgets, cuts=cuts, bounds=bounds)
         return bounds.size, [Strip.join(chop.values()) for chop in chops]
 
     def _render_chops(
         self,
         crop: Region,
-        is_rendered_line: Callable[[int], bool],
+        spans: Iterable[tuple[int, int, int]],
         *, widgets: Mapping[Widget, tuple[Region, Region]], cuts: list[list[int]],
         bounds: Region,
     ) -> Sequence[Mapping[int, Strip]]:
@@ -1647,19 +1659,15 @@ class Compositor:
 
         Args:
             crop: Region to crop to.
-            is_rendered_line: Callable to check if line should be rendered.
+            spans: Original damaged horizontal spans to admit before painting.
             bounds: Original screen or body bounds represented by the chops.
 
         Returns:
             Chops structure.
         """
-        fromkeys = cast("Callable[[list[int]], dict[int, Strip | None]]", dict.fromkeys)
-        chops: list[dict[int, Strip | None]]
-        chops = [
-            fromkeys(cut_set[:-1])
-            if crop.y <= y < crop.bottom and is_rendered_line(y) else {}
-            for y, cut_set in enumerate(cuts, bounds.y)
-        ]
+        chops: list[dict[int, Strip | None]] = [{} for _ in cuts]
+        for y, x, _end in ChopsUpdate._span_cuts(spans, cuts, bounds.y):
+            chops[y - bounds.y][x] = None
         remaining = [len(line) for line in chops]
 
         def render_regions(region: Region) -> Iterable[Region]:
@@ -1679,8 +1687,7 @@ class Compositor:
                     row_cuts = cuts[row]
                     for index in range(bisect_left(row_cuts, first), bisect_left(row_cuts, last)):
                         x = row_cuts[index]
-                        value = chops[row][x]
-                        if value is None:
+                        if x in chops[row] and chops[row][x] is None:
                             if start_x is None:
                                 start_x = x
                         elif start_x is not None:
@@ -1717,9 +1724,8 @@ class Compositor:
                 cut_strips = strip.divide([cut - render_x for cut in final_cuts[1:]])
 
                 # Since we are painting front to back, the first segments for a cut "wins"
-                get_chops_line = chops_line.get
                 for cut, strip in zip(final_cuts, cut_strips):
-                    if get_chops_line(cut) is None:
+                    if cut in chops_line and chops_line[cut] is None:
                         chops_line[cut] = strip
                         remaining[row] -= 1
         return cast("Sequence[Mapping[int, Strip]]", chops)
