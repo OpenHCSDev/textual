@@ -9,6 +9,7 @@ import pytest
 
 async def test_point_hits_follow_layer_clip_visibility_and_scene_changes():
     from textual.errors import NoWidget
+    from textual.geometry import Region
 
     class PointApp(App):
         CSS = """
@@ -29,6 +30,12 @@ async def test_point_hits_follow_layer_clip_visibility_and_scene_changes():
         front = app.query_one("#front")
         compositor = app.screen._compositor
 
+        # Paint admission clips pixels without changing the original source
+        # origin/extent returned to hit and pager geometry consumers.
+        assert compositor.visible_widgets[front] == (
+            Region(2, 2, 12, 3), Region(2, 2, 8, 3),
+        )
+        assert compositor.find_widget(front).clip == Region(2, 2, 8, 4)
         assert compositor.get_widget_at(3, 2) == (front, front.region)
         assert [widget for widget, _ in compositor.get_widgets_at(3, 2)] == [
             front, back, pane, app.screen,
@@ -43,13 +50,38 @@ async def test_point_hits_follow_layer_clip_visibility_and_scene_changes():
 
         front.visible = False
         await pilot.pause()
+        assert front not in compositor.visible_widgets
         assert compositor.get_widget_at(3, 2)[0] is back
         assert all(widget is not front for widget, _ in compositor.get_widgets_at(3, 2))
         front.visible = True
         pane.styles.offset = (4, 3)
         await pilot.pause()
+        assert compositor.visible_widgets[front] == (
+            Region(4, 3, 12, 3), Region(4, 3, 8, 3),
+        )
         assert compositor.get_widget_at(3, 2)[0] is app.screen
         assert compositor.get_widget_at(5, 3)[0] is front
+
+        pane.styles.offset = (-2, -1)
+        await pilot.pause()
+        assert compositor.visible_widgets[front] == (
+            Region(-2, -1, 12, 3), Region(0, 0, 6, 2),
+        )
+        assert compositor.get_widget_at(0, 0) == (front, Region(-2, -1, 12, 3))
+        assert compositor.cuts[0] == [0, 6, 20]
+        assert compositor.cuts[2] == [0, 6, 20]
+        assert compositor.cuts[3] == [0, 20]
+
+        # A completely clipped descendant still belongs to native geometry,
+        # but contributes neither paint pixels nor pointer hits.
+        front.styles.offset = (8, 0)
+        await pilot.pause()
+        assert front in compositor.widgets and front in compositor.full_map
+        assert front not in compositor.visible_widgets
+        assert compositor.get_widget_at(0, 0)[0] is back
+        pane.styles.offset = (4, 3)
+        front.styles.offset = (0, 0)
+        await pilot.pause()
         await front.remove()
         await pilot.pause()
         assert compositor.get_widget_at(5, 3)[0] is back
