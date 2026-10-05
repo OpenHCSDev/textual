@@ -15,10 +15,6 @@ from textual.widget import Widget
 from textual.widgets import Static
 
 
-class CachedColumn(VerticalGroup):
-    CACHE_HEIGHT_INDEPENDENT_BOX = True
-
-
 def box(widget, height, *, width=40, greedy=True):
     return widget._get_box_model(Size(width, height), widget.app.size,
                                  Fraction(width), Fraction(height), greedy=greedy)
@@ -27,7 +23,7 @@ def box(widget, height, *, width=40, greedy=True):
 async def test_native_nested_flow_reuses_only_unused_height_inputs():
     app = App()
     async with app.run_test() as pilot:
-        column = CachedColumn(HorizontalGroup(Static("first"), Static("second")))
+        column = VerticalGroup(HorizontalGroup(Static("first"), Static("second")))
         await app.mount(column)
         await pilot.pause()
         assert not column._box_depends_on_available_height()
@@ -50,15 +46,15 @@ async def test_native_nested_flow_reuses_only_unused_height_inputs():
 async def test_height_dependent_css_and_extrema_match_native_contexts(field, value):
     app = App()
     async with app.run_test() as pilot:
-        column = CachedColumn(Static("wrapped text " * 25))
+        column = VerticalGroup(Static("wrapped text " * 25))
         await app.mount(column)
         setattr(column.styles, field, value)
         await pilot.pause()
         assert column._box_depends_on_available_height()
-        column.CACHE_HEIGHT_INDEPENDENT_BOX = False
-        column._box_model_cache.clear()
-        expected = {height: box(column, height) for height in (0, 10, 30, 70)}
-        column.CACHE_HEIGHT_INDEPENDENT_BOX = True
+        expected = {}
+        for height in (0, 10, 30, 70):
+            column._box_model_cache.clear()
+            expected[height] = box(column, height)
         column._box_model_cache.clear()
         for height, measured in expected.items():
             assert box(column, height) == measured
@@ -68,7 +64,7 @@ async def test_descendant_style_change_invalidates_proof_before_idle():
     app = App()
     async with app.run_test() as pilot:
         leaf = Static("one")
-        column = CachedColumn(VerticalGroup(leaf))
+        column = VerticalGroup(VerticalGroup(leaf))
         await app.mount(column)
         await pilot.pause()
         assert not column._box_depends_on_available_height()
@@ -87,7 +83,7 @@ async def test_structural_admission_retires_normalized_boxes():
     app = App()
     async with app.run_test() as pilot:
         inner = VerticalGroup(Static("first"))
-        column = CachedColumn(inner)
+        column = VerticalGroup(inner)
         await app.mount(column)
         await pilot.pause()
         before = box(column, 30)
@@ -99,7 +95,7 @@ async def test_structural_admission_retires_normalized_boxes():
 
 
 async def test_custom_measurement_and_layout_overrides_are_context_dependent():
-    class CustomHeight(CachedColumn):
+    class CustomHeight(VerticalGroup):
         def get_content_height(self, container, viewport, width):
             return container.height + 3
 
@@ -107,18 +103,18 @@ async def test_custom_measurement_and_layout_overrides_are_context_dependent():
         def arrange(self, parent, children, size, greedy=True):
             return super().arrange(parent, children, size, greedy)
 
-    class CustomHook(CachedColumn):
+    class CustomHook(VerticalGroup):
         def pre_layout(self, layout):
             super().pre_layout(layout)
 
-    class CustomPlacement(CachedColumn):
+    class CustomPlacement(VerticalGroup):
         def process_layout(self, placements):
             return placements
 
     app = App()
     async with app.run_test() as pilot:
         custom = CustomHeight()
-        layout = CachedColumn(Static("auto height"))
+        layout = VerticalGroup(Static("auto height"))
         layout.styles.set_rule("layout", CustomLayout())
         hook = CustomHook(Static("auto height"))
         placement = CustomPlacement(Static("auto height"))
@@ -136,7 +132,7 @@ async def test_flow_rejects_context_sensitive_child_placement(field, value):
     app = App()
     async with app.run_test() as pilot:
         child = VerticalGroup(Static("text"))
-        column = CachedColumn(child)
+        column = VerticalGroup(child)
         await app.mount(column)
         await pilot.pause()
         assert not column._box_depends_on_available_height()
@@ -147,25 +143,20 @@ async def test_flow_rejects_context_sensitive_child_placement(field, value):
 async def test_width_and_viewport_scalars_preserve_native_results():
     app = App()
     async with app.run_test() as pilot:
-        column = CachedColumn(Static("text"))
+        column = VerticalGroup(Static("text"))
         await app.mount(column)
         await pilot.pause()
         for unit in (Unit.CELLS, Unit.WIDTH, Unit.VIEW_HEIGHT, Unit.VIEW_WIDTH):
             column.styles.height = Scalar(10, unit, Unit.HEIGHT)
             assert not column._box_depends_on_available_height()
-            column.CACHE_HEIGHT_INDEPENDENT_BOX = False
             column._box_model_cache.clear()
             expected = box(column, 70)
-            column.CACHE_HEIGHT_INDEPENDENT_BOX = True
             assert box(column, 0) == expected
             assert box(column, 70) == expected
-        assert Widget.CACHE_HEIGHT_INDEPENDENT_BOX is False
 
 
 async def test_unknown_width_and_stream_overrides_do_not_inherit_a_proof():
     class HeightSizedWidth(Static):
-        CACHE_HEIGHT_INDEPENDENT_BOX = True
-
         def get_content_width(self, container, viewport):
             return container.height
 
@@ -178,7 +169,7 @@ async def test_unknown_width_and_stream_overrides_do_not_inherit_a_proof():
         width = HeightSizedWidth("text")
         width.styles.width = "auto"
         width.styles.height = 1
-        stream = CachedColumn(Static("text"))
+        stream = VerticalGroup(Static("text"))
         stream.styles.set_rule("layout", UnknownStream())
         await app.mount(width, stream)
         await pilot.pause()
@@ -193,7 +184,7 @@ async def test_width_padding_margin_offset_and_viewport_parity(layout_name):
     app = App()
     async with app.run_test() as pilot:
         children = [Static("line one\nline two"), Static("wrapped " * 15)]
-        column = CachedColumn(*children)
+        column = VerticalGroup(*children)
         column.styles.layout = layout_name
         column.styles.padding = (1, 2)
         children[0].styles.margin = (1, 2, 3, 4)
@@ -202,10 +193,10 @@ async def test_width_padding_margin_offset_and_viewport_parity(layout_name):
         await pilot.pause()
         inputs = [(width, height, greedy) for width in (20, 40)
                   for height in (0, 10, 100) for greedy in (False, True)]
-        column.CACHE_HEIGHT_INDEPENDENT_BOX = False
-        column._box_model_cache.clear()
-        expected = [box(column, height, width=width, greedy=greedy) for width, height, greedy in inputs]
-        column.CACHE_HEIGHT_INDEPENDENT_BOX = True
+        expected = []
+        for width, height, greedy in inputs:
+            column._box_model_cache.clear()
+            expected.append(box(column, height, width=width, greedy=greedy))
         column._box_model_cache.clear()
         assert [box(column, height, width=width, greedy=greedy) for width, height, greedy in inputs] == expected
 
@@ -213,13 +204,13 @@ async def test_width_padding_margin_offset_and_viewport_parity(layout_name):
 async def test_unset_height_and_custom_extrema_keep_the_full_context():
     from textual._extrema import Extrema
 
-    class CustomExtrema(CachedColumn):
+    class CustomExtrema(VerticalGroup):
         def _resolve_extrema(self, container, viewport, width_fraction, height_fraction):
             return Extrema(min_height=Fraction(container.height))
 
     app = App()
     async with app.run_test() as pilot:
-        fill = CachedColumn(Static("fill"))
+        fill = VerticalGroup(Static("fill"))
         custom = CustomExtrema(Static("extent"))
         await app.mount(fill, custom)
         await pilot.pause()
@@ -240,7 +231,7 @@ async def test_custom_scalar_resolver_is_not_classified_by_its_unit_alone():
 
     app = App()
     async with app.run_test() as pilot:
-        column = CachedColumn(Static("text"))
+        column = VerticalGroup(Static("text"))
         await app.mount(column)
         await pilot.pause()
         column.styles.height = ContextScalar(1, Unit.CELLS, Unit.HEIGHT)
@@ -256,7 +247,7 @@ async def test_raw_width_percentage_height_keeps_native_parent_stretch():
     app = App()
     async with app.run_test() as pilot:
         child = Static("text")
-        column = CachedColumn(child)
+        column = VerticalGroup(child)
         await app.mount(column)
         await pilot.pause()
         child.styles.set_rule("height", Scalar(50, Unit.PERCENT, Unit.WIDTH))
