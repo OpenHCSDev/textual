@@ -25,6 +25,56 @@ class TargetedScreen(Screen):
                     yield Static("second line " * 5)
 
 
+async def test_complete_cached_body_keeps_capture_and_explicit_reader_geometry():
+    class CachedBody(VerticalGroup):
+        CACHE_SUBTREE_GEOMETRY = True
+
+    rows = [Static(f"Original row {index}", id=f"cached-row-{index}")
+            for index in range(40)]
+    body = CachedBody(*rows, id="cached-body")
+
+    class CachedScreen(TargetedScreen):
+        def compose(self):
+            with VerticalScroll(id="history"):
+                yield body
+
+    app = App()
+    async with app.run_test(size=(40, 10)) as pilot:
+        screen = CachedScreen()
+        screen.targets = (body, rows[35])
+        await app.push_screen(screen)
+        await pilot.pause()
+        history = screen.query_one("#history", VerticalScroll)
+        compositor = screen._compositor
+        resource = compositor._subtree_geometry[body]
+        assert all(row in resource.geometry for row in rows)
+
+        for position in (0, 20, 0):
+            history.scroll_to(y=position, immediate=True, animate=False)
+            screen._refresh_layout(app.size, scroll=True)
+            viewport = compositor._visible_map
+            assert body in viewport and rows[35] in viewport
+            omitted = rows[20] if position == 0 else rows[0]
+            assert omitted not in viewport
+            assert all(row in resource.geometry for row in rows)
+            # Capture remains complete without replacing the published viewport.
+            _, placement = next(compositor.published_geometry((body,)))
+            size, strips = compositor.render_subtree_strips(body, placement)
+            assert size.height == 40
+            assert all(f"Original row {index}" in strip.text
+                       for index, strip in enumerate(strips))
+            assert compositor._visible_map is viewport
+
+        # Ordinary position queries still acquire their complete original scene.
+        assert compositor.find_widget(rows[20]).region.height == 1
+        assert all(row in compositor._full_map for row in rows)
+        rows[5].display = False
+        await pilot.pause()
+        screen._refresh_layout(app.size, scroll=True)
+        assert rows[5] not in compositor._subtree_geometry[body].geometry
+        assert rows[35] in compositor._visible_map
+
+
 async def test_offscreen_targets_match_full_geometry_without_full_tree_traversal():
     app = App()
     async with app.run_test(size=(80, 25)) as pilot:
