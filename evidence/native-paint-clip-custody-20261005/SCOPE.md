@@ -14,8 +14,8 @@ complete widget membership remains necessary and is not removed.
 
 Claims: `_paint_regions`, `_cuts_for_regions`, `_get_renders`, `_render_chops` and
 related compositor paint-query consumers. No new type, field, map, flag, cache,
-timer or alternate scene. Heis owns Toad body/frame consumers. Source only;
-no App, package, provider, recording or gain qualification/purpose.
+timer or alternate scene. Heis owns Toad body/frame consumers. Native source App qualified below; no installed package, provider, recording
+or gain qualification.
 
 Complete roots and consumer evidence precede changes. Source semantics first,
 coherent caller migration, then proportionate validation under an actual later
@@ -24,7 +24,8 @@ grant. Pattern IMPL-12: repeated geometry acquisition by related consumers.
 ## Published coherent source
 
 Production7934c06e0cbb03aa4e10fb53bc1a09f088f49e73: one production file,
-16 added /23 deleted lines relative to actual main06771827. Source only, untested.
+16 added /23 deleted lines relative to actual main06771827. Native source
+App controls qualified below; installed Toad/frame/performance not qualified.
 
 The first pair member stays the ORIGINAL widget region, including its origin and
 logical dimensions. The second is the positive original region/clip intersection
@@ -63,8 +64,34 @@ paired with this library, their extra region intersection can be reviewed as an
 identity operation. No such caller migration is made against old native65 or the
 current installed prefix, and no compatibility/version branch is introduced.
 
-No source App/control run, wheel, package access, keeper, provider, capture or
-frame/CPU measurement was performed. Final affected controls remain to exercise
+At the original2e8e source checkpoint, no source App/control run, wheel,
+package access, keeper, provider, capture or frame/CPU measurement was performed. Final affected controls remain to exercise
 partial horizontal/vertical damage, offscreen-origin body capture, overlays,
 selection/link metadata and native interaction/retirement under the next actual
 grant. Frozen65/e253/controls and Heis453 tuple remain immutable.
+
+
+## Scoped source qualification
+
+Source/control7e0ad94ca9f19506f9a1ed2b8bb2f2e3bd939569; production remains
+7934c06e0cbb03aa4e10fb53bc1a09f088f49e73. ONE affected native source App batch:
+22PASS/2.54s pytest,3.745s controller, exit0. System /usr/bin/python with existing
+dependencies and PYTHONPATH=src; no new environment/build/installed prefix access.
+Exact command, log and SHA are source-batch01.json/source-batch01.log.
+
+The existing point-hit scene checks original extent/origin vs bounded positive
+paint, negative origins, fully clipped logical membership, hide/move/remove and
+original raw clip. Existing capture controls check nonzero and negative original
+bounds, cuts and full row content, original maps/offsets, hidden descendant refusal
+and renderer-error resource release. Existing damage/exposure controls check
+sparse vertical rows, dirty-x cut alignment, overlap exclusion and terminal parity.
+The horizontal exposure case additionally checks authored link/click metadata;
+existing wide-cell and native selection controls preserve selected pixels and
+metadata. Pending actual Unmount controls ensure paint projection retirement
+cannot retain old geometry/cover or revive pointer/selection resources.
+
+These controls confirm native source behavior for this family. They do not prove
+installed Toad pairing, Linux terminal frame timing, cold/warm motion, CPU gain,
+144Hz or full performance. Frozen65/e253 and original negatives remain unchanged.
+Future changed installed integration belongs to Heis; no current holder purpose
+or native66 wheel is implied. No further accepted-source repeat requested.
