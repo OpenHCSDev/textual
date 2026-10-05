@@ -1,6 +1,8 @@
 from unittest.mock import patch
 
 import pytest
+from rich.style import Style
+from rich.text import Text
 
 from textual.app import App
 from textual.geometry import Region
@@ -11,7 +13,10 @@ from textual.widgets import Static
 async def test_horizontal_occlusion_skips_covered_cells_with_native_render_parity(offset, width):
     class Counted(Static):
         def __init__(self):
-            super().__init__("[bold]界 café 界[/bold] " * 50)
+            super().__init__(Text("界 café 界 " * 50, style=Style(
+                bold=True, link="https://example.com/original-row",
+                meta={"@click": "original_row"},
+            )))
             self.crops = []
 
         def render_lines(self, crop):
@@ -46,3 +51,10 @@ async def test_horizontal_occlusion_skips_covered_cells_with_native_render_parit
         with patch.object(compositor, "_get_renders", lambda crop=None, render_regions=None, *, widgets: original(crop, widgets=widgets)):
             reference = compositor.render_strips()
         assert optimized == reference
+        # Strip parity includes authored links and click metadata, rather than
+        # only terminal text after cutting around the foreground overlay.
+        authored = [segment.style for strip in optimized for segment in strip
+                    if segment.style and segment.style.link]
+        assert authored
+        assert all(style.link == "https://example.com/original-row"
+                   and style.meta["@click"] == "original_row" for style in authored)

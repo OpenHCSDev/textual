@@ -125,6 +125,26 @@ async def test_body_capture_keeps_original_nonzero_row_coordinates():
         assert size == Size(12, 3)
         assert [strip.text.rstrip() for strip in strips] == ["ABC界DEF", "SECOND_ROW", "THIRD_ROW"]
 
+        # Capturing a partly offscreen body still owns its full original rows.
+        # Native screen painting clips it; capture has distinct nonzero bounds.
+        from textual.geometry import Region
+        body.styles.offset = (-2, -1)
+        await pilot.pause()
+        [(original, placement)] = list(compositor.published_geometry([body]))
+        assert placement.region == Region(-2, -1, 12, 3)
+        assert compositor.visible_widgets[body] == (
+            placement.region, Region(0, 0, 10, 2),
+        )
+        geometry, _ = compositor._arrange_root(
+            original, compositor.size, visible_only=False, root_geometry=placement,
+        )
+        paint = compositor._paint_regions(compositor._ordered_geometry(geometry), placement.region)
+        assert paint[body] == (placement.region, placement.region)
+        assert compositor._cuts_for_regions(placement.region, paint) == [[-2, 10]] * 3
+        size, strips = compositor.render_subtree_strips(original, placement)
+        assert size == Size(12, 3)
+        assert [strip.text.rstrip() for strip in strips] == ["ABC界DEF", "SECOND_ROW", "THIRD_ROW"]
+
 
 async def test_scene_change_retains_both_rectangles_and_native_resize_membership():
     """Movement, resizing, hide and show consume original native scene records."""
