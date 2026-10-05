@@ -38,3 +38,33 @@ and motion qualification; no repeat of native70/68/69 controls, provider,
 recording, environment, installed package or native SDK build. Source-only
 until those boundaries are qualified. CI is deferred; results are recorded
 without adding a delivery wait.
+
+## Qualified native source and App checkpoint
+
+Original source63fe769a181bbd149c51f42ecfaa635aed0b7cd2: 21 checks passed,
+0 failed in 4.00s, terminal exit0. The single affected batch ran
+`tests/test_native_scene_size_publication.py`,
+`tests/test_compositor_frame_damage.py` and
+`tests/test_viewport_geometry_targets.py`. Original command/log and SHA are
+bound in source-app01.json; no native70/68/69 controls were repeated.
+
+The actual native Apps cover Screen Resize delivery after a virtual-only child
+mount and a container-only authored ScrollView gutter change, preserving its
+original virtual extent and scrollbar dimensions. They also cover first scroll
+after full layout, full layout after viewport scroll, and an empty detached
+viewport publication. Both Screen reflow paths now deliver the Widget's
+committed outer/virtual/container dimensions rather than the raw layout inputs.
+
+Three production files: 32 added / 43 deleted. Removed the independent resized
+set, record field and consumer decision, repeated predecessor choices and the
+ScrollView size-commit copy. Existing Widget owns size commit and resize need;
+Compositor's derived published-map acquisition owns the previous paint scene.
+Logical show/hide membership and conservative viewport sizing remain distinct.
+No change to Widget/Toad size-hook ABI, authored extent policy or generic
+layout invalidation.
+
+This is scoped native source/App readiness. No installed terminal motion,
+measured speed, CPU gain, smoothness or full performance acceptance. Heisenberg
+owns the next meaningful installed union with native70/Toad463; CI is deferred
+for this checkpoint. No wheel/build/package/App/film repeat is required for the
+source-equal evidence head.

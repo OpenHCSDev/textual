@@ -1,0 +1,19 @@
+{
+  "source_head": "63fe769a181bbd149c51f42ecfaa635aed0b7cd2",
+  "command": "PYTHONPATH=src /usr/bin/python -m pytest -q tests/test_native_scene_size_publication.py tests/test_compositor_frame_damage.py tests/test_viewport_geometry_targets.py",
+  "exit_code": 0,
+  "passed": 21,
+  "failed": 0,
+  "pytest_seconds": 4.0,
+  "log_sha256": "94b4b89904bcaabfb1a1c2128d7b125bce560166e8ed534071c6555fb2312905",
+  "native_app_controls": [
+    "Screen virtual-only Resize after actual child mount",
+    "Screen container-only Resize after authored ScrollView gutter change",
+    "Authored ScrollView extent and original scrollbar dimensions",
+    "First viewport scroll preserves unchanged chrome damage",
+    "Full reflow uses just-published viewport predecessor",
+    "Detached empty viewport publication stays canonical"
+  ],
+  "qualification": "source and original native App only; no installed package, terminal motion, speed, CPU gain or smoothness acceptance",
+  "production_diff": "32 added / 43 deleted, three native production files; Widget size-hook ABI unchanged"
+}
