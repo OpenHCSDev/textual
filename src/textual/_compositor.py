@@ -40,7 +40,8 @@ from rich.style import Style
 from textual import errors
 from textual._context import visible_screen_stack
 from textual._loop import loop_last
-from textual.geometry import NULL_SPACING, Offset, Region, Size, Spacing
+from textual._spatial_map import SpatialMap
+from textual.geometry import NULL_OFFSET, NULL_SPACING, Offset, Region, Size, Spacing
 from textual.map_geometry import MapGeometry
 from textual.strip import Strip, StripRenderable
 from textual.widget import Widget
@@ -198,7 +199,8 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
     """One immutable native arrangement resource in the compositor's cache."""
 
     key: SubtreeGeometryKey
-    geometry: Mapping[Widget, GeometryEntry]
+    geometry: Mapping[Widget, tuple[int, GeometryEntry]]
+    """Original source ordinals and placements, indexed by their native widget."""
     widgets: frozenset[Widget]
     invisible_widgets: frozenset[Widget]
 
@@ -208,7 +210,20 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
 
     @classmethod
     def capture(cls, key, geometry, widgets, invisible_widgets, clips, clip, screen_coordinates):
-        return cls(key, MappingProxyType(geometry), widgets, invisible_widgets)
+        return cls(key, MappingProxyType({
+            node: (ordinal, entry)
+            for ordinal, (node, entry) in enumerate(geometry.items())
+        }), widgets, invisible_widgets)
+
+    @cached_property
+    def _spatial_map(self) -> SpatialMap[tuple[int, Widget]]:
+        """Derive spatial admission from this immutable arrangement, once."""
+        spatial_map: SpatialMap[tuple[int, Widget]] = SpatialMap()
+        spatial_map.insert(
+            (entry.region, NULL_OFFSET, False, False, (ordinal, node))
+            for node, (ordinal, entry) in self.geometry.items()
+        )
+        return spatial_map
 
     @abstractmethod
     def matches(self, key: SubtreeGeometryKey) -> bool:
@@ -234,7 +249,16 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
         entry. Both newly captured and reused resources publish through here.
         """
         source_bounds = bounds - (key.region.offset - self.key.region.offset)
-        for node, entry in self.geometry.items():
+        if visible_only:
+            candidates = dict(self._spatial_map.get_values_in_region(source_bounds))
+            for node in (root, *retained):
+                if (indexed := self.geometry.get(node)) is not None:
+                    candidates[indexed[0]] = node
+            entries = ((node, self.geometry[node][1])
+                       for _, node in sorted(candidates.items()))
+        else:
+            entries = ((node, entry) for node, (_, entry) in self.geometry.items())
+        for node, entry in entries:
             required = not visible_only or node is root or node in retained
             # Clip intersection can only reduce these original rectangle bounds.
             # Reject an offscreen, unrequired entry before resolving its clip
@@ -252,7 +276,9 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
         ...
 
     def references_retired(self, owner: Widget, retired: set[Widget]) -> bool:
-        return not retired.isdisjoint((owner, *self.geometry, *self.widgets, *self.invisible_widgets))
+        return (owner in retired or not self.geometry.keys().isdisjoint(retired)
+                or not self.widgets.isdisjoint(retired)
+                or not self.invisible_widgets.isdisjoint(retired))
 
 
 @dataclass(frozen=True)
@@ -288,7 +314,8 @@ class IntrinsicSubtreeGeometry(SubtreeGeometry[SubtreeMapGeometry]):
                 return PlacedSubtreeGeometry.capture(
                     key, geometry, widgets, invisible_widgets, clips, clip, screen_coordinates)
             intrinsic[node] = SubtreeMapGeometry(entry, bounds)
-        return cls(key, MappingProxyType(intrinsic), widgets, invisible_widgets)
+        return super().capture(key, intrinsic, widgets, invisible_widgets,
+                               clips, clip, screen_coordinates)
 
     def matches(self, key: SubtreeGeometryKey) -> bool:
         return self.key.intrinsic() == key.intrinsic()
