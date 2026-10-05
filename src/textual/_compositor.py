@@ -212,15 +212,31 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
     def restore_into(
         self, geometry: CompositorMap, widgets: set[Widget], invisible_widgets: set[Widget],
         key: SubtreeGeometryKey, clip: SceneClip, clips: dict[Widget, SceneClip],
-        root: Widget,
+        root: Widget, *, visible_only: bool, retained: set[Widget], bounds: Region,
     ) -> None:
-        self.project_into(geometry, key, clip, clips, root)
+        self.project_into(geometry, key, clip, clips, root,
+                          visible_only=visible_only, retained=retained, bounds=bounds)
         widgets.update(self.widgets)
         invisible_widgets.update(self.invisible_widgets)
 
-    @abstractmethod
     def project_into(self, geometry: CompositorMap, key: SubtreeGeometryKey,
-                     clip: SceneClip, clips: dict[Widget, SceneClip], root: Widget) -> None:
+                     clip: SceneClip, clips: dict[Widget, SceneClip], root: Widget,
+                     *, visible_only: bool, retained: set[Widget], bounds: Region) -> None:
+        """Publish the requested scene without retiring complete source geometry.
+
+        A viewport needs exposed descendants and its explicit geometry targets.
+        Complete capture and ordinary full-map acquisition still consume every
+        entry. Both newly captured and reused resources publish through here.
+        """
+        for node, entry, node_clip in self._projected_geometry(key, clip, root):
+            if (not visible_only or node is root or node in retained
+                    or entry.visible_region.overlaps(bounds)):
+                geometry[node] = entry
+                clips[node] = node_clip
+
+    @abstractmethod
+    def _projected_geometry(self, key: SubtreeGeometryKey, clip: SceneClip,
+                            root: Widget) -> Iterator[tuple[Widget, MapGeometry, SceneClip]]:
         ...
 
     def references_retired(self, owner: Widget, retired: set[Widget]) -> bool:
@@ -234,10 +250,10 @@ class PlacedSubtreeGeometry(SubtreeGeometry[MapGeometry]):
     def matches(self, key: SubtreeGeometryKey) -> bool:
         return self.key == key
 
-    def project_into(self, geometry: CompositorMap, key: SubtreeGeometryKey,
-                     clip: SceneClip, clips: dict[Widget, SceneClip], root: Widget) -> None:
-        geometry.update(self.geometry)
-        clips.update((node, RootSceneClip(entry.clip)) for node, entry in self.geometry.items())
+    def _projected_geometry(self, key: SubtreeGeometryKey, clip: SceneClip,
+                            root: Widget) -> Iterator[tuple[Widget, MapGeometry, SceneClip]]:
+        for node, entry in self.geometry.items():
+            yield node, entry, RootSceneClip(entry.clip)
 
 
 @dataclass(frozen=True)
@@ -266,10 +282,11 @@ class IntrinsicSubtreeGeometry(SubtreeGeometry[SubtreeMapGeometry]):
     def matches(self, key: SubtreeGeometryKey) -> bool:
         return self.key.intrinsic() == key.intrinsic()
 
-    def project_into(self, geometry: CompositorMap, key: SubtreeGeometryKey,
-                     clip: SceneClip, clips: dict[Widget, SceneClip], root: Widget) -> None:
+    def _projected_geometry(self, key: SubtreeGeometryKey, clip: SceneClip,
+                            root: Widget) -> Iterator[tuple[Widget, MapGeometry, SceneClip]]:
         for node, entry in self.geometry.items():
-            geometry[node], clips[node] = entry.project(self.key, key, clip, root=node is root)
+            placement, node_clip = entry.project(self.key, key, clip, root=node is root)
+            yield node, placement, node_clip
 
 
 class CompositorUpdate:
@@ -1053,6 +1070,7 @@ class Compositor:
                                complete, inherited_layers)  # noqa: F821 -- closure cleared after traversal
                 return
             resource_type = widget.subtree_geometry_resource()
+            enclosing_complete = complete
             complete = resource_type.complete_arrangement(complete)
             # Retention requires an uncropped path only for partial resources.
             # Complete native arrangements already own every descendant box.
@@ -1064,34 +1082,29 @@ class Compositor:
                    virtual_region, region, order, layer_order, clip.region, visible, dock_gutter,
                    size, visible_only and not complete,
                    tuple(inherited_layers.items()) if inherited_layers is not None else ())
-            cached = self._subtree_geometry.get(widget)
-            if cached is not None and cached.matches(key):
-                cached.restore_into(map, widgets, invisible_widgets, key, clip, clips, widget._render_widget)
-                return
-            # A body needs its complete native arrangement to reveal new rows.
-            # A scroll-owning viewport changes its own arrangement inputs and
-            # must continue culling; it cannot demand the entire prepared buffer
-            # merely to retain an exact-coordinate scene.
-            # Construct only this native subtree, then publish it into its
-            # enclosing scene. Copying and subtracting the already-built whole
-            # scene for each body makes admission depend on unrelated bodies.
-            parent_map, parent_widgets, parent_invisible = map, widgets, invisible_widgets
-            map, widgets, invisible_widgets = {}, set(), set()
-            try:
-                arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
-                               complete, inherited_layers)  # noqa: F821 -- closure cleared after traversal
-                geometry = map
-                added_widgets, added_invisible = frozenset(widgets), frozenset(invisible_widgets)
-            finally:
-                map, widgets, invisible_widgets = parent_map, parent_widgets, parent_invisible
-            map.update(geometry)
-            widgets.update(added_widgets)
-            invisible_widgets.update(added_invisible)
-            if (widget not in self._subtree_geometry
-                    and len(self._subtree_geometry) >= self.max_subtree_geometry_entries):
-                self._subtree_geometry.pop(next(iter(self._subtree_geometry)))
-            self._subtree_geometry[widget] = resource_type.capture(
-                key, geometry, added_widgets, added_invisible, clips, clip, screen_coordinates)
+            resource = self._subtree_geometry.get(widget)
+            if resource is None or not resource.matches(key):
+                # Capture complete source geometry before its viewport publication.
+                # Enclosing complete captures borrow all child entries; ordinary
+                # viewport publication retains only exposed and required boxes.
+                parent_map, parent_widgets, parent_invisible = map, widgets, invisible_widgets
+                map, widgets, invisible_widgets = {}, set(), set()
+                try:
+                    arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
+                                   complete, inherited_layers)  # noqa: F821 -- closure cleared after traversal
+                    geometry = map
+                    added_widgets, added_invisible = frozenset(widgets), frozenset(invisible_widgets)
+                finally:
+                    map, widgets, invisible_widgets = parent_map, parent_widgets, parent_invisible
+                if (widget not in self._subtree_geometry
+                        and len(self._subtree_geometry) >= self.max_subtree_geometry_entries):
+                    self._subtree_geometry.pop(next(iter(self._subtree_geometry)))
+                resource = resource_type.capture(
+                    key, geometry, added_widgets, added_invisible, clips, clip, screen_coordinates)
+                self._subtree_geometry[widget] = resource
+            resource.restore_into(map, widgets, invisible_widgets, key, clip, clips, widget._render_widget,
+                                  visible_only=visible_only and not enclosing_complete,
+                                  retained=retained_paths, bounds=root_geometry.region)
 
         # Add top level (root) widget
         self._arranging = True
