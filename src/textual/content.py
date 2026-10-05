@@ -11,8 +11,9 @@ from __future__ import annotations
 
 import re
 from functools import cached_property, total_ordering
+from itertools import islice
 from operator import itemgetter
-from typing import Callable, Iterable, NamedTuple, Sequence, Union
+from typing import Callable, Iterable, Iterator, NamedTuple, Sequence, Union
 
 import rich.repr
 from rich._wrap import divide_line
@@ -612,9 +613,12 @@ class Content(Visual):
         else:
             available = width - line_pad
             if available <= 0:
-                height = len(self.without_spans._wrap_and_format(
-                    available, overflow=overflow, no_wrap=no_wrap,
-                ))
+                height = sum(
+                    1
+                    for _ in self.without_spans._wrap_and_format(
+                        available, overflow=overflow, no_wrap=no_wrap,
+                    )
+                )
             else:
                 # Measurement needs only native wrapping boundaries. Building
                 # Content slices, span caches and _FormattedLine objects here
@@ -643,7 +647,7 @@ class Content(Visual):
         selection_style: Style | None = None,
         post_style: Style | None = None,
         get_style: Callable[[str | Style], Style] = Style.parse,
-    ) -> list[_FormattedLine]:
+    ) -> Iterator[_FormattedLine]:
         """Wraps the text and applies formatting.
 
         Args:
@@ -656,10 +660,8 @@ class Content(Visual):
             selection_style: Selection style, or `None` if no selection.
 
         Returns:
-            List of formatted lines.
+            Formatted lines in original source and wrapping order.
         """
-        output_lines: list[_FormattedLine] = []
-
         if selection is not None:
             get_span = selection.get_span
         else:
@@ -682,48 +684,35 @@ class Content(Visual):
             if no_wrap:
                 if overflow == "fold":
                     cuts = list(range(0, line.cell_length, width))[1:]
-                    new_lines = [
-                        _FormattedLine(get_style, line, width, y=y, align=align)
-                        for line in line.divide(cuts)
-                    ]
+                    for content in line.divide(cuts):
+                        yield _FormattedLine(get_style, content, width, y=y, align=align)
                 else:
                     line = line.truncate(width, ellipsis=overflow == "ellipsis")
-                    content_line = _FormattedLine(
+                    yield _FormattedLine(
                         get_style, line, width, y=y, align=align
                     )
-                    new_lines = [content_line]
             else:
-                content_line = _FormattedLine(get_style, line, width, y=y, align=align)
                 offsets = divide_line(
                     line.plain, width - line_pad * 2, fold=overflow == "fold"
                 )
-                divided_lines = content_line.content.divide(offsets)
                 ellipsis = overflow == "ellipsis"
-                divided_lines = [
-                    (
-                        line.truncate(width, ellipsis=ellipsis)
+                for (last, content), offset in zip(
+                    loop_last(line.divide(offsets)), [0, *offsets]
+                ):
+                    content = (
+                        content.truncate(width, ellipsis=ellipsis)
                         if last
-                        else line.rstrip().truncate(width, ellipsis=ellipsis)
+                        else content.rstrip().truncate(width, ellipsis=ellipsis)
                     )
-                    for last, line in loop_last(divided_lines)
-                ]
-
-                new_lines = [
-                    _FormattedLine(
+                    yield _FormattedLine(
                         get_style,
                         content.rstrip_end(width).pad(line_pad, line_pad),
                         width,
                         offset,
                         y,
                         align=align,
+                        line_end=last,
                     )
-                    for content, offset in zip(divided_lines, [0, *offsets])
-                ]
-                new_lines[-1].line_end = True
-
-            output_lines.extend(new_lines)
-
-        return output_lines
 
     def render_strips(
         self, width: int, height: int | None, style: Style, options: RenderOptions
@@ -744,7 +733,7 @@ class Content(Visual):
             return []
 
         get_rule = options.rules.get
-        lines = self._wrap_and_format(
+        lines: Iterable[_FormattedLine] = self._wrap_and_format(
             width,
             align=get_rule("text_align", "left"),
             overflow=get_rule("text_overflow", "fold"),
@@ -758,7 +747,7 @@ class Content(Visual):
         )
 
         if height is not None:
-            lines = lines[:height]
+            lines = list(lines)[:height] if height < 0 else islice(lines, height)
 
         strip_lines = [Strip(*line.to_strip(style)) for line in lines]
         return strip_lines

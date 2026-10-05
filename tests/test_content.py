@@ -5,9 +5,43 @@ from rich.text import Text
 
 from textual.color import Color
 from textual.content import Content, Span
+from textual.geometry import Offset
+from textual.selection import Selection
 from textual.style import Style
 from textual.visual import RenderOptions
 from textual.widget import Widget
+
+
+@pytest.mark.parametrize("height", [0, 1, 3, -1, None])
+@pytest.mark.parametrize("width", [9, 20])
+@pytest.mark.parametrize(
+    "rules",
+    [
+        {},
+        {"text_wrap": "nowrap", "text_overflow": "clip", "text_align": "right"},
+        {"text_align": "justify", "line_pad": 1},
+    ],
+)
+def test_render_height_preserves_source_segments(width, height, rules):
+    """A bounded render keeps the full render's cell, link and selection metadata."""
+    content = Content.from_markup(
+        "[link='https://example.com']wide 界 text[/link]\tmore words\n"
+        "second line wraps too\nthird source paragraph\nfinal line"
+    )
+    options = RenderOptions(
+        Style.parse,
+        rules,
+        selection=Selection.from_offsets(Offset(2, 0), Offset(6, 2)),
+        selection_style=Style.parse("reverse"),
+        post_style=Style.parse("italic"),
+    )
+    base_style = Style.parse("white on black")
+    complete = content.render_strips(width, None, base_style, options)
+    bounded = content.render_strips(width, height, base_style, options)
+    expected = complete if height is None else complete[:height]
+    assert [(strip.cell_length, list(strip)) for strip in bounded] == [
+        (strip.cell_length, list(strip)) for strip in expected
+    ]
 
 
 def test_blank():
