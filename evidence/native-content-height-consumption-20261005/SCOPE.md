@@ -46,9 +46,15 @@ complete height measurement (including no available width), and public
 bounded/full/negative rendering preserve strip cells, link/wide-cell/selection
 metadata and post styles. Original log SHA256:
 9c92eb8034b308320e4b038c3781be785dd0f3a557acc06d39b237548b1125a4.
-Heisenberg has closed PathContent in source by delegating to Content.render_strips
-with original leaf policy/options; its published successor and final source
-closure evidence remain to bind. No installed App/frame/motion qualification
+Heisenberg published PathContent delegation at
+1fbe1f09b80dec9a809609edaeafc6ddb5a661a2 (Toad463); final AST finds zero
+Toad private formatter readers. The complete native producer read then found a
+caller contract defect: Visual.to_strips supplies widget.styles, not a dict,
+and Styles/RenderStyles has no mapping-union operation. PathContent currently
+unions that resource with its four fixed rules. Heisenberg owns correction to
+the original four-rule leaf policy directly while preserving all other
+RenderOptions fields. This is source evidence, not an executed UI failure; the
+original snapshot remains recorded and the joined caller is not qualified. No installed App/frame/motion qualification
 exists for Text70. Unregistered external private readers and runtime rebinding
 are not proved by the AST.
 

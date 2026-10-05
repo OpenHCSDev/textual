@@ -16,21 +16,21 @@
     },
     {
       "repository": "/home/ts/wt/toad-viewport-raster-cpu-continuation-20261001",
-      "head": "22177726ea4a5eb6bf7ccec660f58d10ec8cf287",
+      "head": "1fbe1f09b80dec9a809609edaeafc6ddb5a661a2",
       "root": "src/toad",
       "parsed": 288,
       "omitted": []
     },
     {
       "repository": "/home/ts/wt/toad-viewport-raster-cpu-continuation-20261001",
-      "head": "22177726ea4a5eb6bf7ccec660f58d10ec8cf287",
+      "head": "1fbe1f09b80dec9a809609edaeafc6ddb5a661a2",
       "root": "tests",
       "parsed": 397,
       "omitted": []
     },
     {
       "repository": "/home/ts/wt/toad-viewport-raster-cpu-continuation-20261001",
-      "head": "22177726ea4a5eb6bf7ccec660f58d10ec8cf287",
+      "head": "1fbe1f09b80dec9a809609edaeafc6ddb5a661a2",
       "root": "tools",
       "parsed": 41,
       "omitted": []
@@ -236,15 +236,23 @@
       "node": "Attribute",
       "name": "_wrap_and_format",
       "source": "content.without_spans._wrap_and_format"
-    },
+    }
+  ],
+  "limits": "Syntactic source evidence only; runtime rebinding and unregistered external private readers unresolved. Native source/tests AST is reused from identical 325a source; Toad source successor is pinned independently. No installed frame, motion or CPU attribution.",
+  "toad_private_formatter_readers": [],
+  "toad_public_content_delegations": [
     {
       "root": "src/toad",
       "path": "src/toad/widgets/path_search.py",
-      "line": 69,
-      "node": "Attribute",
-      "name": "_wrap_and_format",
-      "source": "line._wrap_and_format"
+      "line": 70,
+      "source": "Content.render_strips(\n            line,\n            width,\n            height,\n            style,\n            replace(\n                options,\n                rules=options.rules\n                | {\n                    \"text_wrap\": \"nowrap\",\n                    \"text_overflow\": \"clip\",\n                    \"text_align\": \"left\",\n                    \"line_pad\": 0,\n                },\n            ),\n        )"
     }
   ],
-  "limits": "Syntactic source evidence only; runtime rebinding and unregistered external private readers unresolved. Toad PathContent migration remains required if its private reader is present."
+  "path_contract_counterexample": {
+    "source": "1fbe1f09b80dec9a809609edaeafc6ddb5a661a2",
+    "producer": "src/textual/visual.py Visual.to_strips constructs RenderOptions with widget.styles; src/textual/widgets/_option_list.py uses that path",
+    "failure": "Styles/RenderStyles supports get but not mapping union; PathContent options.rules | dict is not supported by the real producer",
+    "correction_owner": "Heisenberg, Toad463",
+    "required_correction": "Preserve the four original fixed render rules directly; leave the other RenderOptions fields unchanged. No native change or reproduction required."
+  }
 }
