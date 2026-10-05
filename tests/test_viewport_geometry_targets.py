@@ -25,12 +25,62 @@ class TargetedScreen(Screen):
                     yield Static("second line " * 5)
 
 
+async def test_cached_overlay_and_fixed_children_match_the_original_scene():
+    from textual._compositor import Compositor, PlacedSubtreeGeometry
+
+    class CachedBody(VerticalGroup):
+        CACHE_SUBTREE_GEOMETRY = True
+
+    body = CachedBody(
+        Static("Fixed heading", id="fixed-heading"),
+        Static("Screen overlay", id="screen-overlay"),
+        *(Static(f"Source row {index}") for index in range(80)),
+        id="cached-body",
+    )
+
+    class OverlayScreen(TargetedScreen):
+        CSS = """
+        #fixed-heading { dock: top; height: 1; }
+        #screen-overlay { overlay: screen; width: 15; height: 1; offset: 5 3; }
+        """
+
+        def compose(self):
+            with VerticalScroll(id="history"):
+                yield body
+
+    app = App()
+    async with app.run_test(size=(40, 10)) as pilot:
+        screen = OverlayScreen()
+        screen.targets = (body,)
+        await app.push_screen(screen)
+        await pilot.pause()
+        history = screen.query_one("#history", VerticalScroll)
+        compositor = screen._compositor
+        for position in (0, 30, 0):
+            history.scroll_to(y=position, immediate=True, animate=False)
+            screen._refresh_layout(app.size, scroll=True)
+            # The overlay's clip reaches the outer screen, so this resource
+            # keeps placed geometry rather than manufacturing an intrinsic clip.
+            assert isinstance(compositor._subtree_geometry[body], PlacedSubtreeGeometry)
+            expected, _ = Compositor(max_subtree_geometry_entries=0)._arrange_root(
+                screen, app.size, visible_only=False,
+            )
+            admitted = [(node, entry) for node, entry in expected.items()
+                        if node is body or entry.visible_region.overlaps(app.size.region)]
+            assert all(compositor._visible_map[node] == entry for node, entry in admitted)
+            actual_layers = compositor._ordered_geometry(compositor._visible_map)
+            expected_layers = compositor._ordered_geometry(expected)
+            assert [(node, entry) for node, entry in actual_layers if node in dict(admitted)] == [
+                (node, entry) for node, entry in expected_layers if node in dict(admitted)
+            ]
+
+
 async def test_complete_cached_body_keeps_capture_and_explicit_reader_geometry():
     class CachedBody(VerticalGroup):
         CACHE_SUBTREE_GEOMETRY = True
 
     rows = [Static(f"Original row {index}", id=f"cached-row-{index}")
-            for index in range(40)]
+            for index in range(240)]
     body = CachedBody(*rows, id="cached-body")
 
     class CachedScreen(TargetedScreen):
@@ -41,7 +91,7 @@ async def test_complete_cached_body_keeps_capture_and_explicit_reader_geometry()
     app = App()
     async with app.run_test(size=(40, 10)) as pilot:
         screen = CachedScreen()
-        screen.targets = (body, rows[35])
+        screen.targets = (body, rows[235])
         await app.push_screen(screen)
         await pilot.pause()
         history = screen.query_one("#history", VerticalScroll)
@@ -49,18 +99,26 @@ async def test_complete_cached_body_keeps_capture_and_explicit_reader_geometry()
         resource = compositor._subtree_geometry[body]
         assert all(row in resource.geometry for row in rows)
 
-        for position in (0, 20, 0):
+        for position in (0, 200, 0):
             history.scroll_to(y=position, immediate=True, animate=False)
             screen._refresh_layout(app.size, scroll=True)
             viewport = compositor._visible_map
-            assert body in viewport and rows[35] in viewport
-            omitted = rows[20] if position == 0 else rows[0]
+            assert body in viewport and rows[235] in viewport
+            omitted = rows[200] if position == 0 else rows[0]
             assert omitted not in viewport
             assert all(row in resource.geometry for row in rows)
-            # Capture remains complete without replacing the published viewport.
+            assert all(row in compositor.widgets for row in rows)
             _, placement = next(compositor.published_geometry((body,)))
+            source_bounds = app.size.region - (placement.region.offset - resource.key.region.offset)
+            candidates = resource._spatial_map.get_values_in_region(source_bounds)
+            # The immutable source stays complete; spatial admission and the
+            # explicit offscreen reader path remain different original facts.
+            assert omitted not in {node for _, node in candidates}
+            assert rows[235] not in {node for _, node in candidates}
+            assert len(candidates) < len(resource.geometry)
+            # Capture remains complete without replacing the published viewport.
             size, strips = compositor.render_subtree_strips(body, placement)
-            assert size.height == 40
+            assert size.height == 240
             assert all(f"Original row {index}" in strip.text
                        for index, strip in enumerate(strips))
             assert compositor._visible_map is viewport
@@ -72,7 +130,7 @@ async def test_complete_cached_body_keeps_capture_and_explicit_reader_geometry()
         await pilot.pause()
         screen._refresh_layout(app.size, scroll=True)
         assert rows[5] not in compositor._subtree_geometry[body].geometry
-        assert rows[35] in compositor._visible_map
+        assert rows[235] in compositor._visible_map
 
 
 async def test_offscreen_targets_match_full_geometry_without_full_tree_traversal():

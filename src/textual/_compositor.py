@@ -216,7 +216,7 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
         }), widgets, invisible_widgets)
 
     @cached_property
-    def spatial_map(self) -> SpatialMap[tuple[int, Widget]]:
+    def _spatial_map(self) -> SpatialMap[tuple[int, Widget]]:
         """Derive spatial admission from this immutable arrangement, once."""
         spatial_map: SpatialMap[tuple[int, Widget]] = SpatialMap()
         spatial_map.insert(
@@ -250,7 +250,7 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
         """
         source_bounds = bounds - (key.region.offset - self.key.region.offset)
         if visible_only:
-            candidates = dict(self.spatial_map.get_values_in_region(source_bounds))
+            candidates = dict(self._spatial_map.get_values_in_region(source_bounds))
             for node in (root, *retained):
                 if (indexed := self.geometry.get(node)) is not None:
                     candidates[indexed[0]] = node
