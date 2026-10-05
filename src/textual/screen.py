@@ -1388,7 +1388,7 @@ class Screen(Generic[ScreenResultType], Widget):
                             ):
                                 widget.post_message(
                                     ResizeEvent(
-                                        region.size, virtual_size, container_size
+                                        widget.outer_size, widget.virtual_size, widget.container_size
                                     )
                                 )
 
@@ -1420,7 +1420,7 @@ class Screen(Generic[ScreenResultType], Widget):
                     size_changed = widget._size_updated(region.size, virtual_size, container_size)
                     if widget in shown or size_changed:
                         widget.post_message(
-                            ResizeEvent(region.size, virtual_size, container_size)
+                            ResizeEvent(widget.outer_size, widget.virtual_size, widget.container_size)
                         )
 
                 for widget in shown:
