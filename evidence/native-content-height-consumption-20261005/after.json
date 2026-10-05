@@ -16,7 +16,7 @@
     },
     {
       "repository": "/home/ts/wt/toad-viewport-raster-cpu-continuation-20261001",
-      "head": "1fbe1f09b80dec9a809609edaeafc6ddb5a661a2",
+      "head": "a4d7cb17435470edd1276360d9c9a26593c4a031",
       "root": "src/toad",
       "parsed": 288,
       "omitted": []
@@ -245,7 +245,7 @@
       "root": "src/toad",
       "path": "src/toad/widgets/path_search.py",
       "line": 70,
-      "source": "Content.render_strips(\n            line,\n            width,\n            height,\n            style,\n            replace(\n                options,\n                rules=options.rules\n                | {\n                    \"text_wrap\": \"nowrap\",\n                    \"text_overflow\": \"clip\",\n                    \"text_align\": \"left\",\n                    \"line_pad\": 0,\n                },\n            ),\n        )"
+      "source": "Content.render_strips(\n            line,\n            width,\n            height,\n            style,\n            replace(\n                options,\n                rules={\n                    \"text_wrap\": \"nowrap\",\n                    \"text_overflow\": \"clip\",\n                    \"text_align\": \"left\",\n                    \"line_pad\": 0,\n                },\n            ),\n        )"
     }
   ],
   "path_contract_counterexample": {
@@ -253,6 +253,24 @@
     "producer": "src/textual/visual.py Visual.to_strips constructs RenderOptions with widget.styles; src/textual/widgets/_option_list.py uses that path",
     "failure": "Styles/RenderStyles supports get but not mapping union; PathContent options.rules | dict is not supported by the real producer",
     "correction_owner": "Heisenberg, Toad463",
-    "required_correction": "Preserve the four original fixed render rules directly; leave the other RenderOptions fields unchanged. No native change or reproduction required."
-  }
+    "required_correction": "Preserve the four original fixed render rules directly; leave the other RenderOptions fields unchanged. No native change or reproduction required.",
+    "corrected_source_head": "a4d7cb17435470edd1276360d9c9a26593c4a031",
+    "correction": "Original four fixed Path render rules are supplied directly in replace(options); native Styles is no longer used as a mapping-union operand."
+  },
+  "source_preserving_transitions": [
+    {
+      "root": "tests",
+      "parsed_at": "1fbe1f09b80dec9a809609edaeafc6ddb5a661a2",
+      "source_head": "a4d7cb17435470edd1276360d9c9a26593c4a031",
+      "tree": "72d50efa1f3c1fe3379fbff2981313fefddb9a1a",
+      "source_equal": true
+    },
+    {
+      "root": "tools",
+      "parsed_at": "1fbe1f09b80dec9a809609edaeafc6ddb5a661a2",
+      "source_head": "a4d7cb17435470edd1276360d9c9a26593c4a031",
+      "tree": "5f291b2f613803e0b1596581215557f35c65c8d6",
+      "source_equal": true
+    }
+  ]
 }

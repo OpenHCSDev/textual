@@ -51,10 +51,14 @@ Heisenberg published PathContent delegation at
 Toad private formatter readers. The complete native producer read then found a
 caller contract defect: Visual.to_strips supplies widget.styles, not a dict,
 and Styles/RenderStyles has no mapping-union operation. PathContent currently
-unions that resource with its four fixed rules. Heisenberg owns correction to
-the original four-rule leaf policy directly while preserving all other
-RenderOptions fields. This is source evidence, not an executed UI failure; the
-original snapshot remains recorded and the joined caller is not qualified. No installed App/frame/motion qualification
+unions that resource with its four fixed rules. Heisenberg corrected that original four-rule leaf policy directly at
+a4d7cb17435470edd1276360d9c9a26593c4a031 while preserving all other RenderOptions fields.
+Final source AST retains zero Toad private formatter readers, one public
+Content delegation, and no parse omissions. Unchanged test/tool AST is carried
+by exact original Git tree identity; no repeated parse or checks are claimed.
+The original 1fbe counterexample remains recorded as source evidence, not an
+executed UI failure. Complete declared source family and native source controls
+are closed; the changed installed caller/frame journey remains unqualified. No installed App/frame/motion qualification
 exists for Text70. Unregistered external private readers and runtime rebinding
 are not proved by the AST.
 
