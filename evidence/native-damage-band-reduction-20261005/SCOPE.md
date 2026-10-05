@@ -23,3 +23,40 @@ Source reasoning and coherent implementation first; final proportionate
 interval and affected native App controls last. Native68 original14+2 controls
 and negative are immutable, not rerun. No build/installed prefix/SDK/provider/
 media purpose; no measured gain or physical cadence claim.
+
+## Published algorithm and caller closure
+
+Production83ea6b17eab3ac0a917451070a954b7299a1a91a, one file23+/23-.
+The original reducer now consumes each input rectangle once into its vertical
+start/end edge deltas. Counter preserves original overlapping interval
+multiplicity; intervals are reduced only when that active set changes at a
+vertical edge. Each required output row still receives the original ordered
+spans. Empty gaps are skipped and no source rectangle is expanded into a
+per-row temporary range list. Counter.elements preserves original interval
+multiplicity before merging; no retained state survives the generator.
+
+`owner-consumers.json`: actual source48f79749ef7521ff727cbc7be0feba1794e99c6a,
+production249/tests460, parse omissions0, one reducer declaration and four
+native consumers. Original Text68 pinned Toad dependency census is retained;
+all source signatures and related consumers remain unchanged here. Existing
+full, partial, inline/export and original-body capture paths use this reducer.
+One source fact remains one owner; no separate fast path or uncached reducer.
+
+## Final pure source controls
+
+ONE batch8PASS/0.18s, controller1.3053654759423807s, exit0. Source48f79749e,
+production83ea6b17e. Exact logSHA
+`c513a336404899b0e4e59540faac60f730d81e38e236b1b942334605c26575ed`.
+Existing empty/single/partial/full overlap, different-row and same-row gaps,
+and adjacent intervals passed. The added whole-contract case preserves
+different rectangle lifetimes with equal horizontal spans, negative origins,
+one-shot input, distant empty gaps, nonpositive height and original
+zero-width span output. No App, installed prefix, SDK/native process, build,
+provider, media or accepted Native68 controls were run.
+
+Draft / pure source-qualified only. No installed frame/materialization or
+physical scrolling result is inferred. Full observed source/paint workflow
+acceptance belongs to the next meaningful joined Heis cohort; issued46067 is
+unchanged. CPU time and cadence are unmeasured. Band reduction still sorts
+active intervals at each real source edge; it does not remove legitimate
+output rows or promise a universally faster result for every damage shape.
