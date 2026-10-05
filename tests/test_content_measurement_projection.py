@@ -24,3 +24,10 @@ def test_line_padding_does_not_alias_another_widths_measurement():
         rules = {"line_pad": padding}
         expected = sum(1 for _ in content.without_spans._wrap_and_format(width - padding * 2))
         assert content.get_height(rules, width) == expected
+
+
+@pytest.mark.parametrize("width", [0, 2])
+def test_no_available_width_measurement_consumes_all_source_lines(width):
+    content = Content("first\n\nlast")
+    rules = {"text_wrap": "nowrap", "text_overflow": "clip", "line_pad": 1}
+    assert content.get_height(rules, width) == 3
