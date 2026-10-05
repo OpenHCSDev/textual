@@ -15,6 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from bisect import bisect_left, bisect_right
+from collections import Counter
 from contextlib import contextmanager
 from functools import cached_property
 from types import MappingProxyType
@@ -636,30 +637,29 @@ class Compositor:
         Returns:
             Yields tuples of (Y, X1, X2).
         """
-        inline_ranges: dict[int, list[tuple[int, int]]] = {}
-        setdefault = inline_ranges.setdefault
+        edges: dict[int, Counter[tuple[int, int]]] = {}
         for region_x, region_y, width, height in regions:
-            span = (region_x, region_x + width)
-            for y in range(region_y, region_y + height):
-                setdefault(y, []).append(span)
+            if height > 0:
+                span = (region_x, region_x + width)
+                edges.setdefault(region_y, Counter())[span] += 1
+                edges.setdefault(region_y + height, Counter())[span] -= 1
 
-        slice_remaining = slice(1, None)
-        for y, ranges in sorted(inline_ranges.items()):
-            if len(ranges) == 1:
-                # Special case of 1 span
-                yield (y, *ranges[0])
-            else:
-                ranges.sort()
-                x1, x2 = ranges[0]
-                for next_x1, next_x2 in ranges[slice_remaining]:
-                    if next_x1 <= x2:
-                        if next_x2 > x2:
-                            x2 = next_x2
-                    else:
-                        yield (y, x1, x2)
-                        x1 = next_x1
-                        x2 = next_x2
-                yield (y, x1, x2)
+        active: Counter[tuple[int, int]] = Counter()
+        spans: list[tuple[int, int]] = []
+        previous_y = 0
+        for y, changes in sorted(edges.items()):
+            if spans:
+                for row in range(previous_y, y):
+                    for span in spans:
+                        yield (row, *span)
+            active.update(changes)
+            spans = []
+            for x1, x2 in sorted(active.elements()):
+                if spans and x1 <= spans[-1][1]:
+                    spans[-1] = (spans[-1][0], max(x2, spans[-1][1]))
+                else:
+                    spans.append((x1, x2))
+            previous_y = y
 
     def __rich_repr__(self) -> rich.repr.Result:
         yield "size", self.size

@@ -52,3 +52,27 @@ def test_regions_to_ranges_directly_adjacent_ranges_merged():
         (0, 0, 2),
         (1, 0, 2),
     ]
+
+
+def test_damage_bands_keep_overlap_multiplicity_origins_and_empty_gaps():
+    regions = [
+        Region(-2, -3, 4, 4),
+        Region(-2, -1, 4, 4),
+        Region(2, -2, 2, 4),
+        Region(9, 0, 2, 2),
+        Region(3, 5, 1, 0),
+        Region(6, 7, 1, -1),
+        Region(100, 1000, 0, 1),
+    ]
+    # Equal horizontal intervals are independently owned rectangles: one can
+    # end while the other still supplies damage. A one-shot input and distant
+    # band retain the original reducer's order and zero-width span contract.
+    assert list(Compositor._regions_to_spans(iter(regions))) == [
+        (-3, -2, 2),
+        (-2, -2, 4),
+        (-1, -2, 4),
+        (0, -2, 4), (0, 9, 11),
+        (1, -2, 4), (1, 9, 11),
+        (2, -2, 2),
+        (1000, 100, 100),
+    ]
