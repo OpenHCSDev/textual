@@ -51,16 +51,45 @@ private-method consumers.
 
 ## Remaining qualification
 
-Source-only / Draft. The new actual-native App controls are authored but UNRUN.
-They check that horizontal damage islands do not render the intervening pane,
+Native source App scope qualified / Draft; installed behavior unqualified.
+The actual-native App controls check that horizontal damage islands do not render the intervening pane,
 with output parity against the same scene's full strips, including mid-wide-cell
 edges, links and disjoint / overlapping damaged rows. Existing frame resize,
 partial vertical redraw, layered exposure and original subtree-coordinate
-controls cover the other changed callers. One final bounded affected family
-batch is sufficient; accepted Text67 controls are not part of it.
+controls cover the other changed callers. The authorized final bounded batch ran once; accepted Text67 controls were not
+part of it. Only two invalid-markup fixture cases were corrected and rerun.
 
 No installed prefix, wheel, UI movie, provider or public mutation was attempted.
 No causal CPU gain, measured cadence, smoothness or whole-workflow readiness is
 claimed. All scene members are still walked to select layered candidates, and
 full-frame cut construction cost is unmeasured; this removes unnecessary content
 painting, not those legitimate traversal/geometry operations.
+
+## Actual source App qualification
+
+- Batch01 source8c4cb3563ae7dc14e84e87edccdd627f583e05d5:
+  14 PASS / 2 FAIL in4.19s, controller5.798375586979091s, exit1.
+  Both failures occurred at App startup because the authored link markup used
+  an unquoted URL, contrary to native Content markup. Original full failure log
+  and source are retained; no damage assertion ran in those two cases.
+- Correction51f1971c2ea29b443ef15764036fa54b3de51c25 changes ONLY that
+  fixture literal to the existing quoted native link declaration. No product
+  bytes or assertions changed. Only those two cases ran: 2 PASS in0.40s,
+  controller1.6918718189699575s, exit0.
+- Thus16 affected cases are qualified across the original batch plus the two
+  corrected cases; this is not a claim of one clean16-case run. Exact production
+  remains68a9755b411819090283f180a362bf7659757b01.
+- Damage islands left the middle native pane unrendered; resulting emitted
+  strips match the same full scene, including link metadata, mid-wide-cell
+  damage, overlap and differing selected rows. Existing partial vertical,
+  layered exposure, resize/old-caption damage, native writer crop, and subtree
+  original-coordinate/capture custody controls also passed.
+
+`source-batch01/02.json` bind their original logs by SHA. Resource readback
+reported10.7GiB available RAM and17.0GiB swap; this was one short sequential
+source batch and its two corrected cases, without a new environment or native
+process/package/SDK/media purpose. No accepted Text67/66 controls were repeated.
+
+Remaining boundary: normal standalone artifact and joined installed saved
+workflow acceptance. No source App control measures CPU, first paint cadence,
+physical input/frame latency, smoothness,144Hz or a global performance gain.
