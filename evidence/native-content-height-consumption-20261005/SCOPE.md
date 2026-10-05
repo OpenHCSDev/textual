@@ -16,12 +16,17 @@ contracts, source selection/link/wide-cell metadata and original Content.split
 resource remain unchanged. Delete the unused complete formatted-result list.
 No new class, cache, map, timer, flag, alternate renderer or Toad implementation.
 
-Published native source: 71e8c7fd4486b772252dafe7556b91e23a08fab9.
-The complete formatting list is deleted (7 additions / 10 deletions in the
-production source at that checkpoint). Later unrequested paragraphs no longer
-construct formatting resources. Original Content.split still acquires all
-logical source lines, and a requested paragraph still formats its wrapped
-lines together; neither is claimed eliminated.
+The initial published iterator source was
+71e8c7fd4486b772252dafe7556b91e23a08fab9 (7 additions / 10 deletions).
+The same owner now also yields each wrapped line directly: no complete
+per-paragraph formatting list, intermediate truncated-content list, or
+throwaway _FormattedLine solely for its content field. Original loop_last
+supplies the last-line justification fact at construction instead of mutating
+the last member of a completed list. Current production delta is 23 additions /
+34 deletions in one file. Unrequested wrapped suffixes no longer construct
+formatted lines or apply their truncation/padding. Original Content.split and
+divide still acquire source slices and wrapping boundaries; neither is claimed
+eliminated or height bounded.
 
 The before AST covers 249 native production files / 460 native test files and
 288 Toad production files / 397 test files / 41 tools with zero parse omissions.

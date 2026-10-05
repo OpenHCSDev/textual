@@ -684,46 +684,35 @@ class Content(Visual):
             if no_wrap:
                 if overflow == "fold":
                     cuts = list(range(0, line.cell_length, width))[1:]
-                    new_lines = [
-                        _FormattedLine(get_style, line, width, y=y, align=align)
-                        for line in line.divide(cuts)
-                    ]
+                    for content in line.divide(cuts):
+                        yield _FormattedLine(get_style, content, width, y=y, align=align)
                 else:
                     line = line.truncate(width, ellipsis=overflow == "ellipsis")
-                    content_line = _FormattedLine(
+                    yield _FormattedLine(
                         get_style, line, width, y=y, align=align
                     )
-                    new_lines = [content_line]
             else:
-                content_line = _FormattedLine(get_style, line, width, y=y, align=align)
                 offsets = divide_line(
                     line.plain, width - line_pad * 2, fold=overflow == "fold"
                 )
-                divided_lines = content_line.content.divide(offsets)
                 ellipsis = overflow == "ellipsis"
-                divided_lines = [
-                    (
-                        line.truncate(width, ellipsis=ellipsis)
+                for (last, content), offset in zip(
+                    loop_last(line.divide(offsets)), [0, *offsets]
+                ):
+                    content = (
+                        content.truncate(width, ellipsis=ellipsis)
                         if last
-                        else line.rstrip().truncate(width, ellipsis=ellipsis)
+                        else content.rstrip().truncate(width, ellipsis=ellipsis)
                     )
-                    for last, line in loop_last(divided_lines)
-                ]
-
-                new_lines = [
-                    _FormattedLine(
+                    yield _FormattedLine(
                         get_style,
                         content.rstrip_end(width).pad(line_pad, line_pad),
                         width,
                         offset,
                         y,
                         align=align,
+                        line_end=last,
                     )
-                    for content, offset in zip(divided_lines, [0, *offsets])
-                ]
-                new_lines[-1].line_end = True
-
-            yield from new_lines
 
     def render_strips(
         self, width: int, height: int | None, style: Style, options: RenderOptions
