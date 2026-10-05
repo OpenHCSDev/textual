@@ -38,11 +38,18 @@ Toad change, preserving original path shortening, nowrap/clip/tab8/left/zero
 padding and RenderOptions through Content.render_strips. PreparedDiffLine
 inherits the original rendering implementation without an override.
 
-Native controls are authored, not executed: original height-measurement
-expected counts consume the iterator; public bounded/full/negative render
-comparisons retain strip cells, links, wide characters, selection and post
-styles. The family remains unqualified until the PathContent closure and final
-batched controls. Unregistered external private readers and runtime rebinding
+ONE final native source batch executed at
+81ca92b137e3070b31abb5146b7bae6f8043e228, production tree
+90f78e605a8dc1470d1de8c19220ab4b26474706: 348 PASS / 0 FAIL in 0.76s
+(pytest), controller 2.499691362027079s, terminal 0. Original Content wrapping,
+complete height measurement (including no available width), and public
+bounded/full/negative rendering preserve strip cells, link/wide-cell/selection
+metadata and post styles. Original log SHA256:
+9c92eb8034b308320e4b038c3781be785dd0f3a557acc06d39b237548b1125a4.
+Heisenberg has closed PathContent in source by delegating to Content.render_strips
+with original leaf policy/options; its published successor and final source
+closure evidence remain to bind. No installed App/frame/motion qualification
+exists for Text70. Unregistered external private readers and runtime rebinding
 are not proved by the AST.
 
 The original recorded59.605 RichVisual stack does NOT identify Content or its
