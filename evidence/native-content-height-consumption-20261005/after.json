@@ -1,0 +1,250 @@
+{
+  "roots": [
+    {
+      "repository": "/home/ts/wt/textual-native-subtree-strips-20261002",
+      "head": "325a912635f55f6ec15b8365530a66c04edaf1ad",
+      "root": "src/textual",
+      "parsed": 249,
+      "omitted": []
+    },
+    {
+      "repository": "/home/ts/wt/textual-native-subtree-strips-20261002",
+      "head": "325a912635f55f6ec15b8365530a66c04edaf1ad",
+      "root": "tests",
+      "parsed": 460,
+      "omitted": []
+    },
+    {
+      "repository": "/home/ts/wt/toad-viewport-raster-cpu-continuation-20261001",
+      "head": "22177726ea4a5eb6bf7ccec660f58d10ec8cf287",
+      "root": "src/toad",
+      "parsed": 288,
+      "omitted": []
+    },
+    {
+      "repository": "/home/ts/wt/toad-viewport-raster-cpu-continuation-20261001",
+      "head": "22177726ea4a5eb6bf7ccec660f58d10ec8cf287",
+      "root": "tests",
+      "parsed": 397,
+      "omitted": []
+    },
+    {
+      "repository": "/home/ts/wt/toad-viewport-raster-cpu-continuation-20261001",
+      "head": "22177726ea4a5eb6bf7ccec660f58d10ec8cf287",
+      "root": "tools",
+      "parsed": 41,
+      "omitted": []
+    }
+  ],
+  "formatter_sites": [
+    {
+      "root": "src/textual",
+      "path": "src/textual/content.py",
+      "line": 1724,
+      "node": "ClassDef",
+      "name": "_FormattedLine",
+      "source": "class _FormattedLine:"
+    },
+    {
+      "root": "src/textual",
+      "path": "src/textual/content.py",
+      "line": 638,
+      "node": "FunctionDef",
+      "name": "_wrap_and_format",
+      "source": "    def _wrap_and_format("
+    },
+    {
+      "root": "src/textual",
+      "path": "src/textual/content.py",
+      "line": 650,
+      "node": "Name",
+      "name": "_FormattedLine",
+      "source": "_FormattedLine"
+    },
+    {
+      "root": "src/textual",
+      "path": "src/textual/content.py",
+      "line": 1532,
+      "node": "Name",
+      "name": "new_lines",
+      "source": "new_lines"
+    },
+    {
+      "root": "src/textual",
+      "path": "src/textual/content.py",
+      "line": 1552,
+      "node": "Name",
+      "name": "new_lines",
+      "source": "new_lines"
+    },
+    {
+      "root": "src/textual",
+      "path": "src/textual/content.py",
+      "line": 736,
+      "node": "Name",
+      "name": "_FormattedLine",
+      "source": "_FormattedLine"
+    },
+    {
+      "root": "src/textual",
+      "path": "src/textual/content.py",
+      "line": 736,
+      "node": "Attribute",
+      "name": "_wrap_and_format",
+      "source": "self._wrap_and_format"
+    },
+    {
+      "root": "src/textual",
+      "path": "src/textual/content.py",
+      "line": 1011,
+      "node": "Attribute",
+      "name": "_wrap_and_format",
+      "source": "self._wrap_and_format"
+    },
+    {
+      "root": "src/textual",
+      "path": "src/textual/content.py",
+      "line": 1535,
+      "node": "Name",
+      "name": "new_lines",
+      "source": "new_lines"
+    },
+    {
+      "root": "src/textual",
+      "path": "src/textual/content.py",
+      "line": 1537,
+      "node": "Name",
+      "name": "new_lines",
+      "source": "new_lines"
+    },
+    {
+      "root": "src/textual",
+      "path": "src/textual/content.py",
+      "line": 691,
+      "node": "Name",
+      "name": "_FormattedLine",
+      "source": "_FormattedLine"
+    },
+    {
+      "root": "src/textual",
+      "path": "src/textual/content.py",
+      "line": 707,
+      "node": "Name",
+      "name": "_FormattedLine",
+      "source": "_FormattedLine"
+    },
+    {
+      "root": "src/textual",
+      "path": "src/textual/content.py",
+      "line": 618,
+      "node": "Attribute",
+      "name": "_wrap_and_format",
+      "source": "self.without_spans._wrap_and_format"
+    },
+    {
+      "root": "src/textual",
+      "path": "src/textual/content.py",
+      "line": 688,
+      "node": "Name",
+      "name": "_FormattedLine",
+      "source": "_FormattedLine"
+    },
+    {
+      "root": "src/textual",
+      "path": "src/textual/document/_wrapped_document.py",
+      "line": 197,
+      "node": "Name",
+      "name": "new_lines",
+      "source": "new_lines"
+    },
+    {
+      "root": "src/textual",
+      "path": "src/textual/document/_wrapped_document.py",
+      "line": 212,
+      "node": "Name",
+      "name": "new_lines",
+      "source": "new_lines"
+    },
+    {
+      "root": "src/textual",
+      "path": "src/textual/document/_wrapped_document.py",
+      "line": 267,
+      "node": "Name",
+      "name": "new_lines",
+      "source": "new_lines"
+    },
+    {
+      "root": "src/textual",
+      "path": "src/textual/widgets/_log.py",
+      "line": 231,
+      "node": "Name",
+      "name": "new_lines",
+      "source": "new_lines"
+    },
+    {
+      "root": "src/textual",
+      "path": "src/textual/widgets/_log.py",
+      "line": 235,
+      "node": "Name",
+      "name": "new_lines",
+      "source": "new_lines"
+    },
+    {
+      "root": "src/textual",
+      "path": "src/textual/widgets/_log.py",
+      "line": 239,
+      "node": "Name",
+      "name": "new_lines",
+      "source": "new_lines"
+    },
+    {
+      "root": "src/textual",
+      "path": "src/textual/widgets/_log.py",
+      "line": 240,
+      "node": "Name",
+      "name": "new_lines",
+      "source": "new_lines"
+    },
+    {
+      "root": "src/textual",
+      "path": "src/textual/widgets/_log.py",
+      "line": 233,
+      "node": "Name",
+      "name": "new_lines",
+      "source": "new_lines"
+    },
+    {
+      "root": "tests",
+      "path": "tests/test_content_measurement_projection.py",
+      "line": 17,
+      "node": "Constant",
+      "name": "_wrap_and_format",
+      "source": "\"_wrap_and_format\""
+    },
+    {
+      "root": "tests",
+      "path": "tests/test_content_measurement_projection.py",
+      "line": 16,
+      "node": "Attribute",
+      "name": "_wrap_and_format",
+      "source": "content.without_spans._wrap_and_format"
+    },
+    {
+      "root": "tests",
+      "path": "tests/test_content_measurement_projection.py",
+      "line": 25,
+      "node": "Attribute",
+      "name": "_wrap_and_format",
+      "source": "content.without_spans._wrap_and_format"
+    },
+    {
+      "root": "src/toad",
+      "path": "src/toad/widgets/path_search.py",
+      "line": 69,
+      "node": "Attribute",
+      "name": "_wrap_and_format",
+      "source": "line._wrap_and_format"
+    }
+  ],
+  "limits": "Syntactic source evidence only; runtime rebinding and unregistered external private readers unresolved. Toad PathContent migration remains required if its private reader is present."
+}
