@@ -118,7 +118,7 @@ async def test_horizontal_damage_keeps_intervening_native_content_unpainted(regi
 
     class Counted(Static):
         def __init__(self, **kwargs):
-            super().__init__("[link=https://example.com]A界BCDEFGH[/link]\nSECOND\nTHIRD", **kwargs)
+            super().__init__("[link='https://example.com']A界BCDEFGH[/link]\nSECOND\nTHIRD", **kwargs)
             self.crops = []
 
         def render_lines(self, crop):
