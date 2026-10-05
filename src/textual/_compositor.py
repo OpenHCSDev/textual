@@ -169,6 +169,11 @@ class SubtreeMapGeometry(NamedTuple):
     geometry: MapGeometry
     clip_bounds: tuple[Region, ...]
 
+    @property
+    def region(self) -> Region:
+        """The original placement bounds, before any destination projection."""
+        return self.geometry.region
+
     def project(self, original: SubtreeGeometryKey, current: SubtreeGeometryKey,
                 clip: SceneClip, *, root: bool) -> tuple[MapGeometry, SceneClip]:
         for bound in self.clip_bounds:
@@ -185,7 +190,7 @@ class SubtreeMapGeometry(NamedTuple):
         ), clip
 
 
-GeometryEntry = TypeVar("GeometryEntry")
+GeometryEntry = TypeVar("GeometryEntry", MapGeometry, SubtreeMapGeometry)
 
 
 @dataclass(frozen=True)
@@ -228,15 +233,22 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
         Complete capture and ordinary full-map acquisition still consume every
         entry. Both newly captured and reused resources publish through here.
         """
-        for node, entry, node_clip in self._projected_geometry(key, clip, root):
-            if (not visible_only or node is root or node in retained
-                    or entry.visible_region.overlaps(bounds)):
-                geometry[node] = entry
+        source_bounds = bounds - (key.region.offset - self.key.region.offset)
+        for node, entry in self.geometry.items():
+            required = not visible_only or node is root or node in retained
+            # Clip intersection can only reduce these original rectangle bounds.
+            # Reject an offscreen, unrequired entry before resolving its clip
+            # chain, descendant rank and destination MapGeometry allocation.
+            if not required and not entry.region.overlaps(source_bounds):
+                continue
+            placement, node_clip = self._project_entry(entry, key, clip, root=node is root)
+            if required or placement.visible_region.overlaps(bounds):
+                geometry[node] = placement
                 clips[node] = node_clip
 
     @abstractmethod
-    def _projected_geometry(self, key: SubtreeGeometryKey, clip: SceneClip,
-                            root: Widget) -> Iterator[tuple[Widget, MapGeometry, SceneClip]]:
+    def _project_entry(self, entry: GeometryEntry, key: SubtreeGeometryKey,
+                       clip: SceneClip, *, root: bool) -> tuple[MapGeometry, SceneClip]:
         ...
 
     def references_retired(self, owner: Widget, retired: set[Widget]) -> bool:
@@ -250,10 +262,9 @@ class PlacedSubtreeGeometry(SubtreeGeometry[MapGeometry]):
     def matches(self, key: SubtreeGeometryKey) -> bool:
         return self.key == key
 
-    def _projected_geometry(self, key: SubtreeGeometryKey, clip: SceneClip,
-                            root: Widget) -> Iterator[tuple[Widget, MapGeometry, SceneClip]]:
-        for node, entry in self.geometry.items():
-            yield node, entry, RootSceneClip(entry.clip)
+    def _project_entry(self, entry: MapGeometry, key: SubtreeGeometryKey,
+                       clip: SceneClip, *, root: bool) -> tuple[MapGeometry, SceneClip]:
+        return entry, RootSceneClip(entry.clip)
 
 
 @dataclass(frozen=True)
@@ -282,11 +293,9 @@ class IntrinsicSubtreeGeometry(SubtreeGeometry[SubtreeMapGeometry]):
     def matches(self, key: SubtreeGeometryKey) -> bool:
         return self.key.intrinsic() == key.intrinsic()
 
-    def _projected_geometry(self, key: SubtreeGeometryKey, clip: SceneClip,
-                            root: Widget) -> Iterator[tuple[Widget, MapGeometry, SceneClip]]:
-        for node, entry in self.geometry.items():
-            placement, node_clip = entry.project(self.key, key, clip, root=node is root)
-            yield node, placement, node_clip
+    def _project_entry(self, entry: SubtreeMapGeometry, key: SubtreeGeometryKey,
+                       clip: SceneClip, *, root: bool) -> tuple[MapGeometry, SceneClip]:
+        return entry.project(self.key, key, clip, root=root)
 
 
 class CompositorUpdate:
