@@ -613,9 +613,12 @@ class Content(Visual):
         else:
             available = width - line_pad
             if available <= 0:
-                height = sum(1 for _ in self.without_spans._wrap_and_format(
-                    available, overflow=overflow, no_wrap=no_wrap,
-                ))
+                height = sum(
+                    1
+                    for _ in self.without_spans._wrap_and_format(
+                        available, overflow=overflow, no_wrap=no_wrap,
+                    )
+                )
             else:
                 # Measurement needs only native wrapping boundaries. Building
                 # Content slices, span caches and _FormattedLine objects here
