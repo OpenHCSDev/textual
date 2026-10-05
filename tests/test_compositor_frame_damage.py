@@ -107,6 +107,60 @@ async def test_sparse_damage_publishes_only_selected_native_rows():
         assert "".join(segment.text for segment in segments if not segment.control) == "CDE\nEF"
 
 
+@pytest.mark.parametrize('regions', [
+    ((2, 0, 3, 1), (22, 0, 3, 1)),
+    ((1, 0, 2, 1), (2, 0, 3, 1), (21, 2, 2, 1)),
+])
+async def test_horizontal_damage_keeps_intervening_native_content_unpainted(regions):
+    """Damage islands must not materialize the unchanged pane between them."""
+    from rich.control import Control
+    from textual.geometry import Region
+
+    class Counted(Static):
+        def __init__(self, **kwargs):
+            super().__init__("[link=https://example.com]A界BCDEFGH[/link]\nSECOND\nTHIRD", **kwargs)
+            self.crops = []
+
+        def render_lines(self, crop):
+            self.crops.append(crop)
+            return super().render_lines(crop)
+
+    class IslandsApp(App):
+        CSS = "Screen { layout: horizontal; } Counted { width: 10; height: 3; }"
+
+        def compose(self):
+            for name in ('left', 'middle', 'right'):
+                yield Counted(id=name)
+
+    app = IslandsApp()
+    async with app.run_test(size=(30, 5)) as pilot:
+        await pilot.pause()
+        compositor = app.screen._compositor
+        reference = compositor.render_strips()
+        panes = [app.query_one(f'#{name}', Counted) for name in ('left', 'middle', 'right')]
+        for pane in panes:
+            pane.crops.clear()
+        compositor._dirty_regions = {Region(*region) for region in regions}
+        update = compositor.render_partial_update()
+        assert update is not None
+        assert panes[0].crops and panes[2].crops
+        assert panes[1].crops == []
+        assert all(not region.translate(pane.region.offset).overlaps(panes[1].region)
+                   for pane in (panes[0], panes[2]) for region in pane.crops)
+
+        expected = []
+        for y, x1, x2 in update.spans:
+            painted = list(update._get_line_chops(y, x1, x2))
+            assert len(painted) == 1
+            x, strip = painted[0]
+            assert x == x1
+            assert strip == reference[y].crop(x1, x2)
+            expected.append(Control.move_to(x1, y).segment.text + strip.render(app.console))
+            if y != update.spans[-1][0]:
+                expected.append('\n')
+        assert update.render_segments(app.console) == ''.join(expected)
+
+
 async def test_body_capture_keeps_original_nonzero_row_coordinates():
     class BodyApp(App):
         CSS = "#body { width: 12; height: 3; offset: 5 4; }"
