@@ -97,20 +97,15 @@ class ScrollView(ScrollableContainer):
         Returns:
             True if a resize event should be sent, otherwise False.
         """
-        if size_changed := self._size != size:
-            self._set_dirty()
-        if (
-            size_changed
-            or virtual_size != self.virtual_size
-            or container_size != self.container_size
-        ):
-            self._scrollbar_changes.clear()
-            self._size = size
-            virtual_size = self.virtual_size
-            self._container_size = size - self.styles.gutter.totals
-            self._scroll_update(virtual_size)
+        # The line surface authors its virtual extent. Commit native bounds
+        # without feeding layout measurements or reactive validation into it.
+        return super()._size_updated(
+            size, self.virtual_size, size - self.styles.gutter.totals, layout=False
+        )
 
-        return size_changed or self._container_size != container_size
+    def _scroll_update(self, virtual_size: Size) -> None:
+        self._scrollbar_changes.clear()
+        super()._scroll_update(self.virtual_size)
 
     def render(self) -> RenderableType:
         """Render the scrollable region (if `render_lines` is not implemented).

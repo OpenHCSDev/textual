@@ -54,11 +54,10 @@ if TYPE_CHECKING:
 
 
 class ReflowResult(NamedTuple):
-    """The result of a reflow operation. Describes the chances to widgets."""
+    """Logical show and hide membership after reflow."""
 
     hidden: set[Widget]  # Widgets that are hidden
     shown: set[Widget]  # Widgets that are shown
-    resized: set[Widget]  # Widgets that have been resized
 
 
 # Maps a widget on to its geometry (information that describes its position in the composition)
@@ -665,6 +664,11 @@ class Compositor:
         yield "size", self.size
         yield "widgets", self.widgets
 
+    @property
+    def _published_map(self) -> CompositorMap:
+        """Last committed scene, including a legitimately empty viewport."""
+        return self._visible_map if self._visible_map is not None else self._full_map
+
     def reflow(
         self, parent: Widget, size: Size, *, visible_only: bool = False,
         retain_geometry: Iterable[Widget] = (),
@@ -680,9 +684,10 @@ class Compositor:
                 using viewport layout, without traversing unrelated descendants.
 
         Returns:
-            Hidden, shown, and resized widgets.
+            Hidden and shown widgets.
         """
-        previous_map = self._visible_map if visible_only and self._visible_map is not None else self._full_map
+        previous_scene = self._published_map
+        previous_map = previous_scene if visible_only else self._full_map
         self._invalidate_render_projection()
         self._visible_map = None
         self.root = parent
@@ -715,12 +720,8 @@ class Compositor:
         self._invalidate_render_projection()
         self.widgets = widgets
 
-        resized_widgets = self._damage_geometry(old_map, map, parent)
-        return ReflowResult(
-            hidden=hidden_widgets,
-            shown=shown_widgets,
-            resized=resized_widgets,
-        )
+        self._damage_geometry(previous_scene, map, parent)
+        return ReflowResult(hidden=hidden_widgets, shown=shown_widgets)
 
     def reflow_visible(
         self, parent: Widget, size: Size, *, retain_geometry: Iterable[Widget],
@@ -738,6 +739,7 @@ class Compositor:
             Set of widgets that were exposed by the scroll.
         """
         self._invalidate_render_projection()
+        previous_scene = self._published_map
         self._full_map_invalidated = True
         self.root = parent
         self.size = size
@@ -755,29 +757,26 @@ class Compositor:
 
         exposed_widgets = map.keys() - old_map.keys()
 
-        self._damage_geometry(old_map, map, parent)
+        self._damage_geometry(previous_scene, map, parent)
 
         return exposed_widgets
 
     def _damage_geometry(
         self, before: Mapping[Widget, MapGeometry], after: Mapping[Widget, MapGeometry],
         owner: Widget,
-    ) -> set[Widget]:
-        """Derive damage and resized membership from the original scene change.
+    ) -> None:
+        """Retain both paint rectangles from the original scene change.
 
         Compare each new placement with its previous one. Retain both clipped
         rectangles without hashing complete geometry records into temporary
-        sets; the same comparison supplies normal reflow's resize notification.
+        sets. Widget size publication owns resize notification separately.
         """
-        resized: set[Widget] = set()
         track_damage = self.size.region not in self._dirty_regions
         for widget, geometry in after.items():
             previous = before.get(widget)
             if previous == geometry:
                 continue
             if previous is not None:
-                if previous.region.size != geometry.region.size:
-                    resized.add(widget)
                 if track_damage and (region := previous.visible_region):
                     self._dirty_regions.add(region)
             if track_damage and (region := geometry.visible_region):
@@ -788,7 +787,6 @@ class Compositor:
                     self._dirty_regions.add(region)
         if self._dirty_regions:
             owner.check_idle()
-        return resized
 
     @property
     def full_map(self) -> CompositorMap:
@@ -801,7 +799,7 @@ class Compositor:
             # A geometry query also publishes this scene. Retain the damage
             # from its original visible coordinates before replacing the map;
             # a later reflow can no longer recover that previous geometry.
-            previous = self._visible_map if self._visible_map is not None else self._full_map
+            previous = self._published_map
             self._damage_geometry(previous, map, self.root)
             self._full_map = map
             self._full_map_invalidated = False
@@ -1182,9 +1180,8 @@ class Compositor:
     @property
     def layers(self) -> list[tuple[Widget, MapGeometry]]:
         """Get widgets and geometry in layer order."""
-        map = self._visible_map if self._visible_map is not None else self._full_map
         if self._layers is None:
-            self._layers = self._ordered_geometry(map)
+            self._layers = self._ordered_geometry(self._published_map)
         return self._layers
 
     def __contains__(self, widget: Widget) -> bool:
