@@ -1395,20 +1395,17 @@ class Screen(Generic[ScreenResultType], Widget):
             else:
                 viewport_layout = self._use_viewport_layout()
                 if viewport_layout:
-                    hidden, shown, resized = self._compositor.reflow(
+                    hidden, shown = self._compositor.reflow(
                         self, size, visible_only=True, retain_geometry=geometry_targets,
                     )
                 else:
-                    hidden, shown, resized = self._compositor.reflow(self, size)
+                    hidden, shown = self._compositor.reflow(self, size)
                 self._layout_widgets.clear()
                 Hide = events.Hide
                 Show = events.Show
 
                 for widget in hidden:
                     widget.post_message(Hide())
-
-                # We want to send a resize event to widgets that were just added or change since last layout
-                send_resize = shown | resized
 
                 layers = self._compositor.layers
                 for widget, (
@@ -1421,7 +1418,7 @@ class Screen(Generic[ScreenResultType], Widget):
                     _,
                 ) in layers:
                     size_changed = widget._size_updated(region.size, virtual_size, container_size)
-                    if widget in send_resize or (viewport_layout and size_changed):
+                    if widget in shown or size_changed:
                         widget.post_message(
                             ResizeEvent(region.size, virtual_size, container_size)
                         )

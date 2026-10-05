@@ -200,7 +200,7 @@ async def test_body_capture_keeps_original_nonzero_row_coordinates():
         assert [strip.text.rstrip() for strip in strips] == ["ABC界DEF", "SECOND_ROW", "THIRD_ROW"]
 
 
-async def test_scene_change_retains_both_rectangles_and_native_resize_membership():
+async def test_scene_change_retains_both_rectangles_and_widget_size_publication():
     """Movement, resizing, hide and show consume original native scene records."""
     from textual.geometry import Region
 
@@ -220,21 +220,27 @@ async def test_scene_change_retains_both_rectangles_and_native_resize_membership
         box.styles.width = 12
         box.styles.offset = (4, 3)
         result = compositor.reflow(app.screen, Size(40, 12))
-        assert box in result.resized
+        placement = compositor.find_widget(box)
+        assert box._size_updated(
+            placement.region.size, placement.virtual_size, placement.container_size
+        )
         assert {Region(2, 1, 8, 2), Region(4, 3, 12, 2)} <= compositor._dirty_regions
 
         compositor._dirty_regions.clear()
         box.display = False
         result = compositor.reflow(app.screen, Size(40, 12))
         assert box in result.hidden
-        assert box not in result.resized
+        assert box.outer_size == Size(12, 2)
         assert Region(4, 3, 12, 2) in compositor._dirty_regions
 
         compositor._dirty_regions.clear()
         box.display = True
         result = compositor.reflow(app.screen, Size(40, 12))
         assert box in result.shown
-        assert box not in result.resized
+        placement = compositor.find_widget(box)
+        assert not box._size_updated(
+            placement.region.size, placement.virtual_size, placement.container_size
+        )
         assert Region(4, 3, 12, 2) in compositor._dirty_regions
 
 
