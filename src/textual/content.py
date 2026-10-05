@@ -744,7 +744,7 @@ class Content(Visual):
             return []
 
         get_rule = options.rules.get
-        lines = self._wrap_and_format(
+        lines: Iterable[_FormattedLine] = self._wrap_and_format(
             width,
             align=get_rule("text_align", "left"),
             overflow=get_rule("text_overflow", "fold"),
