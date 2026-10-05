@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from functools import partial
 from inspect import isawaitable, signature
+from types import MethodType
 from typing import TYPE_CHECKING, Any, Callable
 
 from textual import active_app
@@ -15,24 +16,24 @@ INVOKE_TIMEOUT_WARNING = 3
 
 
 def count_parameters(func: Callable) -> int:
-    """Count the number of parameters in a callable"""
+    """Derive callable arity from its original function and argument binding."""
+    if isinstance(func, MethodType):
+        # Method attributes delegate to the original function. Its cached count
+        # includes self; binding derives an arity without overwriting that fact.
+        return count_parameters(func.__func__) - 1
     try:
         return func._param_count
     except AttributeError:
         pass
     if isinstance(func, partial):
-        param_count = _count_parameters(func.func) - (
+        param_count = count_parameters(func.func) - (
             len(func.args) + len(func.keywords)
         )
-    elif hasattr(func, "__self__"):
-        # Bound method
-        func = func.__func__  # type: ignore
-        param_count = _count_parameters(func) - 1
     else:
         param_count = _count_parameters(func)
     try:
         func._param_count = param_count
-    except TypeError:
+    except (AttributeError, TypeError):
         pass
     return param_count
 
