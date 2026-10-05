@@ -35,9 +35,9 @@ cannot prove dynamic dispatch or arbitrary external aliases. Read original owner
 class initialization, proof family and all flag consumers before implementation.
 Pattern IMPL-5: duplicate authorization of one declared measurement relation.
 
-Source only/Draft/untested. Tests/App/runtime/wheel/prefix/provider/SDK/recording
-are not authorized here; final coherent affected checks/installed pairing remain
-separate. Existing oracle controls will compare warmed results against original
+At the initial source checkpoint this was source-only/Draft/untested. Later
+named source App authorization and qualification are recorded below; installed
+pairing remains separate. Existing oracle controls will compare warmed results against original
 fresh calculation after cache clear, not retain a second opt-in switch.
 
 
@@ -67,6 +67,30 @@ class-declared through original subclass initialization: arbitrary later runtime
 monkeypatch rebinding is an unresolved external dynamic boundary, not a proven
 native reuse contract. No public input or installed runtime was changed.
 
-Source syntax/diff checked only. No controls executed, App, wheel, dependency
-operation, prefix import/write, SDK/provider or recording. Draft/source unqualified;
-changed native controls and actual paired application acceptance remain required.
+At implementation checkpoint455d8ec2 only source syntax/diff was checked. No
+controls/App/wheel/dependency/prefix/SDK/provider/recording had run. Subsequent
+changed source App qualification is below; installed pairing remains unqualified.
+
+
+## Changed native source App qualification
+
+Executed source/controlb158ca382f835db4351d920eef6c16f77490b2c6; production
+455d8ec2d0339e1f0ddba2634361c7aebf86386e. ONE originally authorized source App
+batch: **62PASS/4.51s pytest**,5.604s controller, exit0. Exact argv/interpreter/raw
+output/hash are source-batch01.json and source-batch01.log. Existing system
+/usr/bin/python and dependencies, PYTHONPATH=src; no new environment/installation.
+
+The two existing modules retain fresh original calculation versus warmed reuse,
+width/viewport/optimal/parent inputs, full source mutation/inherited style/display/
+structural admission and scroll retirement. Custom measurement/layout/hooks,
+scalar resolvers, relative/fractional/extrema, stream/grid/automatic sizing keep
+conservative context. These 62 source App cases pass without either retired flag
+or label-only wrapper class. No failed case or rerun; accepted66 compositor22
+and frozen65 controls not repeated.
+
+This confirms the changed native source family, not installed Toad/body/wheel,
+Linux motion, frame cadence, cold traversal cost, CPU gain or full performance.
+New proof acquisition has a real cold traversal; existing source-epoch reuse is
+not a measured speedup. Heis owns remaining15Toad declaration deletions and the
+future coherent affected paired application scope; current455 bytes/artifacts
+stay frozen. No current holder, wheel, SDK/provider, film or package purpose.
