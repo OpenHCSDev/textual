@@ -11,8 +11,9 @@ from __future__ import annotations
 
 import re
 from functools import cached_property, total_ordering
+from itertools import islice
 from operator import itemgetter
-from typing import Callable, Iterable, NamedTuple, Sequence, Union
+from typing import Callable, Iterable, Iterator, NamedTuple, Sequence, Union
 
 import rich.repr
 from rich._wrap import divide_line
@@ -612,7 +613,7 @@ class Content(Visual):
         else:
             available = width - line_pad
             if available <= 0:
-                height = len(self.without_spans._wrap_and_format(
+                height = sum(1 for _ in self.without_spans._wrap_and_format(
                     available, overflow=overflow, no_wrap=no_wrap,
                 ))
             else:
@@ -643,7 +644,7 @@ class Content(Visual):
         selection_style: Style | None = None,
         post_style: Style | None = None,
         get_style: Callable[[str | Style], Style] = Style.parse,
-    ) -> list[_FormattedLine]:
+    ) -> Iterator[_FormattedLine]:
         """Wraps the text and applies formatting.
 
         Args:
@@ -656,10 +657,8 @@ class Content(Visual):
             selection_style: Selection style, or `None` if no selection.
 
         Returns:
-            List of formatted lines.
+            Formatted lines in original source and wrapping order.
         """
-        output_lines: list[_FormattedLine] = []
-
         if selection is not None:
             get_span = selection.get_span
         else:
@@ -721,9 +720,7 @@ class Content(Visual):
                 ]
                 new_lines[-1].line_end = True
 
-            output_lines.extend(new_lines)
-
-        return output_lines
+            yield from new_lines
 
     def render_strips(
         self, width: int, height: int | None, style: Style, options: RenderOptions
@@ -758,7 +755,7 @@ class Content(Visual):
         )
 
         if height is not None:
-            lines = lines[:height]
+            lines = list(lines)[:height] if height < 0 else islice(lines, height)
 
         strip_lines = [Strip(*line.to_strip(style)) for line in lines]
         return strip_lines
