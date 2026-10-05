@@ -310,19 +310,6 @@ class Widget(DOMNode):
     CACHE_SUBTREE_GEOMETRY: ClassVar[bool] = False
     """Reuse an unchanged contained scene during unrelated sibling reflows."""
 
-    CACHE_HEIGHT_INDEPENDENT_BOX: ClassVar[bool] = False
-    """Opt in to sharing box measurements when declarations prove height independence.
-
-    Unknown measurement/layout overrides remain context-dependent. Dynamic method
-    replacement requires disabling this opt-in or declaring the replacement on a
-    class so its measurement contract is bound normally.
-    """
-    CACHE_HEIGHT_INDEPENDENT_ARRANGEMENT: ClassVar[bool] = False
-    """Reuse complete arrangements only when declarations prove height independence.
-
-    Unknown layout/hooks retain full-context keys. As with box reuse, dynamic
-    method replacement requires disabling reuse or rebinding the class contract.
-    """
     _content_height_dependency: ClassVar[HeightDependency] = NATIVE_WIDGET_HEIGHT
     _content_width_dependency: ClassVar[HeightDependency] = NATIVE_WIDGET_WIDTH
     _native_box_measurement: ClassVar[bool] = True
@@ -1428,10 +1415,12 @@ class Widget(DOMNode):
             Widget locations.
         """
         viewport = self.screen.size
-        cache_key: tuple[object, ...] = (size, viewport, self._nodes._updates, self._layout_updates, optimal)
-        if self.CACHE_HEIGHT_INDEPENDENT_ARRANGEMENT:
-            independent = not self._arrangement_depends_on_available_height()
-            cache_key = ((size.with_height(0) if independent else size), *cache_key[1:], independent)
+        independent = not self._arrangement_depends_on_available_height()
+        cache_key: tuple[object, ...] = (
+            size.with_height(0) if independent else size,
+            viewport, self._nodes._updates, self._layout_updates, optimal,
+            independent,
+        )
         cached_result = self._arrangement_cache.get(cache_key)
         if cached_result is not None:
             return cached_result
@@ -1942,7 +1931,7 @@ class Widget(DOMNode):
         revision = (self._layout_updates,
                     nodes._updates if nodes is not None else 0)
         cache_container, cache_height_fraction = container, height_fraction
-        if self.CACHE_HEIGHT_INDEPENDENT_BOX and not self._box_depends_on_available_height():
+        if not self._box_depends_on_available_height():
             # The class/method/layout declarations proved these two inputs unused.
             # Include the immediate parent's actual auto-size inputs before idle,
             # and retire prior epochs rather than accumulating stale aliases.

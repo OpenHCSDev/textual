@@ -14,21 +14,12 @@ from textual.layouts.vertical import VerticalLayout
 from textual.widgets import Static
 
 
-class CachedArrangement(VerticalGroup):
-    CACHE_HEIGHT_INDEPENDENT_ARRANGEMENT = True
-    CACHE_HEIGHT_INDEPENDENT_BOX = True
-
-
 async def test_scroll_preserves_measurements_and_source_changes_retire_before_idle():
-    class CachedScrollable(ScrollableContainer):
-        CACHE_HEIGHT_INDEPENDENT_ARRANGEMENT = True
-        CACHE_HEIGHT_INDEPENDENT_BOX = True
-
     app = App()
     async with app.run_test(size=(60, 20)) as pilot:
         child = Static("content")
         child.styles.height = 20
-        parent = CachedScrollable(child)
+        parent = ScrollableContainer(child)
         parent.styles.width, parent.styles.height = 40, 4
         await app.mount(parent)
         await pilot.pause()
@@ -76,7 +67,7 @@ async def test_scroll_preserves_measurements_and_source_changes_retire_before_id
 async def test_unrelated_style_and_topology_changes_preserve_subtree_reuse():
     app = App()
     async with app.run_test() as pilot:
-        parent = CachedArrangement(Static("one"))
+        parent = VerticalGroup(Static("one"))
         sibling = VerticalGroup(Static("unrelated"))
         await app.mount(parent, sibling)
         await pilot.pause()
@@ -93,7 +84,7 @@ async def test_raw_descendant_style_write_invalidates_without_refresh():
     app = App()
     async with app.run_test() as pilot:
         child = Static("one")
-        parent = CachedArrangement(child)
+        parent = VerticalGroup(child)
         await app.mount(parent)
         await pilot.pause()
         first = parent.arrange(Size(40, 0))
@@ -104,12 +95,9 @@ async def test_raw_descendant_style_write_invalidates_without_refresh():
 
 
 async def test_box_reuse_observes_immediate_parent_width_exception():
-    class CachedLeaf(Static):
-        CACHE_HEIGHT_INDEPENDENT_BOX = True
-
     app = App()
     async with app.run_test() as pilot:
-        leaf = CachedLeaf("intrinsic width")
+        leaf = Static("intrinsic width")
         leaf.styles.width = "auto"
         leaf.styles.max_width = "50%"
         leaf.styles.height = 1
@@ -133,7 +121,7 @@ async def test_grid_auto_track_extrema_keep_outer_height_dependency(field, value
     app = App()
     async with app.run_test() as pilot:
         child = Static("wrapped text " * 10)
-        parent = CachedArrangement(child)
+        parent = VerticalGroup(child)
         parent.styles.layout = "grid"
         parent.styles.grid_columns = "auto"
         setattr(child.styles, field, value)
@@ -148,8 +136,8 @@ async def test_local_style_projection_covers_all_raw_mutation_boundaries():
     app = App()
     async with app.run_test() as pilot:
         child = Static("one")
-        parent = CachedArrangement(child)
-        sibling = CachedArrangement(Static("unrelated"))
+        parent = VerticalGroup(child)
+        sibling = VerticalGroup(Static("unrelated"))
         await app.mount(parent, sibling)
         await pilot.pause()
         style = child.styles.base
@@ -170,7 +158,7 @@ async def test_local_style_projection_covers_all_raw_mutation_boundaries():
 async def test_reuse_skips_a_complete_intrinsic_arrangement(layout):
     app = App()
     async with app.run_test() as pilot:
-        parent = CachedArrangement(Static("one"), Static("wrapped " * 15))
+        parent = VerticalGroup(Static("one"), Static("wrapped " * 15))
         parent.styles.layout = layout
         await app.mount(parent)
         await pilot.pause()
@@ -187,7 +175,7 @@ async def test_reuse_matches_native_placements_and_invalidates_before_idle(layou
     app = App()
     async with app.run_test() as pilot:
         inner = VerticalGroup(Static("nested " * 10))
-        parent = CachedArrangement(inner, Static("second"))
+        parent = VerticalGroup(inner, Static("second"))
         parent.styles.layout = layout
         parent.styles.padding = (1, 2)
         inner.styles.margin = (1, 2, 3, 4)
@@ -197,10 +185,12 @@ async def test_reuse_matches_native_placements_and_invalidates_before_idle(layou
 
         def check():
             sizes = [Size(width, height) for width in (20, 40) for height in (0, 10, 100)]
-            parent.CACHE_HEIGHT_INDEPENDENT_ARRANGEMENT = False
-            parent._clear_arrangement_cache()
-            expected = [parent.arrange(size).placements[:] for size in sizes]
-            parent.CACHE_HEIGHT_INDEPENDENT_ARRANGEMENT = True
+            # Each original fresh calculation is the reference for reuse;
+            # no second class-level authorization controls the same proof.
+            expected = []
+            for size in sizes:
+                parent._clear_arrangement_cache()
+                expected.append(parent.arrange(size).placements[:])
             parent._clear_arrangement_cache()
             assert [parent.arrange(size).placements for size in sizes] == expected
 
@@ -229,7 +219,7 @@ async def test_context_sensitive_flow_keeps_native_height_inputs(field, value):
     app = App()
     async with app.run_test() as pilot:
         child = Static("text")
-        parent = CachedArrangement(child)
+        parent = VerticalGroup(child)
         await app.mount(parent)
         setattr(child.styles, field, value)
         await pilot.pause()
@@ -248,7 +238,7 @@ async def test_direct_content_measurement_cannot_use_a_fixed_box_proof(layout):
     async with app.run_test() as pilot:
         child = ContextContent("text")
         child.styles.height = 2  # Box is constant; direct content measurement is not.
-        parent = CachedArrangement(child)
+        parent = VerticalGroup(child)
         parent.styles.layout = layout
         await app.mount(parent)
         await pilot.pause()
@@ -264,7 +254,7 @@ async def test_direct_content_measurement_cannot_use_a_fixed_box_proof(layout):
 async def test_grid_context_rules_retain_native_arrangements(field, value):
     app = App()
     async with app.run_test() as pilot:
-        parent = CachedArrangement(Static("text"))
+        parent = VerticalGroup(Static("text"))
         parent.styles.layout = "grid"
         setattr(parent.styles, field, value)
         await app.mount(parent)
@@ -279,7 +269,7 @@ async def test_unknown_layout_hooks_and_scalars_remain_context_sensitive():
         def arrange(self, parent, children, size, greedy=True):
             return super().arrange(parent, children, size, greedy)
 
-    class UnknownHook(CachedArrangement):
+    class UnknownHook(VerticalGroup):
         def pre_layout(self, layout):
             super().pre_layout(layout)
 
@@ -289,10 +279,10 @@ async def test_unknown_layout_hooks_and_scalars_remain_context_sensitive():
 
     app = App()
     async with app.run_test() as pilot:
-        layout = CachedArrangement(Static("text"))
+        layout = VerticalGroup(Static("text"))
         layout.styles.set_rule("layout", UnknownLayout())
         hook = UnknownHook(Static("text"))
-        scalar = CachedArrangement(Static("text"))
+        scalar = VerticalGroup(Static("text"))
         scalar.styles.layout = "grid"
         scalar.styles.set_rule("grid_rows", (UnknownScalar(1, Unit.CELLS, Unit.HEIGHT),))
         await app.mount(layout, hook, scalar)
@@ -307,7 +297,7 @@ async def test_paint_rules_preserve_native_content_geometry_across_raw_writes():
     app = App()
     async with app.run_test() as pilot:
         child = Static("unchanged wrapped content " * 6)
-        parent = CachedArrangement(child)
+        parent = VerticalGroup(child)
         await app.mount(parent)
         await pilot.pause()
         style = child.styles.inline
@@ -336,7 +326,7 @@ async def test_custom_renderer_keeps_paint_rules_as_measurement_inputs():
     async with app.run_test() as pilot:
         child = StyleMeasuredContent()
         child.styles.color = "red"
-        parent = CachedArrangement(child)
+        parent = VerticalGroup(child)
         await app.mount(parent)
         await pilot.pause()
         size = Size(40, 100)
@@ -353,7 +343,7 @@ async def test_raw_display_rule_publishes_original_native_child_selection():
     async with app.run_test() as pilot:
         first, second = Static("first"), Static("second")
         first.styles.height, second.styles.height = 3, 4
-        parent = CachedArrangement(first, second)
+        parent = VerticalGroup(first, second)
         await app.mount(parent)
         await pilot.pause()
         size = Size(40, 100)
@@ -368,8 +358,6 @@ async def test_raw_display_rule_publishes_original_native_child_selection():
 
 async def test_inherited_paint_mutation_retires_opaque_descendant_measurements():
     class InheritedStyleContent(Static):
-        CACHE_HEIGHT_INDEPENDENT_BOX = True
-
         def render(self):
             color = self.rich_style.color.get_truecolor()
             return "one\ntwo\nthree" if color == (255, 0, 0) else "one"
@@ -377,7 +365,7 @@ async def test_inherited_paint_mutation_retires_opaque_descendant_measurements()
     app = App()
     async with app.run_test() as pilot:
         child = InheritedStyleContent()
-        parent = CachedArrangement(child)
+        parent = VerticalGroup(child)
         parent.styles.color = "red"
         await app.mount(parent)
         await pilot.pause()
@@ -391,7 +379,7 @@ async def test_inherited_paint_mutation_retires_opaque_descendant_measurements()
 
 
 async def test_height_independent_custom_layout_hook_remains_style_sensitive():
-    class StyledPlacement(CachedArrangement):
+    class StyledPlacement(VerticalGroup):
         @height_dependency(INDEPENDENT_HEIGHT)
         def process_layout(self, placements):
             offset = Offset(0, 2 if self.styles.color == Color.parse("red") else 0)

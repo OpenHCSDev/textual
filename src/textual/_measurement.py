@@ -1,4 +1,4 @@
-"""Declaration-owned available-height dependencies for optional layout reuse."""
+"""Declaration-owned available-height dependencies for native layout reuse."""
 
 from __future__ import annotations
 
