@@ -1,0 +1,1000 @@
+......FF........                                                         [100%]
+=================================== FAILURES ===================================
+_ test_horizontal_damage_keeps_intervening_native_content_unpainted[regions0] __
+
+regions = ((2, 0, 3, 1), (22, 0, 3, 1))
+
+    @pytest.mark.parametrize('regions', [
+        ((2, 0, 3, 1), (22, 0, 3, 1)),
+        ((1, 0, 2, 1), (2, 0, 3, 1), (21, 2, 2, 1)),
+    ])
+    async def test_horizontal_damage_keeps_intervening_native_content_unpainted(regions):
+        """Damage islands must not materialize the unchanged pane between them."""
+        from rich.control import Control
+        from textual.geometry import Region
+    
+        class Counted(Static):
+            def __init__(self, **kwargs):
+                super().__init__("[link=https://example.com]A界BCDEFGH[/link]\nSECOND\nTHIRD", **kwargs)
+                self.crops = []
+    
+            def render_lines(self, crop):
+                self.crops.append(crop)
+                return super().render_lines(crop)
+    
+        class IslandsApp(App):
+            CSS = "Screen { layout: horizontal; } Counted { width: 10; height: 3; }"
+    
+            def compose(self):
+                for name in ('left', 'middle', 'right'):
+                    yield Counted(id=name)
+    
+        app = IslandsApp()
+>       async with app.run_test(size=(30, 5)) as pilot:
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_compositor_frame_damage.py:136: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/lib/python3.14/contextlib.py:235: in __aexit__
+    await self.gen.athrow(value)
+src/textual/app.py:2228: in run_test
+    raise self._exception
+src/textual/message_pump.py:707: in _process_messages_loop
+    await self._dispatch_message(message)
+src/textual/message_pump.py:778: in _dispatch_message
+    await self.on_event(message)
+src/textual/message_pump.py:859: in on_event
+    await self._on_message(event)
+src/textual/message_pump.py:880: in _on_message
+    await invoke(method, message)
+src/textual/_callback.py:97: in invoke
+    return await _invoke(callback, *params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/textual/_callback.py:57: in _invoke
+    result = callback(*params[:parameter_count])
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/textual/screen.py:1563: in _on_screen_resume
+    self._refresh_layout(size)
+src/textual/screen.py:1437: in _refresh_layout
+    self._compositor_refresh()
+src/textual/screen.py:1243: in _compositor_refresh
+    update = self._compositor.render_update(
+src/textual/_compositor.py:1523: in render_update
+    return self.render_full_update(simplify=simplify)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/textual/_compositor.py:1559: in render_full_update
+    chops = self._render_chops(crop, self._regions_to_spans((screen_region,)),
+src/textual/_compositor.py:1713: in _render_chops
+    for render_region, strips in renders:
+                                 ^^^^^^^
+src/textual/_compositor.py:1493: in _get_renders
+    widget.render_lines(
+tests/test_compositor_frame_damage.py:126: in render_lines
+    return super().render_lines(crop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/textual/widget.py:4511: in render_lines
+    strips = self._styles_cache.render_widget(self, crop)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/textual/_styles_cache.py:117: in render_widget
+    strips = self.render(
+src/textual/_styles_cache.py:222: in render
+    strip = render_line(
+src/textual/_styles_cache.py:457: in render_line
+    line = render_content_line(y - gutter.top)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/textual/widget.py:4489: in render_line
+    self._render_content()
+src/textual/widget.py:4471: in _render_content
+    visual = self._render()
+             ^^^^^^^^^^^^^^
+src/textual/widget.py:4698: in _render
+    visual = visualize(self, self.render(), markup=self._render_markup)
+                             ^^^^^^^^^^^^^
+src/textual/widgets/_static.py:85: in render
+    return self.visual
+           ^^^^^^^^^^^
+src/textual/widgets/_static.py:64: in visual
+    self.__visual = visualize(self, self.__content, markup=self._render_markup)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/textual/visual.py:103: in visualize
+    return Content.from_markup(obj) if markup else Content(obj)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+src/textual/content.py:299: in from_markup
+    content = to_content(markup, template_variables=variables or None)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+markup = '[link=https://example.com]A界BCDEFGH[/link]\nSECOND\nTHIRD', style = ''
+template_variables = None
+
+    def to_content(
+        markup: str,
+        style: str | Style = "",
+        template_variables: Mapping[str, object] | None = None,
+    ) -> Content:
+        """Convert markup to Content.
+    
+        Args:
+            markup: String containing markup.
+            style: Optional base style.
+            template_variables: Mapping of string.Template variables
+    
+        Raises:
+            MarkupError: If the markup is invalid.
+    
+        Returns:
+            Content that renders the markup.
+        """
+        _rich_traceback_omit = True
+        try:
+            return _to_content(markup, style, template_variables)
+        except UnexpectedEnd:
+            raise MarkupError(
+                "Unexpected end of markup; are you missing a closing square bracket?"
+            ) from None
+        except Exception as error:
+            # Ensure all errors are wrapped in a MarkupError
+>           raise MarkupError(str(error)) from None
+E           textual.markup.MarkupError: Expected markup value (found '://example.com]A界BCDEFGH[/link]\n').
+
+src/textual/markup.py:320: MarkupError
+----------------------------- Captured stderr call -----------------------------
+╭───────────────────── Traceback (most recent call last) ──────────────────────╮
+│ /home/ts/wt/textual-native-subtree-strips-20261002/tests/test_compositor_fra │
+│ me_damage.py:126 in render_lines                                             │
+│                                                                              │
+│   123 │   │                                                                  │
+│   124 │   │   def render_lines(self, crop):                                  │
+│   125 │   │   │   self.crops.append(crop)                                    │
+│ ❱ 126 │   │   │   return super().render_lines(crop)                          │
+│   127 │                                                                      │
+│   128 │   class IslandsApp(App):                                             │
+│   129 │   │   CSS = "Screen { layout: horizontal; } Counted { width: 10; hei │
+│                                                                              │
+│ ╭────────────────── locals ───────────────────╮                              │
+│ │ crop = Region(x=0, y=0, width=10, height=3) │                              │
+│ │ self = Counted(id='right')                  │                              │
+│ ╰─────────────────────────────────────────────╯                              │
+│                                                                              │
+│ /home/ts/wt/textual-native-subtree-strips-20261002/src/textual/widget.py:451 │
+│ 1 in render_lines                                                            │
+│                                                                              │
+│   4508 │   │   │   │   Strip.blank(crop.width, self.visual_style.rich_style) │
+│   4509 │   │   │   ] * crop.height                                           │
+│   4510 │   │   else:                                                         │
+│ ❱ 4511 │   │   │   strips = self._styles_cache.render_widget(self, crop)     │
+│   4512 │   │   return strips                                                 │
+│   4513 │                                                                     │
+│   4514 │   def get_style_at(self, x: int, y: int) -> Style:                  │
+│                                                                              │
+│ ╭────────────────── locals ───────────────────╮                              │
+│ │ crop = Region(x=0, y=0, width=10, height=3) │                              │
+│ │ self = Counted(id='right')                  │                              │
+│ ╰─────────────────────────────────────────────╯                              │
+│                                                                              │
+│ /home/ts/wt/textual-native-subtree-strips-20261002/src/textual/_styles_cache │
+│ .py:117 in render_widget                                                     │
+│                                                                              │
+│   114 │   │   base_background, background = widget.background_colors         │
+│   115 │   │   styles = widget.styles                                         │
+│   116 │   │   app = widget.app                                               │
+│ ❱ 117 │   │   strips = self.render(                                          │
+│   118 │   │   │   styles,                                                    │
+│   119 │   │   │   widget.region.size,                                        │
+│   120 │   │   │   base_background,                                           │
+│                                                                              │
+│ ╭───────────────────────────────── locals ─────────────────────────────────╮ │
+│ │             app = IslandsApp(                                            │ │
+│ │                   │   title='IslandsApp',                                │ │
+│ │                   │   classes={'-dark-mode'},                            │ │
+│ │                   │   pseudo_classes={'focus', 'nocolor', 'dark'}        │ │
+│ │                   )                                                      │ │
+│ │      background = Color(18, 18, 18)                                      │ │
+│ │ base_background = Color(18, 18, 18)                                      │ │
+│ │ border_subtitle = None                                                   │ │
+│ │    border_title = None                                                   │ │
+│ │            crop = Region(x=0, y=0, width=10, height=3)                   │ │
+│ │            self = <StylesCache size=Size(width=10, height=3)>            │ │
+│ │          styles = RenderStyles(                                          │ │
+│ │                   │   Counted(id='right'),                               │ │
+│ │                   │   background=Color(0, 0, 0, a=0),                    │ │
+│ │                   │   width=Scalar(                                      │ │
+│ │                   │   │   value=10.0,                                    │ │
+│ │                   │   │   unit=<Unit.CELLS: 1>,                          │ │
+│ │                   │   │   percent_unit=<Unit.WIDTH: 4>                   │ │
+│ │                   │   ),                                                 │ │
+│ │                   │   height=Scalar(                                     │ │
+│ │                   │   │   value=3.0,                                     │ │
+│ │                   │   │   unit=<Unit.CELLS: 1>,                          │ │
+│ │                   │   │   percent_unit=<Unit.WIDTH: 4>                   │ │
+│ │                   │   ),                                                 │ │
+│ │                   │   scrollbar_color=Color(0, 48, 84),                  │ │
+│ │                   │   scrollbar_color_hover=Color(0, 60, 106),           │ │
+│ │                   │   scrollbar_color_active=Color(1, 120, 212),         │ │
+│ │                   │   scrollbar_corner_color=Color(0, 0, 0),             │ │
+│ │                   │   scrollbar_background=Color(0, 0, 0),               │ │
+│ │                   │   scrollbar_background_hover=Color(0, 0, 0),         │ │
+│ │                   │   scrollbar_background_active=Color(0, 0, 0),        │ │
+│ │                   │   scrollbar_size_vertical=2,                         │ │
+│ │                   │   scrollbar_size_horizontal=1,                       │ │
+│ │                   │   link_color=Color(255, 255, 255, a=0.87),           │ │
+│ │                   │   auto_link_color=True,                              │ │
+│ │                   │   link_background=Color(0, 0, 0, a=0),               │ │
+│ │                   │   link_style=Style(underline=True),                  │ │
+│ │                   │   link_color_hover=Color(255, 255, 255, a=0.87),     │ │
+│ │                   │   auto_link_color_hover=True,                        │ │
+│ │                   │   link_background_hover=Color(1, 120, 212),          │ │
+│ │                   │   link_style_hover=Style(                            │ │
+│ │                   │   │   bold=True,                                     │ │
+│ │                   │   │   underline=False                                │ │
+│ │                   │   )                                                  │ │
+│ │                   )                                                      │ │
+│ │          widget = Counted(id='right')                                    │ │
+│ ╰──────────────────────────────────────────────────────────────────────────╯ │
+│                                                                              │
+│ /home/ts/wt/textual-native-subtree-strips-20261002/src/textual/_styles_cache │
+│ .py:222 in render                                                            │
+│                                                                              │
+│   219 │   │                                                                  │
+│   220 │   │   for y in crop.line_range:                                      │
+│   221 │   │   │   if is_dirty(y) or y not in self._cache:                    │
+│ ❱ 222 │   │   │   │   strip = render_line(                                   │
+│   223 │   │   │   │   │   styles,                                            │
+│   224 │   │   │   │   │   y,                                                 │
+│   225 │   │   │   │   │   size,                                              │
+│                                                                              │
+│ ╭───────────────────────────────── locals ─────────────────────────────────╮ │
+│ │             _height = 3                                                  │ │
+│ │           add_strip = <built-in method append of list object at          │ │
+│ │                       0x7f21f0c71900>                                    │ │
+│ │          ansi_theme = <rich.terminal_theme.TerminalTheme object at       │ │
+│ │                       0x7f21f04072f0>                                    │ │
+│ │          background = Color(18, 18, 18)                                  │ │
+│ │     base_background = Color(18, 18, 18)                                  │ │
+│ │     border_subtitle = None                                               │ │
+│ │        border_title = None                                               │ │
+│ │        content_size = Size(width=10, height=3)                           │ │
+│ │                crop = Region(x=0, y=0, width=10, height=3)               │ │
+│ │             filters = [                                                  │ │
+│ │                       │   <textual.filter.ANSIToTruecolor object at      │ │
+│ │                       0x7f21f0fb03b0>,                                   │ │
+│ │                       │   <textual.filter.Monochrome object at           │ │
+│ │                       0x7f21f0fb20f0>                                    │ │
+│ │                       ]                                                  │ │
+│ │            is_dirty = <built-in method __contains__ of set object at     │ │
+│ │                       0x7f21f0b7f220>                                    │ │
+│ │         native_ansi = False                                              │ │
+│ │             opacity = 1.0                                                │ │
+│ │             padding = Spacing(top=0, right=0, bottom=0, left=0)          │ │
+│ │ render_content_line = <bound method Widget.render_line of                │ │
+│ │                       Counted(id='right')>                               │ │
+│ │         render_line = <bound method StylesCache.render_line of           │ │
+│ │                       <StylesCache size=Size(width=10, height=3)>>       │ │
+│ │                self = <StylesCache size=Size(width=10, height=3)>        │ │
+│ │                size = Size(width=10, height=3)                           │ │
+│ │              strips = []                                                 │ │
+│ │              styles = RenderStyles(                                      │ │
+│ │                       │   Counted(id='right'),                           │ │
+│ │                       │   background=Color(0, 0, 0, a=0),                │ │
+│ │                       │   width=Scalar(                                  │ │
+│ │                       │   │   value=10.0,                                │ │
+│ │                       │   │   unit=<Unit.CELLS: 1>,                      │ │
+│ │                       │   │   percent_unit=<Unit.WIDTH: 4>               │ │
+│ │                       │   ),                                             │ │
+│ │                       │   height=Scalar(                                 │ │
+│ │                       │   │   value=3.0,                                 │ │
+│ │                       │   │   unit=<Unit.CELLS: 1>,                      │ │
+│ │                       │   │   percent_unit=<Unit.WIDTH: 4>               │ │
+│ │                       │   ),                                             │ │
+│ │                       │   scrollbar_color=Color(0, 48, 84),              │ │
+│ │                       │   scrollbar_color_hover=Color(0, 60, 106),       │ │
+│ │                       │   scrollbar_color_active=Color(1, 120, 212),     │ │
+│ │                       │   scrollbar_corner_color=Color(0, 0, 0),         │ │
+│ │                       │   scrollbar_background=Color(0, 0, 0),           │ │
+│ │                       │   scrollbar_background_hover=Color(0, 0, 0),     │ │
+│ │                       │   scrollbar_background_active=Color(0, 0, 0),    │ │
+│ │                       │   scrollbar_size_vertical=2,                     │ │
+│ │                       │   scrollbar_size_horizontal=1,                   │ │
+│ │                       │   link_color=Color(255, 255, 255, a=0.87),       │ │
+│ │                       │   auto_link_color=True,                          │ │
+│ │                       │   link_background=Color(0, 0, 0, a=0),           │ │
+│ │                       │   link_style=Style(underline=True),              │ │
+│ │                       │   link_color_hover=Color(                        │ │
+│ │                       │   │   255,                                       │ │
+│ │                       │   │   255,                                       │ │
+│ │                       │   │   255,                                       │ │
+│ │                       │   │   a=0.87                                     │ │
+│ │                       │   ),                                             │ │
+│ │                       │   auto_link_color_hover=True,                    │ │
+│ │                       │   link_background_hover=Color(1, 120, 212),      │ │
+│ │                       │   link_style_hover=Style(                        │ │
+│ │                       │   │   bold=True,                                 │ │
+│ │                       │   │   underline=False                            │ │
+│ │                       │   )                                              │ │
+│ │                       )                                                  │ │
+│ │               width = 10                                                 │ │
+│ │                   y = 0                                                  │ │
+│ ╰──────────────────────────────────────────────────────────────────────────╯ │
+│                                                                              │
+│ /home/ts/wt/textual-native-subtree-strips-20261002/src/textual/_styles_cache │
+│ .py:457 in render_line                                                       │
+│                                                                              │
+│   454 │   │   │   # Content with border and padding (C)                      │
+│   455 │   │   │   content_y = y - gutter.top                                 │
+│   456 │   │   │   if content_y < content_height:                             │
+│ ❱ 457 │   │   │   │   line = render_content_line(y - gutter.top)             │
+│   458 │   │   │   │   line = line.adjust_cell_length(content_width, inner.ri │
+│   459 │   │   │   else:                                                      │
+│   460 │   │   │   │   line = Strip.blank(content_width, inner.rich_style)    │
+│                                                                              │
+│ ╭───────────────────────────────── locals ─────────────────────────────────╮ │
+│ │           ansi_theme = <rich.terminal_theme.TerminalTheme object at      │ │
+│ │                        0x7f21f04072f0>                                   │ │
+│ │           background = Color(18, 18, 18)                                 │ │
+│ │      base_background = Color(18, 18, 18)                                 │ │
+│ │        border_bottom = ''                                                │ │
+│ │  border_bottom_color = Color(0, 255, 0)                                  │ │
+│ │          border_left = ''                                                │ │
+│ │    border_left_color = Color(0, 255, 0)                                  │ │
+│ │         border_right = ''                                                │ │
+│ │   border_right_color = Color(0, 255, 0)                                  │ │
+│ │      border_subtitle = None                                              │ │
+│ │         border_title = None                                              │ │
+│ │           border_top = ''                                                │ │
+│ │     border_top_color = Color(0, 255, 0)                                  │ │
+│ │   cache_simple_strip = False                                             │ │
+│ │       content_height = 3                                                 │ │
+│ │         content_size = Size(width=10, height=3)                          │ │
+│ │        content_width = 10                                                │ │
+│ │            content_y = 0                                                 │ │
+│ │           from_color = <bound method Style.from_color of <class          │ │
+│ │                        'rich.style.Style'>>                              │ │
+│ │               gutter = Spacing(top=0, right=0, bottom=0, left=0)         │ │
+│ │               height = 3                                                 │ │
+│ │                inner = Style(background=Color(18, 18, 18))               │ │
+│ │          native_ansi = False                                             │ │
+│ │              opacity = 1.0                                               │ │
+│ │                outer = Style(background=Color(18, 18, 18))               │ │
+│ │       outline_bottom = ''                                                │ │
+│ │ outline_bottom_color = Color(0, 255, 0)                                  │ │
+│ │         outline_left = ''                                                │ │
+│ │   outline_left_color = Color(0, 255, 0)                                  │ │
+│ │        outline_right = ''                                                │ │
+│ │  outline_right_color = Color(0, 255, 0)                                  │ │
+│ │          outline_top = ''                                                │ │
+│ │    outline_top_color = Color(0, 255, 0)                                  │ │
+│ │           pad_bottom = 0                                                 │ │
+│ │             pad_left = 0                                                 │ │
+│ │            pad_right = 0                                                 │ │
+│ │              pad_top = 0                                                 │ │
+│ │              padding = Spacing(top=0, right=0, bottom=0, left=0)         │ │
+│ │  render_content_line = <bound method Widget.render_line of               │ │
+│ │                        Counted(id='right')>                              │ │
+│ │                 self = <StylesCache size=Size(width=10, height=3)>       │ │
+│ │                 size = Size(width=10, height=3)                          │ │
+│ │               styles = RenderStyles(                                     │ │
+│ │                        │   Counted(id='right'),                          │ │
+│ │                        │   background=Color(0, 0, 0, a=0),               │ │
+│ │                        │   width=Scalar(                                 │ │
+│ │                        │   │   value=10.0,                               │ │
+│ │                        │   │   unit=<Unit.CELLS: 1>,                     │ │
+│ │                        │   │   percent_unit=<Unit.WIDTH: 4>              │ │
+│ │                        │   ),                                            │ │
+│ │                        │   height=Scalar(                                │ │
+│ │                        │   │   value=3.0,                                │ │
+│ │                        │   │   unit=<Unit.CELLS: 1>,                     │ │
+│ │                        │   │   percent_unit=<Unit.WIDTH: 4>              │ │
+│ │                        │   ),                                            │ │
+│ │                        │   scrollbar_color=Color(0, 48, 84),             │ │
+│ │                        │   scrollbar_color_hover=Color(0, 60, 106),      │ │
+│ │                        │   scrollbar_color_active=Color(1, 120, 212),    │ │
+│ │                        │   scrollbar_corner_color=Color(0, 0, 0),        │ │
+│ │                        │   scrollbar_background=Color(0, 0, 0),          │ │
+│ │                        │   scrollbar_background_hover=Color(0, 0, 0),    │ │
+│ │                        │   scrollbar_background_active=Color(0, 0, 0),   │ │
+│ │                        │   scrollbar_size_vertical=2,                    │ │
+│ │                        │   scrollbar_size_horizontal=1,                  │ │
+│ │                        │   link_color=Color(255, 255, 255, a=0.87),      │ │
+│ │                        │   auto_link_color=True,                         │ │
+│ │                        │   link_background=Color(0, 0, 0, a=0),          │ │
+│ │                        │   link_style=Style(underline=True),             │ │
+│ │                        │   link_color_hover=Color(                       │ │
+│ │                        │   │   255,                                      │ │
+│ │                        │   │   255,                                      │ │
+│ │                        │   │   255,                                      │ │
+│ │                        │   │   a=0.87                                    │ │
+│ │                        │   ),                                            │ │
+│ │                        │   auto_link_color_hover=True,                   │ │
+│ │                        │   link_background_hover=Color(1, 120, 212),     │ │
+│ │                        │   link_style_hover=Style(                       │ │
+│ │                        │   │   bold=True,                                │ │
+│ │                        │   │   underline=False                           │ │
+│ │                        │   )                                             │ │
+│ │                        )                                                 │ │
+│ │                width = 10                                                │ │
+│ │                    y = 0                                                 │ │
+│ ╰──────────────────────────────────────────────────────────────────────────╯ │
+│                                                                              │
+│ /home/ts/wt/textual-native-subtree-strips-20261002/src/textual/widget.py:448 │
+│ 9 in render_line                                                             │
+│                                                                              │
+│   4486 │   │   │   return Strip.blank(self.size.width, self.visual_style.ric │
+│   4487 │   │                                                                 │
+│   4488 │   │   if self._dirty_regions or self._render_cache.size != self.siz │
+│ ❱ 4489 │   │   │   self._render_content()                                    │
+│   4490 │   │   try:                                                          │
+│   4491 │   │   │   line = self._render_cache.lines[y]                        │
+│   4492 │   │   except IndexError:                                            │
+│                                                                              │
+│ ╭────────── locals ──────────╮                                               │
+│ │ self = Counted(id='right') │                                               │
+│ │    y = 0                   │                                               │
+│ ╰────────────────────────────╯                                               │
+│                                                                              │
+│ /home/ts/wt/textual-native-subtree-strips-20261002/src/textual/widget.py:447 │
+│ 1 in _render_content                                                         │
+│                                                                              │
+│   4468 │   │   """Render all lines."""                                       │
+│   4469 │   │   size = self.size                                              │
+│   4470 │   │   width, height = size                                          │
+│ ❱ 4471 │   │   visual = self._render()                                       │
+│   4472 │   │   strips = Visual.to_strips(self, visual, width, height, self.v │
+│   4473 │   │   self._render_cache = _RenderCache(size, strips)               │
+│   4474 │   │   self._dirty_regions.clear()                                   │
+│                                                                              │
+│ ╭───────────── locals ──────────────╮                                        │
+│ │ height = 3                        │                                        │
+│ │   self = Counted(id='right')      │                                        │
+│ │   size = Size(width=10, height=3) │                                        │
+│ │  width = 10                       │                                        │
+│ ╰───────────────────────────────────╯                                        │
+│                                                                              │
+│ /home/ts/wt/textual-native-subtree-strips-20261002/src/textual/widget.py:469 │
+│ 8 in _render                                                                 │
+│                                                                              │
+│   4695 │   │   if cached_visual is not None:                                 │
+│   4696 │   │   │   assert isinstance(cached_visual, Visual)                  │
+│   4697 │   │   │   return cached_visual                                      │
+│ ❱ 4698 │   │   visual = visualize(self, self.render(), markup=self._render_m │
+│   4699 │   │   self._layout_cache[cache_key] = visual                        │
+│   4700 │   │   return visual                                                 │
+│   4701                                                                       │
+│                                                                              │
+│ ╭────────────── locals ───────────────╮                                      │
+│ │     cache_key = '_render.visual'    │                                      │
+│ │ cached_visual = None                │                                      │
+│ │          self = Counted(id='right') │                                      │
+│ ╰─────────────────────────────────────╯                                      │
+│                                                                              │
+│ /home/ts/wt/textual-native-subtree-strips-20261002/src/textual/widgets/_stat │
+│ ic.py:85 in render                                                           │
+│                                                                              │
+│    82 │   │   Returns:                                                       │
+│    83 │   │   │   A rich renderable.                                         │
+│    84 │   │   """                                                            │
+│ ❱  85 │   │   return self.visual                                             │
+│    86 │                                                                      │
+│    87 │   def _render_styles_sensitive(self) -> bool:                        │
+│    88 │   │   """Only original Content has the native rule-measurement contr │
+│                                                                              │
+│ ╭────────── locals ──────────╮                                               │
+│ │ self = Counted(id='right') │                                               │
+│ ╰────────────────────────────╯                                               │
+│                                                                              │
+│ /home/ts/wt/textual-native-subtree-strips-20261002/src/textual/widgets/_stat │
+│ ic.py:64 in visual                                                           │
+│                                                                              │
+│    61 │   │                                                                  │
+│    62 │   │   """                                                            │
+│    63 │   │   if self.__visual is None:                                      │
+│ ❱  64 │   │   │   self.__visual = visualize(self, self.__content, markup=sel │
+│    65 │   │   return self.__visual                                           │
+│    66 │                                                                      │
+│    67 │   @property                                                          │
+│                                                                              │
+│ ╭────────── locals ──────────╮                                               │
+│ │ self = Counted(id='right') │                                               │
+│ ╰────────────────────────────╯                                               │
+╰──────────────────────────────────────────────────────────────────────────────╯
+MarkupError: Expected markup value (found '://example.com]A界BCDEFGH[/link]\n').
+_ test_horizontal_damage_keeps_intervening_native_content_unpainted[regions1] __
+
+regions = ((1, 0, 2, 1), (2, 0, 3, 1), (21, 2, 2, 1))
+
+    @pytest.mark.parametrize('regions', [
+        ((2, 0, 3, 1), (22, 0, 3, 1)),
+        ((1, 0, 2, 1), (2, 0, 3, 1), (21, 2, 2, 1)),
+    ])
+    async def test_horizontal_damage_keeps_intervening_native_content_unpainted(regions):
+        """Damage islands must not materialize the unchanged pane between them."""
+        from rich.control import Control
+        from textual.geometry import Region
+    
+        class Counted(Static):
+            def __init__(self, **kwargs):
+                super().__init__("[link=https://example.com]A界BCDEFGH[/link]\nSECOND\nTHIRD", **kwargs)
+                self.crops = []
+    
+            def render_lines(self, crop):
+                self.crops.append(crop)
+                return super().render_lines(crop)
+    
+        class IslandsApp(App):
+            CSS = "Screen { layout: horizontal; } Counted { width: 10; height: 3; }"
+    
+            def compose(self):
+                for name in ('left', 'middle', 'right'):
+                    yield Counted(id=name)
+    
+        app = IslandsApp()
+>       async with app.run_test(size=(30, 5)) as pilot:
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_compositor_frame_damage.py:136: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/lib/python3.14/contextlib.py:235: in __aexit__
+    await self.gen.athrow(value)
+src/textual/app.py:2228: in run_test
+    raise self._exception
+src/textual/message_pump.py:707: in _process_messages_loop
+    await self._dispatch_message(message)
+src/textual/message_pump.py:778: in _dispatch_message
+    await self.on_event(message)
+src/textual/message_pump.py:859: in on_event
+    await self._on_message(event)
+src/textual/message_pump.py:880: in _on_message
+    await invoke(method, message)
+src/textual/_callback.py:97: in invoke
+    return await _invoke(callback, *params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/textual/_callback.py:57: in _invoke
+    result = callback(*params[:parameter_count])
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/textual/screen.py:1563: in _on_screen_resume
+    self._refresh_layout(size)
+src/textual/screen.py:1437: in _refresh_layout
+    self._compositor_refresh()
+src/textual/screen.py:1243: in _compositor_refresh
+    update = self._compositor.render_update(
+src/textual/_compositor.py:1523: in render_update
+    return self.render_full_update(simplify=simplify)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/textual/_compositor.py:1559: in render_full_update
+    chops = self._render_chops(crop, self._regions_to_spans((screen_region,)),
+src/textual/_compositor.py:1713: in _render_chops
+    for render_region, strips in renders:
+                                 ^^^^^^^
+src/textual/_compositor.py:1493: in _get_renders
+    widget.render_lines(
+tests/test_compositor_frame_damage.py:126: in render_lines
+    return super().render_lines(crop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/textual/widget.py:4511: in render_lines
+    strips = self._styles_cache.render_widget(self, crop)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/textual/_styles_cache.py:117: in render_widget
+    strips = self.render(
+src/textual/_styles_cache.py:222: in render
+    strip = render_line(
+src/textual/_styles_cache.py:457: in render_line
+    line = render_content_line(y - gutter.top)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/textual/widget.py:4489: in render_line
+    self._render_content()
+src/textual/widget.py:4471: in _render_content
+    visual = self._render()
+             ^^^^^^^^^^^^^^
+src/textual/widget.py:4698: in _render
+    visual = visualize(self, self.render(), markup=self._render_markup)
+                             ^^^^^^^^^^^^^
+src/textual/widgets/_static.py:85: in render
+    return self.visual
+           ^^^^^^^^^^^
+src/textual/widgets/_static.py:64: in visual
+    self.__visual = visualize(self, self.__content, markup=self._render_markup)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/textual/visual.py:103: in visualize
+    return Content.from_markup(obj) if markup else Content(obj)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+src/textual/content.py:299: in from_markup
+    content = to_content(markup, template_variables=variables or None)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+markup = '[link=https://example.com]A界BCDEFGH[/link]\nSECOND\nTHIRD', style = ''
+template_variables = None
+
+    def to_content(
+        markup: str,
+        style: str | Style = "",
+        template_variables: Mapping[str, object] | None = None,
+    ) -> Content:
+        """Convert markup to Content.
+    
+        Args:
+            markup: String containing markup.
+            style: Optional base style.
+            template_variables: Mapping of string.Template variables
+    
+        Raises:
+            MarkupError: If the markup is invalid.
+    
+        Returns:
+            Content that renders the markup.
+        """
+        _rich_traceback_omit = True
+        try:
+            return _to_content(markup, style, template_variables)
+        except UnexpectedEnd:
+            raise MarkupError(
+                "Unexpected end of markup; are you missing a closing square bracket?"
+            ) from None
+        except Exception as error:
+            # Ensure all errors are wrapped in a MarkupError
+>           raise MarkupError(str(error)) from None
+E           textual.markup.MarkupError: Expected markup value (found '://example.com]A界BCDEFGH[/link]\n').
+
+src/textual/markup.py:320: MarkupError
+----------------------------- Captured stderr call -----------------------------
+╭───────────────────── Traceback (most recent call last) ──────────────────────╮
+│ /home/ts/wt/textual-native-subtree-strips-20261002/tests/test_compositor_fra │
+│ me_damage.py:126 in render_lines                                             │
+│                                                                              │
+│   123 │   │                                                                  │
+│   124 │   │   def render_lines(self, crop):                                  │
+│   125 │   │   │   self.crops.append(crop)                                    │
+│ ❱ 126 │   │   │   return super().render_lines(crop)                          │
+│   127 │                                                                      │
+│   128 │   class IslandsApp(App):                                             │
+│   129 │   │   CSS = "Screen { layout: horizontal; } Counted { width: 10; hei │
+│                                                                              │
+│ ╭────────────────── locals ───────────────────╮                              │
+│ │ crop = Region(x=0, y=0, width=10, height=3) │                              │
+│ │ self = Counted(id='right')                  │                              │
+│ ╰─────────────────────────────────────────────╯                              │
+│                                                                              │
+│ /home/ts/wt/textual-native-subtree-strips-20261002/src/textual/widget.py:451 │
+│ 1 in render_lines                                                            │
+│                                                                              │
+│   4508 │   │   │   │   Strip.blank(crop.width, self.visual_style.rich_style) │
+│   4509 │   │   │   ] * crop.height                                           │
+│   4510 │   │   else:                                                         │
+│ ❱ 4511 │   │   │   strips = self._styles_cache.render_widget(self, crop)     │
+│   4512 │   │   return strips                                                 │
+│   4513 │                                                                     │
+│   4514 │   def get_style_at(self, x: int, y: int) -> Style:                  │
+│                                                                              │
+│ ╭────────────────── locals ───────────────────╮                              │
+│ │ crop = Region(x=0, y=0, width=10, height=3) │                              │
+│ │ self = Counted(id='right')                  │                              │
+│ ╰─────────────────────────────────────────────╯                              │
+│                                                                              │
+│ /home/ts/wt/textual-native-subtree-strips-20261002/src/textual/_styles_cache │
+│ .py:117 in render_widget                                                     │
+│                                                                              │
+│   114 │   │   base_background, background = widget.background_colors         │
+│   115 │   │   styles = widget.styles                                         │
+│   116 │   │   app = widget.app                                               │
+│ ❱ 117 │   │   strips = self.render(                                          │
+│   118 │   │   │   styles,                                                    │
+│   119 │   │   │   widget.region.size,                                        │
+│   120 │   │   │   base_background,                                           │
+│                                                                              │
+│ ╭───────────────────────────────── locals ─────────────────────────────────╮ │
+│ │             app = IslandsApp(                                            │ │
+│ │                   │   title='IslandsApp',                                │ │
+│ │                   │   classes={'-dark-mode'},                            │ │
+│ │                   │   pseudo_classes={'focus', 'nocolor', 'dark'}        │ │
+│ │                   )                                                      │ │
+│ │      background = Color(18, 18, 18)                                      │ │
+│ │ base_background = Color(18, 18, 18)                                      │ │
+│ │ border_subtitle = None                                                   │ │
+│ │    border_title = None                                                   │ │
+│ │            crop = Region(x=0, y=0, width=10, height=3)                   │ │
+│ │            self = <StylesCache size=Size(width=10, height=3)>            │ │
+│ │          styles = RenderStyles(                                          │ │
+│ │                   │   Counted(id='right'),                               │ │
+│ │                   │   background=Color(0, 0, 0, a=0),                    │ │
+│ │                   │   width=Scalar(                                      │ │
+│ │                   │   │   value=10.0,                                    │ │
+│ │                   │   │   unit=<Unit.CELLS: 1>,                          │ │
+│ │                   │   │   percent_unit=<Unit.WIDTH: 4>                   │ │
+│ │                   │   ),                                                 │ │
+│ │                   │   height=Scalar(                                     │ │
+│ │                   │   │   value=3.0,                                     │ │
+│ │                   │   │   unit=<Unit.CELLS: 1>,                          │ │
+│ │                   │   │   percent_unit=<Unit.WIDTH: 4>                   │ │
+│ │                   │   ),                                                 │ │
+│ │                   │   scrollbar_color=Color(0, 48, 84),                  │ │
+│ │                   │   scrollbar_color_hover=Color(0, 60, 106),           │ │
+│ │                   │   scrollbar_color_active=Color(1, 120, 212),         │ │
+│ │                   │   scrollbar_corner_color=Color(0, 0, 0),             │ │
+│ │                   │   scrollbar_background=Color(0, 0, 0),               │ │
+│ │                   │   scrollbar_background_hover=Color(0, 0, 0),         │ │
+│ │                   │   scrollbar_background_active=Color(0, 0, 0),        │ │
+│ │                   │   scrollbar_size_vertical=2,                         │ │
+│ │                   │   scrollbar_size_horizontal=1,                       │ │
+│ │                   │   link_color=Color(255, 255, 255, a=0.87),           │ │
+│ │                   │   auto_link_color=True,                              │ │
+│ │                   │   link_background=Color(0, 0, 0, a=0),               │ │
+│ │                   │   link_style=Style(underline=True),                  │ │
+│ │                   │   link_color_hover=Color(255, 255, 255, a=0.87),     │ │
+│ │                   │   auto_link_color_hover=True,                        │ │
+│ │                   │   link_background_hover=Color(1, 120, 212),          │ │
+│ │                   │   link_style_hover=Style(                            │ │
+│ │                   │   │   bold=True,                                     │ │
+│ │                   │   │   underline=False                                │ │
+│ │                   │   )                                                  │ │
+│ │                   )                                                      │ │
+│ │          widget = Counted(id='right')                                    │ │
+│ ╰──────────────────────────────────────────────────────────────────────────╯ │
+│                                                                              │
+│ /home/ts/wt/textual-native-subtree-strips-20261002/src/textual/_styles_cache │
+│ .py:222 in render                                                            │
+│                                                                              │
+│   219 │   │                                                                  │
+│   220 │   │   for y in crop.line_range:                                      │
+│   221 │   │   │   if is_dirty(y) or y not in self._cache:                    │
+│ ❱ 222 │   │   │   │   strip = render_line(                                   │
+│   223 │   │   │   │   │   styles,                                            │
+│   224 │   │   │   │   │   y,                                                 │
+│   225 │   │   │   │   │   size,                                              │
+│                                                                              │
+│ ╭───────────────────────────────── locals ─────────────────────────────────╮ │
+│ │             _height = 3                                                  │ │
+│ │           add_strip = <built-in method append of list object at          │ │
+│ │                       0x7f21eef54ec0>                                    │ │
+│ │          ansi_theme = <rich.terminal_theme.TerminalTheme object at       │ │
+│ │                       0x7f21f04072f0>                                    │ │
+│ │          background = Color(18, 18, 18)                                  │ │
+│ │     base_background = Color(18, 18, 18)                                  │ │
+│ │     border_subtitle = None                                               │ │
+│ │        border_title = None                                               │ │
+│ │        content_size = Size(width=10, height=3)                           │ │
+│ │                crop = Region(x=0, y=0, width=10, height=3)               │ │
+│ │             filters = [                                                  │ │
+│ │                       │   <textual.filter.ANSIToTruecolor object at      │ │
+│ │                       0x7f21f0b0bf00>,                                   │ │
+│ │                       │   <textual.filter.Monochrome object at           │ │
+│ │                       0x7f21f0c9de10>                                    │ │
+│ │                       ]                                                  │ │
+│ │            is_dirty = <built-in method __contains__ of set object at     │ │
+│ │                       0x7f21f0bbf5a0>                                    │ │
+│ │         native_ansi = False                                              │ │
+│ │             opacity = 1.0                                                │ │
+│ │             padding = Spacing(top=0, right=0, bottom=0, left=0)          │ │
+│ │ render_content_line = <bound method Widget.render_line of                │ │
+│ │                       Counted(id='right')>                               │ │
+│ │         render_line = <bound method StylesCache.render_line of           │ │
+│ │                       <StylesCache size=Size(width=10, height=3)>>       │ │
+│ │                self = <StylesCache size=Size(width=10, height=3)>        │ │
+│ │                size = Size(width=10, height=3)                           │ │
+│ │              strips = []                                                 │ │
+│ │              styles = RenderStyles(                                      │ │
+│ │                       │   Counted(id='right'),                           │ │
+│ │                       │   background=Color(0, 0, 0, a=0),                │ │
+│ │                       │   width=Scalar(                                  │ │
+│ │                       │   │   value=10.0,                                │ │
+│ │                       │   │   unit=<Unit.CELLS: 1>,                      │ │
+│ │                       │   │   percent_unit=<Unit.WIDTH: 4>               │ │
+│ │                       │   ),                                             │ │
+│ │                       │   height=Scalar(                                 │ │
+│ │                       │   │   value=3.0,                                 │ │
+│ │                       │   │   unit=<Unit.CELLS: 1>,                      │ │
+│ │                       │   │   percent_unit=<Unit.WIDTH: 4>               │ │
+│ │                       │   ),                                             │ │
+│ │                       │   scrollbar_color=Color(0, 48, 84),              │ │
+│ │                       │   scrollbar_color_hover=Color(0, 60, 106),       │ │
+│ │                       │   scrollbar_color_active=Color(1, 120, 212),     │ │
+│ │                       │   scrollbar_corner_color=Color(0, 0, 0),         │ │
+│ │                       │   scrollbar_background=Color(0, 0, 0),           │ │
+│ │                       │   scrollbar_background_hover=Color(0, 0, 0),     │ │
+│ │                       │   scrollbar_background_active=Color(0, 0, 0),    │ │
+│ │                       │   scrollbar_size_vertical=2,                     │ │
+│ │                       │   scrollbar_size_horizontal=1,                   │ │
+│ │                       │   link_color=Color(255, 255, 255, a=0.87),       │ │
+│ │                       │   auto_link_color=True,                          │ │
+│ │                       │   link_background=Color(0, 0, 0, a=0),           │ │
+│ │                       │   link_style=Style(underline=True),              │ │
+│ │                       │   link_color_hover=Color(                        │ │
+│ │                       │   │   255,                                       │ │
+│ │                       │   │   255,                                       │ │
+│ │                       │   │   255,                                       │ │
+│ │                       │   │   a=0.87                                     │ │
+│ │                       │   ),                                             │ │
+│ │                       │   auto_link_color_hover=True,                    │ │
+│ │                       │   link_background_hover=Color(1, 120, 212),      │ │
+│ │                       │   link_style_hover=Style(                        │ │
+│ │                       │   │   bold=True,                                 │ │
+│ │                       │   │   underline=False                            │ │
+│ │                       │   )                                              │ │
+│ │                       )                                                  │ │
+│ │               width = 10                                                 │ │
+│ │                   y = 0                                                  │ │
+│ ╰──────────────────────────────────────────────────────────────────────────╯ │
+│                                                                              │
+│ /home/ts/wt/textual-native-subtree-strips-20261002/src/textual/_styles_cache │
+│ .py:457 in render_line                                                       │
+│                                                                              │
+│   454 │   │   │   # Content with border and padding (C)                      │
+│   455 │   │   │   content_y = y - gutter.top                                 │
+│   456 │   │   │   if content_y < content_height:                             │
+│ ❱ 457 │   │   │   │   line = render_content_line(y - gutter.top)             │
+│   458 │   │   │   │   line = line.adjust_cell_length(content_width, inner.ri │
+│   459 │   │   │   else:                                                      │
+│   460 │   │   │   │   line = Strip.blank(content_width, inner.rich_style)    │
+│                                                                              │
+│ ╭───────────────────────────────── locals ─────────────────────────────────╮ │
+│ │           ansi_theme = <rich.terminal_theme.TerminalTheme object at      │ │
+│ │                        0x7f21f04072f0>                                   │ │
+│ │           background = Color(18, 18, 18)                                 │ │
+│ │      base_background = Color(18, 18, 18)                                 │ │
+│ │        border_bottom = ''                                                │ │
+│ │  border_bottom_color = Color(0, 255, 0)                                  │ │
+│ │          border_left = ''                                                │ │
+│ │    border_left_color = Color(0, 255, 0)                                  │ │
+│ │         border_right = ''                                                │ │
+│ │   border_right_color = Color(0, 255, 0)                                  │ │
+│ │      border_subtitle = None                                              │ │
+│ │         border_title = None                                              │ │
+│ │           border_top = ''                                                │ │
+│ │     border_top_color = Color(0, 255, 0)                                  │ │
+│ │   cache_simple_strip = False                                             │ │
+│ │       content_height = 3                                                 │ │
+│ │         content_size = Size(width=10, height=3)                          │ │
+│ │        content_width = 10                                                │ │
+│ │            content_y = 0                                                 │ │
+│ │           from_color = <bound method Style.from_color of <class          │ │
+│ │                        'rich.style.Style'>>                              │ │
+│ │               gutter = Spacing(top=0, right=0, bottom=0, left=0)         │ │
+│ │               height = 3                                                 │ │
+│ │                inner = Style(background=Color(18, 18, 18))               │ │
+│ │          native_ansi = False                                             │ │
+│ │              opacity = 1.0                                               │ │
+│ │                outer = Style(background=Color(18, 18, 18))               │ │
+│ │       outline_bottom = ''                                                │ │
+│ │ outline_bottom_color = Color(0, 255, 0)                                  │ │
+│ │         outline_left = ''                                                │ │
+│ │   outline_left_color = Color(0, 255, 0)                                  │ │
+│ │        outline_right = ''                                                │ │
+│ │  outline_right_color = Color(0, 255, 0)                                  │ │
+│ │          outline_top = ''                                                │ │
+│ │    outline_top_color = Color(0, 255, 0)                                  │ │
+│ │           pad_bottom = 0                                                 │ │
+│ │             pad_left = 0                                                 │ │
+│ │            pad_right = 0                                                 │ │
+│ │              pad_top = 0                                                 │ │
+│ │              padding = Spacing(top=0, right=0, bottom=0, left=0)         │ │
+│ │  render_content_line = <bound method Widget.render_line of               │ │
+│ │                        Counted(id='right')>                              │ │
+│ │                 self = <StylesCache size=Size(width=10, height=3)>       │ │
+│ │                 size = Size(width=10, height=3)                          │ │
+│ │               styles = RenderStyles(                                     │ │
+│ │                        │   Counted(id='right'),                          │ │
+│ │                        │   background=Color(0, 0, 0, a=0),               │ │
+│ │                        │   width=Scalar(                                 │ │
+│ │                        │   │   value=10.0,                               │ │
+│ │                        │   │   unit=<Unit.CELLS: 1>,                     │ │
+│ │                        │   │   percent_unit=<Unit.WIDTH: 4>              │ │
+│ │                        │   ),                                            │ │
+│ │                        │   height=Scalar(                                │ │
+│ │                        │   │   value=3.0,                                │ │
+│ │                        │   │   unit=<Unit.CELLS: 1>,                     │ │
+│ │                        │   │   percent_unit=<Unit.WIDTH: 4>              │ │
+│ │                        │   ),                                            │ │
+│ │                        │   scrollbar_color=Color(0, 48, 84),             │ │
+│ │                        │   scrollbar_color_hover=Color(0, 60, 106),      │ │
+│ │                        │   scrollbar_color_active=Color(1, 120, 212),    │ │
+│ │                        │   scrollbar_corner_color=Color(0, 0, 0),        │ │
+│ │                        │   scrollbar_background=Color(0, 0, 0),          │ │
+│ │                        │   scrollbar_background_hover=Color(0, 0, 0),    │ │
+│ │                        │   scrollbar_background_active=Color(0, 0, 0),   │ │
+│ │                        │   scrollbar_size_vertical=2,                    │ │
+│ │                        │   scrollbar_size_horizontal=1,                  │ │
+│ │                        │   link_color=Color(255, 255, 255, a=0.87),      │ │
+│ │                        │   auto_link_color=True,                         │ │
+│ │                        │   link_background=Color(0, 0, 0, a=0),          │ │
+│ │                        │   link_style=Style(underline=True),             │ │
+│ │                        │   link_color_hover=Color(                       │ │
+│ │                        │   │   255,                                      │ │
+│ │                        │   │   255,                                      │ │
+│ │                        │   │   255,                                      │ │
+│ │                        │   │   a=0.87                                    │ │
+│ │                        │   ),                                            │ │
+│ │                        │   auto_link_color_hover=True,                   │ │
+│ │                        │   link_background_hover=Color(1, 120, 212),     │ │
+│ │                        │   link_style_hover=Style(                       │ │
+│ │                        │   │   bold=True,                                │ │
+│ │                        │   │   underline=False                           │ │
+│ │                        │   )                                             │ │
+│ │                        )                                                 │ │
+│ │                width = 10                                                │ │
+│ │                    y = 0                                                 │ │
+│ ╰──────────────────────────────────────────────────────────────────────────╯ │
+│                                                                              │
+│ /home/ts/wt/textual-native-subtree-strips-20261002/src/textual/widget.py:448 │
+│ 9 in render_line                                                             │
+│                                                                              │
+│   4486 │   │   │   return Strip.blank(self.size.width, self.visual_style.ric │
+│   4487 │   │                                                                 │
+│   4488 │   │   if self._dirty_regions or self._render_cache.size != self.siz │
+│ ❱ 4489 │   │   │   self._render_content()                                    │
+│   4490 │   │   try:                                                          │
+│   4491 │   │   │   line = self._render_cache.lines[y]                        │
+│   4492 │   │   except IndexError:                                            │
+│                                                                              │
+│ ╭────────── locals ──────────╮                                               │
+│ │ self = Counted(id='right') │                                               │
+│ │    y = 0                   │                                               │
+│ ╰────────────────────────────╯                                               │
+│                                                                              │
+│ /home/ts/wt/textual-native-subtree-strips-20261002/src/textual/widget.py:447 │
+│ 1 in _render_content                                                         │
+│                                                                              │
+│   4468 │   │   """Render all lines."""                                       │
+│   4469 │   │   size = self.size                                              │
+│   4470 │   │   width, height = size                                          │
+│ ❱ 4471 │   │   visual = self._render()                                       │
+│   4472 │   │   strips = Visual.to_strips(self, visual, width, height, self.v │
+│   4473 │   │   self._render_cache = _RenderCache(size, strips)               │
+│   4474 │   │   self._dirty_regions.clear()                                   │
+│                                                                              │
+│ ╭───────────── locals ──────────────╮                                        │
+│ │ height = 3                        │                                        │
+│ │   self = Counted(id='right')      │                                        │
+│ │   size = Size(width=10, height=3) │                                        │
+│ │  width = 10                       │                                        │
+│ ╰───────────────────────────────────╯                                        │
+│                                                                              │
+│ /home/ts/wt/textual-native-subtree-strips-20261002/src/textual/widget.py:469 │
+│ 8 in _render                                                                 │
+│                                                                              │
+│   4695 │   │   if cached_visual is not None:                                 │
+│   4696 │   │   │   assert isinstance(cached_visual, Visual)                  │
+│   4697 │   │   │   return cached_visual                                      │
+│ ❱ 4698 │   │   visual = visualize(self, self.render(), markup=self._render_m │
+│   4699 │   │   self._layout_cache[cache_key] = visual                        │
+│   4700 │   │   return visual                                                 │
+│   4701                                                                       │
+│                                                                              │
+│ ╭────────────── locals ───────────────╮                                      │
+│ │     cache_key = '_render.visual'    │                                      │
+│ │ cached_visual = None                │                                      │
+│ │          self = Counted(id='right') │                                      │
+│ ╰─────────────────────────────────────╯                                      │
+│                                                                              │
+│ /home/ts/wt/textual-native-subtree-strips-20261002/src/textual/widgets/_stat │
+│ ic.py:85 in render                                                           │
+│                                                                              │
+│    82 │   │   Returns:                                                       │
+│    83 │   │   │   A rich renderable.                                         │
+│    84 │   │   """                                                            │
+│ ❱  85 │   │   return self.visual                                             │
+│    86 │                                                                      │
+│    87 │   def _render_styles_sensitive(self) -> bool:                        │
+│    88 │   │   """Only original Content has the native rule-measurement contr │
+│                                                                              │
+│ ╭────────── locals ──────────╮                                               │
+│ │ self = Counted(id='right') │                                               │
+│ ╰────────────────────────────╯                                               │
+│                                                                              │
+│ /home/ts/wt/textual-native-subtree-strips-20261002/src/textual/widgets/_stat │
+│ ic.py:64 in visual                                                           │
+│                                                                              │
+│    61 │   │                                                                  │
+│    62 │   │   """                                                            │
+│    63 │   │   if self.__visual is None:                                      │
+│ ❱  64 │   │   │   self.__visual = visualize(self, self.__content, markup=sel │
+│    65 │   │   return self.__visual                                           │
+│    66 │                                                                      │
+│    67 │   @property                                                          │
+│                                                                              │
+│ ╭────────── locals ──────────╮                                               │
+│ │ self = Counted(id='right') │                                               │
+│ ╰────────────────────────────╯                                               │
+╰──────────────────────────────────────────────────────────────────────────────╯
+MarkupError: Expected markup value (found '://example.com]A界BCDEFGH[/link]\n').
+=========================== short test summary info ============================
+FAILED tests/test_compositor_frame_damage.py::test_horizontal_damage_keeps_intervening_native_content_unpainted[regions0]
+FAILED tests/test_compositor_frame_damage.py::test_horizontal_damage_keeps_intervening_native_content_unpainted[regions1]
+2 failed, 14 passed in 4.19s
