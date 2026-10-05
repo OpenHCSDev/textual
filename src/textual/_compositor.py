@@ -536,7 +536,7 @@ class Compositor:
         # Note this may be a superset of self.full_map.keys() as some widgets may be invisible for various reasons
         self.widgets: set[Widget] = set()
 
-        # Mapping of visible widgets on to their region, and clip region
+        # Original widget origins and their bounded positive paint rectangles.
         self._visible_widgets: dict[Widget, tuple[Region, Region]] | None = None
 
         # The top level widget
@@ -800,7 +800,7 @@ class Compositor:
 
     @property
     def visible_widgets(self) -> dict[Widget, tuple[Region, Region]]:
-        """Get a mapping of widgets on to region and clip.
+        """Get widget origins and rectangles admitted to this original scene.
 
         Returns:
             Visible widget mapping.
@@ -819,10 +819,10 @@ class Compositor:
     @staticmethod
     def _paint_regions(layers: Iterable[tuple[Widget, MapGeometry]], bounds: Region
                        ) -> dict[Widget, tuple[Region, Region]]:
-        """Clip the original ordered cohort without acquiring its order again."""
-        return {widget: (entry.region, entry.clip)
+        """Own each positive paint rectangle within the original scene bounds."""
+        return {widget: (entry.region, paint_region)
                 for widget, entry in layers
-                if bounds.overlaps(entry.region) and entry.clip.overlaps(entry.region)}
+                if (paint_region := entry.visible_region.intersection(bounds))}
 
     def _arrange_root(
         self, root: Widget, size: Size, visible_only: bool = True,
@@ -1424,18 +1424,15 @@ class Compositor:
     @staticmethod
     def _cuts_for_regions(bounds: Region, widgets: Mapping[Widget, tuple[Region, Region]]
                           ) -> list[list[int]]:
-        """Derive chop boundaries from the original ordered paint regions."""
+        """Derive cuts from the positive rectangles owned by paint admission."""
         cuts = [[bounds.x, bounds.right] for _ in range(bounds.height)]
 
-        intersection = Region.intersection
         extend = list.extend
 
-        for region, clip in widgets.values():
-            x, y, region_width, region_height = intersection(intersection(region, clip), bounds)
-            if region_width and region_height:
-                region_cuts = (x, x + region_width)
-                for cut in cuts[y - bounds.y : y - bounds.y + region_height]:
-                    extend(cut, region_cuts)
+        for _, (x, y, region_width, region_height) in widgets.values():
+            region_cuts = (x, x + region_width)
+            for cut in cuts[y - bounds.y : y - bounds.y + region_height]:
+                extend(cut, region_cuts)
 
         # Sort the cuts for each line
         return [sorted(set(line_cuts)) for line_cuts in cuts]
@@ -1444,7 +1441,7 @@ class Compositor:
         self, crop: Region | None = None,
         render_regions: Callable[[Region], Iterable[Region]] | None = None,
         *, widgets: Mapping[Widget, tuple[Region, Region]],
-    ) -> Iterable[tuple[Region, Region, list[Strip]]]:
+    ) -> Iterable[tuple[Region, list[Strip]]]:
         """Get rendered widgets (lists of segments) in the composition.
 
         Args:
@@ -1452,7 +1449,7 @@ class Compositor:
             render_regions: Select still-exposed damaged rows within each widget.
 
         Returns:
-            An iterable of <region>, <clip region>, and <strips>
+            An iterable of original selected paint rectangles and their strips.
         """
         # If a renderable throws an error while rendering, the user likely doesn't care about the traceback
         # up to this point.
@@ -1472,16 +1469,14 @@ class Compositor:
                 # clip boundaries intact: compositor chops are aligned to those
                 # cuts and may extend past the narrower dirty x span.
                 clip = intersection(clip, _Region(clip.x, crop.y, clip.width, crop.height))
-            visible_region = intersection(region, clip)
-            if visible_region:
+            if clip:
                 regions = (
-                    (visible_region,) if render_regions is None
-                    else render_regions(visible_region)
+                    (clip,) if render_regions is None
+                    else render_regions(clip)
                 )
                 for render_region in regions:
                     new_x, new_y, new_width, new_height = render_region
                     yield (
-                        region,
                         render_region,
                         widget.render_lines(
                             _Region(
@@ -1707,10 +1702,8 @@ class Compositor:
 
         # Go through all the renders in reverse order and fill buckets with no render
         renders = self._get_renders(crop, render_regions, widgets=widgets)
-        intersection = Region.intersection
 
-        for region, clip, strips in renders:
-            render_region = intersection(region, clip)
+        for render_region, strips in renders:
             render_x = render_region.x
             first_cut, last_cut = render_region.column_span
 
