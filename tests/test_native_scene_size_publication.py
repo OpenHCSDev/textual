@@ -137,8 +137,8 @@ async def test_empty_committed_viewport_is_not_replaced_by_full_geometry():
     async with app.run_test(size=(40, 12)) as pilot:
         await pilot.pause()
         compositor = app.screen._compositor
-        # Native zero-sized viewport publication, not an assigned alternate map.
-        compositor.reflow_visible(app.screen, Size(0, 0), retain_geometry=())
+        # A detached native root has no mounted scene members. No assigned map.
+        compositor.reflow_visible(Static("DETACHED"), app.size, retain_geometry=())
         assert compositor._visible_map == {}
         assert compositor._published_map is compositor._visible_map
         compositor._dirty_regions.clear()
