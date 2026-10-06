@@ -22,7 +22,7 @@ The original six-check batch produced5PASS and one preserved failure: its
 callback test expected the Screen to wait inside an admitted async callback.
 The existing control now asserts the actual sender task, preserved callback
 order and completion inside a later batch after original publication admission.
-That changed control alone passed1/.21s; the other five were not repeated.
+That changed control alone passed1/.26s; the other five were not repeated.
 MessagePump.call_after_refresh and merged#75 own this lifetime. No production
 callback rule changed. The five existing controls cover actual batches, held
 subtree geometry/hits/callbacks, inline publication and translucent backdrops.
