@@ -27,7 +27,19 @@ and 288 Toad production / 400 test modules, with zero omissions. before.json
 contains 118 lexical owner/consumer sites. Dynamic overrides/factories remain a
 semantic resolution limitation, not zero-by-omission proof.
 
-Source checkpoint; changed-path checks have not run. Parent owns recorder motion
+Changed native checks passed: 33 in 10.45s through actual App/HeadlessDriver
+packet ingress, direct and ancestor capture, delayed press, release-before-wheel,
+Input/TextArea selection, filtered delivery, self-removal, original input messages
+and queued selection/copy behavior. The first selection batch caught 80 redundant
+selection rebuilds: original call_next flushed every newly awaited DOM delivery.
+That early fallback is deleted; original copy/release/paint/refresh-callback owners
+still flush the single pending projection. Final source retains all 80 mouse events
+and exact mid-burst/final copy values. No new timer or selection state exists.
+
+Two initial authored editor assertions incorrectly assumed an unpanned/unwrapped
+substring; their expectation is now movement selection, preserved original text
+and ended capture. Initial negatives stay in the tool transcript; final-checks.log
+retains the coalescing refusal and qualified-checks.log the completed result. Parent owns recorder motion
 acceptance; no physical run, installed pin, package or public runtime is changed.
 Frozen e15 / physical02 evidence remains unchanged.
 
@@ -39,3 +51,7 @@ MessageTarget/EventTarget protocols, Markdown self-publication and input tests.
 Awaited target completion is a distinct MessagePump operation on the same FIFO;
 it does not change raw driver admission or add a queue. These callers are present
 in before.json; the first checkpoint failed to read their scheduling requirements.
+
+No physical02 causality or repaired physical motion is claimed. Parent owns the
+matched application/recorder acceptance. All local checks are terminal, with no
+provider, installed package, pin or public runtime operation.

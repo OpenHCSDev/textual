@@ -2167,8 +2167,9 @@ class Screen(Generic[ScreenResultType], Widget):
             # The application may already have another raw drag position
             # queued. Deliver all mouse events, but don't repeatedly traverse
             # thousands of selected widgets for positions superseded before
-            # painting. A callback, copy, mouse-up or paint flushes the latest
-            # state even if the following event doesn't update this screen.
+            # painting. The original callback, copy, mouse-up and paint
+            # boundaries flush this projection. Routed handler completion is
+            # not a selection publication boundary.
             try:
                 pending = self.app._peek_message()
             except MessagePumpClosed:
@@ -2178,9 +2179,7 @@ class Screen(Generic[ScreenResultType], Widget):
                 and pending.button == 1
                 and not pending.is_forwarded
             ):
-                if not self._selection_update_pending:
-                    self._selection_update_pending = True
-                    self.call_next(self._flush_pending_selection)
+                self._selection_update_pending = True
                 return
 
         self._selection_update_pending = False
