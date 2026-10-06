@@ -492,7 +492,9 @@ class MessagePump(metaclass=_MessagePumpMeta):
         """Schedule a callback after this owner's messages and publication complete.
 
         Widget callbacks await their subtree; Screen and App callbacks await the
-        complete frame. Positional and keyword arguments are passed to the callable.
+        complete frame. After admission, this pump's existing callback handler
+        executes the callable, including async work, on its own task. Positional
+        and keyword arguments are passed to the callable.
 
         Args:
             callback: A callable.

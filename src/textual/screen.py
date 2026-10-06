@@ -1336,19 +1336,22 @@ class Screen(Generic[ScreenResultType], Widget):
         return False
 
     async def _invoke_and_clear_callbacks(self) -> None:
-        """Keep held senders in the original queue; release independent senders."""
+        """Admit painted senders back to their own original message pumps."""
+        if self.app._batch_count or not self._callbacks:
+            return
+        # No callback runs during this synchronous admission. Borrow one scene
+        # cohort, then let each sender's existing callback handler own execution.
+        roots = tuple(root for _, roots in self._prepare_visible_screens() for root in roots) if self.is_current else ()
         index = 0
         for _ in range(len(self._callbacks)):
             if self.app._batch_count or index >= len(self._callbacks):
                 return
             callback, sender = self._callbacks[index]
-            roots = tuple(root for _, roots in self._prepare_visible_screens() for root in roots) if self.is_current else ()
             if self.is_current and sender._after_refresh_pending(self, roots):
                 index += 1
                 continue
             self._callbacks.pop(index)
-            with sender._context():
-                await invoke(callback)
+            sender.call_later(callback)
 
     def _invoke_later(self, callback: CallbackType, sender: MessagePump) -> None:
         """Enqueue a callback to be invoked after the screen is repainted.
