@@ -98,6 +98,57 @@ async def test_nested_focus_scopes_share_traversal_without_expanding_inner_targe
         assert inner_target.styles.color == Color.parse("green")
 
 
+async def test_focus_dependency_supply_follows_read_and_reparse(tmp_path):
+    class Badge(Label):
+        COMPONENT_CLASSES = {"badge--label"}
+
+    class FocusApp(App):
+        AUTO_FOCUS = "#outside"
+        CSS = """
+        .detail, .badge--label { color: blue; }
+        """
+
+        def compose(self):
+            with VerticalGroup(id="host"):
+                yield Button("inside", id="inside")
+                yield Badge("target", classes="detail")
+            yield Button("outside", id="outside")
+
+    app = FocusApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        badge = app.query_one(Badge)
+        # Acquire the original index before a new source is read. Both an
+        # immediate descendant and a virtual component must gain its dependency.
+        previous_index = app.stylesheet.rules_map
+        path = tmp_path / "focus.tcss"
+        path.write_text("""
+        #host:focus-within > .detail { color: red; }
+        #host:focus-within .badge--label { color: red; }
+        """)
+        app.stylesheet.read(path)
+        app.query_one("#inside").focus()
+        await pilot.pause()
+        assert app.stylesheet.rules_map is not previous_index
+        assert badge.styles.color == Color.parse("red")
+        assert badge.get_component_styles("badge--label").color == Color.parse("red")
+
+        path.write_text("""
+        #host:focus-within > .detail { color: green; }
+        #host:focus-within .badge--label { color: green; }
+        """)
+        app.stylesheet.read(path)
+        app.stylesheet.reparse()
+        app.query_one("#outside").focus()
+        await pilot.pause()
+        assert badge.styles.color == Color.parse("blue")
+        assert badge.get_component_styles("badge--label").color == Color.parse("blue")
+        app.query_one("#inside").focus()
+        await pilot.pause()
+        assert badge.styles.color == Color.parse("green")
+        assert badge.get_component_styles("badge--label").color == Color.parse("green")
+
+
 async def test_instant_style_changes_do_not_materialize_animation_rule_graphs():
     app = App()
     async with app.run_test() as pilot:
