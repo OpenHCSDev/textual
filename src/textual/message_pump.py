@@ -52,6 +52,8 @@ if TYPE_CHECKING:
     from textual.app import App
     from textual.css.model import SelectorSet
     from textual.dom import DOMNode
+    from textual.screen import Screen
+    from textual.widget import Widget
 
 
 Callback: TypeAlias = "Callable[..., Any] | Callable[..., Awaitable[Any]]"
@@ -481,9 +483,15 @@ class MessagePump(metaclass=_MessagePumpMeta):
         self._timers.add(timer)
         return timer
 
+    def _after_refresh_pending(self, screen: Screen, roots: tuple[Widget, ...]) -> bool:
+        """Non-spatial owners await the complete admitted screen publication."""
+        return screen._refresh_pending or bool(roots)
+
     def call_after_refresh(self, callback: Callback, *args: Any, **kwargs: Any) -> bool:
-        """Schedule a callback to run after all messages are processed and the screen
-        has been refreshed. Positional and keyword arguments are passed to the callable.
+        """Schedule a callback after this owner's messages and publication complete.
+
+        Widget callbacks await their subtree; Screen and App callbacks await the
+        complete frame. Positional and keyword arguments are passed to the callable.
 
         Args:
             callback: A callable.
@@ -554,9 +562,9 @@ class MessagePump(metaclass=_MessagePumpMeta):
     def _on_invoke_later(self, message: messages.InvokeLater) -> None:
         # Forward InvokeLater message to the Screen
         if self.app._running:
-            self.app.screen._invoke_later(
-                message.callback, message._sender or active_message_pump.get()
-            )
+            # call_after_refresh posts to this owner's queue first. That owner,
+            # rather than the ambient caller, owns the publication being awaited.
+            self.app.screen._invoke_later(message.callback, self)
 
     async def _close_messages(self, wait: bool = True) -> None:
         """Close message queue, and optionally wait for queue to finish processing."""

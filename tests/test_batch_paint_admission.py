@@ -5,6 +5,7 @@ import asyncio
 from textual.app import App, ComposeResult
 from textual.containers import Vertical
 from textual.screen import ModalScreen, Screen
+from textual.widget import Widget
 from textual.widgets import Label
 
 
@@ -13,7 +14,7 @@ class ObservedScreen(Screen):
         super().__init__()
         self.preparation_batches: list[int] = []
 
-    def _prepare_compositor_refresh(self) -> bool:
+    def _prepare_compositor_refresh(self) -> tuple[Widget, ...]:
         self.preparation_batches.append(self.app._batch_count)
         return super()._prepare_compositor_refresh()
 
@@ -99,9 +100,9 @@ async def test_refresh_callback_queue_survives_a_batch_between_callbacks() -> No
 
 async def test_translucent_foreground_respects_background_resource_admission() -> None:
     class SourceScreen(ObservedScreen):
-        def _prepare_compositor_refresh(self) -> bool:
-            return (not self.query_one("#holder").lock.is_locked
-                    and super()._prepare_compositor_refresh())
+        def _prepare_compositor_refresh(self) -> tuple[Widget, ...]:
+            holder = self.query_one("#holder")
+            return (holder,) if holder.lock.is_locked else super()._prepare_compositor_refresh()
 
     class SourceApp(BatchPaintApp):
         def get_default_screen(self) -> Screen:
@@ -122,7 +123,162 @@ async def test_translucent_foreground_respects_background_resource_admission() -
             foreground._compositor_refresh()
             assert not app.frames
             assert foreground._compositor._dirty_regions == damage
-            assert foreground._repaint_required
         foreground._compositor_refresh()
         assert app.frames
+        assert not foreground._compositor._dirty_regions
+
+
+class HeldVertical(Vertical):
+    """A real changing subtree refuses layout and paint until its owner releases."""
+
+    def arrange(self, size, optimal=False):
+        assert not self.lock.is_locked, "Layout descended into a mutation"
+        return super().arrange(size, optimal=optimal)
+
+    def render_lines(self, crop):
+        assert not self.lock.is_locked, "Paint consumed a held source"
+        return super().render_lines(crop)
+
+
+class IndependentScreen(ObservedScreen):
+    def __init__(self):
+        super().__init__()
+        self.publications = []
+
+    def _layout_mutation_roots(self):
+        return tuple(root for root in self.query(HeldVertical) if root.lock.is_locked)
+
+    def _prepare_compositor_refresh(self):
+        return self._layout_mutation_roots()
+
+    def _on_frame_published(self, deferred_roots):
+        self.publications.append(deferred_roots)
+
+
+class IndependentApp(BatchPaintApp):
+    CSS = """
+    HeldVertical { width: 20; height: auto; }
+    HeldVertical Label { height: 3; }
+    #sidebar { dock: right; width: 20; height: 8; }
+    """
+
+    def get_default_screen(self):
+        return IndependentScreen()
+
+    def compose(self):
+        with HeldVertical(id="holder"):
+            yield Label("ORIGINAL_HELD", id="original")
+        yield Label("SIDEBAR_OLD", id="sidebar")
+
+
+async def test_partial_publication_keeps_geometry_and_owner_callbacks():
+    from textual._compositor import ChopsUpdate
+    from textual.geometry import Region
+
+    app = IndependentApp()
+    held_done, parent_done, scene_done, sidebar_done = (asyncio.Event() for _ in range(4))
+    async with app.run_test(size=(40, 8)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        holder = app.query_one(HeldVertical)
+        original = app.query_one("#original")
+        sidebar = app.query_one("#sidebar", Label)
+        compositor = screen._compositor
+        before = compositor.find_widget(holder)
+        original_geometry = compositor.find_widget(original)
+        original_hit = compositor.get_widget_at(15, 1)[0]
+        app.frames.clear()
+        screen.publications.clear()
+        async with holder.lock:
+            await holder.mount(Label("NEW_HELD", id="new"))
+            sidebar.update("SIDEBAR_NEW")
+            original.call_after_refresh(held_done.set)
+            holder.call_after_refresh(parent_done.set)
+            app.call_after_refresh(scene_done.set)
+            sidebar.call_after_refresh(sidebar_done.set)
+            await asyncio.wait_for(sidebar_done.wait(), 2)
+            assert not held_done.is_set() and not parent_done.is_set() and not scene_done.is_set()
+            assert compositor.find_widget(holder) == before
+            assert compositor.find_widget(original) == original_geometry
+            assert compositor.get_widget_at(1, 1)[0] is original
+            assert screen.publications and all(roots == (holder,) for roots in screen.publications)
+            assert compositor._dirty_regions
+            compositor._dirty_regions.add(compositor.size.region)
+            update = compositor.render_update(excluded_regions=compositor.deferred_regions((holder,)))
+            assert isinstance(update, ChopsUpdate)
+            cells = list(ChopsUpdate._span_cuts(update.spans, update.cuts, 0))
+            assert all(not Region(x1, y, x2 - x1, 1).overlaps(before.visible_region)
+                       for y, x1, x2 in cells)
+            assert "SIDEBAR_NEW" in update.render_segments(app.console)
+            assert "ORIGINAL_HELD" not in update.render_segments(app.console)
+            # Repeated idle delivery is quiescent: holding a callback never
+            # schedules itself, and held-only damage doesn't resume the timer.
+            await pilot.pause(0.05)
+            assert screen._update_timer._active.is_set() is False
+            # A sibling can acquire new layout overlapping held pixels. The
+            # terminal still shows the borrowed subtree there; hit lookup must
+            # not expose the sibling's unpainted part early.
+            sidebar.styles.width = 30
+            await pilot.pause()
+            assert compositor.get_widget_at(15, 1)[0] is original_hit
+        holder.refresh(layout=True)
+        await asyncio.wait_for(scene_done.wait(), 2)
+        assert held_done.is_set() and parent_done.is_set()
+        assert screen.publications[-1] == ()
+        assert not compositor._dirty_regions
+        assert compositor.find_widget(holder).region.height == 6
+
+
+async def test_inline_partial_cells_preserve_held_content_and_clear_after_release():
+    from textual._compositor import InlineUpdate
+
+    app = IndependentApp()
+    async with app.run_test(size=(40, 8)) as pilot:
+        await pilot.pause()
+        compositor = app.screen._compositor
+        holder = app.query_one(HeldVertical)
+        async with holder.lock:
+            update = compositor.render_inline(app.size, clear=True,
+                excluded_regions=compositor.deferred_regions((holder,)))
+            assert isinstance(update, InlineUpdate)
+            rendered = update.render_segments(app.console)
+            assert "SIDEBAR_OLD" in rendered and "ORIGINAL_HELD" not in rendered
+            assert "\x1b[J" not in rendered
+            assert compositor._dirty_regions
+        rendered = compositor.render_inline(app.size, clear=True).render_segments(app.console)
+        assert "ORIGINAL_HELD" in rendered and "\x1b[J" in rendered
+        assert not compositor._dirty_regions
+
+
+async def test_partial_translucent_publication_never_reads_held_backdrop():
+    from textual._compositor import ChopsUpdate
+    from textual.geometry import Region
+
+    app = IndependentApp()
+    async with app.run_test(size=(40, 8)) as pilot:
+        await pilot.pause()
+        source = app.screen
+        holder = app.query_one(HeldVertical)
+        held = holder.region
+        await app.push_screen(ModalScreen())
+        await pilot.pause()
+        foreground = app.screen
+        async with holder.lock:
+            compositor = foreground._compositor
+            compositor._dirty_regions.add(compositor.size.region)
+            regions = source._compositor.deferred_regions((holder,))
+            # Exercise the original Screen publication including its nested
+            # BackgroundScreen renderer, not only the isolated damage function.
+            app.frames.clear()
+            foreground._compositor_refresh()
+            assert app.frames
+            assert compositor._dirty_regions
+            with source._compositor._using_exclusions(regions):
+                update = compositor.render_update(full=True, screen_stack=[source], excluded_regions=regions)
+            assert isinstance(update, ChopsUpdate)
+            assert all(not Region(x1, y, x2 - x1, 1).overlaps(held)
+                       for y, x1, x2 in ChopsUpdate._span_cuts(update.spans, update.cuts, 0))
+            assert "SIDEBAR_OLD" in update.render_segments(app.console)
+        foreground.refresh()
+        await pilot.pause()
         assert not foreground._compositor._dirty_regions
