@@ -1238,12 +1238,13 @@ class Compositor:
         Returns:
             `True` if the widget was in the last refresh, or `False` if it wasn't.
         """
-        # Try to avoid a recalculation of full_map if possible.
-        return (
-            widget in self.widgets
-            or (self._visible_map is not None and widget in self._visible_map)
-            or widget in self.full_map
-        )
+        if widget in self.widgets:
+            return True
+        try:
+            self.find_widget(widget)
+        except errors.NoWidget:
+            return False
+        return True
 
     def get_offset(self, widget: Widget) -> Offset:
         """Get the offset of a widget.
@@ -1426,7 +1427,19 @@ class Compositor:
         """
         geometry = self._get_geometry(widget)
         if geometry is None:
-            geometry = self.full_map.get(widget)
+            if self.root is not None and self._full_map_invalidated and not self._arranging:
+                # A position query requires this original ancestry path, not
+                # every offscreen descendant. Preserve the scene's existing
+                # reader placements in the same original reflow publication.
+                self.reflow_visible(
+                    self.root, self.size,
+                    retain_geometry=(*self._published_map, widget),
+                )
+                geometry = self._get_geometry(widget)
+            else:
+                # Measurement inside arrangement must not recursively arrange;
+                # the original complete map remains its available prior scope.
+                geometry = self.full_map.get(widget)
         if geometry is None:
             raise errors.NoWidget("Widget is not in layout")
         return geometry
@@ -1454,15 +1467,10 @@ class Compositor:
         """Read the original scene placement without arranging or copying it."""
         if self.root is None:
             return None
-        if not self._full_map_invalidated:
-            geometry = self._full_map.get(widget)
-            if geometry is not None:
-                return geometry
-        if self._visible_map is not None:
-            geometry = self._visible_map.get(widget)
-            if geometry is not None:
-                return geometry
-        return None
+        # Completeness invalidation does not retire committed coordinates.
+        # Paint and hit readers already consume this exact scene; positions and
+        # capture eligibility must not independently choose another map.
+        return self._published_map.get(widget)
 
     @contextmanager
     def _using_geometry(self, root: Widget, geometry: CompositorMap) -> Iterator[None]:
