@@ -250,17 +250,14 @@ class Screen(Generic[ScreenResultType], Widget):
     selections: var[dict[Widget, Selection]] = var(dict)
     """Map of widgets and selected ranges."""
 
-    _selecting = var(False)
-    """Indicates mouse selection is in progress."""
-
     # Selection paints through the changed widgets' own refreshes. Repainting
     # the entire screen whenever the pointer moves makes transcript drags
     # scale with every mounted history pane and forces a full compositor pass.
     _select_state: Reactive[SelectState | None] = Reactive(None, repaint=False)
-    """Current select state, if selecting."""
+    """Pointer range, retained after release for selection projection and copy."""
 
     _mouse_down_offset: var[Offset | None] = var(None)
-    """Last mouse down screen offset, or `None` if the mouse is up."""
+    """Primary press screen offset, or `None` after its release."""
 
     _pointer_shape: var[PointerShape] = var("default")
     """The current mouse pointer shape."""
@@ -579,6 +576,11 @@ class Screen(Generic[ScreenResultType], Widget):
     def allow_select(self) -> bool:
         """Check if this widget permits text selection."""
         return self.ALLOW_SELECT
+
+    @property
+    def _selecting(self) -> bool:
+        """Whether the original primary press still owns a pointer range."""
+        return self._mouse_down_offset is not None and self._select_state is not None
 
     def get_loading_widget(self) -> Widget:
         """Get a widget to display a loading indicator.
@@ -1636,6 +1638,9 @@ class Screen(Generic[ScreenResultType], Widget):
 
     def _on_screen_suspend(self) -> None:
         """Screen has suspended."""
+        # Releases now route to another Screen. Retain the copyable range,
+        # but retire the press and its auto-scroll through the original owner.
+        self._mouse_down_offset = None
         if self.app.SUSPENDED_SCREEN_CLASS:
             self.add_class(self.app.SUSPENDED_SCREEN_CLASS)
         self.app._set_mouse_over(None, None)
@@ -1905,7 +1910,7 @@ class Screen(Generic[ScreenResultType], Widget):
                 widget: Container widgets to scroll.
                 direction: Lines to scroll.
             """
-            if self._select_state is not None:
+            if self._selecting:
                 # Update scroll position
                 previous_offset = widget.scroll_offset
                 widget.scroll_y += direction
@@ -2053,7 +2058,7 @@ class Screen(Generic[ScreenResultType], Widget):
 
         elif isinstance(event, events.MouseEvent):
             event.widget = None
-            if isinstance(event, events.MouseUp):
+            if isinstance(event, events.MouseUp) and event.button == 1:
                 self._flush_pending_selection()
                 if (
                     self._mouse_down_offset is not None
@@ -2070,10 +2075,13 @@ class Screen(Generic[ScreenResultType], Widget):
                         self.clear_selection()
 
                 self._mouse_down_offset = None
-                self._selecting = False
                 self.post_message(events.TextSelected())
 
-            elif isinstance(event, events.MouseDown) and not self.app.mouse_captured:
+            elif (
+                isinstance(event, events.MouseDown)
+                and event.button == 1
+                and not self.app.mouse_captured
+            ):
                 self._mouse_down_offset = event.screen_offset
                 select_widget, select_offset = self.get_widget_and_offset_at(
                     event.x, event.y
@@ -2150,8 +2158,8 @@ class Screen(Generic[ScreenResultType], Widget):
     def _key_escape(self) -> None:
         self.clear_selection()
 
-    def _watch__selecting(self, selecting: bool) -> None:
-        if not selecting:
+    def _watch__mouse_down_offset(self, offset: Offset | None) -> None:
+        if offset is None:
             self._stop_auto_scroll()
 
     def _interaction_widgets(self) -> Iterator[Widget]:
@@ -2169,6 +2177,8 @@ class Screen(Generic[ScreenResultType], Widget):
         Args:
             select_state: Current selection state.
         """
+        if select_state is None:
+            self._stop_auto_scroll()
         if (
             select_state is not None
             and select_state.end is not None
@@ -2203,7 +2213,6 @@ class Screen(Generic[ScreenResultType], Widget):
 
     def _apply_selection_state(self, select_state: SelectState | None) -> None:
         """Calculate widget selections from the current pointer state."""
-        self._selecting = select_state is not None
         if select_state is None:
             return
 

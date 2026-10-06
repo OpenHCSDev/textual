@@ -1,0 +1,20 @@
+..F......................                                                [100%]
+=================================== FAILURES ===================================
+___ test_real_run_async_primary_edge_scroll_stops_without_projection_revival ___
+tests/test_primary_selection_gesture.py:121: in test_real_run_async_primary_edge_scroll_stops_without_projection_revival
+    await asyncio.wait_for(
+/usr/lib/python3.14/asyncio/tasks.py:488: in wait_for
+    return await fut
+           ^^^^^^^^^
+src/textual/app.py:2307: in run_async
+    await auto_pilot_task
+src/textual/app.py:2279: in run_auto_pilot
+    await auto_pilot(pilot)
+tests/test_primary_selection_gesture.py:99: in drive
+    assert app.screen._selecting
+E   AssertionError: assert False
+E    +  where False = Screen(id='_default')._selecting
+E    +    where Screen(id='_default') = HistoryApp(title='HistoryApp', classes={'-dark-mode'}, pseudo_classes={'nocolor', 'dark', 'focus'}).screen
+=========================== short test summary info ============================
+FAILED tests/test_primary_selection_gesture.py::test_real_run_async_primary_edge_scroll_stops_without_projection_revival
+1 failed, 24 passed in 26.72s
