@@ -724,8 +724,9 @@ class MessagePump(metaclass=_MessagePumpMeta):
                 except MessagePumpClosed:
                     break
 
+            result: Message | None = None
             try:
-                await self._dispatch_message(message)
+                result = await self._dispatch_message(message)
             except CancelledError:
                 raise
             except Exception as error:
@@ -734,7 +735,7 @@ class MessagePump(metaclass=_MessagePumpMeta):
                 self.app._handle_exception(error)
                 break
             finally:
-                message._complete_dispatch(self)
+                message._complete_dispatch(self, result)
                 # Subscription access initializes this optional signal. Do not
                 # allocate its weak-key subscriber machinery for quiet pumps.
                 message_signal = self.__dict__.get("message_signal")
@@ -777,7 +778,7 @@ class MessagePump(metaclass=_MessagePumpMeta):
                 self.app._handle_exception(error)
                 break
 
-    async def _dispatch_message(self, message: Message) -> None:
+    async def _dispatch_message(self, message: Message) -> Message | None:
         """Dispatch a message received from the message queue.
 
         Args:
@@ -794,10 +795,11 @@ class MessagePump(metaclass=_MessagePumpMeta):
         else:
             message_hook(message)
 
+        result: Message | None = None
         with self.prevent(*message._prevent):
             # Allow apps to treat events and messages separately
             if isinstance(message, Event):
-                await self.on_event(message)
+                result = await self.on_event(message)
             elif "debug" in self.app.features:
                 start = perf_counter()
                 await self._on_message(message)
@@ -812,6 +814,7 @@ class MessagePump(metaclass=_MessagePumpMeta):
                 await self._on_message(message)
             if self._next_callbacks:
                 await self._flush_next_callbacks()
+        return result
 
     def _get_dispatch_methods(
         self, method_name: str, message: Message
@@ -872,11 +875,15 @@ class MessagePump(metaclass=_MessagePumpMeta):
             if method is not None and not getattr(method, "_textual_on", None):
                 yield cls, method.__get__(self, cls)
 
-    async def on_event(self, event: events.Event) -> None:
+    async def on_event(self, event: events.Event) -> Message | None:
         """Called to process an event.
 
         Args:
             event: An Event object.
+
+        Returns:
+            A final message produced by this delivery, or None for the original
+            event. Overrides should return the original owner's result.
         """
         await self._on_message(event)
 
@@ -927,7 +934,7 @@ class MessagePump(metaclass=_MessagePumpMeta):
             message: A message object.
 
         Returns:
-            Optional completion of this delivery, including its DOM bubbling.
+            Optional completion with the final delivered message, including DOM bubbling.
             The originating pump processes its own bubbled copy after admission.
         """
         from textual.await_complete import AwaitComplete
@@ -937,7 +944,7 @@ class MessagePump(metaclass=_MessagePumpMeta):
         completion = asyncio.get_running_loop().create_future()
         message._dispatch_completion = (self, asyncio.current_task(), completion)
 
-        async def wait_for_dispatch() -> None:
+        async def wait_for_dispatch() -> Message:
             # A removed receiver may stop before reaching this message. Borrow
             # its original task; never cancel that task or replay the delivery.
             while not completion.done():
@@ -951,6 +958,7 @@ class MessagePump(metaclass=_MessagePumpMeta):
                 )
                 if task.done() and not completion.done():
                     message._complete_dispatch(owner)
+            return completion.result()
 
         def check_self_wait() -> None:
             if asyncio.current_task() is self._task:

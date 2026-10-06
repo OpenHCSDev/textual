@@ -1,0 +1,12 @@
+.....F                                                                   [100%]
+=================================== FAILURES ===================================
+___________ test_background_screen_delivery_keeps_raw_app_completion ___________
+tests/test_pilot_pointer_ingress.py:149: in test_background_screen_delivery_keeps_raw_app_completion
+    assert app.delivered == [(None, 1, False, False, False)]
+E   AssertionError: assert [('_default',...False, False)] == [(None, 1, Fa...False, False)]
+E     
+E     At index 0 diff: ('_default', 1, False, False, False) != (None, 1, False, False, False)
+E     Use -v to get more diff
+=========================== short test summary info ============================
+FAILED tests/test_pilot_pointer_ingress.py::test_background_screen_delivery_keeps_raw_app_completion
+1 failed, 5 passed in 1.31s
