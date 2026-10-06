@@ -596,33 +596,23 @@ class MessagePump(metaclass=_MessagePumpMeta):
         self._thread_init()
 
         if self.app._running:
-            self._task = create_task(
+            task = create_task(
                 self._process_messages(), name=f"message pump {self}"
             )
+            # Enroll scheduled custody until the coroutine acquires it. An
+            # eager task which already exited has released that custody.
+            if not task.done():
+                self._task = task
         else:
             self._closing = True
             self._closed = True
 
-    async def _process_messages(self) -> None:
-        self._running = True
+    async def _process_messages(self, **kwargs: Any) -> None:
+        """Own the real pump task through subclass startup, dispatch and exit."""
+        self._task = asyncio.current_task()
         try:
             with self._context():
-                try:
-                    if not await self._pre_process():
-                        return
-                    try:
-                        await self._process_messages_loop()
-                    except CancelledError:
-                        pass
-                finally:
-                    self._running = False
-                    try:
-                        if self._timers:
-                            await Timer._stop_all(self._timers)
-                            self._timers.clear()
-                        Reactive._clear_watchers(self)
-                    finally:
-                        await self._message_loop_exit()
+                await self._process_messages_body(**kwargs)
         finally:
             # Bound methods and closures in a quiet publisher may retain this
             # node despite its weak subscriber key. Teardown owns their removal,
@@ -631,6 +621,26 @@ class MessagePump(metaclass=_MessagePumpMeta):
             self._clear_signal_subscriptions()
             Reactive._clear_watch_subscriptions(self)
             self._task = None
+
+    async def _process_messages_body(self, **kwargs: Any) -> None:
+        """Default widget startup and teardown inside the shared task lifetime."""
+        self._running = True
+        try:
+            if not await self._pre_process():
+                return
+            try:
+                await self._process_messages_loop()
+            except CancelledError:
+                pass
+        finally:
+            self._running = False
+            try:
+                if self._timers:
+                    await Timer._stop_all(self._timers)
+                    self._timers.clear()
+                Reactive._clear_watchers(self)
+            finally:
+                await self._message_loop_exit()
 
     async def _message_loop_exit(self) -> None:
         """Called when the message loop has completed."""
