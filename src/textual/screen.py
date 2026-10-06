@@ -1320,9 +1320,9 @@ class Screen(Generic[ScreenResultType], Widget):
 
     def _sender_refresh_pending(self, sender: Widget, roots: tuple[Widget, ...]) -> bool:
         """Admit the original spatial sender, including its backdrop publication."""
-        ancestry = set(sender.walk_ancestors(with_self=True))
-        if ancestry.intersection(roots) or any(
-            sender in root.walk_ancestors(with_self=True) for root in roots
+        if roots and (
+            set(sender.walk_ancestors(with_self=True)).intersection(roots)
+            or any(sender in root.walk_ancestors(with_self=True) for root in roots)
         ):
             return True
         owner = sender.screen
@@ -1459,7 +1459,7 @@ class Screen(Generic[ScreenResultType], Widget):
                         member for member in members
                         if set(member.walk_ancestors(with_self=True)).intersection(mutation_roots)
                     })
-                }
+                } if mutation_roots else {}
                 Hide = events.Hide
                 Show = events.Show
 

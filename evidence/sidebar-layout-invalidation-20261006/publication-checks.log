@@ -1,0 +1,12 @@
+.F....                                                                   [100%]
+=================================== FAILURES ===================================
+________ test_refresh_callback_queue_survives_a_batch_between_callbacks ________
+tests/test_batch_paint_admission.py:95: in test_refresh_callback_queue_survives_a_batch_between_callbacks
+    assert order == ["first"]
+E   AssertionError: assert ['first', 'second'] == ['first']
+E     
+E     Left contains one more item: 'second'
+E     Use -v to get more diff
+=========================== short test summary info ============================
+FAILED tests/test_batch_paint_admission.py::test_refresh_callback_queue_survives_a_batch_between_callbacks
+1 failed, 5 passed in 0.85s
