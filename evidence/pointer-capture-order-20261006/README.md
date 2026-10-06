@@ -1,0 +1,32 @@
+# Ordered native pointer admission
+
+App originally selected every pointer target before the queued MouseDown handler
+could establish capture. A queued move and release could therefore miss the press
+owner, then its late handler left capture active. This is a source defect; it is
+not proven to be the interleaving in closed physical02.
+
+Message owns one pending dispatch completion. MessagePump posts the original
+message to its existing FIFO and releases completion only from the receiver which
+still owns it. Bubbling transfers that custody through the original DOM queues;
+the originating pump retains its own bubbled copy for later dispatch. A retiring
+receiver releases its original delivery without cancelling children or replay.
+App awaits this admission before resolving the next pointer packet. Screen and
+Widget return the existing AwaitComplete resource; Pilot awaits the same contract.
+Capture, release, selection, hit geometry, broker actions and disabled input keep
+their existing owners. No second input queue, capture state or timed delay exists.
+
+Native Input, TextArea and ScrollBar capture from their queued handlers. Toad
+SidebarResizeHandle, SidebarSlider, GoalBar and Mandelbrot do the same. Ancestor
+handlers retain ordinary bubbling. The awaited chain stops before the originating
+App pump, which cannot await itself; its forwarded application-level event remains
+on its original FIFO. This is target/DOM admission, not synchronous application
+notification delivery.
+
+Existing refactor-audit Package parsed 249 native production / 461 test modules
+and 288 Toad production / 400 test modules, with zero omissions. before.json
+contains 118 lexical owner/consumer sites. Dynamic overrides/factories remain a
+semantic resolution limitation, not zero-by-omission proof.
+
+Source checkpoint; changed-path checks have not run. Parent owns recorder motion
+acceptance; no physical run, installed pin, package or public runtime is changed.
+Frozen e15 / physical02 evidence remains unchanged.

@@ -251,12 +251,12 @@ async def test_drag_does_not_repaint_unchanged_selected_text():
         last = app.query_one("#record-504", Counted)
         assert await pilot.mouse_down(first, offset=(0, 0))
         x, y = last.region.x + 2, last.region.y
-        app.screen._forward_event(MouseMove(None, x, y, 2, 1, 1, False, False, False))
+        await app.screen._forward_event(MouseMove(None, x, y, 2, 1, 1, False, False, False))
         await pilot.pause()
         assert interior in app.screen.selections
         updates = interior.selection_updates
         assert updates == 1
-        app.screen._forward_event(MouseMove(None, x + 1, y, 1, 0, 1, False, False, False))
+        await app.screen._forward_event(MouseMove(None, x + 1, y, 1, 0, 1, False, False, False))
         await pilot.pause()
         assert interior.selection_updates == updates
         assert last.selection_updates > 1

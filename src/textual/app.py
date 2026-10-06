@@ -4123,7 +4123,9 @@ class App(Generic[ReturnType], DOMNode):
                         # Shouldn't occur, since at the very least this will find the Screen
                         self._mouse_down_widget = None
 
-                self.screen._forward_event(event)
+                # The next pointer packet must use capture and geometry decided
+                # by this delivery's original widget / ancestor queues.
+                await self.screen._forward_event(event)
 
                 # If a MouseUp occurs at the same widget as a MouseDown, then we should
                 # consider it a click, and produce a Click event.
@@ -4158,7 +4160,7 @@ class App(Generic[ReturnType], DOMNode):
                             self._click_chain_last_time = event.time
                             self._click_chain_last_offset = screen_offset
 
-                            self.screen._forward_event(click_event)
+                            await self.screen._forward_event(click_event)
                     except NoWidget:
                         pass
 
