@@ -210,16 +210,19 @@ class Stylesheet:
 
     @property
     def rules_map(self) -> dict[str, list[RuleSet]]:
-        """Structure that maps a selector on to a list of rules.
+        """Index target names and pseudo-class dependencies from parsed rules.
 
         Returns:
             Mapping of selector to rule sets.
         """
+        rules = self.rules
         if self._rules_map is None:
             rules_map: dict[str, list[RuleSet]] = defaultdict(list)
-            for rule in self.rules:
+            for rule in rules:
                 for name in rule.selector_names:
                     rules_map[name].append(rule)
+                for pseudo_class in rule.pseudo_classes:
+                    rules_map[f":{pseudo_class}"].append(rule)
             self._rules_map = dict(rules_map)
         return self._rules_map
 
@@ -974,7 +977,12 @@ class Stylesheet:
         if not scopes:
             return
         scope_names: dict[DOMNode, set[str]] = {}
-        for rule in self.rules:
+        rules_map = self.rules_map
+        rules = dict.fromkeys(
+            rule for pseudo_class in pseudo_classes
+            for rule in rules_map.get(f":{pseudo_class}", ())
+        )
+        for rule in rules:
             for root, focus_node in scopes:
                 if any(
                     selector.pseudo_classes & pseudo_classes

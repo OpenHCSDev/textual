@@ -1,0 +1,11 @@
+# Focus rule supply
+
+The existing RuleSet parser owns pseudo-class dependencies from every selector, including ancestor and nested selectors. Stylesheet.rules_map now indexes those declarations alongside target names. Focus/blur/focus-within acquisition selects indexed rules and deletes its scan of every rule for every changed scope. Actual dynamic selector checks, nested-scope target traversal, component/virtual DOM handling and cascade application remain unchanged. Candidate collection unions rule identities; cascade precedence still comes from the unchanged apply path.
+
+The rules_map reader first acquires rules, so a pending read/parse cannot serve an older index. Successful parse and reparse retire the same existing index; copies retain their normal source/parse lifetime. New pseudo-class keys cannot collide with native target keys (type, *, #id, .class). No new cache or registry.
+
+AST before: 249 native production, 467 test and 288 Toad production modules, zero omissions. RuleSet._post_parse is the dependency producer; Stylesheet.rules_map is the one index; App application focus, Widget focus and Screen changed focus-within scopes converge on _update_focus_dependencies. Existing matching/index readers were inspected. After native parser: 249 modules, zero omissions. External dynamic mutation is not proven absent by lexical AST; no new support for post-parse selector mutation is claimed. Three production lines replaced; index lifetime and all three focus consumers use the existing owner.
+
+Seven focused controls passed, including real mounted descendants/components across CSS read and reparse. One original matched sidebar App finished zero with empty stderr, 508 widgets/10 tabs, no provider. Right profile: same three focus updates, own declaration discovery 7.05ms -> .47ms and full method 19.03ms -> 11.22ms. Left full method 18.51ms -> 7.99ms. This is a single source headless observation. First-display medians 41.8/42.2ms versus 40.1/45.6ms, tails vary, paint was slower: no reliable overall frame or live speedup claim.
+
+RESULT.json binds original raw profiles/logs and source evidence. No new build, install, provider, public operation or repeated benchmark. The existing empty-damage pending_for checkpoint remains on this same PR, independently scoped.
