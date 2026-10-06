@@ -48,7 +48,7 @@ async def test_async_widget_batch_retains_damage_and_refresh_callbacks() -> None
         screen.preparation_batches.clear()
         async with holder.batch():
             await holder.mount(Label("new retained source", id="new"))
-            screen._refresh_layout()
+            compositor.reflow(screen, screen.size)
             app.call_after_refresh(painted.set)
             await pilot.pause()
             damage = set(screen._compositor._dirty_regions)
