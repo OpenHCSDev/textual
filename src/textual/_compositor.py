@@ -875,9 +875,10 @@ class Compositor:
         mutation_paths: set[Widget] = set()
         for owner in mutation_roots:
             mutation_paths.update(owner.walk_ancestors(with_self=True))
-        for node, geometry in previous.items():
-            for owner in mutation_roots.intersection(node.walk_ancestors(with_self=True)):
-                held[owner][node] = geometry
+        if mutation_roots:
+            for node, geometry in previous.items():
+                for owner in mutation_roots.intersection(node.walk_ancestors(with_self=True)):
+                    held[owner][node] = geometry
         for owner in mutation_paths:
             self._subtree_geometry.pop(owner, None)
         map: CompositorMap = {}
@@ -1576,6 +1577,8 @@ class Compositor:
         Overflowing descendants retain their own original clipped bounds.
         """
         roots = set(roots)
+        if not roots:
+            return ()
         regions: set[Region] = set()
         placed: set[Widget] = set()
         for widget, geometry in self._published_map.items():

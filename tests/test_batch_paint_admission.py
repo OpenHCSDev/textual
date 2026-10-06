@@ -68,7 +68,7 @@ async def test_async_widget_batch_retains_damage_and_refresh_callbacks() -> None
         assert app.query_one("#new", Label).is_attached
 
 
-async def test_refresh_callback_queue_survives_a_batch_between_callbacks() -> None:
+async def test_admitted_refresh_callbacks_keep_sender_order_during_later_batch() -> None:
     app = BatchPaintApp()
     entered = asyncio.Event()
     release = asyncio.Event()
@@ -76,11 +76,13 @@ async def test_refresh_callback_queue_survives_a_batch_between_callbacks() -> No
     order: list[str] = []
 
     async def first() -> None:
+        assert asyncio.current_task() is app.task
         order.append("first")
         entered.set()
         await release.wait()
 
     def second() -> None:
+        assert asyncio.current_task() is app.task
         order.append("second")
         completed.set()
 
@@ -89,12 +91,13 @@ async def test_refresh_callback_queue_survives_a_batch_between_callbacks() -> No
         app.call_after_refresh(second)
         await asyncio.wait_for(entered.wait(), 1)
         with app.batch_update():
-            release.set()
-            # The screen message pump is waiting inside first; let it proceed.
-            await asyncio.sleep(0.05)
             assert order == ["first"]
             assert not completed.is_set()
-        await asyncio.wait_for(completed.wait(), 1)
+            release.set()
+            # Publication already admitted both callbacks. The sender owns
+            # their execution and order; a later batch holds new frames,
+            # not this sender's previously admitted callback messages.
+            await asyncio.wait_for(completed.wait(), 1)
         assert order == ["first", "second"]
 
 
