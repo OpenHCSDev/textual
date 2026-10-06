@@ -15,6 +15,7 @@ from textual._context import active_message_pump
 from textual.case import camel_to_snake
 
 if TYPE_CHECKING:
+    from asyncio import Future, Task
     from textual.dom import DOMNode
     from textual.message_pump import MessagePump
 
@@ -30,6 +31,7 @@ class Message:
         "_no_default_action",
         "_stop_propagation",
         "_prevent",
+        "_dispatch_completion",
     ]
 
     ALLOW_SELECTOR_MATCH: ClassVar[set[str]] = set()
@@ -55,6 +57,7 @@ class Message:
         self._no_default_action = False
         self._stop_propagation = False
         self._prevent: set[type[Message]] = set()
+        self._dispatch_completion: tuple[MessagePump, Task | None, Future] | None = None
 
     def __rich_repr__(self) -> rich.repr.Result:
         yield from ()
@@ -155,4 +158,18 @@ class Message:
             widget: Target of bubble.
         """
         self._no_default_action = False
-        widget.post_message(self)
+        if widget.post_message(self) and self._dispatch_completion is not None:
+            _, caller, completion = self._dispatch_completion
+            # The originating pump is awaiting this delivery. Its bubbled copy
+            # remains on its original queue, after the routed DOM handlers finish.
+            if widget._task is not caller:
+                self._dispatch_completion = (widget, caller, completion)
+
+    def _complete_dispatch(self, receiver: MessagePump) -> None:
+        """Release this delivery only from the queue which still owns it."""
+        if self._dispatch_completion is not None:
+            owner, _, completion = self._dispatch_completion
+            if owner is receiver:
+                self._dispatch_completion = None
+                if not completion.done():
+                    completion.set_result(None)

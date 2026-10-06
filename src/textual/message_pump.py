@@ -50,6 +50,7 @@ if TYPE_CHECKING:
     from typing_extensions import TypeAlias
 
     from textual.app import App
+    from textual.await_complete import AwaitComplete
     from textual.css.model import SelectorSet
     from textual.dom import DOMNode
     from textual.screen import Screen
@@ -721,6 +722,7 @@ class MessagePump(metaclass=_MessagePumpMeta):
                 self.app._handle_exception(error)
                 break
             finally:
+                message._complete_dispatch(self)
                 # Subscription access initializes this optional signal. Do not
                 # allocate its weak-key subscriber machinery for quiet pumps.
                 message_signal = self.__dict__.get("message_signal")
@@ -903,18 +905,46 @@ class MessagePump(metaclass=_MessagePumpMeta):
             self.post_message(messages.Prompt())
 
     async def _post_message(self, message: Message) -> bool:
-        """Post a message or an event to this message pump.
+        """Coroutine admission to the original queue, including driver threads."""
+        return self.post_message(message)
 
-        This is an internal method for use where a coroutine is required.
+    def _post_message_and_wait(self, message: Message) -> AwaitComplete:
+        """Post to the original queue and await its routed handler completion.
 
         Args:
             message: A message object.
 
         Returns:
-            True if the messages was posted successfully, False if the message was not posted
-                (because the message pump was in the process of closing).
+            Optional completion of this delivery, including its DOM bubbling.
+            The originating pump processes its own bubbled copy after admission.
         """
-        return self.post_message(message)
+        from textual.await_complete import AwaitComplete
+
+        if not self.post_message(message) or self._task is None:
+            return AwaitComplete.nothing()
+        completion = asyncio.get_running_loop().create_future()
+        message._dispatch_completion = (self, asyncio.current_task(), completion)
+
+        async def wait_for_dispatch() -> None:
+            # A removed receiver may stop before reaching this message. Borrow
+            # its original task; never cancel that task or replay the delivery.
+            while not completion.done():
+                owner, _, _ = message._dispatch_completion
+                task = owner._task
+                if task is None:
+                    message._complete_dispatch(owner)
+                    break
+                await asyncio.wait(
+                    (completion, task), return_when=asyncio.FIRST_COMPLETED
+                )
+                if task.done() and not completion.done():
+                    message._complete_dispatch(owner)
+
+        def check_self_wait() -> None:
+            if asyncio.current_task() is self._task:
+                raise RuntimeError("A message pump cannot await its own queued delivery")
+
+        return AwaitComplete(wait_for_dispatch(), pre_await=check_self_wait)
 
     def post_message(self, message: Message) -> bool:
         """Posts a message on to this widget's queue.

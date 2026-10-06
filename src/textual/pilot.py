@@ -465,7 +465,7 @@ class Pilot(Generic[ReturnType]):
                 # that's useful to other things (tooltip handling, for example),
                 # we patch the offset in there as well.
                 app.mouse_position = offset
-                screen._forward_event(event)
+                await screen._forward_event(event)
 
         await self.pause()
         return widget is None or widget_at is target_widget
