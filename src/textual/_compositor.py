@@ -1650,6 +1650,8 @@ class Compositor:
 
     def pending_for(self, widget: Widget) -> bool:
         """Whether this sender still owns damage in the original committed scene."""
+        if not self._dirty_regions:
+            return False
         regions = widget.screen._compositor.deferred_regions((widget,))
         return any(damage.overlaps(region) for damage in self._dirty_regions for region in regions)
 
