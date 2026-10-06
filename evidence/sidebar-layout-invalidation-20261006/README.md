@@ -18,13 +18,14 @@ fell2746→1242 (left) and3230→1166 (right); empty deferred-region work fell f
 ~0.8–1.3ms to~0.001ms. Overall medians41.8/47.4ms do not establish an improvement
 over the original43.8/41ms. This is a small removed cost, not solved latency.
 
-The six existing publication checks produced5PASS and one preserved failure.
-The failing test explicitly assumes the Screen pump waits inside an admitted
-async callback. Merged#75 instead admits callbacks to the original sender's
-queue; MessagePump.call_after_refresh documents that lifetime. A later batch
-cannot recall an already admitted callable. This patch changes neither that
-contract nor the test. The other controls exercise actual batches, held subtree
-geometry/hits/callbacks, inline publication and translucent backdrops.
+The original six-check batch produced5PASS and one preserved failure: its
+callback test expected the Screen to wait inside an admitted async callback.
+The existing control now asserts the actual sender task, preserved callback
+order and completion inside a later batch after original publication admission.
+That changed control alone passed1/.21s; the other five were not repeated.
+MessagePump.call_after_refresh and merged#75 own this lifetime. No production
+callback rule changed. The five existing controls cover actual batches, held
+subtree geometry/hits/callbacks, inline publication and translucent backdrops.
 
 RESULT.json references the exact original/new profiles and App logs. No
 installed pin, public runtime or frozen original evidence changed. The App

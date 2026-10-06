@@ -89,6 +89,7 @@
     "/home/ts/.cache/agent-scratch/tab-sidebar-native-app-20261006/toggle-channels.pstats": "62677e584d201d63342784575c10fa63a2017d6ce85d3d16d8811302c1c20bf0",
     "/home/ts/.cache/agent-scratch/tab-sidebar-native-app-20261006/toggle-thread.pstats": "631271560a14978c886afbd94602dd885eb25489c5ad06e9196b868dafac6ce1"
   },
-  "publication_controls": "5 passed; 1 retained test expects the Screen-task callback custody replaced by merged #75. Raw failure preserved; no test or callback behavior changed.",
-  "remaining": "No reliable toggle latency improvement. Width-dependent measurement and paint remain required. The original profiles also include Core MroDispatch handler discovery; no Core edit."
+  "publication_controls": "Original batch5PASS/1 preserved pre75 Screen-custody failure; migrated existing sender-completion control alonePASS. Other five not repeated.",
+  "remaining": "No reliable toggle latency improvement. Width-dependent measurement and paint remain required. The original profiles also include Core MroDispatch handler discovery; no Core edit.",
+  "sender_control_sha256": "364fae48cbe8f4ef8e995f8fb3224d43792e784eb9919ceefea2fe0106918edf"
 }
