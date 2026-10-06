@@ -381,7 +381,10 @@ class MouseEvent(InputEvent, bubble=True):
     ) -> None:
         super().__init__()
         self.widget: Widget | None = widget
-        """The widget under the mouse at the time of a click."""
+        """The recipient acquired by Screen for this delivery, including capture.
+
+        Raw input has no recipient until it is routed.
+        """
         self._x = x
         """The relative x coordinate."""
         self._y = y

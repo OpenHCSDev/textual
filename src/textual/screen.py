@@ -1805,6 +1805,7 @@ class Screen(Generic[ScreenResultType], Widget):
                 tooltip.update(tooltip_content)
 
     def _handle_mouse_move(self, event: events.MouseMove) -> AwaitComplete:
+        event.widget = None
         completion = AwaitComplete.nothing()
         hover_widget: Widget | None = None
         try:
@@ -1825,11 +1826,14 @@ class Screen(Generic[ScreenResultType], Widget):
                 except NoMatches:
                     pass
         else:
+            event.widget = widget
             self.app._set_mouse_over(widget, hover_widget)
             self.update_pointer_shape()
             widget.hover_style = event.style
             if widget is self:
-                completion = self._post_message_and_wait(event)
+                routed_event = event._apply_offset(0, 0)
+                routed_event._set_forwarded()
+                completion = self._post_message_and_wait(routed_event)
             else:
                 mouse_event = self._translate_mouse_move_event(event, widget, region)
                 mouse_event._set_forwarded()
@@ -2048,6 +2052,7 @@ class Screen(Generic[ScreenResultType], Widget):
                     self._stop_auto_scroll()
 
         elif isinstance(event, events.MouseEvent):
+            event.widget = None
             if isinstance(event, events.MouseUp):
                 self._flush_pending_selection()
                 if (
@@ -2126,9 +2131,12 @@ class Screen(Generic[ScreenResultType], Widget):
                 event.style = self.get_style_at(event.screen_x, event.screen_y)
                 if widget.loading:
                     return completion
+                event.widget = widget
                 if widget is self:
                     event._set_forwarded()
-                    completion = self._post_message_and_wait(event)
+                    routed_event = event._apply_offset(0, 0)
+                    routed_event._set_forwarded()
+                    completion = self._post_message_and_wait(routed_event)
                 else:
                     completion = widget._forward_event(
                         event._apply_offset(-region.x, -region.y)

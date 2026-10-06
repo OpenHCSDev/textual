@@ -4098,7 +4098,7 @@ class App(Generic[ReturnType], DOMNode):
         """
         pass
 
-    async def on_event(self, event: events.Event) -> None:
+    async def on_event(self, event: events.Event) -> events.MouseEvent | None:
         # Handle input events that haven't been forwarded
         # If the event has been forwarded it may have bubbled up back to the App
         if isinstance(event, events.Compose):
@@ -4122,6 +4122,12 @@ class App(Generic[ReturnType], DOMNode):
                         # Shouldn't occur, since at the very least this will find the Screen
                         self._mouse_down_widget = None
 
+                mouse_down_widget = self._mouse_down_widget
+                if isinstance(event, events.MouseUp):
+                    # A press is consumed by its release, including a refused
+                    # click. A second release cannot reuse that old press.
+                    self._mouse_down_widget = None
+
                 # The next pointer packet must use capture and geometry decided
                 # by this delivery's original widget / ancestor queues.
                 await self.screen._forward_event(event)
@@ -4130,11 +4136,10 @@ class App(Generic[ReturnType], DOMNode):
                 # consider it a click, and produce a Click event.
                 if (
                     isinstance(event, events.MouseUp)
-                    and self._mouse_down_widget is not None
+                    and mouse_down_widget is not None
                 ):
                     try:
                         screen_offset = event.screen_offset
-                        mouse_down_widget = self._mouse_down_widget
                         mouse_up_widget, _ = self.get_widget_at(*screen_offset)
                         if mouse_up_widget is mouse_down_widget:
                             same_offset = (
@@ -4160,6 +4165,7 @@ class App(Generic[ReturnType], DOMNode):
                             self._click_chain_last_offset = screen_offset
 
                             await self.screen._forward_event(click_event)
+                            return click_event
                     except NoWidget:
                         pass
 

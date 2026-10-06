@@ -443,11 +443,12 @@ async def test_queued_drag_keeps_events_and_copy_but_coalesces_selection_work():
                     yield Tracked(f"record {index:03d}", id=f"record-{index}")
 
         async def on_event(self, event):
-            await super().on_event(event)
+            result = await super().on_event(event)
             if event is self.copy_event:
                 # Copy in the middle of a queued burst must see this position,
                 # rather than the last computed selection or a future one.
                 self.during_drag = self.screen.get_selected_text()
+            return result
 
         def on_text_selected(self):
             self.after_release = self.screen.get_selected_text()
