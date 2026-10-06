@@ -1,0 +1,50 @@
+FF..                                                                     [100%]
+=================================== FAILURES ===================================
+_______ test_run_async_driver_burst_owns_bubbling_pointer_until_terminal _______
+tests/test_real_app_pump_lifetime.py:87: in test_run_async_driver_burst_owns_bubbling_pointer_until_terminal
+    assert app.startup_task.done()
+E   AssertionError: assert False
+E    +  where False = <built-in method done of _asyncio.Task object at 0x7f52d1d663f0>()
+E    +    where <built-in method done of _asyncio.Task object at 0x7f52d1d663f0> = <Task pending name='Task-1' coro=<test_run_async_driver_burst_owns_bubbling_pointer_until_terminal() running at /home/...sts/test_real_app_pump_lifetime.py:87> cb=[_run_until_complete_cb() at /usr/lib/python3.14/asyncio/base_events.py:181]>.done
+E    +      where <Task pending name='Task-1' coro=<test_run_async_driver_burst_owns_bubbling_pointer_until_terminal() running at /home/...sts/test_real_app_pump_lifetime.py:87> cb=[_run_until_complete_cb() at /usr/lib/python3.14/asyncio/base_events.py:181]> = RealEntryApp(title='RealEntryApp', classes={'-dark-mode'}, pseudo_classes={'dark', 'nocolor', 'focus'}).startup_task
+_____________ test_run_async_startup_failure_releases_shared_task ______________
+tests/test_real_app_pump_lifetime.py:106: in test_run_async_startup_failure_releases_shared_task
+    assert app.observed_task.done()
+E   AssertionError: assert False
+E    +  where False = <built-in method done of _asyncio.Task object at 0x7f52d26b4910>()
+E    +    where <built-in method done of _asyncio.Task object at 0x7f52d26b4910> = <Task pending name='Task-16' coro=<test_run_async_startup_failure_releases_shared_task() running at /home/ts/wt/textua...ts/test_real_app_pump_lifetime.py:106> cb=[_run_until_complete_cb() at /usr/lib/python3.14/asyncio/base_events.py:181]>.done
+E    +      where <Task pending name='Task-16' coro=<test_run_async_startup_failure_releases_shared_task() running at /home/ts/wt/textua...ts/test_real_app_pump_lifetime.py:106> cb=[_run_until_complete_cb() at /usr/lib/python3.14/asyncio/base_events.py:181]> = FailedStartup(title='FailedStartup', classes={'-dark-mode'}, pseudo_classes={'dark', 'nocolor', 'focus'}).observed_task
+----------------------------- Captured stderr call -----------------------------
+╭───────────────────── Traceback (most recent call last) ──────────────────────╮
+│ /home/ts/wt/textual-frame-publication-20261006/tests/test_real_app_pump_life │
+│ time.py:98 in on_mount                                                       │
+│                                                                              │
+│    95 │   │   def on_mount(self):                                            │
+│    96 │   │   │   self.observed_task = self.task                             │
+│    97 │   │   │   assert self.task is asyncio.current_task()                 │
+│ ❱  98 │   │   │   raise RuntimeError("original startup failure")             │
+│    99 │                                                                      │
+│   100 │   app = FailedStartup()                                              │
+│   101 │   await asyncio.wait_for(app.run_async(headless=True, size=(20, 4)), │
+│                                                                              │
+│ ╭─────────────────────────── locals ────────────────────────────╮            │
+│ │ @py_assert1 = None                                            │            │
+│ │ @py_assert3 = None                                            │            │
+│ │ @py_assert5 = None                                            │            │
+│ │ @py_assert7 = None                                            │            │
+│ │        self = FailedStartup(                                  │            │
+│ │               │   title='FailedStartup',                      │            │
+│ │               │   classes={'-dark-mode'},                     │            │
+│ │               │   pseudo_classes={                            │            │
+│ │               │   │   'dark',                                 │            │
+│ │               │   │   'nocolor',                              │            │
+│ │               │   │   'focus'                                 │            │
+│ │               │   }                                           │            │
+│ │               )                                               │            │
+│ ╰───────────────────────────────────────────────────────────────╯            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+RuntimeError: original startup failure
+=========================== short test summary info ============================
+FAILED tests/test_real_app_pump_lifetime.py::test_run_async_driver_burst_owns_bubbling_pointer_until_terminal
+FAILED tests/test_real_app_pump_lifetime.py::test_run_async_startup_failure_releases_shared_task
+2 failed, 2 passed in 0.83s

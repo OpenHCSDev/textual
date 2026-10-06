@@ -17,11 +17,32 @@ and selection boundaries are unchanged. No missing-task fallback or new queue,
 timer, Toad override or completion exemption is added. App's duplicate body context
 was removed; the shared lifetime borrows its existing polymorphic _context.
 
-Existing refactor-audit Package parsed 249 native production and 462 test modules,
-zero omissions. before.json groups all 1286 lexical task/lifetime/entrypoint sites
-by source coordinates. Dynamic external subclasses remain unresolved explicitly.
+Existing refactor-audit Package parsed all 249 native production modules and
+462 before / 463 after test modules, with zero omissions. before.json and after.json
+record declaration and consumer coordinates. All App/Screen pump-task writes were
+deleted; initialization, scheduled enrollment, acquisition and release now belong
+to MessagePump. Independent Timer/Worker/Markdown tasks are included in lexical
+results but retain their distinct owners. Dynamic external subclasses remain
+unresolved explicitly.
 
-Source checkpoint. Next qualification is actual run_async/HeadlessDriver FIFO
-press/move/release/wheel with bubbling to App, plus terminal task release. The old
-33 native73 controls and closed physical03 are not rerun. No installed, physical,
-provider, package or public runtime operation is authorized by this checkpoint.
+## Actual entrypoint qualification
+
+`PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 /usr/bin/python -m pytest -q
+tests/test_real_app_pump_lifetime.py --tb=short`: **4 passed in 0.69s**.
+
+The actual run_async/HeadlessDriver ingress delivered press, move, release and
+wheel in order, including target-to-App bubbling and capture release. The actual
+pump task matched its caller, cleared at pump exit, and child tasks joined. Other
+cases covered startup failure, cancellation and eager completion without task
+reenrollment. These are source App checks using the original driver and queues.
+They do not use run_test to demonstrate real-entry task ownership.
+
+Original collection refusal and test-assertion refusal are preserved. The latter
+incorrectly assumed an inline run_async caller Task must finish when its borrowed
+pump lifetime finishes. The corrected checks create and join the actual run_async
+Task explicitly; no production or completion rule changed after that refusal.
+
+The old 33 native73 controls and closed physical03 were not rerun. No installed,
+physical, provider, package or public runtime operation occurred. The remaining
+real-entry acceptance is Parent's actual terminal/Toad motion journey against the
+matching source; the original physical03 cause remains unproved without a stack.
