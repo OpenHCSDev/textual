@@ -5,7 +5,7 @@ could establish capture. A queued move and release could therefore miss the pres
 owner, then its late handler left capture active. This is a source defect; it is
 not proven to be the interleaving in closed physical02.
 
-Message owns one pending dispatch completion. MessagePump posts the original
+Message owns one pending dispatch completion. MessagePump._post_message_and_wait posts the original
 message to its existing FIFO and releases completion only from the receiver which
 still owns it. Bubbling transfers that custody through the original DOM queues;
 the originating pump retains its own bubbled copy for later dispatch. A retiring
@@ -30,3 +30,12 @@ semantic resolution limitation, not zero-by-omission proof.
 Source checkpoint; changed-path checks have not run. Parent owns recorder motion
 acceptance; no physical run, installed pin, package or public runtime is changed.
 Frozen e15 / physical02 evidence remains unchanged.
+
+The first checkpoint broke the drivers' coroutine scheduling contract by changing
+_post_message to a synchronous return. That negative is retained in Parent's
+mounted.stderr. The original async _post_message coroutine and bool admission
+contract are restored for all Headless/Linux/inline/Web/Win32 driver callers,
+MessageTarget/EventTarget protocols, Markdown self-publication and input tests.
+Awaited target completion is a distinct MessagePump operation on the same FIFO;
+it does not change raw driver admission or add a queue. These callers are present
+in before.json; the first checkpoint failed to read their scheduling requirements.

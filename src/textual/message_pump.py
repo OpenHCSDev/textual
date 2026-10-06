@@ -904,7 +904,11 @@ class MessagePump(metaclass=_MessagePumpMeta):
         if self._running and self._message_queue.empty():
             self.post_message(messages.Prompt())
 
-    def _post_message(self, message: Message) -> AwaitComplete:
+    async def _post_message(self, message: Message) -> bool:
+        """Coroutine admission to the original queue, including driver threads."""
+        return self.post_message(message)
+
+    def _post_message_and_wait(self, message: Message) -> AwaitComplete:
         """Post to the original queue and await its routed handler completion.
 
         Args:

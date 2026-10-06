@@ -4550,7 +4550,7 @@ class Widget(DOMNode):
     def _forward_event(self, event: events.Event) -> AwaitComplete:
         event._set_forwarded()
         if isinstance(event, events.MouseEvent):
-            return self._post_message(event)
+            return self._post_message_and_wait(event)
         self.post_message(event)
         return AwaitComplete.nothing()
 

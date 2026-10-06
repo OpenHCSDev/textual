@@ -1827,7 +1827,7 @@ class Screen(Generic[ScreenResultType], Widget):
             self.update_pointer_shape()
             widget.hover_style = event.style
             if widget is self:
-                completion = self._post_message(event)
+                completion = self._post_message_and_wait(event)
             else:
                 mouse_event = self._translate_mouse_move_event(event, widget, region)
                 mouse_event._set_forwarded()
@@ -2126,7 +2126,7 @@ class Screen(Generic[ScreenResultType], Widget):
                     return completion
                 if widget is self:
                     event._set_forwarded()
-                    completion = self._post_message(event)
+                    completion = self._post_message_and_wait(event)
                 else:
                     completion = widget._forward_event(
                         event._apply_offset(-region.x, -region.y)
