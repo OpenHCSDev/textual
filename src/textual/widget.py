@@ -1402,6 +1402,10 @@ class Widget(DOMNode):
             return text_content
         return Content.from_markup(text_content)
 
+    def _after_refresh_pending(self, screen, roots: tuple[Widget, ...]) -> bool:
+        """A spatial sender borrows its original screen's geometry and damage."""
+        return self.is_attached and screen._sender_refresh_pending(self, roots)
+
     def arrange(self, size: Size, optimal: bool = False) -> DockArrangeResult:
         """Arrange child widgets.
 

@@ -400,10 +400,12 @@ class InlineUpdate(CompositorUpdate):
     def from_chops(cls, update: ChopsUpdate, height: int) -> InlineUpdate:
         """Use inline-relative cursor movement for the original admitted cells."""
         rows: list[list[Segment]] = [[] for _ in range(height)]
+        cursors = [0] * height
         for y, x1, x2 in update.spans:
             for x, strip in update._get_line_chops(y, x1, x2):
-                rows[y].append(Control.move_to_column(x).segment)
+                rows[y].append(Control.move(x - cursors[y]).segment)
                 rows[y].extend(strip)
+                cursors[y] = x + strip.cell_length
         return cls([Strip(row) for row in rows])
 
     def __rich_console__(
@@ -1189,7 +1191,7 @@ class Compositor:
         # Add top level (root) widget
         previous_layout_geometry = self._layout_geometry
         self._layout_geometry = {
-            owner: previous.get(owner) for owner in mutation_roots
+            owner: previous.get(owner._render_widget) for owner in mutation_roots
         }
         previous_arranging = self._arranging
         self._arranging = True
@@ -1214,6 +1216,9 @@ class Compositor:
             # alive until cyclic GC. Reflow is finished, so break those local
             # recursion links before returning the authoritative scene map.
             del add_widget, arrange_widget
+        for geometry in held.values():
+            map.update(geometry)
+            widgets.update(geometry)
         widgets -= invisible_widgets
         return map, widgets
 
@@ -1280,10 +1285,26 @@ class Compositor:
             Sequence of (WIDGET, REGION) tuples.
         """
         contains = Region.contains
+        held = () if self.root is None else tuple(
+            root for root in self.root.screen._layout_mutation_roots()
+            if any(region.contains(x, y) for region in self.deferred_regions((root,)))
+        )
         if self.size.height > y >= 0:
             for widget, (region, clip) in self.visible_widgets.items():
                 if contains(region, x, y) and contains(clip, x, y) and widget.visible:
+                    if held and not (
+                        set(widget.walk_ancestors(with_self=True)).intersection(held)
+                        or any(widget in root.walk_ancestors(with_self=True) for root in held)
+                    ):
+                        continue
                     yield widget, region
+
+    def _interaction_deferred(self, x: int, y: int) -> bool:
+        """A geometry query cannot render held source to acquire metadata."""
+        regions = self._render_exclusions
+        if self.root is not None:
+            regions += self.deferred_regions(self.root.screen._layout_mutation_roots())
+        return any(region.contains(x, y) for region in regions)
 
     def get_style_at(self, x: int, y: int) -> Style:
         """Get the Style at the given cell or Style.null()
@@ -1295,6 +1316,8 @@ class Compositor:
         Returns:
             The Style at the cell (x, y) within the Layout.
         """
+        if self._interaction_deferred(x, y):
+            return Style.null()
         try:
             widget, region = self.get_widget_at(x, y)
         except errors.NoWidget:
@@ -1335,8 +1358,8 @@ class Compositor:
             widget, region = self.get_widget_at(x, y)
         except errors.NoWidget:
             return None, None
-        if widget not in self.visible_widgets:
-            return None, None
+        if widget not in self.visible_widgets or self._interaction_deferred(x, y):
+            return widget, None
 
         if y >= widget.content_region.bottom:
             x, y = widget.content_region.bottom_right_inclusive
@@ -1616,7 +1639,7 @@ class Compositor:
 
     def pending_for(self, widget: Widget) -> bool:
         """Whether this sender still owns damage in the original committed scene."""
-        regions = self.deferred_regions((widget,))
+        regions = widget.screen._compositor.deferred_regions((widget,))
         return any(damage.overlaps(region) for damage in self._dirty_regions for region in regions)
 
     def render_update(

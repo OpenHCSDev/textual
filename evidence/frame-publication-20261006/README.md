@@ -22,7 +22,28 @@ production modules and 461 test modules, with zero omissions. Its 259 lexical
 sites identify definitions and references; dynamic subclass and callback
 resolution was read semantically, not inferred from absence.
 
-This checkpoint is implementation in progress. Native checks and the matching
-Toad application journey have not run. Translucent paint, inline cursor behavior,
-held geometry and eventual callbacks remain required verification. The frozen
+This remains a draft pending the matching Toad application journey owned by
+Parent. Native checks passed: 17 in 1.76s for batch/publication and scene-damage
+semantics; then 12 in 1.69s after completing polymorphic sender/backdrop admission,
+including inline, translucent, mutation/hit geometry, quiescence and reparenting.
+The first focused run refused an ambient-App sidebar callback; the receiver now
+owns admission. A later test incorrectly expected a Label at an original cell
+owned by its container; the control now compares the actual pre-mutation hit.
+Both original negative tool outputs remain in the session. Logs here retain the
+final successful checks and the intermediate hit assertion refusal.
+
+Parent's first matched source App at 225c did not finish and was joined. Its
+successful stack observed held-callback idle work; its later empty stack file
+is not evidence. The held queue entry called check_idle on every pass. That
+wake-up is deleted, and held-only damage no longer resumes the original timer.
+No new timer or wakeup mechanism was introduced. New source still requires the
+changed matching application check; no latency improvement is claimed.
+
+Callback scope is polymorphic: MessagePump and Screen await the entire frame;
+Widget borrows its own original screen geometry, including backdrops. InvokeLater
+is delivered to the receiver's original queue before sender admission. Container
+callbacks cover descendants as well as roots enclosing the sender. Mutation
+placements also protect hit lookup from a sibling's still-unpainted overlap.
+`after.json` parses the staged complete production/test tree with zero omissions;
+it records the actual declaration/MRO hooks and lexical consumers. The frozen
 textual-native-subtree-strips checkout is unchanged.

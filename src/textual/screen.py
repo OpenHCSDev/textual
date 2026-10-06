@@ -56,7 +56,7 @@ from textual.errors import NoWidget
 from textual.geometry import Offset, Region, Size
 from textual.keys import key_to_character
 from textual.layout import DockArrangeResult
-from textual.message_pump import MessagePumpClosed
+from textual.message_pump import MessagePump, MessagePumpClosed
 from textual.reactive import Reactive, var
 from textual.renderables.background_screen import BackgroundScreen
 from textual.renderables.blank import Blank
@@ -1190,7 +1190,15 @@ class Screen(Generic[ScreenResultType], Widget):
         event.prevent_default()
         if not self.app._batch_count and self.is_current:
             if self._refresh_pending:
-                self._update_timer.resume()
+                roots = tuple(root for _, roots in self._prepare_visible_screens() for root in roots)
+                if (self._layout_required or self._scroll_required or self._repaint_required
+                        or self._recompose_required or self._dirty_widgets
+                        or self._compositor._exclude_regions(
+                            self._compositor._dirty_regions,
+                            tuple(region for root in roots
+                                  for region in root.screen._compositor.deferred_regions((root,))),
+                        )):
+                    self._update_timer.resume()
 
         await self._invoke_and_clear_callbacks()
 
@@ -1205,16 +1213,24 @@ class Screen(Generic[ScreenResultType], Widget):
     def _on_frame_published(self, deferred_roots: tuple[Widget, ...]) -> None:
         """Observe an actual displayed update with its acquired admission roots."""
 
+    def _prepare_visible_screens(self) -> tuple[tuple[Screen, tuple[Widget, ...]], ...]:
+        """Acquire the same original visible stack for paint and sender admission."""
+        screens = (*self.app._background_screens, self) if self is self.app.screen else (self,)
+        return tuple((screen, screen._prepare_compositor_refresh()) for screen in screens)
+
+    def _after_refresh_pending(self, screen, roots: tuple[Widget, ...]) -> bool:
+        """Screen-owned work retains the original whole-frame admission."""
+        return MessagePump._after_refresh_pending(self, screen, roots)
+
     def _compositor_refresh(self) -> None:
         """Publish admitted damage, retaining held subtree damage in Compositor."""
         app = self.app
         if app._batch_count:
             return
         background_screens = app._background_screens
-        screens = (*background_screens, self) if self is app.screen else (self,)
         if self is app.screen and app.is_inline:
             inline_height = app._get_inline_height()
-        cohort = tuple((screen, screen._prepare_compositor_refresh()) for screen in screens)
+        cohort = self._prepare_visible_screens()
         deferred_roots = tuple(root for _, roots in cohort for root in roots)
         excluded_regions = tuple(
             region for screen, roots in cohort
@@ -1247,8 +1263,11 @@ class Screen(Generic[ScreenResultType], Widget):
                 if update is not None:
                     app._display(self, update)
                     self._on_frame_published(deferred_roots)
+                if not self._compositor._interaction_deferred(*app.mouse_position):
+                    app._update_mouse_over(self)
             if background_screens:
-                self._release_paint()
+                for screen, _ in cohort:
+                    screen._release_paint()
             self._dirty_widgets.clear()
         elif self in background_screens and self._compositor._dirty_regions:
             # The foreground owns terminal publication of the same backdrop
@@ -1263,7 +1282,8 @@ class Screen(Generic[ScreenResultType], Widget):
                     self._compositor._dirty_regions, damage,
                 )
             self._dirty_widgets.clear()
-        app._update_mouse_over(self)
+            if not self._compositor._interaction_deferred(*app.mouse_position):
+                app._update_mouse_over(self)
 
     def _on_timer_update(self) -> None:
         """Called by the _update_timer."""
@@ -1296,20 +1316,24 @@ class Screen(Generic[ScreenResultType], Widget):
         if self._callbacks:
             self.call_next(self._invoke_and_clear_callbacks)
 
-    def _sender_refresh_pending(self, sender: MessagePump, roots: tuple[Widget, ...]) -> bool:
-        """Admit the original sender's publication, rather than every subtree."""
-        if not isinstance(sender, Widget) or isinstance(sender, Screen):
-            return self._refresh_pending or bool(roots)
+    def _sender_refresh_pending(self, sender: Widget, roots: tuple[Widget, ...]) -> bool:
+        """Admit the original spatial sender, including its backdrop publication."""
         ancestry = set(sender.walk_ancestors(with_self=True))
         if ancestry.intersection(roots) or any(
             sender in root.walk_ancestors(with_self=True) for root in roots
         ):
             return True
-        if self._layout_required or self._scroll_required or self._recompose_required:
-            return True
-        if self._repaint_required or sender in self._dirty_widgets:
-            return True
-        return self._compositor.pending_for(sender)
+        owner = sender.screen
+        for screen in (self, owner) if owner is not self else (self,):
+            if (screen._layout_required or screen._scroll_required or screen._recompose_required
+                    or screen._repaint_required):
+                return True
+            if any(sender in widget.walk_ancestors(with_self=True)
+                   for widget in screen._dirty_widgets):
+                return True
+            if screen._compositor.pending_for(sender):
+                return True
+        return False
 
     async def _invoke_and_clear_callbacks(self) -> None:
         """Keep held senders in the original queue; release independent senders."""
@@ -1318,10 +1342,9 @@ class Screen(Generic[ScreenResultType], Widget):
             if self.app._batch_count or index >= len(self._callbacks):
                 return
             callback, sender = self._callbacks[index]
-            roots = self._prepare_compositor_refresh() if self.is_current else ()
-            if self.is_current and self._sender_refresh_pending(sender, roots):
+            roots = tuple(root for _, roots in self._prepare_visible_screens() for root in roots) if self.is_current else ()
+            if self.is_current and sender._after_refresh_pending(self, roots):
                 index += 1
-                self.check_idle()
                 continue
             self._callbacks.pop(index)
             with sender._context():
