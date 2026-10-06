@@ -1802,7 +1802,8 @@ class Screen(Generic[ScreenResultType], Widget):
                 tooltip.absolute_offset = self.app.mouse_position
                 tooltip.update(tooltip_content)
 
-    def _handle_mouse_move(self, event: events.MouseMove) -> None:
+    def _handle_mouse_move(self, event: events.MouseMove) -> AwaitComplete:
+        completion = AwaitComplete.nothing()
         hover_widget: Widget | None = None
         try:
             if self.app.mouse_captured:
@@ -1826,11 +1827,11 @@ class Screen(Generic[ScreenResultType], Widget):
             self.update_pointer_shape()
             widget.hover_style = event.style
             if widget is self:
-                self.post_message(event)
+                completion = self._post_message_and_wait(event)
             else:
                 mouse_event = self._translate_mouse_move_event(event, widget, region)
                 mouse_event._set_forwarded()
-                widget._forward_event(mouse_event)
+                completion = widget._forward_event(mouse_event)
 
             if not self.app._disable_tooltips:
                 try:
@@ -1851,6 +1852,7 @@ class Screen(Generic[ScreenResultType], Widget):
                     else:
                         tooltip.display = False
         self.screen.update_pointer_shape()
+        return completion
 
     @staticmethod
     def _translate_mouse_move_event(
@@ -1997,17 +1999,18 @@ class Screen(Generic[ScreenResultType], Widget):
         """Update select for a screen-space offset (typically the mouse position)."""
         self._watch__select_state(self._select_state)
 
-    def _forward_event(self, event: events.Event) -> None:
+    def _forward_event(self, event: events.Event) -> AwaitComplete:
         if event.is_forwarded:
-            return
+            return AwaitComplete.nothing()
         event._set_forwarded()
+        completion = AwaitComplete.nothing()
 
         if isinstance(event, (events.Enter, events.Leave)):
             self.post_message(event)
 
         elif isinstance(event, events.MouseMove):
             event.style = self.get_style_at(event.screen_x, event.screen_y)
-            self._handle_mouse_move(event)
+            completion = self._handle_mouse_move(event)
 
             if self._selecting and self._select_state is not None:
 
@@ -2120,16 +2123,19 @@ class Screen(Generic[ScreenResultType], Widget):
                         self.set_focus(focusable_widget, scroll_visible=False)
                 event.style = self.get_style_at(event.screen_x, event.screen_y)
                 if widget.loading:
-                    return
+                    return completion
                 if widget is self:
                     event._set_forwarded()
-                    self.post_message(event)
+                    completion = self._post_message_and_wait(event)
                 else:
-                    widget._forward_event(event._apply_offset(-region.x, -region.y))
+                    completion = widget._forward_event(
+                        event._apply_offset(-region.x, -region.y)
+                    )
 
         else:
             self.post_message(event)
         self.update_pointer_shape()
+        return completion
 
     def _key_escape(self) -> None:
         self.clear_selection()
@@ -2161,8 +2167,9 @@ class Screen(Generic[ScreenResultType], Widget):
             # The application may already have another raw drag position
             # queued. Deliver all mouse events, but don't repeatedly traverse
             # thousands of selected widgets for positions superseded before
-            # painting. A callback, copy, mouse-up or paint flushes the latest
-            # state even if the following event doesn't update this screen.
+            # painting. The original callback, copy, mouse-up and paint
+            # boundaries flush this projection. Routed handler completion is
+            # not a selection publication boundary.
             try:
                 pending = self.app._peek_message()
             except MessagePumpClosed:
@@ -2172,9 +2179,7 @@ class Screen(Generic[ScreenResultType], Widget):
                 and pending.button == 1
                 and not pending.is_forwarded
             ):
-                if not self._selection_update_pending:
-                    self._selection_update_pending = True
-                    self.call_next(self._flush_pending_selection)
+                self._selection_update_pending = True
                 return
 
         self._selection_update_pending = False

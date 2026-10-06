@@ -1,0 +1,11 @@
+................................F                                        [100%]
+=================================== FAILURES ===================================
+_____ test_queued_drag_keeps_events_and_copy_but_coalesces_selection_work ______
+tests/test_selection.py:475: in test_queued_drag_keeps_events_and_copy_but_coalesces_selection_work
+    assert apply.call_count < len(moves) // 4
+E   AssertionError: assert 80 < (80 // 4)
+E    +  where 80 = <MagicMock name='_apply_selection_state' id='139988838995616'>.call_count
+E    +  and   80 = len([MouseMove(None, x=2, y=4, pointer_x=2, pointer_y=4, delta_x=1, button=1, style=Style(color=Color('#e0e0e0', ColorType...Color('#3b3b3b', ColorType.TRUECOLOR, triplet=ColorTriplet(red=59, green=59, blue=59)), meta={'offset': (0, 0)})), ...])
+=========================== short test summary info ============================
+FAILED tests/test_selection.py::test_queued_drag_keeps_events_and_copy_but_coalesces_selection_work
+1 failed, 32 passed in 10.32s

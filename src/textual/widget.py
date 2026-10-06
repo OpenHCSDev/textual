@@ -64,6 +64,7 @@ from textual.message_pump import MessagePump
 from textual._styles_cache import StylesCache
 from textual._types import AnimationLevel
 from textual.actions import SkipAction
+from textual.await_complete import AwaitComplete
 from textual.await_remove import AwaitRemove
 from textual.box_model import BoxModel
 from textual.cache import FIFOCache, LRUCache
@@ -4546,9 +4547,12 @@ class Widget(DOMNode):
         """
         self.app._mouse_down_widget = None
 
-    def _forward_event(self, event: events.Event) -> None:
+    def _forward_event(self, event: events.Event) -> AwaitComplete:
         event._set_forwarded()
+        if isinstance(event, events.MouseEvent):
+            return self._post_message_and_wait(event)
         self.post_message(event)
+        return AwaitComplete.nothing()
 
     def _refresh_scroll(self) -> None:
         """Refreshes the scroll position."""
