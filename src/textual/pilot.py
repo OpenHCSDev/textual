@@ -32,7 +32,7 @@ def _get_mouse_message_arguments(
     """Get the arguments to pass into mouse messages for the click and hover methods."""
     click_x, click_y = target.region.offset + offset
     message_arguments = {
-        "widget": target,
+        "widget": None,
         "x": click_x,
         "y": click_y,
         "delta_x": 0,
@@ -204,8 +204,6 @@ class Pilot(Generic[ReturnType]):
         The final position to be clicked is computed based on the selector provided and
         the offset specified and it must be within the visible area of the screen.
 
-        Implementation note: This method bypasses the normal event processing in `App.on_event`.
-
         Example:
             The code below runs an app and clicks its only button right in the middle:
             ```py
@@ -231,8 +229,8 @@ class Pilot(Generic[ReturnType]):
             OutOfBounds: If the position to be clicked is outside of the (visible) screen.
 
         Returns:
-            `True` if no selector was specified or if the selected widget was under the mouse
-                when the click was initiated. `False` is the selected widget was not under the pointer.
+            `True` if no selector was specified or if the final admitted click landed on the
+                selected widget. `False` if the click was refused or landed elsewhere.
         """
         try:
             return await self._post_mouse_events(
@@ -264,8 +262,6 @@ class Pilot(Generic[ReturnType]):
         The final position to be clicked is computed based on the selector provided and
         the offset specified and it must be within the visible area of the screen.
 
-        Implementation note: This method bypasses the normal event processing in `App.on_event`.
-
         Example:
             The code below runs an app and double-clicks its only button right in the middle:
             ```py
@@ -290,8 +286,8 @@ class Pilot(Generic[ReturnType]):
             OutOfBounds: If the position to be clicked is outside of the (visible) screen.
 
         Returns:
-            `True` if no selector was specified or if the selected widget was under the mouse
-                when the click was initiated. `False` is the selected widget was not under the pointer.
+            `True` if no selector was specified or if the final admitted click landed on the
+                selected widget. `False` if the click was refused or landed elsewhere.
         """
         return await self.click(
             widget, offset, shift, meta, control, times=2, button=button
@@ -312,8 +308,6 @@ class Pilot(Generic[ReturnType]):
 
         The final position to be clicked is computed based on the selector provided and
         the offset specified and it must be within the visible area of the screen.
-
-        Implementation note: This method bypasses the normal event processing in `App.on_event`.
 
         Example:
             The code below runs an app and triple-clicks its only button right in the middle:
@@ -339,8 +333,8 @@ class Pilot(Generic[ReturnType]):
             OutOfBounds: If the position to be clicked is outside of the (visible) screen.
 
         Returns:
-            `True` if no selector was specified or if the selected widget was under the mouse
-                when the click was initiated. `False` is the selected widget was not under the pointer.
+            `True` if no selector was specified or if the final admitted click landed on the
+                selected widget. `False` if the click was refused or landed elsewhere.
         """
         return await self.click(
             widget, offset, shift, meta, control, times=3, button=button
@@ -418,6 +412,7 @@ class Pilot(Generic[ReturnType]):
             True if no selector was specified or if the *final* event landed on the
                 selected widget, False otherwise.
         """
+        await self.pause()
         app = self.app
         screen = app.screen
         target_widget: Widget
@@ -443,32 +438,25 @@ class Pilot(Generic[ReturnType]):
                 "Target offset is outside of currently-visible screen region."
             )
 
-        widget_at = None
-        for chain in range(1, times + 1):
+        delivered: MouseEvent | None = None
+        for _ in range(times):
             for mouse_event_cls in events:
-                await self.pause()
-                # Get the widget under the mouse before the event because the app might
-                # react to the event and move things around. We override on each iteration
-                # because we assume the final event in `events` is the actual event we care
-                # about and that all the preceding events are just setup.
-                # E.g., the click event is preceded by MouseDown/MouseUp to emulate how
-                # the driver works and emits a click event.
-                kwargs = message_arguments
                 if mouse_event_cls is Click:
-                    kwargs = {**kwargs, "chain": chain}
-
-                if widget_at is None:
-                    widget_at, _ = app.get_widget_at(*offset)
-                event = mouse_event_cls(**kwargs)
-                # Bypass event processing in App.on_event. Because App.on_event
-                # is responsible for updating App.mouse_position, and because
-                # that's useful to other things (tooltip handling, for example),
-                # we patch the offset in there as well.
-                app.mouse_position = offset
-                await screen._forward_event(event)
+                    # App owns press/release matching and produces the Click.
+                    # This final gesture member requests its receipt, not a
+                    # second synthetic delivery or a separately authored chain.
+                    if not isinstance(delivered, Click):
+                        delivered = None
+                    continue
+                await self.pause()
+                event = mouse_event_cls(**message_arguments)
+                results = await app._post_message_and_wait(event)
+                delivered = results[0] if results else None
 
         await self.pause()
-        return widget is None or widget_at is target_widget
+        return widget is None or (
+            delivered is not None and delivered.widget is target_widget
+        )
 
     async def _wait_for_screen(self, timeout: float = 30.0) -> bool:
         """Wait for the current screen and its children to have processed all pending events.
