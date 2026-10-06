@@ -1927,6 +1927,10 @@ class Widget(DOMNode):
         Returns:
             The size and margin for this widget.
         """
+        if self.is_attached and (box := self.screen._compositor.mutation_box(self)) is not None:
+            # Parent layouts measure the same committed box as Compositor;
+            # never descend through an actively changing child to size siblings.
+            return box
         nodes = self.__dict__.get("_nodes")
         revision = (self._layout_updates,
                     nodes._updates if nodes is not None else 0)

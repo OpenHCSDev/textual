@@ -9,6 +9,7 @@ The `Screen` class is a special widget which represents the content in the termi
 from __future__ import annotations
 
 import asyncio
+from contextlib import ExitStack
 from functools import partial
 from operator import attrgetter
 from typing import (
@@ -1190,69 +1191,77 @@ class Screen(Generic[ScreenResultType], Widget):
         if not self.app._batch_count and self.is_current:
             if self._refresh_pending:
                 self._update_timer.resume()
-                return
 
         await self._invoke_and_clear_callbacks()
 
-    def _prepare_compositor_refresh(self) -> bool:
-        """Prepare an admitted scene; return False while it cannot be painted.
+    def _prepare_compositor_refresh(self) -> tuple[Widget, ...]:
+        """Prepare the frame and return original subtrees whose paint is held."""
+        return ()
 
-        Terminal refresh calls this hook for every screen it will composite,
-        after batch admission and before consuming any compositor damage.
-        Deferred preparation retains the existing repaint intent; the scene
-        owner arranges its next refresh through the update timer.
-        """
-        return True
+    def _layout_mutation_roots(self) -> tuple[Widget, ...]:
+        """Subtrees borrowing their committed geometry during source mutation."""
+        return ()
+
+    def _on_frame_published(self, deferred_roots: tuple[Widget, ...]) -> None:
+        """Observe an actual displayed update with its acquired admission roots."""
 
     def _compositor_refresh(self) -> None:
-        """Perform a compositor refresh."""
-
+        """Publish admitted damage, retaining held subtree damage in Compositor."""
         app = self.app
         if app._batch_count:
             return
-        # A translucent foreground renders its backdrops through BackgroundScreen,
-        # without entering those screens' refresh methods. Admit that same visible
-        # stack before rendering any rows, including an invalidated backdrop.
         background_screens = app._background_screens
         screens = (*background_screens, self) if self is app.screen else (self,)
         if self is app.screen and app.is_inline:
-            # Height acquisition can invalidate a body's captured width.
-            # Complete that geometry read before asking its scene to paint.
             inline_height = app._get_inline_height()
-        if not all(screen._prepare_compositor_refresh() for screen in screens):
-            self._repaint_required = True
-            return
-
+        cohort = tuple((screen, screen._prepare_compositor_refresh()) for screen in screens)
+        deferred_roots = tuple(root for _, roots in cohort for root in roots)
+        excluded_regions = tuple(
+            region for screen, roots in cohort
+            for region in screen._compositor.deferred_regions(roots)
+        )
         if self is app.screen:
-            if app.is_inline:
-                clear = (
-                    app._previous_inline_height is not None
-                    and inline_height < app._previous_inline_height
-                )
-                app._display(
-                    self,
-                    self._compositor.render_inline(
-                        app.size.with_height(inline_height),
+            # BackgroundScreen can render its compositor inside the foreground's
+            # renderer. Borrow this exact admission, including every backdrop.
+            with ExitStack() as frame:
+                for screen, _ in cohort:
+                    frame.enter_context(screen._compositor._using_exclusions(excluded_regions))
+                if app.is_inline:
+                    clear = (
+                        app._previous_inline_height is not None
+                        and inline_height < app._previous_inline_height
+                    )
+                    update = self._compositor.render_inline(
+                        app.size.with_height(max(inline_height, app._previous_inline_height or 0)
+                                             if deferred_roots else inline_height),
+                        screen_stack=background_screens, clear=clear,
+                        excluded_regions=excluded_regions,
+                    )
+                    if update is not None and not deferred_roots:
+                        app._previous_inline_height = inline_height
+                else:
+                    update = self._compositor.render_update(
                         screen_stack=background_screens,
-                        clear=clear,
-                    ),
-                )
-                app._previous_inline_height = inline_height
-                self._compositor._dirty_regions.clear()
-            else:
-                update = self._compositor.render_update(
-                    screen_stack=background_screens
-                )
-                app._display(self, update)
+                        excluded_regions=excluded_regions,
+                    )
+                if update is not None:
+                    app._display(self, update)
+                    self._on_frame_published(deferred_roots)
+            if background_screens:
+                self._release_paint()
             self._dirty_widgets.clear()
         elif self in background_screens and self._compositor._dirty_regions:
-            if app.is_inline:
-                app.screen.refresh(*self._compositor._dirty_regions)
-            else:
-                self._set_dirty(*self._compositor._dirty_regions)
-                app.screen.refresh(*self._compositor._dirty_regions)
-                self._repaint_required = True
-            self._compositor._dirty_regions.clear()
+            # The foreground owns terminal publication of the same backdrop
+            # damage. Transfer the intent without consuming the held portion.
+            damage = self._compositor._exclude_regions(
+                self._compositor._dirty_regions, excluded_regions,
+            )
+            if damage:
+                self._set_dirty(*damage)
+                app.screen.refresh(*damage)
+                self._compositor._dirty_regions = self._compositor._exclude_regions(
+                    self._compositor._dirty_regions, damage,
+                )
             self._dirty_widgets.clear()
         app._update_mouse_over(self)
 
@@ -1287,19 +1296,35 @@ class Screen(Generic[ScreenResultType], Widget):
         if self._callbacks:
             self.call_next(self._invoke_and_clear_callbacks)
 
+    def _sender_refresh_pending(self, sender: MessagePump, roots: tuple[Widget, ...]) -> bool:
+        """Admit the original sender's publication, rather than every subtree."""
+        if not isinstance(sender, Widget) or isinstance(sender, Screen):
+            return self._refresh_pending or bool(roots)
+        ancestry = set(sender.walk_ancestors(with_self=True))
+        if ancestry.intersection(roots) or any(
+            sender in root.walk_ancestors(with_self=True) for root in roots
+        ):
+            return True
+        if self._layout_required or self._scroll_required or self._recompose_required:
+            return True
+        if self._repaint_required or sender in self._dirty_widgets:
+            return True
+        return self._compositor.pending_for(sender)
+
     async def _invoke_and_clear_callbacks(self) -> None:
-        """If there are scheduled callbacks to run, call them and clear
-        the callback queue."""
+        """Keep held senders in the original queue; release independent senders."""
+        index = 0
         for _ in range(len(self._callbacks)):
-            if self.app._batch_count:
+            if self.app._batch_count or index >= len(self._callbacks):
                 return
-            if self.is_current and self._refresh_pending:
+            callback, sender = self._callbacks[index]
+            roots = self._prepare_compositor_refresh() if self.is_current else ()
+            if self.is_current and self._sender_refresh_pending(sender, roots):
+                index += 1
                 self.check_idle()
-                return
-            if not self._callbacks:
-                return
-            callback, message_pump = self._callbacks.pop(0)
-            with message_pump._context():
+                continue
+            self._callbacks.pop(index)
+            with sender._context():
                 await invoke(callback)
 
     def _invoke_later(self, callback: CallbackType, sender: MessagePump) -> None:
@@ -1400,7 +1425,14 @@ class Screen(Generic[ScreenResultType], Widget):
                     )
                 else:
                     hidden, shown = self._compositor.reflow(self, size)
-                self._layout_widgets.clear()
+                mutation_roots = self._layout_mutation_roots()
+                self._layout_widgets = {
+                    owner: held for owner, members in self._layout_widgets.items()
+                    if (held := {
+                        member for member in members
+                        if set(member.walk_ancestors(with_self=True)).intersection(mutation_roots)
+                    })
+                }
                 Hide = events.Hide
                 Show = events.Show
 
