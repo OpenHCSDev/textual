@@ -1402,6 +1402,10 @@ class Widget(DOMNode):
             return text_content
         return Content.from_markup(text_content)
 
+    def _after_refresh_pending(self, screen, roots: tuple[Widget, ...]) -> bool:
+        """A spatial sender borrows its original screen's geometry and damage."""
+        return self.is_attached and screen._sender_refresh_pending(self, roots)
+
     def arrange(self, size: Size, optimal: bool = False) -> DockArrangeResult:
         """Arrange child widgets.
 
@@ -1927,6 +1931,10 @@ class Widget(DOMNode):
         Returns:
             The size and margin for this widget.
         """
+        if self.is_attached and (box := self.screen._compositor.mutation_box(self)) is not None:
+            # Parent layouts measure the same committed box as Compositor;
+            # never descend through an actively changing child to size siblings.
+            return box
         nodes = self.__dict__.get("_nodes")
         revision = (self._layout_updates,
                     nodes._updates if nodes is not None else 0)
