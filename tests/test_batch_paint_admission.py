@@ -48,7 +48,7 @@ async def test_async_widget_batch_retains_damage_and_refresh_callbacks() -> None
         screen.preparation_batches.clear()
         async with holder.batch():
             await holder.mount(Label("new retained source", id="new"))
-            compositor.reflow(screen, screen.size)
+            screen._refresh_layout()
             app.call_after_refresh(painted.set)
             await pilot.pause()
             damage = set(screen._compositor._dirty_regions)
@@ -211,7 +211,7 @@ async def test_partial_publication_keeps_geometry_and_owner_callbacks():
             # Reflow still commits geometry while full-screen damage already
             # owns repaint. Held placements must survive and damage must remain
             # available for the partial publisher, rather than being consumed.
-            screen._refresh_layout()
+            compositor.reflow(screen, screen.size)
             assert compositor._dirty_regions == full_damage
             assert compositor.find_widget(holder) == before
             assert compositor.find_widget(original) == original_geometry
