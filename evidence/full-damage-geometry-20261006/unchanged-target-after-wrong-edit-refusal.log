@@ -1,0 +1,13 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_________ test_partial_publication_keeps_geometry_and_owner_callbacks __________
+tests/test_batch_paint_admission.py:215: in test_partial_publication_keeps_geometry_and_owner_callbacks
+    assert compositor._dirty_regions == full_damage
+E   assert {Region(x=0, ...20, height=3)} == {Region(x=0, ...20, height=3)}
+E     
+E     Extra items in the right set:
+E     Region(x=0, y=0, width=40, height=8)
+E     Use -v to get more diff
+=========================== short test summary info ============================
+FAILED tests/test_batch_paint_admission.py::test_partial_publication_keeps_geometry_and_owner_callbacks
+1 failed in 0.29s
