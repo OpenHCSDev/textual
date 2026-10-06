@@ -1388,7 +1388,6 @@ class Screen(Generic[ScreenResultType], Widget):
         self._arrangement_cache.clear()
         self.screen_layout_refresh_signal.unsubscribe(self)
         self._nodes._clear()
-        self._task = None
 
     def _pop_result_callback(self) -> None:
         """Remove the latest result callback from the stack."""

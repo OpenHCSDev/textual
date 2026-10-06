@@ -2208,7 +2208,7 @@ class App(Generic[ReturnType], DOMNode):
 
         # Launch the app in the "background"
 
-        self._task = app_task = create_task(run_app(app), name=f"run_test {app}")
+        app_task = create_task(run_app(app), name=f"run_test {app}")
 
         # Wait until the app has performed all startup routines.
         await app_ready_event.wait()
@@ -3381,7 +3381,7 @@ class App(Generic[ReturnType], DOMNode):
             except DevtoolsConnectionError:
                 self.log.system(f"Couldn't connect to devtools ( {self.devtools.url} )")
 
-    async def _process_messages(
+    async def _process_messages_body(
         self,
         ready_callback: CallbackType | None = None,
         headless: bool = False,
@@ -3492,51 +3492,50 @@ class App(Generic[ReturnType], DOMNode):
                 finally:
                     await Timer._stop_all(self._timers)
 
-        with self._context():
-            if not await app_prelude():
-                return
-            self._running = True
-            try:
-                load_event = events.Load()
-                await self._dispatch_message(load_event)
+        if not await app_prelude():
+            return
+        self._running = True
+        try:
+            load_event = events.Load()
+            await self._dispatch_message(load_event)
 
-                driver = self._driver = self._build_driver(
-                    headless=headless,
-                    inline=inline,
-                    mouse=mouse,
-                    size=terminal_size,
-                )
-                self.log(driver=driver)
+            driver = self._driver = self._build_driver(
+                headless=headless,
+                inline=inline,
+                mouse=mouse,
+                size=terminal_size,
+            )
+            self.log(driver=driver)
 
-                if not self._exit:
-                    driver.start_application_mode()
-                    try:
-                        with redirect_stdout(self._capture_stdout):
-                            with redirect_stderr(self._capture_stderr):
-                                await run_process_messages()
+            if not self._exit:
+                driver.start_application_mode()
+                try:
+                    with redirect_stdout(self._capture_stdout):
+                        with redirect_stderr(self._capture_stderr):
+                            await run_process_messages()
 
-                    finally:
-                        Reactive._clear_watchers(self)
-                        if self._driver.is_inline:
-                            cursor_x, cursor_y = self._previous_cursor_position
+                finally:
+                    Reactive._clear_watchers(self)
+                    if self._driver.is_inline:
+                        cursor_x, cursor_y = self._previous_cursor_position
+                        self._driver.write(
+                            Control.move(-cursor_x, -cursor_y).segment.text
+                        )
+                        self._driver.flush()
+                        if inline_no_clear and not self.app._exit_renderables:
+                            console = Console()
+                            try:
+                                console.print(self.screen._compositor)
+                            except ScreenStackError:
+                                console.print()
+                        else:
                             self._driver.write(
-                                Control.move(-cursor_x, -cursor_y).segment.text
+                                Control.move(0, -self.INLINE_PADDING).segment.text
                             )
-                            self._driver.flush()
-                            if inline_no_clear and not self.app._exit_renderables:
-                                console = Console()
-                                try:
-                                    console.print(self.screen._compositor)
-                                except ScreenStackError:
-                                    console.print()
-                            else:
-                                self._driver.write(
-                                    Control.move(0, -self.INLINE_PADDING).segment.text
-                                )
 
-                        driver.stop_application_mode()
-            except Exception as error:
-                self._handle_exception(error)
+                    driver.stop_application_mode()
+        except Exception as error:
+            self._handle_exception(error)
 
     async def _pre_process(self) -> bool:
         """Special case for the app, which doesn't need the functionality in MessagePump."""
