@@ -448,12 +448,11 @@ class Pilot(Generic[ReturnType]):
                     if not isinstance(delivered, Click):
                         delivered = None
                     continue
-                await self.pause()
                 event = mouse_event_cls(**message_arguments)
                 results = await app._post_message_and_wait(event)
                 delivered = results[0] if results else None
+                await self.pause()
 
-        await self.pause()
         return widget is None or (
             delivered is not None and delivered.widget is target_widget
         )

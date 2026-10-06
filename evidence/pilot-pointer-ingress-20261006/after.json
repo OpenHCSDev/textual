@@ -2,16 +2,16 @@
   "coverage": [
     {
       "checkout": "/home/ts/wt/textual-frame-publication-20261006",
-      "revision": "67af8df0cd6a5224a8ee6fb84244486ea011fcc9",
+      "revision": "54e153614f5e5355dd85355bdc135c0318faf99a",
       "root": "src/textual",
       "parsed": 249,
       "omissions": []
     },
     {
       "checkout": "/home/ts/wt/textual-frame-publication-20261006",
-      "revision": "67af8df0cd6a5224a8ee6fb84244486ea011fcc9",
+      "revision": "54e153614f5e5355dd85355bdc135c0318faf99a",
       "root": "tests",
-      "parsed": 465,
+      "parsed": 466,
       "omissions": []
     },
     {
@@ -60,6 +60,7 @@
         ],
         "_mouse_down_widget:Attribute:Store": [
           670,
+          4129,
           4118,
           4123
         ],
@@ -81,22 +82,21 @@
         ],
         "on_event:Attribute:Load": [
           4106,
-          4193
-        ],
-        "_forward_event:Attribute:Load": [
-          4127,
-          4185,
-          4189,
-          4191,
-          4183,
-          4162
+          4199
         ],
         "_mouse_down_widget:Attribute:Load": [
+          4125
+        ],
+        "_forward_event:Attribute:Load": [
           4133,
-          4137
+          4191,
+          4195,
+          4197,
+          4189,
+          4167
         ],
         "Click:Attribute:Load": [
-          4155
+          4160
         ]
       }
     },
@@ -215,22 +215,22 @@
       "file": "src/textual/events.py",
       "references": {
         "Click:ClassDef:NoneType": [
-          634
+          637
         ],
         "_apply_offset:FunctionDef:NoneType": [
-          554,
-          700
+          557,
+          703
         ],
         "widget:Attribute:Store": [
           383
         ],
         "widget:Attribute:Load": [
-          498,
-          867,
-          884,
-          478,
-          556,
-          702
+          501,
+          870,
+          887,
+          481,
+          559,
+          705
         ]
       }
     },
@@ -266,12 +266,12 @@
         "_dispatch_completion:Attribute:Store": [
           60,
           166,
-          173
+          175
         ],
         "_dispatch_completion:Attribute:Load": [
           162,
-          170,
-          171,
+          172,
+          173,
           161
         ]
       }
@@ -281,33 +281,33 @@
       "file": "src/textual/message_pump.py",
       "references": {
         "_dispatch_message:AsyncFunctionDef:NoneType": [
-          780
+          781
         ],
         "on_event:AsyncFunctionDef:NoneType": [
-          875
+          878
         ],
         "_post_message_and_wait:FunctionDef:NoneType": [
-          923
+          930
         ],
         "_dispatch_completion:Attribute:Store": [
-          938
+          945
         ],
         "_dispatch_completion:Attribute:Load": [
-          944
+          951
         ],
         "_dispatch_message:Attribute:Load": [
           665,
           670,
-          728,
+          729,
           668
         ],
         "_complete_dispatch:Attribute:Load": [
-          737,
-          947,
-          953
+          738,
+          954,
+          960
         ],
         "on_event:Attribute:Load": [
-          800
+          802
         ]
       }
     },
@@ -336,23 +336,27 @@
           24
         ],
         "_post_mouse_events:AsyncFunctionDef:NoneType": [
-          383
+          377
         ],
         "_get_mouse_message_arguments:Name:Load": [
-          431
+          426
         ],
         "_post_mouse_events:Attribute:Load": [
           135,
           180,
-          238,
-          379
+          236,
+          373
         ],
         "Click:Name:Load": [
-          457,
-          239
+          444,
+          237,
+          448
         ],
-        "_forward_event:Attribute:Load": [
-          468
+        "widget:Attribute:Load": [
+          457
+        ],
+        "_post_message_and_wait:Attribute:Load": [
+          452
         ]
       }
     },
@@ -364,34 +368,42 @@
           1807
         ],
         "_forward_event:FunctionDef:NoneType": [
-          2004
+          2008
         ],
         "widget:Attribute:Load": [
           1502,
           1516,
           1519
         ],
+        "widget:Attribute:Store": [
+          1808,
+          1829,
+          2055,
+          2134
+        ],
         "mouse_captured:Attribute:Load": [
-          1811,
-          2154,
           1812,
-          2111,
-          2112,
-          2071
-        ],
-        "_post_message_and_wait:Attribute:Load": [
-          1832,
-          2131
-        ],
-        "_forward_event:Attribute:Load": [
-          1836,
-          2133
-        ],
-        "_handle_mouse_move:Attribute:Load": [
-          2015
+          2162,
+          1813,
+          2116,
+          2117,
+          2076
         ],
         "_apply_offset:Attribute:Load": [
-          2134
+          1834,
+          2137,
+          2142
+        ],
+        "_post_message_and_wait:Attribute:Load": [
+          1836,
+          2139
+        ],
+        "_forward_event:Attribute:Load": [
+          1840,
+          2141
+        ],
+        "_handle_mouse_move:Attribute:Load": [
+          2019
         ]
       }
     },
@@ -573,13 +585,13 @@
       "file": "tests/test_app.py",
       "references": {
         "_get_mouse_message_arguments:Name:Load": [
-          270
+          269
         ],
         "Click:Attribute:Load": [
-          290,
-          315,
-          344,
-          366
+          289,
+          314,
+          343,
+          365
         ]
       }
     },
@@ -624,6 +636,23 @@
         "Click:Attribute:Load": [
           441,
           451
+        ]
+      }
+    },
+    {
+      "root": "/home/ts/wt/textual-frame-publication-20261006",
+      "file": "tests/test_pilot_pointer_ingress.py",
+      "references": {
+        "_mouse_down_widget:Attribute:Load": [
+          94
+        ],
+        "widget:Attribute:Load": [
+          105,
+          126,
+          29
+        ],
+        "mouse_captured:Attribute:Load": [
+          119
         ]
       }
     },

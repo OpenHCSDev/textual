@@ -1,0 +1,17 @@
+.....F.................................................................. [ 44%]
+........................................................................ [ 89%]
+...........event: Click(Label(id='one'), x=0, y=0, pointer_x=0, pointer_y=0, style=Style(color=Color('#e0e0e0', ColorType.TRUECOLOR, triplet=ColorTriplet(red=224, green=224, blue=224)), bgcolor=Color('#121212', ColorType.TRUECOLOR, triplet=ColorTriplet(red=18, green=18, blue=18)), meta={'offset': (0, 0)}), chain=1)
+.event: Click(Label(id='one'), x=0, y=0, pointer_x=0, pointer_y=0, style=Style(color=Color('#e0e0e0', ColorType.TRUECOLOR, triplet=ColorTriplet(red=224, green=224, blue=224)), bgcolor=Color('#121212', ColorType.TRUECOLOR, triplet=ColorTriplet(red=18, green=18, blue=18)), meta={'offset': (0, 0)}), chain=1)
+event: Click(Label(id='one'), x=0, y=0, pointer_x=0, pointer_y=0, style=Style(color=Color('#e0e0e0', ColorType.TRUECOLOR, triplet=ColorTriplet(red=224, green=224, blue=224)), bgcolor=Color('#121212', ColorType.TRUECOLOR, triplet=ColorTriplet(red=18, green=18, blue=18)), meta={'offset': (0, 0)}), chain=2)
+.event: Click(Label(id='one'), x=0, y=0, pointer_x=0, pointer_y=0, style=Style(color=Color('#e0e0e0', ColorType.TRUECOLOR, triplet=ColorTriplet(red=224, green=224, blue=224)), bgcolor=Color('#121212', ColorType.TRUECOLOR, triplet=ColorTriplet(red=18, green=18, blue=18)), meta={'offset': (0, 0)}), chain=1)
+event: Click(Label(id='one'), x=0, y=0, pointer_x=0, pointer_y=0, style=Style(color=Color('#e0e0e0', ColorType.TRUECOLOR, triplet=ColorTriplet(red=224, green=224, blue=224)), bgcolor=Color('#121212', ColorType.TRUECOLOR, triplet=ColorTriplet(red=18, green=18, blue=18)), meta={'offset': (0, 0)}), chain=2)
+event: Click(Label(id='one'), x=0, y=0, pointer_x=0, pointer_y=0, style=Style(color=Color('#e0e0e0', ColorType.TRUECOLOR, triplet=ColorTriplet(red=224, green=224, blue=224)), bgcolor=Color('#121212', ColorType.TRUECOLOR, triplet=ColorTriplet(red=18, green=18, blue=18)), meta={'offset': (0, 0)}), chain=3)
+....                                                        [100%]
+=================================== FAILURES ===================================
+___________ test_background_screen_delivery_keeps_raw_app_completion ___________
+tests/test_pilot_pointer_ingress.py:142: in test_background_screen_delivery_keeps_raw_app_completion
+    assert await pilot.click(app.screen, offset=(30, 7))
+E   assert False
+=========================== short test summary info ============================
+FAILED tests/test_pilot_pointer_ingress.py::test_background_screen_delivery_keeps_raw_app_completion
+1 failed, 160 passed, 22 deselected in 27.62s

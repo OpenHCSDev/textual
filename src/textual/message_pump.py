@@ -880,6 +880,10 @@ class MessagePump(metaclass=_MessagePumpMeta):
 
         Args:
             event: An Event object.
+
+        Returns:
+            A final message produced by this delivery, or None for the original
+            event. Overrides should return the original owner's result.
         """
         await self._on_message(event)
 
