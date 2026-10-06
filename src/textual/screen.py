@@ -1397,7 +1397,7 @@ class Screen(Generic[ScreenResultType], Widget):
         self._result_callbacks.pop()
 
     def _use_viewport_layout(self) -> bool:
-        """Opt in to viewport-local geometry/lifecycle with lazy full-map lookup."""
+        """Opt in to viewport geometry with lazy acquisition of reader paths."""
         return False
 
     def _layout_geometry_targets(self) -> tuple[Widget, ...]:
