@@ -126,9 +126,12 @@ async def test_complete_cached_body_keeps_capture_and_explicit_reader_geometry()
                        for index, strip in enumerate(strips))
             assert compositor._visible_map is viewport
 
-        # Ordinary position queries still acquire their complete original scene.
+        # A position query retains its path without requiring every offscreen row.
         assert compositor.find_widget(rows[20]).region.height == 1
-        assert all(row in compositor._full_map for row in rows)
+        assert rows[20] in compositor._visible_map
+        assert rows[235] in compositor._visible_map
+        assert compositor._full_map_invalidated
+        assert all(row in compositor.full_map for row in rows)
         rows[5].display = False
         await pilot.pause()
         screen._refresh_layout(app.size, scroll=True)
@@ -188,7 +191,7 @@ async def test_foreign_and_removed_targets_do_not_enter_the_scene():
         assert not tuple(screen._compositor.published_geometry((target, foreign)))
 
 
-async def test_capture_requires_publication_while_position_queries_keep_lazy_layout():
+async def test_capture_requires_publication_while_position_queries_acquire_reader_paths():
     app = App()
     async with app.run_test(size=(80, 25)) as pilot:
         screen = TargetedScreen()
@@ -203,9 +206,12 @@ async def test_capture_requires_publication_while_position_queries_keep_lazy_lay
             assert not tuple(compositor.published_geometry((body,)))
         assert compositor._full_map is published[0]
         assert compositor._visible_map is published[1]
-        # Position queries still acquire the ordinary complete layout.
+        # Position queries acquire this original path in the current scene.
         assert compositor.find_widget(body).region.height > 0
-        assert body in compositor._full_map
+        assert body in compositor._visible_map
+        assert screen.query_one("#group-50") not in compositor._visible_map
+        assert compositor._full_map is published[0]
+        assert compositor._full_map_invalidated
 
 
 async def test_body_capture_descendants_use_original_arrangement_and_screen_coordinates():

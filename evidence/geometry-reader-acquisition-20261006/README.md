@@ -23,5 +23,32 @@ read before editing. Existing Package parsed 249 native production modules,
 881 lexical sites. External dynamic consumers are not exhaustively resolved.
 Toad and original Physical05 helpers/footage are unchanged.
 
-Source checkpoint; changed reader/Undo/geometry qualification is pending.
-No installed package, native artifact, saved source, provider or physical run.
+## Changed-path verification
+
+One serial source batch executed the two new real run_async Apps, all six existing
+viewport target/capture cases, scoped capture/offsets and caption damage. Nine
+cases passed in the original batch. The Undo case's offscreen keyboard assertion
+failed because original Hide handling blurred the editor; the original log is
+retained as offscreen-key-refusal.log. No production code changed after this
+result. The corrected case invokes the retained editor's original Undo action,
+executing the real selection watcher and scroll-region reader: **1 passed in
+0.77s**, undo-path.log. The other nine cases were not repeated.
+
+The Undo App verifies only viewport/retained-path arrangements during the changed
+action, unchanged original full-map identity, preservation of a prior offscreen
+reader, and exact agreement with the explicit complete-map coordinates. The other
+new App verifies completeness invalidation cannot reject committed coordinates,
+and actual removal still revokes them. Existing cases cover cached body/overlay
+geometry, explicit reader paths, foreign/removed targets, scoped capture's missing
+child refusal and damage retention. Complete enumeration remains explicit.
+
+After: 249 production modules, 465 tests and the same 288 Toad dependency modules,
+zero parse omissions. One published scene owns existing coordinate selection;
+position/membership no longer independently demand complete enumeration.
+
+This qualifies native source reader behavior through HeadlessDriver Apps, not a
+latency result or matching Toad/terminal acceptance. Original mutation, inline,
+translucent and hit mechanisms were not changed; those full workflows are not
+newly qualified by this gate. No Physical05 repeat, installed package, native
+artifact, saved source, provider or public runtime operation occurred. Both new
+Apps returned through original shutdown; no operation remains running.

@@ -304,6 +304,8 @@ async def test_capture_geometry_and_offsets_share_original_scene_custody():
             assert compositor.find_widget(far) is capture[far]
 
         assert compositor._render_geometry is None
-        # An ordinary offscreen query may still arrange the whole native scene.
+        # An offscreen query acquires its path without escaping captured scopes
+        # or forcing a complete native scene.
         assert compositor.find_widget(far).region == capture[far].region
-        assert not compositor._full_map_invalidated
+        assert far in compositor._visible_map
+        assert compositor._full_map_invalidated

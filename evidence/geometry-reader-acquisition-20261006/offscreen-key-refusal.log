@@ -1,0 +1,22 @@
+F.........                                                               [100%]
+=================================== FAILURES ===================================
+____ test_real_undo_acquires_only_missing_editor_and_preserves_reader_paths ____
+tests/test_geometry_reader_acquisition.py:86: in test_real_undo_acquires_only_missing_editor_and_preserves_reader_paths
+    await asyncio.wait_for(app.run_async(headless=True, size=(40, 8), auto_pilot=drive), 10)
+/usr/lib/python3.14/asyncio/tasks.py:488: in wait_for
+    return await fut
+           ^^^^^^^^^
+src/textual/app.py:2307: in run_async
+    await auto_pilot_task
+src/textual/app.py:2279: in run_auto_pilot
+    await auto_pilot(pilot)
+tests/test_geometry_reader_acquisition.py:72: in drive
+    assert editor.text == "original draft"
+E   AssertionError: assert 'xoriginal draft' == 'original draft'
+E     
+E     - original draft
+E     + xoriginal draft
+E     ? +
+=========================== short test summary info ============================
+FAILED tests/test_geometry_reader_acquisition.py::test_real_undo_acquires_only_missing_editor_and_preserves_reader_paths
+1 failed, 9 passed in 8.44s
