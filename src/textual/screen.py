@@ -1638,6 +1638,9 @@ class Screen(Generic[ScreenResultType], Widget):
 
     def _on_screen_suspend(self) -> None:
         """Screen has suspended."""
+        # Releases now route to another Screen. Retain the copyable range,
+        # but retire the press and its auto-scroll through the original owner.
+        self._mouse_down_offset = None
         if self.app.SUSPENDED_SCREEN_CLASS:
             self.add_class(self.app.SUSPENDED_SCREEN_CLASS)
         self.app._set_mouse_over(None, None)

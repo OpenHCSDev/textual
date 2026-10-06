@@ -2,16 +2,16 @@
   "coverage": [
     {
       "checkout": "/home/ts/wt/textual-frame-publication-20261006",
-      "revision": "cb95661ee0b02d914fef9290658fed85b8f367c2",
+      "revision": "6934a31001b65e4c6b76583d43621d23de5118ae",
       "root": "src/textual",
       "parsed": 249,
       "omissions": []
     },
     {
       "checkout": "/home/ts/wt/textual-frame-publication-20261006",
-      "revision": "cb95661ee0b02d914fef9290658fed85b8f367c2",
+      "revision": "6934a31001b65e4c6b76583d43621d23de5118ae",
       "root": "tests",
-      "parsed": 466,
+      "parsed": 467,
       "omissions": []
     },
     {
@@ -70,143 +70,143 @@
       "checkout": "/home/ts/wt/textual-frame-publication-20261006",
       "file": "src/textual/screen.py",
       "references": {
+        "_selecting:FunctionDef:NoneType": [
+          581
+        ],
         "clear_selection:FunctionDef:NoneType": [
-          768
+          770
         ],
         "_retire_selection:FunctionDef:NoneType": [
-          1547
+          1549
         ],
         "_on_screen_suspend:FunctionDef:NoneType": [
-          1637
+          1639
         ],
         "_start_auto_scroll:FunctionDef:NoneType": [
-          1886
+          1891
         ],
         "_stop_auto_scroll:FunctionDef:NoneType": [
-          1937
+          1942
         ],
         "_check_auto_scroll:FunctionDef:NoneType": [
-          1943
+          1948
         ],
         "_update_select:FunctionDef:NoneType": [
-          2004
+          2009
         ],
         "_forward_event:FunctionDef:NoneType": [
-          2008
+          2013
         ],
-        "_watch__selecting:FunctionDef:NoneType": [
-          2153
+        "_watch__mouse_down_offset:FunctionDef:NoneType": [
+          2161
         ],
         "_watch__select_state:FunctionDef:NoneType": [
-          2166
+          2174
         ],
         "_flush_pending_selection:FunctionDef:NoneType": [
-          2198
+          2208
         ],
         "_apply_selection_state:FunctionDef:NoneType": [
-          2204
-        ],
-        "_selecting:Name:Store": [
-          253
+          2214
         ],
         "_select_state:Name:Store": [
-          259
+          256
         ],
         "_mouse_down_offset:Name:Store": [
-          262
+          259
         ],
         "_auto_select_scroll_timer:Attribute:Store": [
-          332,
-          1933,
-          1941
+          329,
+          1938,
+          1946
         ],
         "_selecting:Attribute:Load": [
-          599,
-          2021
+          601,
+          1913,
+          2026
         ],
         "_select_state:Attribute:Store": [
-          771,
-          1558,
-          2216,
-          2040,
-          2101,
-          2113
-        ],
-        "_selecting:Attribute:Store": [
-          2206,
-          2073
-        ],
-        "SelectState:Name:Load": [
-          259,
-          2166,
-          2204,
-          2101
-        ],
-        "_flush_pending_selection:Attribute:Load": [
-          983,
-          1292,
-          2057
-        ],
-        "_retire_selection:Attribute:Load": [
-          1544
-        ],
-        "_stop_auto_scroll:Attribute:Load": [
-          1921,
-          2002,
-          2155,
-          2052
-        ],
-        "_auto_select_scroll_timer:Attribute:Load": [
-          1939,
-          1963,
-          1940
-        ],
-        "_watch__select_state:Attribute:Load": [
-          2006
-        ],
-        "_select_state:Attribute:Load": [
-          2006,
-          2160,
-          1555,
-          1908,
-          2202,
-          1556,
-          2021,
-          2161,
-          2040
-        ],
-        "clear_selection:Attribute:Load": [
-          2151,
-          2070
-        ],
-        "_apply_selection_state:Attribute:Load": [
-          2196,
-          2202
-        ],
-        "_forward_event:Attribute:Load": [
-          1840,
-          2141
-        ],
-        "_update_select:Attribute:Load": [
-          1918
+          773,
+          1560,
+          2225,
+          2045,
+          2109,
+          2121
         ],
         "_mouse_down_offset:Attribute:Store": [
-          2072,
-          2077
+          1643,
+          2077,
+          2085
         ],
-        "_start_auto_scroll:Attribute:Load": [
-          1991,
-          1999
+        "SelectState:Name:Load": [
+          256,
+          2174,
+          2214,
+          2109
         ],
-        "_check_auto_scroll:Attribute:Load": [
-          2046
+        "_flush_pending_selection:Attribute:Load": [
+          985,
+          1294,
+          2062
+        ],
+        "_retire_selection:Attribute:Load": [
+          1546
+        ],
+        "_stop_auto_scroll:Attribute:Load": [
+          1926,
+          2007,
+          2163,
+          2181,
+          2057
+        ],
+        "_auto_select_scroll_timer:Attribute:Load": [
+          1944,
+          1968,
+          1945
+        ],
+        "_watch__select_state:Attribute:Load": [
+          2011
+        ],
+        "_select_state:Attribute:Load": [
+          2011,
+          2168,
+          583,
+          1557,
+          2212,
+          1558,
+          2026,
+          2169,
+          2045
+        ],
+        "clear_selection:Attribute:Load": [
+          2159,
+          2075
+        ],
+        "_apply_selection_state:Attribute:Load": [
+          2206,
+          2212
         ],
         "_mouse_down_offset:Attribute:Load": [
-          2059,
-          2060
+          583,
+          2064,
+          2065
+        ],
+        "_forward_event:Attribute:Load": [
+          1845,
+          2149
+        ],
+        "_update_select:Attribute:Load": [
+          1923
+        ],
+        "_start_auto_scroll:Attribute:Load": [
+          1996,
+          2004
+        ],
+        "_check_auto_scroll:Attribute:Load": [
+          2051
         ],
         "TextSelected:Attribute:Load": [
-          2074
+          2078
         ]
       }
     },
@@ -359,6 +359,53 @@
       "references": {
         "_selecting:Attribute:Load": [
           139
+        ]
+      }
+    },
+    {
+      "checkout": "/home/ts/wt/textual-frame-publication-20261006",
+      "file": "tests/test_primary_selection_gesture.py",
+      "references": {
+        "_select_state:Attribute:Load": [
+          78,
+          192,
+          61,
+          85,
+          115,
+          199
+        ],
+        "_selecting:Attribute:Load": [
+          86,
+          106,
+          62,
+          91,
+          116,
+          122,
+          147,
+          157,
+          201
+        ],
+        "_mouse_down_offset:Attribute:Load": [
+          60,
+          84,
+          92,
+          146
+        ],
+        "_auto_select_scroll_timer:Attribute:Load": [
+          63,
+          107,
+          117,
+          123,
+          143,
+          148,
+          159,
+          202
+        ],
+        "_update_select:Attribute:Load": [
+          119
+        ],
+        "_flush_pending_selection:Attribute:Load": [
+          120
         ]
       }
     },
