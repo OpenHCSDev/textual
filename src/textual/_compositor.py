@@ -789,20 +789,21 @@ class Compositor:
         rectangles without hashing complete geometry records into temporary
         sets. Widget size publication owns resize notification separately.
         """
-        track_damage = self.size.region not in self._dirty_regions
+        if self.size.region in self._dirty_regions:
+            owner.check_idle()
+            return
         for widget, geometry in after.items():
             previous = before.get(widget)
             if previous == geometry:
                 continue
             if previous is not None:
-                if track_damage and (region := previous.visible_region):
+                if region := previous.visible_region:
                     self._dirty_regions.add(region)
-            if track_damage and (region := geometry.visible_region):
+            if region := geometry.visible_region:
                 self._dirty_regions.add(region)
-        if track_damage:
-            for widget, geometry in before.items():
-                if widget not in after and (region := geometry.visible_region):
-                    self._dirty_regions.add(region)
+        for widget, geometry in before.items():
+            if widget not in after and (region := geometry.visible_region):
+                self._dirty_regions.add(region)
         if self._dirty_regions:
             owner.check_idle()
 
