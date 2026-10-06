@@ -207,6 +207,15 @@ async def test_partial_publication_keeps_geometry_and_owner_callbacks():
             assert screen.publications and all(roots == (holder,) for roots in screen.publications)
             assert compositor._dirty_regions
             compositor._dirty_regions.add(compositor.size.region)
+            full_damage = set(compositor._dirty_regions)
+            # Reflow still commits geometry while full-screen damage already
+            # owns repaint. Held placements must survive and damage must remain
+            # available for the partial publisher, rather than being consumed.
+            compositor.reflow(screen, screen.size)
+            assert compositor._dirty_regions == full_damage
+            assert compositor.find_widget(holder) == before
+            assert compositor.find_widget(original) == original_geometry
+            assert compositor.get_widget_at(1, 1)[0] is original
             update = compositor.render_update(excluded_regions=compositor.deferred_regions((holder,)))
             assert isinstance(update, ChopsUpdate)
             cells = list(ChopsUpdate._span_cuts(update.spans, update.cuts, 0))
