@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import gc
+from inspect import CORO_CLOSED, getcoroutinestate
 
 import pytest
 
@@ -9,9 +11,125 @@ from textual.message import Message
 from textual.message_pump import MessagePump
 from textual.reactive import Initialize, Reactive, TooManyComputesError, reactive, var
 from textual.widget import Widget
+from textual.widgets import DirectoryTree
 
 OLD_VALUE = 5_000
 NEW_VALUE = 1_000_000
+
+
+async def test_abandoned_watcher_results_keep_invocation_and_borrowed_task_lifetime():
+    """Retirement closes owned coroutines without cancelling borrowed execution."""
+    results = []
+    calls = []
+    release = asyncio.Event()
+
+    async def work():
+        await release.wait()
+
+    class WatchWidget(Widget):
+        count = var(0, init=False)
+
+        def watch_count(self, value):
+            calls.append(value)
+            result = work() if value == 1 else asyncio.create_task(work())
+            results.append(result)
+            return result
+
+    async with App().run_test():
+        widget = WatchWidget()
+        widget.count = 1
+        widget.count = 2
+        assert calls == [1, 2]
+        await widget._close_messages(wait=False)
+        assert getcoroutinestate(results[0]) == CORO_CLOSED
+        assert not results[1].cancelled()
+        release.set()
+        await results[1]
+
+
+async def test_cancelled_watcher_batch_closes_active_and_unstarted_results():
+    started = asyncio.Event()
+    results = []
+
+    async def work():
+        started.set()
+        await asyncio.Event().wait()
+
+    class WatchWidget(Widget):
+        count = var(0, init=False)
+
+        def watch_count(self):
+            result = work()
+            results.append(result)
+            return result
+
+    async with App().run_test():
+        widget = WatchWidget()
+        widget.count = 1
+        widget.count = 2
+        batch = asyncio.create_task(widget._flush_next_callbacks())
+        await started.wait()
+        batch.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await batch
+        assert [getcoroutinestate(result) for result in results] == [
+            CORO_CLOSED,
+            CORO_CLOSED,
+        ]
+
+
+async def test_watcher_created_after_retirement_is_disposed():
+    results = []
+
+    async def work():
+        raise AssertionError("A closed receiver must not run its watcher")
+
+    class WatchWidget(Widget):
+        count = var(0, init=False)
+
+        def watch_count(self):
+            result = work()
+            results.append(result)
+            return result
+
+    async with App().run_test():
+        widget = WatchWidget()
+        await widget._close_messages(wait=False)
+        widget.count = 1
+        assert getcoroutinestate(results[0]) == CORO_CLOSED
+
+
+async def test_unmounted_directory_tree_releases_initial_watcher(tmp_path, recwarn):
+    async with App().run_test():
+        tree = DirectoryTree(tmp_path)
+        del tree
+        gc.collect()
+    assert not [
+        warning for warning in recwarn if "was never awaited" in str(warning.message)
+    ]
+
+
+async def test_directory_tree_path_changes_and_removal_release_watchers(
+    tmp_path, recwarn
+):
+    """Exercise the real directory watcher and removal, including pending delivery."""
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+    (first / "one.txt").write_text("one")
+    (second / "two.txt").write_text("two")
+
+    async with App().run_test() as pilot:
+        for _ in range(3):
+            tree = DirectoryTree(first)
+            await pilot.app.mount(tree)
+            tree.path = second
+            await tree.remove()
+    gc.collect()
+    assert not [
+        warning for warning in recwarn if "was never awaited" in str(warning.message)
+    ]
 
 
 async def test_initialize():

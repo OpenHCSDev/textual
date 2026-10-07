@@ -62,6 +62,9 @@ class Message:
     def __rich_repr__(self) -> rich.repr.Result:
         yield from ()
 
+    def _discard(self) -> None:
+        """Release resources owned by an abandoned or completed delivery."""
+
     def __init_subclass__(
         cls,
         bubble: bool | None = True,
