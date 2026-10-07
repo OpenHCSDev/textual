@@ -46,6 +46,7 @@ if typing.TYPE_CHECKING:
     from textual.widgets._tabbed_content import TabbedContent, TabPane
     from textual.widgets._tabs import Tab, Tabs
     from textual.widgets._text_area import TextArea
+    from textual.widgets._prepared_text_area import PreparedTextArea
     from textual.widgets._tooltip import Tooltip
     from textual.widgets._tree import Tree
     from textual.widgets._welcome import Welcome
@@ -90,6 +91,7 @@ __all__ = [
     "TabPane",
     "Tabs",
     "TextArea",
+    "PreparedTextArea",
     "Tooltip",
     "Tree",
     "Welcome",
