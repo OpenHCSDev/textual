@@ -117,7 +117,25 @@ class _MessagePumpMeta(type):
                     )
 
         class_obj = super().__new__(cls, name, bases, class_dict, **kwargs)
+        mro = class_obj.__mro__
+        class_obj._dispatch_declarations = (
+            mro, tuple((owner, owner.__dict__) for owner in mro)
+        )
         return class_obj
+
+    def _get_dispatch_declarations(cls):
+        """Supply C3 declarations without copying their live dictionaries.
+
+        A bases change, including on a plain mixin, replaces Python's MRO.
+        Method and decorated-table replacements remain visible through the
+        original mapping views, even between yields of one delivery.
+        """
+        mro = cls.__mro__
+        source, declarations = cls._dispatch_declarations
+        if source is not mro:
+            declarations = tuple((owner, owner.__dict__) for owner in mro)
+            cls._dispatch_declarations = mro, declarations
+        return declarations
 
 
 class MessagePump(metaclass=_MessagePumpMeta):
@@ -845,13 +863,14 @@ class MessagePump(metaclass=_MessagePumpMeta):
         from textual.widget import Widget
 
         methods_dispatched: set[Callable] | None = None
-        message_types = message.__class__.__mro__
-        message_mro: list[type[Message]] | None = None
+        # Capture both original linearizations before the first yield. A
+        # handler may replace bases while this delivery is suspended; its
+        # successor delivery acquires the changed declaration source.
+        message_mro = message.__class__._get_dispatch_types()
         private_method_name = f"_{method_name}"
-        for cls in self.__class__.__mro__:
+        for cls, declarations in self.__class__._get_dispatch_declarations():
             if message._no_default_action:
                 break
-            declarations = cls.__dict__
             # Try decorated handlers first
             decorated_handlers = cast(
                 "dict[type[Message], list[tuple[Callable, dict[str, tuple[SelectorSet, ...]]]]] | None",
@@ -859,10 +878,6 @@ class MessagePump(metaclass=_MessagePumpMeta):
             )
 
             if decorated_handlers:
-                if message_mro is None:
-                    message_mro = [
-                        _type for _type in message_types if issubclass(_type, Message)
-                    ]
                 for message_class in message_mro:
                     handlers = decorated_handlers.get(message_class, ())
 

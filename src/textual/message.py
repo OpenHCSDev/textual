@@ -45,6 +45,7 @@ class Message:
     namespace: ClassVar[str] = ""  # Namespace to disambiguate messages
     handler_name: ClassVar[str]
     """Name of the default message handler."""
+    _dispatch_types = None
 
     def __init__(self) -> None:
         self.__post_init__()
@@ -87,6 +88,21 @@ class Message:
             namespace = qualname.rsplit(".", 2)[-2:]
             name = "_".join(camel_to_snake(part) for part in namespace)
         cls.handler_name = f"on_{name}"
+        mro = cls.__mro__
+        cls._dispatch_types = mro, tuple(
+            ancestor for ancestor in mro if issubclass(ancestor, Message)
+        )
+
+    @classmethod
+    def _get_dispatch_types(cls):
+        """Supply the actual message ancestors from their declaration source."""
+        mro = cls.__mro__
+        source = cls._dispatch_types
+        if source is None or source[0] is not mro:
+            source = cls._dispatch_types = mro, tuple(
+                ancestor for ancestor in mro if issubclass(ancestor, Message)
+            )
+        return source[1]
 
     @property
     def control(self) -> DOMNode | None:
