@@ -1,6 +1,9 @@
 """Real framework lifecycle checks, not installed terminal acceptance."""
 
 import asyncio
+from contextlib import nullcontext
+
+import pytest
 
 from textual.app import App, ComposeResult
 from textual.containers import Vertical
@@ -172,6 +175,74 @@ class IndependentApp(BatchPaintApp):
         with HeldVertical(id="holder"):
             yield Label("ORIGINAL_HELD", id="original")
         yield Label("SIDEBAR_OLD", id="sidebar")
+
+
+@pytest.mark.parametrize("held", [False, True])
+async def test_idle_shares_acquired_roots_and_paint_reacquires(held):
+    from textual import events
+
+    class IdleScreen(IndependentScreen):
+        def __init__(self):
+            super().__init__()
+            self.acquisitions = []
+
+        def _prepare_compositor_refresh(self):
+            roots = super()._prepare_compositor_refresh()
+            self.acquisitions.append(roots)
+            return roots
+
+    class IdleApp(IndependentApp):
+        def get_default_screen(self):
+            return IdleScreen()
+
+    app = IdleApp()
+    completed = asyncio.Event()
+    async with app.run_test(size=(40, 8)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        compositor = screen._compositor
+        holder = app.query_one(HeldVertical)
+        sidebar = app.query_one("#sidebar")
+
+        # A pending scroll already requires the timer. Preparation belongs to
+        # actual publication, rather than this timer-resume decision.
+        assert not screen._callbacks and not screen._refresh_pending
+        screen._scroll_required = True
+        screen._update_timer.pause()
+        before = len(screen.acquisitions)
+        await screen._on_idle(events.Idle())
+        assert len(screen.acquisitions) == before
+        assert screen._update_timer._active.is_set()
+        screen._on_timer_update()
+        assert len(screen.acquisitions) > before
+        await pilot.pause()
+
+        async with (holder.lock if held else nullcontext()):
+            assert not screen._refresh_pending
+            compositor._dirty_regions.add((holder if held else sidebar).region)
+            screen._invoke_later(completed.set, app)
+            screen._update_timer.pause()
+            before = len(screen.acquisitions)
+            await screen._on_idle(events.Idle())
+            assert len(screen.acquisitions) == before + 1
+            assert screen.acquisitions[-1] == ((holder,) if held else ())
+            assert screen._update_timer._active.is_set() is not held
+            assert not completed.is_set()
+            assert any(sender is app for _, sender in screen._callbacks)
+
+            # Publication is a distinct acquisition, including when the idle
+            # cohort was legitimately empty. Held-only damage is not consumed.
+            screen._compositor_refresh()
+            assert len(screen.acquisitions) == before + 2
+            if held:
+                assert compositor._dirty_regions
+                assert not completed.is_set()
+            else:
+                assert not compositor._dirty_regions
+
+        holder.refresh()
+        await asyncio.wait_for(completed.wait(), 2)
+        assert not compositor._dirty_regions
 
 
 async def test_partial_publication_keeps_geometry_and_owner_callbacks():
