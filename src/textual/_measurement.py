@@ -44,6 +44,17 @@ class IndependentHeight(HeightDependency):
         return False
 
 
+class NativeContainerSelection(IndependentHeight):
+    """Native selection reads child membership / layout, not paint rules.
+
+    User-declared independent getters retain IndependentHeight's conservative
+    style contract; height independence alone says nothing about paint inputs.
+    """
+
+    def styles_sensitive(self, widget: Widget) -> bool:
+        return False
+
+
 class StoredVirtualSize(HeightDependency):
     """The original line surface measures its authored reactive extent.
 
@@ -69,6 +80,8 @@ class NativeWidgetMeasurementHeight(HeightDependency):
         """The native layout owns the selected measurement's dependency."""
 
     def depends(self, widget: Widget, *, greedy: bool = True) -> bool:
+        if widget._container_selection_dependency.depends(widget):
+            return True
         if not widget.is_container:
             # Native leaf visuals receive rules and width, not container height.
             return False
@@ -79,6 +92,8 @@ class NativeWidgetMeasurementHeight(HeightDependency):
         return self.layout_dependency(widget).depends(widget)
 
     def box_depends(self, widget: Widget, *, greedy: bool = True) -> bool:
+        if widget._container_selection_dependency.depends(widget):
+            return True
         if not widget.is_container:
             return False
         if not widget._native_measurement_layout_hooks:
@@ -86,6 +101,8 @@ class NativeWidgetMeasurementHeight(HeightDependency):
         return self.layout_dependency(widget).box_depends(widget)
 
     def styles_sensitive(self, widget: Widget) -> bool:
+        if widget._container_selection_dependency.styles_sensitive(widget):
+            return True
         if not widget.is_container:
             return widget._render_styles_sensitive()
         if not widget._native_measurement_layout_hooks:
@@ -213,6 +230,7 @@ class GridHeight(FlowHeight):
 
 CONTEXT_HEIGHT = ContextHeight()
 INDEPENDENT_HEIGHT = IndependentHeight()
+NATIVE_CONTAINER_SELECTION = NativeContainerSelection()
 STORED_VIRTUAL_SIZE = StoredVirtualSize()
 NATIVE_WIDGET_HEIGHT = NativeWidgetHeight()
 NATIVE_WIDGET_WIDTH = NativeWidgetWidth()
@@ -230,6 +248,10 @@ def height_dependency(policy: HeightDependency) -> Callable[[Function], Function
 
     This does not cache a method's result or retain a widget. A declaration must
     describe the whole implementation, including additional work around super().
+    A declared is_container getter must also publish changes to its selection
+    inputs through the original layout invalidation (refresh(layout=True),
+    layout reactives, or native child/style publication). Independence from
+    incoming height does not make independently changing selection immutable.
     """
     def decorate(function: Function) -> Function:
         function._height_dependency = policy  # type: ignore[attr-defined]
@@ -301,7 +323,8 @@ def _local_box_inputs(widget: Widget) -> tuple[bool, bool, bool, bool, bool]:
 
 def box_depends_on_available_height(widget: Widget, *, greedy: bool) -> bool:
     """Conservative proof for the native box resolver, including its extrema."""
-    if not widget._native_box_measurement:
+    if (not widget._native_box_measurement
+            or widget._container_selection_dependency.depends(widget)):
         return True
     depends, content_width, content_height, _, _ = _local_box_inputs(widget)
     if depends:
