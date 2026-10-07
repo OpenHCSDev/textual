@@ -1429,14 +1429,7 @@ class Compositor:
         """
         geometry = self._get_geometry(widget)
         if geometry is None:
-            if self.root is not None and self._full_map_invalidated and not self._arranging:
-                # A position query requires this original ancestry path, not
-                # every offscreen descendant. Preserve the scene's existing
-                # reader placements in the same original reflow publication.
-                self.reflow_visible(
-                    self.root, self.size,
-                    retain_geometry=(*self._published_map, widget),
-                )
+            if self.acquire_geometry((widget,)):
                 geometry = self._get_geometry(widget)
             else:
                 # Measurement inside arrangement must not recursively arrange;
@@ -1445,6 +1438,34 @@ class Compositor:
         if geometry is None:
             raise errors.NoWidget("Widget is not in layout")
         return geometry
+
+    def acquire_geometry(self, widgets: Iterable[Widget]) -> bool:
+        """Acquire missing reader paths in one original scene publication.
+
+        A focus query requires offscreen ordering paths as well as visible
+        placements. Keep the committed scene's readers and add the complete
+        demand together, instead of reflowing for each missing position.
+        Captured descendants retain their strict original arrangement boundary.
+        Returns whether a viewport arrangement was performed.
+        """
+        if self.root is None or not self._full_map_invalidated or self._arranging:
+            return False
+        missing = []
+        for widget in widgets:
+            try:
+                geometry = self._get_geometry(widget)
+            except errors.NoWidget:
+                # The ordinary reader still refuses an omitted descendant of
+                # the active capture; this acquisition cannot widen its scope.
+                continue
+            if geometry is None:
+                missing.append(widget)
+        if not missing:
+            return False
+        self.reflow_visible(
+            self.root, self.size, retain_geometry=(*self._published_map, *missing),
+        )
+        return True
 
     def _get_geometry(self, widget: Widget) -> MapGeometry | None:
         """Select geometry from its original current publication.

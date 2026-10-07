@@ -787,17 +787,6 @@ class Screen(Generic[ScreenResultType], Widget):
     @property
     def focus_chain(self) -> list[Widget]:
         """A list of widgets that may receive focus, in focus order."""
-        # TODO: Calculating a focus chain is moderately expensive.
-        # Suspect we can move focus without calculating the entire thing again.
-
-        widgets: list[Widget] = []
-        add_widget = widgets.append
-        focus_sorter = attrgetter("_focus_sort_key")
-        # We traverse the DOM and keep track of where we are at with a node stack.
-        # Additionally, we manually keep track of the visibility of the DOM
-        # instead of relying on the property `.visible` to save on DOM traversals.
-        # node_stack: list[tuple[iterator over node children, node visibility]]
-
         root_node = self.screen
 
         if (focused := self.focused) is not None:
@@ -806,11 +795,13 @@ class Screen(Generic[ScreenResultType], Widget):
                     root_node = node
                     break
 
+        # Acquire membership and inherited visibility once. Only branches with
+        # an eligible focus target need an ordering position; unfocusable leaf
+        # geometry cannot change the resulting chain.
+        branches = {root_node: tuple(root_node.displayed_children)}
+        focusable: set[Widget] = set()
         node_stack: list[tuple[Iterator[Widget], bool]] = [
-            (
-                iter(sorted(root_node.displayed_children, key=focus_sorter)),
-                self.visible,
-            )
+            (iter(branches[root_node]), self.visible)
         ]
         pop = node_stack.pop
         push = node_stack.append
@@ -830,14 +821,36 @@ class Screen(Generic[ScreenResultType], Widget):
                     else parent_visibility  # Inherit visibility if the style is unset.
                 )
                 if node.is_container and node.allow_focus_children():
-                    sorted_displayed_children = sorted(
-                        node.displayed_children, key=focus_sorter
-                    )
-                    push((iter(sorted_displayed_children), node_is_visible))
+                    branches[node] = tuple(node.displayed_children)
+                    push((iter(branches[node]), node_is_visible))
                 # Same check as `if node.focusable`, but we cached inherited visibility
                 # and we also skipped disabled nodes altogether.
                 if node_is_visible and node.allow_focus():
-                    add_widget(node)
+                    focusable.add(node)
+
+        # Child branches were acquired after their parents. Prune in reverse
+        # so ancestors of offscreen or visibility-overriding targets survive.
+        for parent in reversed(branches):
+            branches[parent] = tuple(
+                child for child in branches[parent]
+                if child in focusable or branches.get(child)
+            )
+
+        self._compositor.acquire_geometry(
+            child for children in branches.values() for child in children
+        )
+        focus_sorter = attrgetter("_focus_sort_key")
+        widgets: list[Widget] = []
+        ordered = [iter(sorted(branches[root_node], key=focus_sorter))]
+        while ordered:
+            node = next(ordered[-1], None)
+            if node is None:
+                ordered.pop()
+                continue
+            if node in focusable:
+                widgets.append(node)
+            if children := branches.get(node):
+                ordered.append(iter(sorted(children, key=focus_sorter)))
 
         return widgets
 
