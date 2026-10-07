@@ -2788,7 +2788,7 @@ class Widget(DOMNode):
     @property
     def is_container(self) -> bool:
         """Is this widget a container (contains other widgets)?"""
-        return self.styles.layout is not None or bool(self._nodes)
+        return bool(self._nodes) or self.styles.layout is not None
 
     @property
     def is_scrollable(self) -> bool:
