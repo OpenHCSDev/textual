@@ -388,6 +388,8 @@ class MessagePump(metaclass=_MessagePumpMeta):
         message = await self._message_queue.get()
 
         if message is None:
+            if not self._closing:
+                self._on_closing()
             self._closed = True
             raise MessagePumpClosed("The message pump is now closed")
         return message
@@ -407,6 +409,8 @@ class MessagePump(metaclass=_MessagePumpMeta):
         except QueueEmpty:
             return None
         if message is None:
+            if not self._closing:
+                self._on_closing()
             self._closed = True
             raise MessagePumpClosed("The message pump is now closed")
         return message
@@ -569,11 +573,15 @@ class MessagePump(metaclass=_MessagePumpMeta):
             # rather than the ambient caller, owns the publication being awaited.
             self.app.screen._invoke_later(message.callback, self)
 
+    def _on_closing(self) -> None:
+        """Publish a consumer's response to original pump retirement."""
+
     async def _close_messages(self, wait: bool = True) -> None:
         """Close message queue, and optionally wait for queue to finish processing."""
         if self._closed or self._closing:
             return
         self._closing = True
+        self._on_closing()
         self._clear_signal_subscriptions()
         Reactive._clear_watch_subscriptions(self)
         if self._timers:
@@ -608,6 +616,7 @@ class MessagePump(metaclass=_MessagePumpMeta):
         else:
             self._closing = True
             self._closed = True
+            self._on_closing()
 
     async def _process_messages(self, **kwargs: Any) -> None:
         """Own the real pump task through subclass startup, dispatch and exit."""

@@ -982,6 +982,12 @@ class DOMNode(MessagePump):
     def _child_nodes_removed(self) -> None:
         """Retire child-derived ownership at the structural removal boundary."""
 
+    def _on_closing(self) -> None:
+        super()._on_closing()
+        # Native display changes before child custody is physically removed.
+        # Publish through the same source as pruning and display constraints.
+        self._nodes.updated()
+
     @property
     def display(self) -> bool:
         """Should the DOM node be displayed?

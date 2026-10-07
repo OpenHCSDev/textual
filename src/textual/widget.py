@@ -42,7 +42,7 @@ from rich.style import Style
 from rich.text import Text
 from typing_extensions import Self
 
-from textual.css.styles import StylesBase
+from textual.css.styles import RenderStyles, StylesBase
 
 if TYPE_CHECKING:
     from textual.app import RenderResult
@@ -1901,14 +1901,27 @@ class Widget(DOMNode):
             self._height_arrangement_cache = proof
         return proof[1]
 
-    def _box_depends_on_available_height(self) -> bool:
+    def _height_dependency_answers(self) -> dict[str, bool]:
+        """Computed height answers from the current native measurement source.
+
+        Structure includes descendant membership/display publication; styles
+        publish descendant scalar changes before idle. Authored layout changes
+        retire the same resource. Paint alone does not discard these answers.
+        """
         nodes = self.__dict__.get("_nodes")
         epoch = (nodes._updates if nodes is not None else 0, self._layout_updates)
         cached = self.__dict__.get("_height_dependency_cache")
-        if cached is not None and cached[0] == epoch:
-            return cached[1]
+        if cached is None or cached[0] != epoch:
+            cached = epoch, {}
+            self._height_dependency_cache = cached
+        return cached[1]
+
+    def _box_depends_on_available_height(self) -> bool:
+        answers = self._height_dependency_answers()
+        if "box" in answers:
+            return answers["box"]
         dependent = box_depends_on_available_height(self)
-        self._height_dependency_cache = (epoch, dependent)
+        answers["box"] = dependent
         return dependent
 
     def _get_box_model(
@@ -2641,21 +2654,55 @@ class Widget(DOMNode):
     @property
     def _has_relative_children_height(self) -> bool:
         """Do any children (or progeny) have a relative height?"""
+        return self._relative_children_height()[0]
+
+    def _relative_children_height(self) -> tuple[bool, bool]:
+        """The height answer and whether its reads have native source epochs.
+
+        Unknown getters remain live. Their uncertainty follows the actual auto
+        child path into the parent; content/layout independence is not used to
+        guess this separate box-stretch answer.
+        """
+        native = (
+            type(self).is_container is Widget.is_container
+            and type(self).children is DOMNode.children
+            and type(self.styles) is RenderStyles
+        )
+        answers = self._height_dependency_answers()
+        if native and "relative_children" in answers:
+            return answers["relative_children"], True
 
         if not self.is_container:
-            return False
-        for child in self.children:
-            styles = child.styles
-            if not child.display:
-                continue
-            height = styles.height
-            if height is None:
-                continue
-            if styles.is_relative_height or (
-                height.is_auto and child._has_relative_children_height
-            ):
-                return True
-        return False
+            result = False
+        else:
+            result = False
+            for child in self.children:
+                styles = child.styles
+                native = native and (
+                    type(child).display is DOMNode.display
+                    and type(styles) is RenderStyles
+                )
+                if not child.display:
+                    continue
+                height = styles.height
+                if height is None:
+                    continue
+                native = native and type(height) is Scalar
+                if styles.is_relative_height:
+                    result = True
+                    break
+                if height.is_auto:
+                    if type(child)._has_relative_children_height is Widget._has_relative_children_height:
+                        relative, child_native = child._relative_children_height()
+                    else:
+                        relative, child_native = child._has_relative_children_height, False
+                    native = native and child_native
+                    if relative:
+                        result = True
+                        break
+        if native:
+            answers["relative_children"] = result
+        return result, native
 
     @property
     def is_on_screen(self) -> bool:
