@@ -6,7 +6,8 @@ from typing import TYPE_CHECKING, ClassVar, Iterable, NamedTuple
 
 from textual._spatial_map import SpatialMap
 from textual._measurement import (
-    INDEPENDENT_HEIGHT, NATIVE_LAYOUT_HEIGHT, HeightDependency, height_dependency,
+    NATIVE_LAYOUT_HEIGHT, NATIVE_OPTIMAL_WIDTH,
+    HeightDependency, height_dependency,
 )
 from textual.canvas import Canvas, Rectangle
 from textual.geometry import Offset, Region, Size, Spacing
@@ -276,7 +277,7 @@ class Layout(ABC):
             An iterable of widget location
         """
 
-    @height_dependency(INDEPENDENT_HEIGHT)
+    @height_dependency(NATIVE_OPTIMAL_WIDTH)
     def get_content_width(self, widget: Widget, container: Size, viewport: Size) -> int:
         """Get the optimal content width by arranging children.
 
