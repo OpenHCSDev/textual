@@ -590,6 +590,11 @@ class MessagePump(metaclass=_MessagePumpMeta):
                 if message is not None:
                     message._discard()
 
+    def __del__(self) -> None:
+        # Constructor watchers may enqueue work before a widget is mounted.
+        # An abandoned, never-started receiver still owns those deliveries.
+        self._discard_pending_messages()
+
     def _on_invoke_later(self, message: messages.InvokeLater) -> None:
         # Forward InvokeLater message to the Screen
         if self.app._running:
