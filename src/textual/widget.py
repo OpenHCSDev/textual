@@ -1945,7 +1945,15 @@ class Widget(DOMNode):
         Returns:
             The size and margin for this widget.
         """
-        if self.is_attached and (box := self.screen._compositor.mutation_box(self)) is not None:
+        try:
+            box = self.screen._compositor.mutation_box(self)
+        except NoScreen:
+            # Unmounted widgets still have ordinary native measurements.
+            # An attached source with no screen retains the original refusal.
+            if self.is_attached:
+                raise
+            box = None
+        if box is not None:
             # Parent layouts measure the same committed box as Compositor;
             # never descend through an actively changing child to size siblings.
             return box
