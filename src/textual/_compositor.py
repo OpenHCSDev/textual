@@ -1664,7 +1664,7 @@ class Compositor:
 
     def mutation_box(self, widget: Widget) -> BoxModel | None:
         """Borrow the committed root box; an unplaced mutation has no size yet."""
-        if widget not in self._layout_geometry:
+        if widget not in self._layout_geometry or not widget.is_attached:
             return None
         geometry = self._layout_geometry[widget]
         size = Size() if geometry is None else geometry.region.size
