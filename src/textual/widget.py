@@ -2706,12 +2706,15 @@ class Widget(DOMNode):
 
     @property
     def is_on_screen(self) -> bool:
-        """Check if the node was displayed in the last screen update."""
+        """Check membership in the last committed screen geometry.
+
+        A status read must not acquire omitted/offscreen layout paths. Explicit
+        position readers still request those paths through ``find_widget``.
+        """
         try:
-            self.screen.find_widget(self)
-        except (NoScreen, errors.NoWidget):
+            return self.screen._compositor._get_published_geometry(self) is not None
+        except NoScreen:
             return False
-        return True
 
     def _resolve_extrema(
         self,
