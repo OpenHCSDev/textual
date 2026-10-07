@@ -6,6 +6,8 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Callable, TypeVar
 
 from textual.css.scalar import Scalar, Unit
+from textual.css.styles import RenderStyles
+from textual.geometry import Spacing
 
 if TYPE_CHECKING:
     from textual.widget import Widget
@@ -229,10 +231,13 @@ def height_dependency(policy: HeightDependency) -> Callable[[Function], Function
     return decorate
 
 
-def _local_box_inputs(widget: Widget) -> tuple[bool, bool, bool]:
+def _local_box_inputs(widget: Widget) -> tuple[bool, bool, bool, bool]:
     """Resolve local scalar dependencies once per owning style generation."""
     styles = widget.styles
-    revision = styles._cache_key
+    if type(styles) is not RenderStyles:
+        return True, False, False, False
+    # Retain the actual source so replacement cannot reuse an unrelated epoch.
+    revision = id(styles), styles, styles._cache_key
     cached = widget.__dict__.get("_height_style_dependency_cache")
     if cached is not None and cached[0] == revision:
         return cached[1]
@@ -244,11 +249,11 @@ def _local_box_inputs(widget: Widget) -> tuple[bool, bool, bool]:
             # Compile this check at the style-plan boundary, not each cache hit.
             # A custom scalar resolver need not obey its nominal unit's inputs.
             if type(scalar).resolve is not Scalar.resolve:
-                result = (True, False, False)
+                result = (True, False, False, False)
                 break
             unit = scalar.percent_unit if scalar.unit is Unit.PERCENT else scalar.unit
             if unit is Unit.HEIGHT:
-                result = (True, False, False)
+                result = (True, False, False, False)
                 break
     else:
         result = (
@@ -258,6 +263,16 @@ def _local_box_inputs(widget: Widget) -> tuple[bool, bool, bool]:
             or (max_height is not None and not max_height.is_cells),
             width is not None and (width.is_auto or width.is_fraction),
             height is not None and height.is_auto,
+            all(scalar is None or type(scalar) is Scalar for scalar in (
+                width, height, min_width, max_width, min_height, max_height,
+            ))
+            and (width is None or not width.is_auto)
+            and (height is None or not height.is_auto)
+            and all(type(spacing) is Spacing and all(
+                type(cell) in (int, bool) for cell in spacing
+            ) for spacing in (styles.margin, styles.padding))
+            and all(type(edge) is tuple and type(edge[0]) is str
+                    for edge in styles.border),
         )
     widget._height_style_dependency_cache = revision, result
     return result
@@ -267,7 +282,7 @@ def box_depends_on_available_height(widget: Widget) -> bool:
     """Conservative proof for the native box resolver, including its extrema."""
     if not widget._native_box_measurement:
         return True
-    depends, content_width, content_height = _local_box_inputs(widget)
+    depends, content_width, content_height, _ = _local_box_inputs(widget)
     if depends:
         return True
     if content_width and widget._content_width_dependency.depends(widget):
