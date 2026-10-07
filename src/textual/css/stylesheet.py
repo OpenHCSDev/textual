@@ -638,6 +638,11 @@ class Stylesheet:
             cache_key: tuple | None = None
             path_key: tuple | None = None
             css_path_nodes: list[DOMNode] | None = None
+            # Matching already declares whether a group addresses its target
+            # alone. Read that live declaration: selector lists remain editable.
+            requires_path = any(
+                not group.is_compound for rule in rules for group in rule.selector_set
+            )
 
             if cache is not None and all_pseudo_classes.isdisjoint(
                 self._EXCLUDE_PSEUDO_CLASSES_FROM_CACHE
@@ -665,7 +670,7 @@ class Stylesheet:
                 # cannot distinguish these paths when positional/focus-within
                 # selectors were excluded above. Share resolved rules within this
                 # update batch rather than matching every one from scratch.
-                css_path_nodes = node.css_path_nodes
+                css_path_nodes = node.css_path_nodes if requires_path else [node]
                 path_key = (
                     "css_path",
                     rule_key,
@@ -682,7 +687,7 @@ class Stylesheet:
                     return
 
             if css_path_nodes is None:
-                css_path_nodes = node.css_path_nodes
+                css_path_nodes = node.css_path_nodes if requires_path else [node]
 
             # Rules that may be set to the special value `initial`
             initial: set[str] = set()
