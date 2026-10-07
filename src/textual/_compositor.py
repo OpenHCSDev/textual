@@ -228,7 +228,7 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
         return spatial_map
 
     @abstractmethod
-    def matches(self, key: SubtreeGeometryKey) -> bool:
+    def matches(self, key: SubtreeGeometryKey, *, require_complete: bool = False) -> bool:
         ...
 
     def restore_into(
@@ -287,8 +287,13 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
 class PlacedSubtreeGeometry(SubtreeGeometry[MapGeometry]):
     """A culled or screen-dependent arrangement keeps its exact placement."""
 
-    def matches(self, key: SubtreeGeometryKey) -> bool:
-        return self.key == key
+    def matches(self, key: SubtreeGeometryKey, *, require_complete: bool = False) -> bool:
+        if self.key.visible_only and require_complete:
+            return False
+        return self.key == key or (
+            not self.key.visible_only and key.visible_only
+            and self.key._replace(visible_only=True) == key
+        )
 
     def _project_entry(self, entry: MapGeometry, key: SubtreeGeometryKey,
                        clip: SceneClip, *, root: bool) -> tuple[MapGeometry, SceneClip]:
@@ -319,7 +324,7 @@ class IntrinsicSubtreeGeometry(SubtreeGeometry[SubtreeMapGeometry]):
         return super().capture(key, intrinsic, widgets, invisible_widgets,
                                clips, clip, screen_coordinates)
 
-    def matches(self, key: SubtreeGeometryKey) -> bool:
+    def matches(self, key: SubtreeGeometryKey, *, require_complete: bool = False) -> bool:
         return self.key.intrinsic() == key.intrinsic()
 
     def _project_entry(self, entry: SubtreeMapGeometry, key: SubtreeGeometryKey,
@@ -1156,18 +1161,21 @@ class Compositor:
             resource_type = widget.subtree_geometry_resource()
             enclosing_complete = complete
             complete = resource_type.complete_arrangement(complete)
-            # Retention requires an uncropped path only for partial resources.
-            # Complete native arrangements already own every descendant box.
-            if widget in retained_paths and not complete:
-                arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
-                               complete, inherited_layers)  # noqa: F821 -- closure cleared after traversal
-                return
             key = SubtreeGeometryKey.from_widget(widget,
                    virtual_region, region, order, layer_order, clip.region, visible, dock_gutter,
                    size, visible_only and not complete,
                    tuple(inherited_layers.items()) if inherited_layers is not None else ())
             resource = self._subtree_geometry.get(widget)
-            if resource is None or not resource.matches(key):
+            require_complete = widget in retained_paths and not complete
+            matches = resource is not None and resource.matches(key, require_complete=require_complete)
+            # A complete captured source already owns every requested path.
+            # A partial or changed source still acquires the original path;
+            # do not retain a partial capture whose key omits that request.
+            if require_complete and not matches:
+                arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
+                               complete, inherited_layers)  # noqa: F821 -- closure cleared after traversal
+                return
+            if not matches:
                 # Capture complete source geometry before its viewport publication.
                 # Enclosing complete captures borrow all child entries; ordinary
                 # viewport publication retains only exposed and required boxes.
