@@ -5,7 +5,7 @@ from textual._compositor import Compositor
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll
 from textual.screen import Screen
-from textual.widgets import Static, TextArea
+from textual.widgets import Button, Static, TextArea
 
 
 class ObservedCompositor(Compositor):
@@ -44,6 +44,62 @@ class ReaderScreen(Screen):
 class ReaderApp(App):
     def get_default_screen(self):
         return ReaderScreen()
+
+
+async def test_disabled_editor_batches_offscreen_focus_order():
+    class FocusScreen(ReaderScreen):
+        CSS = "VerticalScroll { height: 1fr; } Button { height: 3; } TextArea { height: 3; }"
+
+        def compose(self):
+            with VerticalScroll(id="history"):
+                for index in range(40):
+                    yield Button(f"Focus {index}", id=f"button-{index}")
+                    yield Static(f"Unfocusable source {index}", id=f"source-{index}")
+                yield TextArea("original unsent draft", id="editor")
+
+    class FocusApp(ReaderApp):
+        def get_default_screen(self):
+            return FocusScreen()
+
+    app = FocusApp()
+
+    async def drive(pilot):
+        await pilot.pause()
+        screen = app.screen
+        compositor = screen._compositor
+        editor = screen.query_one("#editor", TextArea)
+        screen.set_focus(editor, scroll_visible=False)
+        screen._refresh_layout(app.size, scroll=True)
+        committed = dict(compositor._published_map)
+        full_map = compositor._full_map
+        assert screen.query_one("#button-39") not in committed
+        compositor.arrangements.clear()
+
+        # This is the same original synchronous watcher/blur/reset path as a
+        # send disabling its focused compose editor. No input is submitted.
+        editor.disabled = True
+        assert len(compositor.arrangements) == 1
+        _, visible, retained, _ = compositor.arrangements[0]
+        assert visible and compositor._full_map is full_map
+        assert all(screen.query_one(f"#button-{index}") in retained for index in range(40))
+        assert screen.query_one("#source-39") not in retained
+        assert editor.text == "original unsent draft" and screen.focused is not editor
+        assert all(compositor._published_map[node] == geometry for node, geometry in committed.items())
+
+        actual = [node.id for node in screen.focus_chain]
+        assert [name for name in actual if name and name.startswith("button-")] == [
+            f"button-{index}" for index in range(40)
+        ]
+        assert "editor" not in actual
+        assert len(compositor.arrangements) == 1
+        # Complete geometry gives the same ordering, rather than treating the
+        # viewport as the full focus scope or manufacturing missing positions.
+        compositor.reflow(screen, app.size)
+        assert [node.id for node in screen.focus_chain] == actual
+        app.exit()
+
+    await asyncio.wait_for(app.run_async(headless=True, size=(40, 8), auto_pilot=drive), 10)
+    assert app._exception is None and app._task is None
 
 
 async def test_real_undo_acquires_only_missing_editor_and_preserves_reader_paths():
