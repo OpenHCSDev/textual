@@ -1467,6 +1467,15 @@ class Screen(Generic[ScreenResultType], Widget):
             })
         } if mutation_roots else {}
 
+    def _has_actionable_layout_requests(
+        self, held: dict[DOMNode, set[Widget]]
+    ) -> bool:
+        """Whether the original pending source requests can affect geometry."""
+        return any(
+            not members <= held.get(owner, set())
+            for owner, members in self._layout_widgets.items()
+        )
+
     def _refresh_layout(self, size: Size | None = None, scroll: bool = False) -> None:
         """Refresh the layout (can change size and positions of widgets)."""
         size = self.outer_size if size is None else size
@@ -1484,10 +1493,7 @@ class Screen(Generic[ScreenResultType], Widget):
             # Held requests remain pending for release. They cannot alter the
             # committed subtree during scrolling; only actionable requests
             # require layout beyond the original visible-scroll traversal.
-            if scroll and all(
-                members <= held_layout.get(owner, set())
-                for owner, members in self._layout_widgets.items()
-            ):
+            if scroll and not self._has_actionable_layout_requests(held_layout):
                 exposed_widgets = self._compositor.reflow_visible(
                     self, size, retain_geometry=geometry_targets,
                 )
@@ -1591,9 +1597,15 @@ class Screen(Generic[ScreenResultType], Widget):
                 break
             widget = ancestor
 
-        if layout_required and not self._layout_required:
-            self._layout_required = True
-            self.check_idle()
+        if not self._layout_required:
+            # A prior frame keeps held requests but consumes its timer intent.
+            # Membership is not a new-source notification: after release the
+            # SAME pending request becomes actionable under current roots.
+            if layout_required or self._has_actionable_layout_requests(
+                self._held_layout_requests()
+            ):
+                self._layout_required = True
+                self.check_idle()
 
     async def _on_update_scroll(self, message: messages.UpdateScroll) -> None:
         message.stop()

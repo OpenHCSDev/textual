@@ -177,6 +177,37 @@ class IndependentApp(BatchPaintApp):
         yield Label("SIDEBAR_OLD", id="sidebar")
 
 
+async def test_released_pending_layout_resumes_on_its_existing_owner_request():
+    app = IndependentApp()
+    completed = asyncio.Event()
+    async with app.run_test(size=(40, 8)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        holder = app.query_one(HeldVertical)
+        original = app.query_one("#original")
+        committed = screen._compositor.find_widget(original)
+        async with holder.lock:
+            new = Label("RELEASED_SOURCE", id="released")
+            await holder.mount(new)
+            # A child source change makes the holder itself a pending owner,
+            # while mount alone may publish only its parent's holder request.
+            new.styles.height = 4
+            await pilot.pause()
+            assert holder in screen._layout_widgets
+            assert not screen._layout_required
+            assert screen._compositor.find_widget(original) == committed
+            assert new not in screen._compositor._published_map
+
+        # Subscribe only after the held frame, then exercise the SAME owner's
+        # refresh. No sidebar update, geometry query or manual timer wakeup.
+        screen.screen_layout_refresh_signal.subscribe(app, lambda _: completed.set())
+        holder.refresh(layout=True)
+        await asyncio.wait_for(completed.wait(), 2)
+        assert new in screen._compositor._published_map
+        assert not screen._layout_widgets
+        assert not app._exception
+
+
 @pytest.mark.parametrize("held", [False, True])
 async def test_idle_shares_acquired_roots_and_paint_reacquires(held):
     from textual import events
