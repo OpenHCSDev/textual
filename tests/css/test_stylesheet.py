@@ -18,6 +18,32 @@ from textual.widget import Widget
 from textual.widgets import Static
 
 
+def test_target_rule_publication_acquires_only_declared_css_path():
+    class PathReads(DOMNode):
+        path_reads = 0
+
+        @property
+        def css_path_nodes(self):
+            self.path_reads += 1
+            return super().css_path_nodes
+
+    parent = DOMNode(classes="outer")
+    node = PathReads(classes="leaf")
+    node._attach(parent)
+    stylesheet = Stylesheet()
+    stylesheet.add_source(".leaf { color: red; }")
+    stylesheet.apply(node)
+    assert node.styles.color == Color.parse("red")
+    assert node.path_reads == 0
+
+    # Reparse a real child declaration: full ancestry and specificity must
+    # become authoritative again, not the previous target-only key.
+    stylesheet.add_source(".outer > .leaf { color: blue; }")
+    stylesheet.apply(node)
+    assert node.styles.color == Color.parse("blue")
+    assert node.path_reads == 1
+
+
 async def test_equal_current_rules_retarget_a_pending_transition():
     app = App()
     async with app.run_test() as pilot:

@@ -637,7 +637,6 @@ class Stylesheet:
 
             cache_key: tuple | None = None
             path_key: tuple | None = None
-            css_path_nodes: list[DOMNode] | None = None
 
             if cache is not None and all_pseudo_classes.isdisjoint(
                 self._EXCLUDE_PSEUDO_CLASSES_FROM_CACHE
@@ -660,12 +659,20 @@ class Stylesheet:
                     self._process_component_classes(node)
                     return
 
+            # Matching already declares whether a group addresses its target
+            # alone. Read the live declaration only after the first cache miss;
+            # selector lists remain editable and hits need no path planning.
+            requires_path = any(
+                not group.is_compound for rule in rules for group in rule.selector_set
+            )
+            css_path_nodes = node.css_path_nodes if requires_path else [node]
+
+            if cache_key is not None:
                 # Widgets in repeated rows have distinct parent *instances* but
                 # frequently the same selector/pseudo-class ancestry. A CSS rule
                 # cannot distinguish these paths when positional/focus-within
                 # selectors were excluded above. Share resolved rules within this
                 # update batch rather than matching every one from scratch.
-                css_path_nodes = node.css_path_nodes
                 path_key = (
                     "css_path",
                     rule_key,
@@ -680,9 +687,6 @@ class Stylesheet:
                     self.replace_rules(node, cached_result, animate=animate)
                     self._process_component_classes(node)
                     return
-
-            if css_path_nodes is None:
-                css_path_nodes = node.css_path_nodes
 
             # Rules that may be set to the special value `initial`
             initial: set[str] = set()
