@@ -13,6 +13,58 @@ from textual.widget import Widget
 from textual.widgets import Button, TabbedContent, TabPane
 
 
+async def test_live_named_replacement_during_decorated_dispatch():
+    class Notice(Message, namespace="lookup", bubble=False):
+        pass
+
+    class BaseApp(App):
+        def _on_lookup_notice(self):
+            self.received.append("base")
+
+    class Left(BaseApp):
+        def on_lookup_notice(self):
+            self.received.append("left")
+
+    class Right(BaseApp):
+        def on_lookup_notice(self):
+            self.received.append("right")
+
+    class DispatchApp(Left, Right):
+        def __init__(self):
+            super().__init__()
+            self.received = []
+
+        def _on_lookup_notice(self):
+            self.received.append("old")
+
+        def on_lookup_notice(self):
+            raise AssertionError("private handler has precedence")
+
+        @on(Notice)
+        async def observe(self):
+            self.received.append("decorated")
+            # The generator is suspended at its decorated yield. Its captured
+            # class mapping must still expose real method replacement.
+            def replacement(instance):
+                instance.received.append("new")
+
+            type(self)._on_lookup_notice = replacement
+
+    app = DispatchApp()
+    async with app.run_test() as pilot:
+        app.post_message(Notice())
+        await pilot.pause()
+        assert app.received == ["decorated", "new", "left", "right", "base"]
+
+    # Binding belongs to the current instance, not a cached bound method.
+    second = DispatchApp()
+    async with second.run_test() as pilot:
+        second.post_message(Notice())
+        await pilot.pause()
+        assert second.received == ["decorated", "new", "left", "right", "base"]
+    assert app.received == ["decorated", "new", "left", "right", "base"]
+
+
 async def test_on_button_pressed() -> None:
     """Test handlers with @on decorator."""
 
