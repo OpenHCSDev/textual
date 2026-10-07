@@ -6,6 +6,27 @@ from textual.widget import Widget
 from textual.worker import Worker, WorkerState
 
 
+async def test_direct_callable_description_does_not_call_its_repr():
+    class CallableWork:
+        repr_calls = 0
+
+        def __repr__(self):
+            self.repr_calls += 1
+            raise RuntimeError("Work repr is not launch metadata")
+
+        def __call__(self):
+            return "completed"
+
+    work = CallableWork()
+    app = App()
+    async with app.run_test():
+        worker = app.run_worker(work, name="callable", thread=True)
+        assert worker.description == "callable"
+        assert work.repr_calls == 0
+        assert await worker.wait() == "completed"
+        assert work.repr_calls == 0
+
+
 def test_worker_manager_init():
     app = App()
     assert isinstance(repr(app.workers), str)

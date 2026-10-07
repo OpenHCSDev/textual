@@ -570,7 +570,7 @@ class DOMNode(MessagePump):
         work: WorkType[ResultType],
         name: str | None = "",
         group: str = "default",
-        description: str = "",
+        description: str | None = None,
         exit_on_error: bool = True,
         start: bool = True,
         exclusive: bool = False,
@@ -584,7 +584,7 @@ class DOMNode(MessagePump):
             work: A function, async function, or an awaitable object to run in a worker.
             name: A short string to identify the worker (in logs and debugging).
             group: A short string to identify a group of workers.
-            description: A longer string to store longer information on the worker.
+            description: A longer string for debugging, or None to use the worker name.
             exit_on_error: Exit the app if the worker raises an error. Set to `False` to suppress exceptions.
             start: Start the worker immediately.
             exclusive: Cancel all workers in the same group.
