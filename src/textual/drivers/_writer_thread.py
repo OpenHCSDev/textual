@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+from asyncio import AbstractEventLoop
 from dataclasses import dataclass
 from queue import Queue
 from typing import IO, Callable
@@ -13,6 +14,15 @@ MAX_QUEUED_WRITES: Final[int] = 30
 @dataclass(frozen=True)
 class _FlushSignal:
     callback: Callable[[], None]
+    loop: AbstractEventLoop
+
+    def deliver(self) -> None:
+        """Publish completion to the original application loop, if still alive."""
+        try:
+            self.loop.call_soon_threadsafe(self.callback)
+        except RuntimeError:
+            if not self.loop.is_closed():
+                raise
 
 
 class WriterThread(threading.Thread):
@@ -31,9 +41,9 @@ class WriterThread(threading.Thread):
         """
         self._queue.put(text)
 
-    def call_after_flush(self, callback: Callable[[], None]) -> None:
-        """Call back after all earlier queued terminal writes are flushed."""
-        self._queue.put(_FlushSignal(callback))
+    def call_after_flush(self, callback: Callable[[], None], loop: AbstractEventLoop) -> None:
+        """Publish on the supplied loop after all earlier queued writes flush."""
+        self._queue.put(_FlushSignal(callback, loop))
 
     def isatty(self) -> bool:
         """Pretend to be a terminal.
@@ -69,7 +79,7 @@ class WriterThread(threading.Thread):
                 break
             if isinstance(text, _FlushSignal):
                 flush()
-                text.callback()
+                text.deliver()
                 continue
             write(text)
             if qsize() == 0:

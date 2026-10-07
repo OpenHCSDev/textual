@@ -1,7 +1,8 @@
 """Terminal-write callbacks acknowledge the write and flush, in order."""
 
+import asyncio
 from io import StringIO
-from threading import Event
+from threading import get_ident
 
 from textual.drivers._writer_thread import WriterThread
 
@@ -20,16 +21,26 @@ class RecordingOutput(StringIO):
         return super().flush()
 
 
-def test_callback_follows_all_earlier_writes_and_flush():
+async def test_callback_follows_all_earlier_writes_and_flush():
     output = RecordingOutput()
     writer = WriterThread(output)
-    done = Event()
+    done = asyncio.Event()
+    callback_threads = []
+    loop = asyncio.get_running_loop()
+
+    def written():
+        output.events.append(("callback", output.getvalue()))
+        callback_threads.append(get_ident())
+        done.set()
+
     writer.start()
     try:
         writer.write("opening")
         writer.write(" frame")
-        writer.call_after_flush(lambda: (output.events.append(("callback", output.getvalue())), done.set()))
-        assert done.wait(2), "Writer did not acknowledge its flush"
+        writer.call_after_flush(written, loop)
+        await asyncio.wait_for(done.wait(), 2)
         assert output.events.index(("flush", "opening frame")) < output.events.index(("callback", "opening frame"))
+        assert callback_threads == [get_ident()]
+        assert writer.ident != callback_threads[0]
     finally:
         writer.stop()

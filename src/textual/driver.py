@@ -5,10 +5,11 @@ import threading
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, BinaryIO, Iterator, Literal, TextIO
+from typing import TYPE_CHECKING, Any, BinaryIO, Callable, Iterator, Literal, TextIO
 
 from textual import events, log, messages
 from textual.events import MouseUp
+from textual.drivers._writer_thread import _FlushSignal
 
 if TYPE_CHECKING:
     from textual.app import App
@@ -141,6 +142,18 @@ class Driver(ABC):
 
     def flush(self) -> None:
         """Flush any buffered data."""
+
+    def call_after_flush(self, callback: Callable[[], None]) -> None:
+        """Publish write completion on this driver's original application loop.
+
+        Synchronous output completes at flush; queued output must override this
+        operation with its actual writer acknowledgment. Completion covers
+        earlier writes to the driver, not terminal or browser pixel presentation.
+        Callbacks are scheduled, never invoked inline. A closed application loop
+        has retired its receiver and receives no completion.
+        """
+        self.flush()
+        _FlushSignal(callback, self._loop).deliver()
 
     def _enable_application_keypad(self) -> None:
         """Enter the terminal's unambiguous application-keypad input mode."""
