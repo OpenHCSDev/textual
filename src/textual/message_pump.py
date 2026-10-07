@@ -844,7 +844,7 @@ class MessagePump(metaclass=_MessagePumpMeta):
         """
         from textual.widget import Widget
 
-        methods_dispatched: set[Callable] = set()
+        methods_dispatched: set[Callable] | None = None
         message_types = message.__class__.__mro__
         message_mro: list[type[Message]] | None = None
         private_method_name = f"_{method_name}"
@@ -864,9 +864,11 @@ class MessagePump(metaclass=_MessagePumpMeta):
                         _type for _type in message_types if issubclass(_type, Message)
                     ]
                 for message_class in message_mro:
-                    handlers = decorated_handlers.get(message_class, [])
+                    handlers = decorated_handlers.get(message_class, ())
 
                     for method, selectors in handlers:
+                        if methods_dispatched is None:
+                            methods_dispatched = set()
                         if method in methods_dispatched:
                             continue
                         if not selectors:
