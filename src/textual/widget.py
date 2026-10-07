@@ -3862,14 +3862,17 @@ class Widget(DOMNode):
             # Adjust the region by the amount we just scrolled it, and convert to
             # its parent's virtual coordinate system.
             region = (
-                (
-                    region.translate(-scroll_offset)
-                    .translate(container.styles.margin.top_left)
-                    .translate(container.styles.border.spacing.top_left)
-                    .translate(container.virtual_region_with_margin.offset)
-                )
+                region.translate(-scroll_offset)
+                .translate(container.styles.margin.top_left)
+                .translate(container.styles.border.spacing.top_left)
+            )
+            # Translate and clip against the same acquired parent geometry,
+            # after its scroll operation has completed.
+            container_region = container.virtual_region_with_margin
+            region = (
+                region.translate(container_region.offset)
                 .grow(container.styles.margin)
-                .intersection(container.virtual_region_with_margin)
+                .intersection(container_region)
             )
 
             widget = container
