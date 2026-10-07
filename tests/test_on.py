@@ -13,6 +13,91 @@ from textual.widget import Widget
 from textual.widgets import Button, TabbedContent, TabPane
 
 
+async def test_dispatch_retains_acquired_ancestry_and_reacquires_changed_bases():
+    class FirstNotice(Message):
+        pass
+
+    class SecondNotice(Message):
+        pass
+
+    class Notice(FirstNotice, namespace="changing", bubble=False):
+        pass
+
+    class FirstMixin:
+        def on_changing_notice(self):
+            self.received.append("first mixin")
+
+    class SecondMixin:
+        def on_changing_notice(self):
+            self.received.append("second mixin")
+
+    class Pivot(FirstMixin):
+        pass
+
+    class BaseApp(Pivot, App):
+        @on(FirstNotice)
+        def first_notice(self):
+            self.received.append("first notice")
+
+        @on(SecondNotice)
+        def second_notice(self):
+            self.received.append("second notice")
+
+    class ChangingApp(BaseApp):
+        def __init__(self):
+            super().__init__()
+            self.received = []
+
+        def on_changing_notice(self):
+            self.received.append("head")
+            # This plain mixin mutation does not pass through MessagePump's
+            # metaclass. Both original linearizations must remain acquired for
+            # this delivery, while the next delivery sees Python's new MROs.
+            Pivot.__bases__ = (SecondMixin,)
+            Notice.__bases__ = (SecondNotice,)
+
+    app = ChangingApp()
+    try:
+        async with app.run_test() as pilot:
+            app.post_message(Notice())
+            await pilot.pause()
+            assert app.received == ["head", "first notice", "first mixin"]
+            app.received.clear()
+            app.post_message(Notice())
+            await pilot.pause()
+            assert app.received == ["head", "second notice", "second mixin"]
+    finally:
+        Pivot.__bases__ = (FirstMixin,)
+        Notice.__bases__ = (FirstNotice,)
+
+
+async def test_dispatch_reads_replaced_decorated_table_between_yields():
+    class Notice(Message, namespace="table", bubble=False):
+        pass
+
+    class BaseApp(App):
+        @on(Notice)
+        def original(self):
+            self.received.append("original")
+
+    def replacement(instance, message):
+        instance.received.append("replacement")
+
+    class ChangingApp(BaseApp):
+        def __init__(self):
+            super().__init__()
+            self.received = []
+
+        def on_table_notice(self):
+            BaseApp._decorated_handlers = {Notice: [(replacement, {})]}
+
+    app = ChangingApp()
+    async with app.run_test() as pilot:
+        app.post_message(Notice())
+        await pilot.pause()
+        assert app.received == ["replacement"]
+
+
 async def test_live_named_replacement_during_decorated_dispatch():
     class Notice(Message, namespace="lookup", bubble=False):
         pass
