@@ -103,6 +103,7 @@ class Static(Widget, inherit_bindings=False):
             and type(self).get_content_height is Widget.get_content_height
             and type(self.__visual) is Content
             and self._native_box_measurement
+            and not self._container_selection_dependency.styles_sensitive(self)
             and self._native_measurement_layout_hooks
             and not self.is_container
         )

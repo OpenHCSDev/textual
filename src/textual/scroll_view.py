@@ -7,7 +7,7 @@ from __future__ import annotations
 from rich.console import RenderableType
 
 from textual._animator import EasingFunction
-from textual._measurement import STORED_VIRTUAL_SIZE, height_dependency
+from textual._measurement import NATIVE_CONTAINER_SELECTION, STORED_VIRTUAL_SIZE, height_dependency
 from textual._types import AnimationLevel, CallbackType
 from textual.containers import ScrollableContainer
 from textual.geometry import Region, Size
@@ -39,6 +39,7 @@ class ScrollView(ScrollableContainer):
         return True
 
     @property
+    @height_dependency(NATIVE_CONTAINER_SELECTION)
     def is_container(self) -> bool:
         """Since a ScrollView should be a line-api widget, it won't have children,
         and therefore isn't a container."""

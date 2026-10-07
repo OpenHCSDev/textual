@@ -56,7 +56,8 @@ from textual._dispatch_key import dispatch_key
 from textual._easing import DEFAULT_SCROLL_EASING
 from textual._extrema import Extrema
 from textual._measurement import (
-    CONTEXT_HEIGHT, INDEPENDENT_HEIGHT, NATIVE_WIDGET_HEIGHT, NATIVE_WIDGET_WIDTH,
+    CONTEXT_HEIGHT, INDEPENDENT_HEIGHT, NATIVE_CONTAINER_SELECTION,
+    NATIVE_WIDGET_HEIGHT, NATIVE_WIDGET_WIDTH,
     HeightDependency, _arrangement_wrapper_uses_height, _local_box_inputs,
     box_depends_on_available_height, height_dependency,
 )
@@ -313,6 +314,7 @@ class Widget(DOMNode):
 
     _content_height_dependency: ClassVar[HeightDependency] = NATIVE_WIDGET_HEIGHT
     _content_width_dependency: ClassVar[HeightDependency] = NATIVE_WIDGET_WIDTH
+    _container_selection_dependency: ClassVar[HeightDependency] = NATIVE_CONTAINER_SELECTION
     _native_box_measurement: ClassVar[bool] = True
     _native_measurement_layout_hooks: ClassVar[bool] = True
 
@@ -2693,7 +2695,7 @@ class Widget(DOMNode):
         guess this separate box-stretch answer.
         """
         native = (
-            type(self).is_container is Widget.is_container
+            not self._container_selection_dependency.depends(self)
             and type(self).children is DOMNode.children
             and type(self.styles) is RenderStyles
         )
@@ -2865,6 +2867,7 @@ class Widget(DOMNode):
         return self.styles.layout or self._default_layout
 
     @property
+    @height_dependency(NATIVE_CONTAINER_SELECTION)
     def is_container(self) -> bool:
         """Is this widget a container (contains other widgets)?"""
         return bool(self._nodes) or self.styles.layout is not None
@@ -4193,12 +4196,14 @@ class Widget(DOMNode):
         # on every measurement. Undeclared overrides select the safe full context.
         cls._content_height_dependency = getattr(cls.get_content_height, "_height_dependency", CONTEXT_HEIGHT)
         cls._content_width_dependency = getattr(cls.get_content_width, "_height_dependency", CONTEXT_HEIGHT)
+        cls._container_selection_dependency = getattr(
+            getattr(cls.is_container, "fget", None), "_height_dependency", CONTEXT_HEIGHT
+        )
         cls._native_box_measurement = (
             cls._get_box_model is Widget._get_box_model
             and cls._resolve_extrema is Widget._resolve_extrema
             and cls._has_relative_children_height is Widget._has_relative_children_height
             and cls._has_relative_children_width is Widget._has_relative_children_width
-            and cls.is_container is Widget.is_container
             and cls.layout is Widget.layout
         )
         cls._native_measurement_layout_hooks = (
