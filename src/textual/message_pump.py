@@ -828,19 +828,24 @@ class MessagePump(metaclass=_MessagePumpMeta):
         from textual.widget import Widget
 
         methods_dispatched: set[Callable] = set()
-        message_mro = [
-            _type for _type in message.__class__.__mro__ if issubclass(_type, Message)
-        ]
+        message_types = message.__class__.__mro__
+        message_mro: list[type[Message]] | None = None
+        private_method_name = f"_{method_name}"
         for cls in self.__class__.__mro__:
             if message._no_default_action:
                 break
+            declarations = cls.__dict__
             # Try decorated handlers first
             decorated_handlers = cast(
                 "dict[type[Message], list[tuple[Callable, dict[str, tuple[SelectorSet, ...]]]]] | None",
-                cls.__dict__.get("_decorated_handlers"),
+                declarations.get("_decorated_handlers"),
             )
 
             if decorated_handlers:
+                if message_mro is None:
+                    message_mro = [
+                        _type for _type in message_types if issubclass(_type, Message)
+                    ]
                 for message_class in message_mro:
                     handlers = decorated_handlers.get(message_class, [])
 
@@ -869,7 +874,7 @@ class MessagePump(metaclass=_MessagePumpMeta):
 
             # Fall back to the naming convention
             # But avoid calling the handler if it was decorated
-            method = cls.__dict__.get(f"_{method_name}") or cls.__dict__.get(
+            method = declarations.get(private_method_name) or declarations.get(
                 method_name
             )
             if method is not None and not getattr(method, "_textual_on", None):
