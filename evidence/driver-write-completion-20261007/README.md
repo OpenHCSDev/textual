@@ -18,8 +18,23 @@ the App loop's normal exception handling, not on the terminal writer thread.
 WriterThread.call_after_flush now requires the original loop explicitly, and
 all native consumers including its original control are migrated.
 
-Source checkpoint, not yet qualified. Verification will cover the actual
-writer FIFO/flush, owner-loop callback, synchronous file/pipe/headless paths,
-closed-loop retirement, and a real source App. Windows console startup cannot
-be exercised on this Linux host; its shared writer path is source-reviewed.
-No provider, package/prefix/public runtime operation is part of this change.
+Qualified native source checks: four focused controls passed in 0.35 seconds,
+covering FIFO flush, callback thread/loop, headless scheduling, buffered inline
+file flush, closed-loop retirement and joined writer shutdown.
+
+The original WebDriver accepted a 1,100,005-byte framed pipe packet across two
+actual OS writes; exact bytes and owner-loop completion passed, and the reader
+joined. This proves transport acceptance, not browser paint.
+
+The actual Linux source App rendered through its original writer and delivered
+completion on its App loop. Writer and input thread joined. PTY input was used;
+output was captured to stderr, not inspected as terminal pixels. The first run
+failed only its cleanup oracle: Linux retains the joined input Thread object.
+That negative is retained. The corrected Linux-only check passed without
+repeating the Web control. Captured stderr includes normal terminal output.
+
+Windows console startup remains unexecuted on this Linux host. Its original
+shared WriterThread path is source-reviewed and that writer is exercised above.
+No latency improvement is claimed. Native verification used zero inputs and
+providers; Parent separately verified and published the paired Linux saved-tab
+App. Production remains byte-identical to the delivered 41e8a5319 checkpoint.

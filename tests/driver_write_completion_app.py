@@ -12,6 +12,7 @@ from threading import Thread, get_ident
 from time import sleep
 
 from textual.app import App
+from textual.drivers.linux_driver import LinuxDriver
 from textual.drivers.web_driver import WebDriver
 from textual.widgets import Static
 
@@ -22,7 +23,7 @@ class CompletionApp(App):
         self.received = False
         self.owner_thread = get_ident()
         self.writer = None
-        super().__init__()
+        super().__init__(driver_class=LinuxDriver)
 
     def compose(self):
         yield Static("Native driver write completion")
@@ -101,19 +102,20 @@ async def web_transport_completion():
             "reader_joined": True, "inputs": 0, "providers": 0}
 
 
-async def main(output: Path):
+async def main(output: Path, *, linux_only: bool = False):
     output.mkdir(parents=True, exist_ok=True)
     os.environ.update(XDG_CONFIG_HOME=str(output / "config"),
                       XDG_STATE_HOME=str(output / "state"),
                       XDG_DATA_HOME=str(output / "data"))
-    web = await web_transport_completion()
-    (output / "web-output.json").write_text(json.dumps(web, indent=2) + "\n")
+    if not linux_only:
+        web = await web_transport_completion()
+        (output / "web-output.json").write_text(json.dumps(web, indent=2) + "\n")
     app = CompletionApp()
     await asyncio.wait_for(app.run_async(mouse=False, size=(60, 10)), 15)
     assert app.received and app._exception is None
     assert app._driver._writer_thread is None
     assert not app.writer.is_alive()
-    assert app._driver._key_thread is None
+    assert not app._driver._key_thread.is_alive()
     result = {"scope": "real source Linux App/PTY writer completion, not pixel presentation",
               "driver": type(app._driver).__name__, "callback_on_owner_loop": True,
               "writer_joined": True, "input_thread_joined": True,
@@ -123,4 +125,4 @@ async def main(output: Path):
 
 if __name__ == "__main__":
     import sys
-    asyncio.run(main(Path(sys.argv[1])))
+    asyncio.run(main(Path(sys.argv[1]), linux_only="--linux-only" in sys.argv[2:]))
