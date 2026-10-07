@@ -120,6 +120,7 @@ class Static(Widget, inherit_bindings=False):
                 and type(self.__visual) is Content
                 and self._native_box_measurement
                 and self._native_measurement_layout_hooks
+                and not self.is_container
                 and previous_visual == self.__visual
             )
         self.refresh(layout=layout)
