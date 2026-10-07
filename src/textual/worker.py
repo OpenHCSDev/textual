@@ -151,7 +151,7 @@ class Worker(Generic[ResultType]):
         *,
         name: str = "",
         group: str = "default",
-        description: str = "",
+        description: str | None = None,
         exit_on_error: bool = True,
         thread: bool = False,
     ) -> None:
@@ -162,7 +162,7 @@ class Worker(Generic[ResultType]):
             work: A callable, coroutine, or other awaitable object to run in the worker.
             name: Name of the worker (short string to help identify when debugging).
             group: The worker group.
-            description: Description of the worker (longer string with more details).
+            description: Description of the worker, or None to use its name.
             exit_on_error: Exit the app if the worker raises an error. Set to `False` to suppress exceptions.
             thread: Mark the worker as a thread worker.
         """
@@ -170,6 +170,8 @@ class Worker(Generic[ResultType]):
         self._work = work
         self.name = name
         self.group = group
+        if description is None:
+            description = name
         self.description = (
             description if len(description) <= 1000 else description[:1000] + "..."
         )

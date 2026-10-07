@@ -85,7 +85,7 @@ class WorkerManager:
         *,
         name: str | None = "",
         group: str = "default",
-        description: str = "",
+        description: str | None = None,
         exit_on_error: bool = True,
         start: bool = True,
         exclusive: bool = False,
@@ -97,7 +97,7 @@ class WorkerManager:
             work: A callable, a coroutine, or other awaitable.
             name: A name to identify the worker.
             group: The worker group.
-            description: A description of the worker.
+            description: A description of the worker, or None to use its name.
             exit_on_error: Exit the app if the worker raises an error. Set to `False` to suppress exceptions.
             start: Automatically start the worker.
             exclusive: Cancel all workers in the same group.
@@ -111,7 +111,7 @@ class WorkerManager:
             work,
             name=name or getattr(work, "__name__", "") or "",
             group=group,
-            description=description or repr(work),
+            description=description,
             exit_on_error=exit_on_error,
             thread=thread,
         )

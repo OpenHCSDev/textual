@@ -10,6 +10,81 @@ from textual.app import App
 from textual.worker import Worker, WorkerState, WorkType
 
 
+async def test_worker_descriptions_do_not_format_call_payloads():
+    from functools import partial
+
+    class Payload:
+        repr_calls = 0
+
+        def __repr__(self):
+            self.repr_calls += 1
+            raise RuntimeError("Worker diagnostics must not format payloads")
+
+    async def partially_declared(node, original, *, selected):
+        return original, selected
+
+    class DescriptionApp(App):
+        partial_task = work(
+            partial(partially_declared, selected="declared selection"),
+            name="named partial",
+        )
+
+        @work
+        async def retain(self, original, *, selected):
+            return original, selected
+
+        @work(description="")
+        async def empty(self, original):
+            return original
+
+        @work(description="explicit diagnostic")
+        async def explicit(self, original):
+            return original
+
+        @work(thread=True)
+        def threaded(self, original):
+            return original
+
+    payload = Payload()
+    selected = Payload()
+    app = DescriptionApp()
+    async with app.run_test():
+        decorated = app.retain(payload, selected=selected)
+        empty = app.empty(payload)
+        explicit = app.explicit(payload)
+        threaded = app.threaded(payload)
+        declared_partial = app.partial_task(payload)
+
+        async def receive(original):
+            return original
+
+        direct = app.run_worker(partial(receive, payload), name="direct", start=False)
+        direct_empty = app.run_worker(
+            partial(receive, payload), name="direct empty", description="", start=False
+        )
+        long = "explicit " * 150
+        direct_long = app.run_worker(
+            partial(receive, payload), description=long, start=False
+        )
+        assert decorated.description.endswith("DescriptionApp.retain")
+        assert empty.description == direct_empty.description == ""
+        assert explicit.description == "explicit diagnostic"
+        assert direct.description == "direct"
+        assert declared_partial.description == "named partial"
+        assert direct_long.description == long[:1000] + "..."
+        assert payload.repr_calls == selected.repr_calls == 0
+        for worker in (decorated, empty, explicit, threaded, declared_partial, direct, direct_empty, direct_long):
+            repr(worker)
+        assert payload.repr_calls == selected.repr_calls == 0
+        app.workers.start_all()
+        assert await decorated.wait() == (payload, selected)
+        assert await declared_partial.wait() == (payload, "declared selection")
+        for worker in (empty, explicit, threaded, direct, direct_empty, direct_long):
+            assert await worker.wait() is payload
+        await app.workers.wait_for_complete()
+        assert payload.repr_calls == selected.repr_calls == 0
+
+
 class WorkApp(App):
     worker: Worker
 
