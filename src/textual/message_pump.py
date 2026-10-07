@@ -726,7 +726,7 @@ class MessagePump(metaclass=_MessagePumpMeta):
                     pending = self._peek_message()
                 except MessagePumpClosed:
                     break
-                if pending is None or not message.can_replace(pending):
+                if pending is None or not self._can_replace_message(message, pending):
                     break
                 try:
                     message = await self._get_message()
@@ -774,6 +774,14 @@ class MessagePump(metaclass=_MessagePumpMeta):
                                 self.app._handle_exception(error)
                                 break
                     await self._flush_next_callbacks()
+
+    def _can_replace_message(self, message: Message, pending: Message) -> bool:
+        """Whether this receiver may consume the pending message instead.
+
+        The original queue owns replacement; receivers may supply semantics
+        that depend on their current delivery owner.
+        """
+        return message.can_replace(pending)
 
     async def _flush_next_callbacks(self) -> None:
         """Invoke pending callbacks in next callbacks queue."""

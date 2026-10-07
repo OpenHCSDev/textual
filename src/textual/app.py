@@ -4098,6 +4098,27 @@ class App(Generic[ReturnType], DOMNode):
         """
         pass
 
+    def _can_replace_message(self, message: Message, pending: Message) -> bool:
+        captured = self.mouse_captured
+        if (
+            captured is not None
+            and type(message) is events.MouseMove
+            and type(pending) is events.MouseMove
+            and not message.is_forwarded
+            and not pending.is_forwarded
+            and message.widget is None
+            and pending.widget is None
+            and message._sender is self
+            and pending._sender is self
+            and message._dispatch_completion is None
+            and pending._dispatch_completion is None
+            and message._prevent == pending._prevent
+            and (message.button, message.shift, message.meta, message.ctrl)
+            == (pending.button, pending.shift, pending.meta, pending.ctrl)
+        ):
+            return captured.can_replace_mouse_move(message, pending)
+        return super()._can_replace_message(message, pending)
+
     async def on_event(self, event: events.Event) -> events.MouseEvent | None:
         # Handle input events that haven't been forwarded
         # If the event has been forwarded it may have bubbled up back to the App
