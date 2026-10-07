@@ -179,3 +179,107 @@ async def test_pointer_receiver_self_removal_releases_original_delivery():
         assert target._task is None
         assert app.mouse_position == Offset(21, 4)
         assert app.mouse_captured is None
+
+
+@pytest.mark.parametrize('latest_position', [False, True])
+async def test_captured_absolute_motion_replacement_preserves_gesture_boundaries(latest_position):
+    entered, release = asyncio.Event(), asyncio.Event()
+    delivered = []
+
+    class Handle(Static):
+        ALLOW_SELECT = False
+
+        def can_replace_mouse_move(self, event, pending):
+            return latest_position and event.button == 1
+
+        async def on_mouse_down(self, event):
+            event.stop()
+            entered.set()
+            await release.wait()
+            self.capture_mouse()
+            delivered.append(('down', event.screen_x))
+
+        def on_mouse_move(self, event):
+            event.stop()
+            delivered.append(('move', event.screen_x, event.shift))
+
+        def on_mouse_up(self, event):
+            event.stop()
+            delivered.append(('up', event.screen_x))
+            self.release_mouse()
+
+        def on_mouse_scroll_up(self, event):
+            event.stop()
+            delivered.append(('wheel', event.screen_x))
+
+    class PointerApp(App):
+        CSS = 'Handle {width: 30; height: 3;}'
+
+        def compose(self):
+            yield Handle('handle')
+
+    app = PointerApp()
+    async with app.run_test(size=(40, 8)) as pilot:
+        await pilot.pause()
+        handle = app.query_one(Handle)
+        send_pointer(app, events.MouseDown, Offset(1, 1))
+        await asyncio.wait_for(entered.wait(), 5)
+        for x, shift in [(2, False), (3, False), (4, True), (5, True)]:
+            app._driver.process_message(events.MouseMove(None, x, 1, 1, 0, 1, shift, False, False))
+        send_pointer(app, events.MouseScrollUp, Offset(6, 1), button=0)
+        for x in (7, 8):
+            send_pointer(app, events.MouseMove, Offset(x, 1))
+        send_pointer(app, events.MouseUp, Offset(9, 1))
+        for x in (10, 11):
+            send_pointer(app, events.MouseMove, Offset(x, 1), button=0)
+        release.set()
+        await pilot.pause()
+        moves = [('move', 3, False), ('move', 5, True)] if latest_position else [
+            ('move', 2, False), ('move', 3, False), ('move', 4, True), ('move', 5, True)]
+        second = [('move', 8, False)] if latest_position else [
+            ('move', 7, False), ('move', 8, False)]
+        assert delivered == [('down', 1), *moves, ('wheel', 6), *second,
+                             ('up', 9), ('move', 10, False), ('move', 11, False)]
+        assert app.mouse_captured is None
+        assert app.mouse_position == Offset(11, 1)
+
+
+async def test_captured_motion_keeps_each_owned_delivery_completion():
+    entered, release = asyncio.Event(), asyncio.Event()
+    delivered = []
+
+    class Handle(Static):
+        ALLOW_SELECT = False
+
+        def can_replace_mouse_move(self, event, pending):
+            return True
+
+        async def on_mouse_down(self, event):
+            event.stop()
+            entered.set()
+            await release.wait()
+            self.capture_mouse()
+
+        def on_mouse_move(self, event):
+            event.stop()
+            delivered.append(event.screen_x)
+
+    class PointerApp(App):
+        CSS = 'Handle {width: 30; height: 3;}'
+
+        def compose(self):
+            yield Handle('handle')
+
+    app = PointerApp()
+    async with app.run_test(size=(40, 8)) as pilot:
+        await pilot.pause()
+        send_pointer(app, events.MouseDown, Offset(1, 1))
+        await asyncio.wait_for(entered.wait(), 5)
+        completions = [app._post_message_and_wait(
+            events.MouseMove(None, x, 1, 1, 0, 1, False, False, False).set_sender(app))
+            for x in (2, 3, 4)]
+        release.set()
+        await asyncio.wait_for(asyncio.gather(*completions), 5)
+        await pilot.pause()
+        assert delivered == [2, 3, 4]
+        app.capture_mouse(None)
