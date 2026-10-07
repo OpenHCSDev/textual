@@ -76,6 +76,17 @@ class PreparedTextArea(TextArea):
         while self.is_attached and not self._pruning:
             document = self.document
             width, tabs = self.wrap_width, self.indent_width
+            wrapped = self.wrapped_document
+            if (wrapped.document is document and
+                    (wrapped._width, wrapped._tab_width) == (width, tabs)):
+                # Native edits update this same view incrementally. A resize
+                # with unchanged wrapping inputs needs scrollbar/size refresh,
+                # not another detached document and navigator.
+                self._refresh_size()
+                if (width, tabs) == (self.wrap_width, self.indent_width):
+                    return
+                # Scrollbar publication can itself change the wrapping width.
+                continue
             prepared = await self._prepare_document(document, width, tabs)
             if not self.is_attached or self._pruning:
                 return
@@ -97,4 +108,5 @@ class PreparedTextArea(TextArea):
             offset = prepared.location_to_offset(reader)
             self.scroll_to(x=offset.x, y=offset.y, animate=False, immediate=True)
             self.record_cursor_width()
-            return
+            # Admit the resulting scrollbar geometry through the same matching
+            # resource decision before declaring this worker complete.
