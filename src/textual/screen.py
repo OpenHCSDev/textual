@@ -1081,7 +1081,7 @@ class Screen(Generic[ScreenResultType], Widget):
         # uses sibling declaration order, so full focus geometry is irrelevant.
         # An overridden public chain remains its own selection authority.
         widget_index: int | None = None
-        if type(self).focus_chain is Screen.focus_chain:
+        if type(self).focus_chain is _NATIVE_FOCUS_CHAIN:
             branches, focusable = self._focus_candidates()
             focusable_widgets = (
                 self._order_focus_candidates(branches, focusable)
@@ -2395,6 +2395,11 @@ class Screen(Generic[ScreenResultType], Widget):
     def validate_sub_title(self, sub_title: Any) -> str | None:
         """Ensure the sub-title is a string or `None`."""
         return None if sub_title is None else str(sub_title)
+
+
+# Retain the declaration, not the current public class attribute: replacing
+# Screen.focus_chain itself must retain the replacement's selection authority.
+_NATIVE_FOCUS_CHAIN = Screen.focus_chain
 
 
 @rich.repr.auto
