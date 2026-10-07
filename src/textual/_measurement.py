@@ -94,16 +94,6 @@ class NativeWidgetWidth(NativeWidgetMeasurementHeight):
     def layout_dependency(self, widget: Widget) -> HeightDependency:
         return widget.layout._content_width_dependency
 
-    def styles_sensitive(self, widget: Widget) -> bool:
-        if widget.is_container and widget._native_measurement_layout_hooks:
-            from textual.layout import Layout
-
-            # Native optimal-width measurement selects the same arrangement.
-            # A custom width method retains its independently declared inputs.
-            if type(widget.layout).get_content_width is Layout.get_content_width:
-                return NATIVE_LAYOUT_HEIGHT.styles_sensitive(widget)
-        return super().styles_sensitive(widget)
-
 
 class NativeLayoutHeight(HeightDependency):
     def depends(self, widget: Widget) -> bool:
@@ -120,6 +110,13 @@ class NativeLayoutHeight(HeightDependency):
         if not widget._native_measurement_layout_hooks:
             return True
         return widget.layout._arrangement_height_dependency.styles_sensitive(widget)
+
+
+class NativeOptimalWidth(IndependentHeight):
+    """Native width arranges at zero height but reads arrangement styles."""
+
+    def styles_sensitive(self, widget: Widget) -> bool:
+        return NATIVE_LAYOUT_HEIGHT.styles_sensitive(widget)
 
 
 class FlowHeight(HeightDependency):
@@ -212,6 +209,7 @@ STORED_VIRTUAL_SIZE = StoredVirtualSize()
 NATIVE_WIDGET_HEIGHT = NativeWidgetHeight()
 NATIVE_WIDGET_WIDTH = NativeWidgetWidth()
 NATIVE_LAYOUT_HEIGHT = NativeLayoutHeight()
+NATIVE_OPTIMAL_WIDTH = NativeOptimalWidth()
 FLOW_HEIGHT = FlowHeight()
 STREAM_HEIGHT = StreamHeight()
 GRID_HEIGHT = GridHeight()
