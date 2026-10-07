@@ -1198,12 +1198,16 @@ TextArea {
             # Use a regular plain-text document.
             document = Document(text)
 
-        self.document = document
-        self.wrapped_document = WrappedDocument(document, tab_width=self.indent_width)
+        self._set_document_view(WrappedDocument(document, tab_width=self.indent_width))
+        self._rewrap_and_refresh_virtual_size()
+
+    def _set_document_view(self, wrapped_document: WrappedDocument) -> None:
+        """Admit the document and its matching navigation as one native resource."""
+        self.document = wrapped_document.document
+        self.wrapped_document = wrapped_document
         self.navigator = DocumentNavigator(self.wrapped_document)
         self._build_highlight_map()
         self.move_cursor((0, 0))
-        self._rewrap_and_refresh_virtual_size()
 
     @property
     def _visible_line_indices(self) -> tuple[int, int]:
@@ -1276,10 +1280,14 @@ TextArea {
 
         Accounts for gutter, scrollbars, etc.
         """
+        return self.wrap_width_for(self.document)
+
+    def wrap_width_for(self, document: DocumentBase) -> int:
+        """Derive wrapping from this surface and the document being admitted."""
         width, _ = self.scrollable_content_region.size
         cursor_width = 1
         if self.soft_wrap:
-            return max(0, width - self.gutter_width - cursor_width)
+            return max(0, width - self.gutter_width_for(document) - cursor_width)
         return 0
 
     def _rewrap_and_refresh_virtual_size(self) -> None:
@@ -1940,10 +1948,14 @@ TextArea {
         Returns:
             The cell-width of the line number column. If `show_line_numbers` is `False` returns 0.
         """
+        return self.gutter_width_for(self.document)
+
+    def gutter_width_for(self, document: DocumentBase) -> int:
+        """The line number declaration belongs to the selected native document."""
         # The longest number in the gutter plus two extra characters: `│ `.
         gutter_margin = 2
         gutter_width = (
-            len(str(self.document.line_count - 1 + self.line_number_start))
+            len(str(document.line_count - 1 + self.line_number_start))
             + gutter_margin
             if self.show_line_numbers
             else 0
