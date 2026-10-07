@@ -787,6 +787,11 @@ class Screen(Generic[ScreenResultType], Widget):
     @property
     def focus_chain(self) -> list[Widget]:
         """A list of widgets that may receive focus, in focus order."""
+        branches, focusable = self._focus_candidates()
+        return self._order_focus_candidates(branches, focusable)
+
+    def _focus_candidates(self) -> tuple[dict[Widget, tuple[Widget, ...]], set[Widget]]:
+        """Acquire focus membership before demanding ordering geometry."""
         root_node = self.screen
 
         if (focused := self.focused) is not None:
@@ -835,6 +840,14 @@ class Screen(Generic[ScreenResultType], Widget):
                 child for child in branches[parent]
                 if child in focusable or branches.get(child)
             )
+
+        return branches, focusable
+
+    def _order_focus_candidates(
+        self, branches: dict[Widget, tuple[Widget, ...]], focusable: set[Widget]
+    ) -> list[Widget]:
+        """Order the acquired eligible branches in their native coordinates."""
+        root_node = next(iter(branches))
 
         self._compositor.acquire_geometry(
             child for children in branches.values() for child in children
@@ -1064,8 +1077,18 @@ class Screen(Generic[ScreenResultType], Widget):
         if self.focused is not widget:
             return
 
-        # Grab the list of widgets that we can set focus to.
-        focusable_widgets = self.focus_chain
+        # A disabled/hidden widget is absent from native membership. That reset
+        # uses sibling declaration order, so full focus geometry is irrelevant.
+        # An overridden public chain remains its own selection authority.
+        widget_index: int | None = None
+        if type(self).focus_chain is _NATIVE_FOCUS_CHAIN:
+            branches, focusable = self._focus_candidates()
+            focusable_widgets = (
+                self._order_focus_candidates(branches, focusable)
+                if widget in focusable else list(focusable)
+            )
+        else:
+            focusable_widgets = self.focus_chain
         if not focusable_widgets:
             # If there's nothing to focus... give up now.
             self.set_focus(None)
@@ -1076,6 +1099,8 @@ class Screen(Generic[ScreenResultType], Widget):
             # the focus chain.
             widget_index = focusable_widgets.index(widget)
         except ValueError:
+            pass
+        if widget_index is None:
             # widget is not in focusable widgets
             # It may have been made invisible
             # Move to a sibling if possible
@@ -2370,6 +2395,11 @@ class Screen(Generic[ScreenResultType], Widget):
     def validate_sub_title(self, sub_title: Any) -> str | None:
         """Ensure the sub-title is a string or `None`."""
         return None if sub_title is None else str(sub_title)
+
+
+# Retain the declaration, not the current public class attribute: replacing
+# Screen.focus_chain itself must retain the replacement's selection authority.
+_NATIVE_FOCUS_CHAIN = Screen.focus_chain
 
 
 @rich.repr.auto

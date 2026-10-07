@@ -1,5 +1,6 @@
 from textual.app import App, ComposeResult
 from textual.containers import Container, ScrollableContainer, Vertical
+from textual.screen import Screen
 from textual.widget import Widget
 from textual.widgets import Button, Label
 from textual.widgets._placeholder import Placeholder
@@ -29,6 +30,34 @@ class FocusTestApp(App):
         yield NonFocusable(Focusable(id="Jessica", classes="a"), id="container2")
         yield Focusable(id="baz", classes="b")
         yield ChildrenFocusableOnly(Focusable(id="child", classes="c"))
+
+
+async def test_reset_focus_preserves_base_property_replacement(monkeypatch):
+    class ReplacementApp(App):
+        AUTO_FOCUS = None
+
+        def compose(self):
+            yield Button("First", id="first")
+            yield Button("Second", id="second")
+            yield Button("Third", id="third")
+
+    app = ReplacementApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        first, second, third = (app.query_one(f"#{name}")
+                                for name in ("first", "second", "third"))
+        app.screen.set_focus(first, scroll_visible=False)
+        calls = []
+
+        def replacement(screen):
+            calls.append(screen)
+            return [third, first, second]
+
+        with monkeypatch.context() as patch:
+            patch.setattr(Screen, "focus_chain", property(replacement))
+            first.disabled = True
+            assert calls == [app.screen]
+            assert app.screen.focused is third
 
 
 async def test_focus_chain():
