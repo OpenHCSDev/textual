@@ -15,11 +15,15 @@ if TYPE_CHECKING:
 
 class HeightDependency(ABC):
     @abstractmethod
-    def depends(self, widget: Widget) -> bool:
-        """Whether incoming container height can change the measured result."""
+    def depends(self, widget: Widget, *, greedy: bool = True) -> bool:
+        """Whether incoming height changes this operation in its actual box mode.
 
-    def box_depends(self, widget: Widget) -> bool:
-        return self.depends(widget) or widget._has_relative_children_height
+        Placement propagates greedy mode. Content measurements select the mode
+        used by their own algorithm, independent of the outer box operation.
+        """
+
+    def box_depends(self, widget: Widget, *, greedy: bool = True) -> bool:
+        return self.depends(widget, greedy=greedy) or widget._has_relative_children_height
 
     def styles_sensitive(self, widget: Widget) -> bool:
         """Unknown measurements may read any rule, not just native box inputs.
@@ -31,12 +35,12 @@ class HeightDependency(ABC):
 
 
 class ContextHeight(HeightDependency):
-    def depends(self, widget: Widget) -> bool:
+    def depends(self, widget: Widget, *, greedy: bool = True) -> bool:
         return True
 
 
 class IndependentHeight(HeightDependency):
-    def depends(self, widget: Widget) -> bool:
+    def depends(self, widget: Widget, *, greedy: bool = True) -> bool:
         return False
 
 
@@ -47,7 +51,7 @@ class StoredVirtualSize(HeightDependency):
     or replaced descriptors retain arbitrary style/container dependencies.
     """
 
-    def depends(self, widget: Widget) -> bool:
+    def depends(self, widget: Widget, *, greedy: bool = True) -> bool:
         from textual.reactive import _STORED_REACTIVE_ACCESS
         from textual.widget import Widget
 
@@ -64,15 +68,17 @@ class NativeWidgetMeasurementHeight(HeightDependency):
     def layout_dependency(self, widget: Widget) -> HeightDependency:
         """The native layout owns the selected measurement's dependency."""
 
-    def depends(self, widget: Widget) -> bool:
+    def depends(self, widget: Widget, *, greedy: bool = True) -> bool:
         if not widget.is_container:
             # Native leaf visuals receive rules and width, not container height.
             return False
         if not widget._native_measurement_layout_hooks:
             return True
+        # Native get_content_height / get_content_width choose their own
+        # arrangement inputs; outer optimal placement cannot change those.
         return self.layout_dependency(widget).depends(widget)
 
-    def box_depends(self, widget: Widget) -> bool:
+    def box_depends(self, widget: Widget, *, greedy: bool = True) -> bool:
         if not widget.is_container:
             return False
         if not widget._native_measurement_layout_hooks:
@@ -98,15 +104,15 @@ class NativeWidgetWidth(NativeWidgetMeasurementHeight):
 
 
 class NativeLayoutHeight(HeightDependency):
-    def depends(self, widget: Widget) -> bool:
+    def depends(self, widget: Widget, *, greedy: bool = True) -> bool:
         # Conservatively require a declaration for the arranger too. Even the
         # fixed-zero branch need not opt unknown/custom layout hooks into reuse.
         return widget._arrangement_depends_on_available_height()
 
-    def box_depends(self, widget: Widget) -> bool:
+    def box_depends(self, widget: Widget, *, greedy: bool = True) -> bool:
         if _arrangement_wrapper_uses_height(widget):
             return True
-        return widget.layout._arrangement_height_dependency.box_depends(widget)
+        return widget.layout._arrangement_height_dependency.box_depends(widget, greedy=True)
 
     def styles_sensitive(self, widget: Widget) -> bool:
         if not widget._native_measurement_layout_hooks:
@@ -136,7 +142,7 @@ class FlowHeight(HeightDependency):
             or type(widget).process_layout is not Widget.process_layout
         )
 
-    def depends(self, widget: Widget) -> bool:
+    def depends(self, widget: Widget, *, greedy: bool = True) -> bool:
         styles = widget.styles
         if (not widget._native_measurement_layout_hooks
                 or styles.align_horizontal != "left" or styles.align_vertical != "top"):
@@ -149,7 +155,7 @@ class FlowHeight(HeightDependency):
             # percentage heights as relative even for a raw width-axis scalar.
             if child_styles.is_relative_height:
                 return True
-            if child._box_depends_on_available_height():
+            if child._box_depends_on_available_height(greedy=greedy):
                 return True
         return False
 
@@ -164,7 +170,7 @@ class StreamHeight(FlowHeight):
     # general box operation. Reuse its one implementation, not Flow's box proof.
     box_depends = HeightDependency.box_depends
 
-    def depends(self, widget: Widget) -> bool:
+    def depends(self, widget: Widget, *, greedy: bool = True) -> bool:
         # Stream measures content directly, even when a child's CSS box height
         # is fixed. A box proof alone cannot certify this operation.
         return any(child._content_height_dependency.depends(child)
@@ -180,7 +186,7 @@ def _scalar_uses_height(scalar: Scalar, *, height_fraction: bool = False) -> boo
 class GridHeight(FlowHeight):
     box_depends = HeightDependency.box_depends
 
-    def depends(self, widget: Widget) -> bool:
+    def depends(self, widget: Widget, *, greedy: bool = True) -> bool:
         styles = widget.styles
         rows, columns = styles.grid_rows or (), styles.grid_columns or ()
         # Default rows become fractional at nonzero height for non-auto parents.
@@ -293,14 +299,17 @@ def _local_box_inputs(widget: Widget) -> tuple[bool, bool, bool, bool, bool]:
     return result
 
 
-def box_depends_on_available_height(widget: Widget) -> bool:
+def box_depends_on_available_height(widget: Widget, *, greedy: bool) -> bool:
     """Conservative proof for the native box resolver, including its extrema."""
     if not widget._native_box_measurement:
         return True
     depends, content_width, content_height, _, _ = _local_box_inputs(widget)
     if depends:
         return True
-    if content_width and widget._content_width_dependency.depends(widget):
+    # Fractional width becomes auto only in optimal sizing. Normal placement
+    # resolves the supplied fraction without calling get_content_width.
+    if (content_width and (not greedy or widget.styles.width.is_auto)
+            and widget._content_width_dependency.depends(widget)):
         return True
     if content_height:
         return widget._content_height_dependency.box_depends(widget)

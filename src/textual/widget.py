@@ -1420,7 +1420,7 @@ class Widget(DOMNode):
             Widget locations.
         """
         viewport = self.screen.size
-        independent = not self._arrangement_depends_on_available_height()
+        independent = not self._arrangement_depends_on_available_height(optimal=optimal)
         cache_key: tuple[object, ...] = (
             size.with_height(0) if independent else size,
             viewport, self._nodes._updates, self._layout_updates, optimal,
@@ -1882,7 +1882,7 @@ class Widget(DOMNode):
         if app.debug:
             app.call_next(self.preflight_checks)
 
-    def _arrangement_depends_on_available_height(self) -> bool:
+    def _arrangement_depends_on_available_height(self, *, optimal: bool = False) -> bool:
         """Own the same complete dependency for arrangement and measurement.
 
         A native auto-size query may ask before arranging. Both questions read
@@ -1893,15 +1893,17 @@ class Widget(DOMNode):
         proof = self.__dict__.get("_height_arrangement_cache")
         if proof is None or proof[0] != epoch:
             self._arrangement_cache.clear()
-            dependent = (
-                _arrangement_wrapper_uses_height(self)
-                or self.layout._arrangement_height_dependency.depends(self)
-            )
-            proof = epoch, dependent
+            proof = epoch, {}
             self._height_arrangement_cache = proof
-        return proof[1]
+        answers = proof[1]
+        if optimal not in answers:
+            answers[optimal] = (
+                _arrangement_wrapper_uses_height(self)
+                or self.layout._arrangement_height_dependency.depends(self, greedy=not optimal)
+            )
+        return answers[optimal]
 
-    def _height_dependency_answers(self) -> dict[str, bool]:
+    def _height_dependency_answers(self) -> dict[str | tuple[str, bool], bool]:
         """Computed height answers from the current native measurement source.
 
         Structure includes descendant membership/display publication; styles
@@ -1916,12 +1918,13 @@ class Widget(DOMNode):
             self._height_dependency_cache = cached
         return cached[1]
 
-    def _box_depends_on_available_height(self) -> bool:
+    def _box_depends_on_available_height(self, *, greedy: bool = True) -> bool:
         answers = self._height_dependency_answers()
-        if "box" in answers:
-            return answers["box"]
-        dependent = box_depends_on_available_height(self)
-        answers["box"] = dependent
+        operation = ("box", greedy)
+        if operation in answers:
+            return answers[operation]
+        dependent = box_depends_on_available_height(self, greedy=greedy)
+        answers[operation] = dependent
         return dependent
 
     def _get_box_model(
@@ -1973,7 +1976,7 @@ class Widget(DOMNode):
             revision = (id(styles), styles, styles._cache_key)
         cache_container = container
         cache_width_fraction, cache_height_fraction = width_fraction, height_fraction
-        independent_height = not self._box_depends_on_available_height()
+        independent_height = not self._box_depends_on_available_height(greedy=greedy)
         if local_styles or independent_height:
             # The class/method/layout declarations proved these two inputs unused.
             # Include the immediate parent's actual auto-size inputs before idle,
