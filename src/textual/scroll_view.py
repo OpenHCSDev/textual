@@ -7,6 +7,7 @@ from __future__ import annotations
 from rich.console import RenderableType
 
 from textual._animator import EasingFunction
+from textual._measurement import STORED_VIRTUAL_SIZE, height_dependency
 from textual._types import AnimationLevel, CallbackType
 from textual.containers import ScrollableContainer
 from textual.geometry import Region, Size
@@ -58,6 +59,7 @@ class ScrollView(ScrollableContainer):
     def on_mount(self):
         self._refresh_scrollbars()
 
+    @height_dependency(STORED_VIRTUAL_SIZE)
     def get_content_width(self, container: Size, viewport: Size) -> int:
         """Gets the width of the content area.
 
@@ -70,6 +72,7 @@ class ScrollView(ScrollableContainer):
         """
         return self.virtual_size.width
 
+    @height_dependency(STORED_VIRTUAL_SIZE)
     def get_content_height(self, container: Size, viewport: Size, width: int) -> int:
         """Gets the height (number of lines) in the content area.
 

@@ -38,6 +38,25 @@ class IndependentHeight(HeightDependency):
         return False
 
 
+class StoredVirtualSize(HeightDependency):
+    """The original line surface measures its authored reactive extent.
+
+    Extent writes already invalidate through Reactive(layout=True). Computed
+    or replaced descriptors retain arbitrary style/container dependencies.
+    """
+
+    def depends(self, widget: Widget) -> bool:
+        from textual.reactive import _STORED_REACTIVE_ACCESS
+        from textual.widget import Widget
+
+        return (
+            type(widget).virtual_size is not Widget.virtual_size
+            or widget._reactive_accessors.get("virtual_size") is not _STORED_REACTIVE_ACCESS
+        )
+
+    styles_sensitive = depends
+
+
 class NativeWidgetMeasurementHeight(HeightDependency):
     @abstractmethod
     def layout_dependency(self, widget: Widget) -> HeightDependency:
@@ -189,6 +208,7 @@ class GridHeight(FlowHeight):
 
 CONTEXT_HEIGHT = ContextHeight()
 INDEPENDENT_HEIGHT = IndependentHeight()
+STORED_VIRTUAL_SIZE = StoredVirtualSize()
 NATIVE_WIDGET_HEIGHT = NativeWidgetHeight()
 NATIVE_WIDGET_WIDTH = NativeWidgetWidth()
 NATIVE_LAYOUT_HEIGHT = NativeLayoutHeight()
