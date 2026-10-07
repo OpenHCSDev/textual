@@ -1416,6 +1416,19 @@ class Screen(Generic[ScreenResultType], Widget):
         """Additional native geometry required by a viewport-layout transaction."""
         return ()
 
+    def _held_layout_requests(self) -> dict[DOMNode, set[Widget]]:
+        """Borrow pending requests whose subtree still owns committed geometry."""
+        if not self._layout_widgets:
+            return {}
+        mutation_roots = self._layout_mutation_roots()
+        return {
+            owner: held for owner, members in self._layout_widgets.items()
+            if (held := {
+                member for member in members
+                if set(member.walk_ancestors(with_self=True)).intersection(mutation_roots)
+            })
+        } if mutation_roots else {}
+
     def _refresh_layout(self, size: Size | None = None, scroll: bool = False) -> None:
         """Refresh the layout (can change size and positions of widgets)."""
         size = self.outer_size if size is None else size
@@ -1429,7 +1442,14 @@ class Screen(Generic[ScreenResultType], Widget):
 
         try:
             geometry_targets = self._layout_geometry_targets()
-            if scroll and not self._layout_widgets:
+            held_layout = self._held_layout_requests() if scroll else {}
+            # Held requests remain pending for release. They cannot alter the
+            # committed subtree during scrolling; only actionable requests
+            # require layout beyond the original visible-scroll traversal.
+            if scroll and all(
+                members <= held_layout.get(owner, set())
+                for owner, members in self._layout_widgets.items()
+            ):
                 exposed_widgets = self._compositor.reflow_visible(
                     self, size, retain_geometry=geometry_targets,
                 )
@@ -1462,14 +1482,7 @@ class Screen(Generic[ScreenResultType], Widget):
                     )
                 else:
                     hidden, shown = self._compositor.reflow(self, size)
-                mutation_roots = self._layout_mutation_roots()
-                self._layout_widgets = {
-                    owner: held for owner, members in self._layout_widgets.items()
-                    if (held := {
-                        member for member in members
-                        if set(member.walk_ancestors(with_self=True)).intersection(mutation_roots)
-                    })
-                } if mutation_roots else {}
+                self._layout_widgets = self._held_layout_requests()
                 Hide = events.Hide
                 Show = events.Show
 

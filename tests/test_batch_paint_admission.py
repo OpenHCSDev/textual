@@ -277,6 +277,31 @@ async def test_partial_publication_keeps_geometry_and_owner_callbacks():
             assert compositor.get_widget_at(1, 1)[0] is original
             assert screen.publications and all(roots == (holder,) for roots in screen.publications)
             assert compositor._dirty_regions
+            # The mount remains a real pending layout request until release.
+            # Scrolling must keep its exact held hit/paint geometry without
+            # turning that deferred request into a full-scene layout.
+            pending_layout = {owner: set(members) for owner, members in screen._layout_widgets.items()}
+            assert any(pending_layout.values())
+            full_map = compositor._full_map
+            for _ in range(2):
+                screen._refresh_layout(scroll=True)
+                assert compositor._visible_map is not None
+                assert compositor._full_map is full_map
+                assert screen._layout_widgets == pending_layout
+                assert compositor.find_widget(holder) == before
+                assert compositor.find_widget(original) == original_geometry
+                assert compositor.get_widget_at(1, 1)[0] is original
+                assert not held_done.is_set() and not parent_done.is_set() and not scene_done.is_set()
+
+            # An independent layout request is actionable even in a scroll
+            # transaction. It must not be hidden by the held request.
+            from textual import messages
+            await screen._on_layout(messages.Layout(sidebar))
+            screen._refresh_layout(scroll=True)
+            assert compositor._visible_map is None
+            assert screen._layout_widgets == pending_layout
+            assert compositor.find_widget(holder) == before
+            assert compositor.find_widget(original) == original_geometry
             compositor._dirty_regions.add(compositor.size.region)
             full_damage = set(compositor._dirty_regions)
             # Reflow still commits geometry while full-screen damage already
