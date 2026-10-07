@@ -91,13 +91,20 @@ class Static(Widget, inherit_bindings=False):
         content from paint rules. Keep their geometry lifetime conservative.
         Do not create or re-render a visual merely to classify a rule mutation.
         """
+        return not self._has_native_content_measurement()
+
+    def _has_native_content_measurement(self) -> bool:
+        """Whether Content's text alone supplies this leaf's intrinsic size."""
         return (
-            type(self).render is not Static.render
-            or type(self).visual is not Static.visual
-            or type(self)._render is not Widget._render
-            or type(self).get_content_width is not Widget.get_content_width
-            or type(self).get_content_height is not Widget.get_content_height
-            or type(self.__dict__.get("_Static__visual")) is not Content
+            type(self).render is Static.render
+            and type(self).visual is Static.visual
+            and type(self)._render is Widget._render
+            and type(self).get_content_width is Widget.get_content_width
+            and type(self).get_content_height is Widget.get_content_height
+            and type(self.__visual) is Content
+            and self._native_box_measurement
+            and self._native_measurement_layout_hooks
+            and not self.is_container
         )
 
     def update(self, content: VisualType = "", *, layout: bool | None = None) -> None:
@@ -115,12 +122,8 @@ class Static(Widget, inherit_bindings=False):
         self.__visual = visualize(self, content, markup=self._render_markup)
         if layout is None:
             layout = not (
-                not self._render_styles_sensitive()
+                self._has_native_content_measurement()
                 and type(previous_visual) is Content
-                and type(self.__visual) is Content
-                and self._native_box_measurement
-                and self._native_measurement_layout_hooks
-                and not self.is_container
                 and previous_visual == self.__visual
             )
         self.refresh(layout=layout)

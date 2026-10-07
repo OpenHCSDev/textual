@@ -74,6 +74,10 @@ async def test_custom_measurement_and_setter_keep_layout_contract():
         def render(self):
             return super().render()
 
+        def _render_styles_sensitive(self):
+            # Style independence does not declare content measurement semantics.
+            return False
+
     class VisualStatic(Static):
         @property
         def visual(self):
