@@ -15,6 +15,58 @@ from textual.widget import Widget
 from textual.widgets import Static
 
 
+async def test_declared_container_selection_publishes_original_measurement_lifetime():
+    from textual._measurement import INDEPENDENT_HEIGHT, NATIVE_WIDGET_HEIGHT, height_dependency
+    from textual.reactive import reactive
+
+    class SelectedContent(Static):
+        show_children = reactive(True, layout=True)
+
+        @property
+        @height_dependency(INDEPENDENT_HEIGHT)
+        def is_container(self):
+            return self.show_children and super().is_container
+
+    class UndeclaredSelection(SelectedContent):
+        @property
+        def is_container(self):
+            return super().is_container
+
+    async with App().run_test() as pilot:
+        selected = SelectedContent("leaf")
+        selected.styles.width = 20
+        selected.styles.height = "auto"
+        child = Static("child")
+        child.styles.height = 7
+        await pilot.app.mount(selected)
+        await selected.mount(child)
+        await pilot.pause()
+        assert selected._native_box_measurement
+        first = box(selected, 10)
+        assert first.height == 7
+        assert box(selected, 30) is first
+        selected.show_children = False
+        leaf = box(selected, 10)
+        assert leaf.height == 1
+        assert leaf is not first
+        assert box(selected, 30) is leaf
+        selected.show_children = True
+        child.styles.height = "1fr"
+        await pilot.pause()
+        assert selected._box_depends_on_available_height()
+        assert selected._has_relative_children_height
+        selected.show_children = False
+        await pilot.pause()
+        assert not selected._has_relative_children_height
+        assert not selected._box_depends_on_available_height()
+
+        unknown = UndeclaredSelection("unknown")
+        assert unknown._native_box_measurement
+        assert unknown._box_depends_on_available_height()
+        assert NATIVE_WIDGET_HEIGHT.depends(unknown)
+        assert NATIVE_WIDGET_HEIGHT.styles_sensitive(selected)
+
+
 async def test_fractional_placement_and_optimal_measurement_keep_distinct_dependencies():
     class HeightReadingWidth(Widget):
         def get_content_width(self, container, viewport):
