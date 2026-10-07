@@ -6,7 +6,7 @@ This module contains the `Reactive` class which implements [reactivity](/guide/r
 from __future__ import annotations
 
 from functools import partial
-from inspect import isawaitable
+from inspect import isawaitable, iscoroutine
 from operator import methodcaller
 from weakref import WeakKeyDictionary
 from typing import (
@@ -81,12 +81,31 @@ class Initialize(Generic[ReactiveType]):
         return self.callback(obj)
 
 
-async def await_watcher(obj: Reactable, awaitable: Awaitable[object]) -> None:
-    """Coroutine to await an awaitable returned from a watcher"""
-    _rich_traceback_omit = True
-    await awaitable
-    # Watcher may have changed the state, so run compute again
-    obj.post_message(events.Callback(callback=partial(Reactive._compute, obj)))
+class WatcherCallback(events.Callback):
+    """Own a watcher's already-created result through deferred delivery."""
+
+    def __init__(self, obj: Reactable, awaitable: Awaitable[object]) -> None:
+        self.obj = obj
+        self.awaitable = awaitable
+        super().__init__(self._await_result)
+
+    async def _await_result(self) -> None:
+        await self.awaitable
+        # Watcher may have changed the state, so run compute again.
+        self.obj.post_message(
+            events.Callback(callback=partial(Reactive._compute, self.obj))
+        )
+
+    def _discard(self) -> None:
+        # A freshly returned coroutine belongs to this deferred delivery.
+        # Tasks / Futures have an independent execution owner; do not cancel
+        # them merely because this callback was never admitted.
+        if iscoroutine(self.awaitable):
+            self.awaitable.close()
+
+    def __rich_repr__(self) -> rich.repr.Result:
+        yield "obj", self.obj
+        yield "awaitable", self.awaitable
 
 
 class _StoredReactiveAccess:
@@ -172,9 +191,7 @@ def invoke_watcher(
             watch_result = cast(WatchCallbackNoArgsType, watch_function)()
         if isawaitable(watch_result):
             # Result is awaitable, so we need to await it within an async context
-            watcher_object.call_next(
-                partial(await_watcher, watcher_object, watch_result)
-            )
+            watcher_object.call_next(WatcherCallback(watcher_object, watch_result))
 
 
 @rich.repr.auto

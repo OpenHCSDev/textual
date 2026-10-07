@@ -552,7 +552,9 @@ class MessagePump(metaclass=_MessagePumpMeta):
         message = events.Callback(callback=partial(callback, *args, **kwargs))
         return self.post_message(message)
 
-    def call_next(self, callback: Callback, *args: Any, **kwargs: Any) -> None:
+    def call_next(
+        self, callback: Callback | events.Callback, *args: Any, **kwargs: Any
+    ) -> None:
         """Schedule a callback to run immediately after processing the current message.
 
         Args:
@@ -561,10 +563,37 @@ class MessagePump(metaclass=_MessagePumpMeta):
             **kwargs: Keyword arguments to pass to the callable.
         """
         assert callback is not None, "Callback must not be None"
-        callback_message = events.Callback(callback=partial(callback, *args, **kwargs))
+        if isinstance(callback, events.Callback):
+            if args or kwargs:
+                raise TypeError("A callback event already owns its arguments")
+            callback_message = callback
+        else:
+            callback_message = events.Callback(callback=partial(callback, *args, **kwargs))
+        if self._closing or self._closed:
+            callback_message._discard()
+            return
         callback_message._prevent.update(self._get_prevented_messages())
         self._next_callbacks.append(callback_message)
         self.check_idle()
+
+    def _discard_next_callbacks(self) -> None:
+        for callback in self.__dict__.pop("_next_callbacks", ()):
+            callback._discard()
+
+    def _discard_pending_messages(self) -> None:
+        """Release undelivered messages after their receiver has stopped."""
+        self._discard_next_callbacks()
+        queue = self.__dict__.get("_message_queue")
+        if queue is not None:
+            while not queue.empty():
+                message = queue.get_nowait()
+                if message is not None:
+                    message._discard()
+
+    def __del__(self) -> None:
+        # Constructor watchers may enqueue work before a widget is mounted.
+        # An abandoned, never-started receiver still owns those deliveries.
+        self._discard_pending_messages()
 
     def _on_invoke_later(self, message: messages.InvokeLater) -> None:
         # Forward InvokeLater message to the Screen
@@ -582,6 +611,7 @@ class MessagePump(metaclass=_MessagePumpMeta):
             return
         self._closing = True
         self._message_pump_closing()
+        self._discard_next_callbacks()
         self._clear_signal_subscriptions()
         Reactive._clear_watch_subscriptions(self)
         if self._timers:
@@ -617,6 +647,7 @@ class MessagePump(metaclass=_MessagePumpMeta):
             self._closing = True
             self._closed = True
             self._message_pump_closing()
+            self._discard_pending_messages()
 
     async def _process_messages(self, **kwargs: Any) -> None:
         """Own the real pump task through subclass startup, dispatch and exit."""
@@ -629,6 +660,7 @@ class MessagePump(metaclass=_MessagePumpMeta):
             # node despite its weak subscriber key. Teardown owns their removal,
             # including cancellation and failed pre-processing.
             self._running = False
+            self._discard_pending_messages()
             self._clear_signal_subscriptions()
             Reactive._clear_watch_subscriptions(self)
             self._task = None
@@ -745,6 +777,7 @@ class MessagePump(metaclass=_MessagePumpMeta):
                 break
             finally:
                 message._complete_dispatch(self, result)
+                message._discard()
                 # Subscription access initializes this optional signal. Do not
                 # allocate its weak-key subscriber machinery for quiet pumps.
                 message_signal = self.__dict__.get("message_signal")
@@ -787,13 +820,17 @@ class MessagePump(metaclass=_MessagePumpMeta):
         """Invoke pending callbacks in next callbacks queue."""
         callbacks = self._next_callbacks.copy()
         self._next_callbacks.clear()
-        for callback in callbacks:
-            try:
-                with self.prevent(*callback._prevent):
-                    await invoke(callback.callback)
-            except Exception as error:
-                self.app._handle_exception(error)
-                break
+        try:
+            for callback in callbacks:
+                try:
+                    with self.prevent(*callback._prevent):
+                        await invoke(callback.callback)
+                except Exception as error:
+                    self.app._handle_exception(error)
+                    break
+        finally:
+            for callback in callbacks:
+                callback._discard()
 
     async def _dispatch_message(self, message: Message) -> Message | None:
         """Dispatch a message received from the message queue.
@@ -1006,8 +1043,10 @@ class MessagePump(metaclass=_MessagePumpMeta):
                 "Message is missing attributes; did you forget to call super().__init__() ?"
             )
         if self._closing or self._closed:
+            message._discard()
             return False
         if not self.check_message_enabled(message):
+            message._discard()
             return False
         # Add a copy of the prevented message types to the message
         # This is so that prevented messages are honoured by the event's handler
