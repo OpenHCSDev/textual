@@ -4943,6 +4943,18 @@ class Widget(DOMNode):
             pass
         return self
 
+    def can_replace_mouse_move(
+        self, event: events.MouseMove, pending: events.MouseMove
+    ) -> bool:
+        """Whether a later captured motion supersedes this absolute position.
+
+        Defaults to ordered delivery. A captured absolute-position control may
+        opt in if intermediate positions, deltas and callbacks are unnecessary.
+        App applies this only to consecutive raw packets in the same gesture;
+        press, release and other messages retain their original ordering.
+        """
+        return False
+
     def capture_mouse(self, capture: bool = True) -> None:
         """Capture (or release) the mouse.
 
