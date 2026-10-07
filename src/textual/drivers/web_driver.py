@@ -17,7 +17,6 @@ import os
 import signal
 import sys
 from codecs import getincrementaldecoder
-from functools import partial
 from pathlib import Path
 from threading import Event, Thread
 from typing import Any, BinaryIO, Literal, TextIO, cast
@@ -60,7 +59,6 @@ class WebDriver(Driver):
         super().__init__(app, debug=debug, mouse=mouse, size=size)
         self.stdout = sys.__stdout__
         self.fileno = sys.__stdout__.fileno()
-        self._write = partial(os.write, self.fileno)
         self.exit_event = Event()
         self._key_thread: Thread = Thread(
             target=self.run_input_thread, name="textual-input"
@@ -74,6 +72,15 @@ class WebDriver(Driver):
     @property
     def is_web(self) -> bool:
         return True
+
+    def _write(self, data: bytes) -> None:
+        """Accept the complete framed packet at the original transport boundary."""
+        remaining = memoryview(data)
+        while remaining:
+            written = os.write(self.fileno, remaining)
+            if not written:
+                raise OSError("Web output write made no progress")
+            remaining = remaining[written:]
 
     def write(self, data: str) -> None:
         """Write string data to the output device, which may be piped to

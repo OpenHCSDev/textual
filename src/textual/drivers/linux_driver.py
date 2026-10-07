@@ -194,9 +194,9 @@ class LinuxDriver(Driver):
         self._writer_thread.write(data)
 
     def call_after_flush(self, callback: Callable[[], None]) -> None:
-        """Observe a flush of all terminal writes queued before this call."""
+        """Publish on the App loop after all earlier terminal writes flush."""
         assert self._writer_thread is not None, "Driver must be in application mode"
-        self._writer_thread.call_after_flush(callback)
+        self._writer_thread.call_after_flush(callback, self._loop)
 
     def start_application_mode(self):
         """Start application mode."""
@@ -406,6 +406,7 @@ class LinuxDriver(Driver):
         """Perform cleanup."""
         if self._writer_thread is not None:
             self._writer_thread.stop()
+            self._writer_thread = None
 
     def _run_input_thread(self) -> None:
         """
