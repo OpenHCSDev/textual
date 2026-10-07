@@ -391,3 +391,46 @@ async def test_partly_covered_widgets_render_only_exposed_rows():
         with patch.object(compositor, "_get_renders", lambda crop=None, render_regions=None, *, widgets: original(crop, widgets=widgets)):
             expected = compositor.render_strips()
         assert actual == expected
+
+
+async def test_screen_membership_reads_do_not_acquire_geometry():
+    """Status is the committed scene; explicit position reads may widen it."""
+    import cProfile
+    from textual.containers import VerticalScroll
+
+    class MembershipApp(App):
+        CSS = "VerticalScroll { height: 3; } Static { height: 1; } #hidden { display: none; }"
+
+        def compose(self):
+            yield VerticalScroll(*(Static(str(index), id=f"row-{index}")
+                                   for index in range(30)))
+            yield Static("hidden", id="hidden")
+
+    app = MembershipApp()
+    detached = Static("detached")
+    assert not detached.is_on_screen
+    async with app.run_test(size=(30, 10)) as pilot:
+        await pilot.pause()
+        compositor = app.screen._compositor
+        compositor.reflow_visible(app.screen, app.screen.size, retain_geometry=())
+        assert compositor._full_map_invalidated
+        hidden = app.query_one("#hidden")
+        last = app.query_one("#row-29")
+        first = app.query_one("#row-0")
+        scene = compositor._published_map
+        assert first in scene and last not in scene and hidden not in scene
+        profile = cProfile.Profile()
+        with profile:
+            for _ in range(40):
+                assert first.is_on_screen
+                assert not last.is_on_screen
+                assert not hidden.is_on_screen
+        assert compositor._published_map is scene
+        assert compositor._full_map_invalidated
+        assert not any(entry.code.co_name == "_arrange_root"
+                       for entry in profile.getstats()
+                       if not isinstance(entry.code, str))
+        # A genuine geometry demand retains the offscreen path in this scene.
+        assert compositor.find_widget(last).virtual_region.y > 0
+        assert last.is_on_screen
+        assert not hidden.is_on_screen
