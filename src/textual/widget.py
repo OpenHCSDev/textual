@@ -1961,16 +1961,18 @@ class Widget(DOMNode):
         revision: tuple[object, ...] = (self._layout_updates,
                     nodes._updates if nodes is not None else 0)
         if self._native_box_measurement:
-            _, content_width, _, styles_only = _local_box_inputs(self)
+            _, content_width, _, styles_only, independent_width = _local_box_inputs(self)
             local_styles = styles_only and (greedy or not content_width)
         else:
             local_styles = False
+            independent_width = False
         if local_styles:
             # Fixed/fill native boxes never query child content. Their source
             # is the original local style owner, not descendant layout epochs.
             styles = self.styles
             revision = (id(styles), styles, styles._cache_key)
-        cache_container, cache_height_fraction = container, height_fraction
+        cache_container = container
+        cache_width_fraction, cache_height_fraction = width_fraction, height_fraction
         independent_height = not self._box_depends_on_available_height()
         if local_styles or independent_height:
             # The class/method/layout declarations proved these two inputs unused.
@@ -1985,6 +1987,11 @@ class Widget(DOMNode):
         if independent_height:
             cache_container = container.with_height(0)
             cache_height_fraction = Fraction(0)
+        if independent_width and not constrain_width:
+            # The native local resolver cannot read these inputs. Keep the
+            # viewport and actual height inputs; only parent width is unused.
+            cache_container = cache_container.with_width(0)
+            cache_width_fraction = Fraction(0)
         if revision != self._box_model_revision:
             # Measurements from previous revisions can never be hit again.
             # Keep width/viewport variants within this revision, rather than
@@ -1997,7 +2004,7 @@ class Widget(DOMNode):
         cache_key = (
             cache_container,
             viewport,
-            width_fraction,
+            cache_width_fraction,
             cache_height_fraction,
             constrain_width,
             greedy,
@@ -4876,7 +4883,7 @@ class Widget(DOMNode):
         self._box_model_cache.clear()
         self.__dict__.pop("_height_dependency_cache", None)
         self.__dict__.pop("_height_arrangement_cache", None)
-        self.__dict__.pop("_height_style_dependency_cache", None)
+        self.__dict__.pop("_box_style_dependency_cache", None)
         self._box_model_revision = None
         self._content_width_cache = (None, 0)
         self._content_height_cache = (None, 0)
