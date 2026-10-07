@@ -53,6 +53,11 @@ class WindowsDriver(Driver):
         assert self._writer_thread is not None, "Driver must be in application mode"
         self._writer_thread.write(data)
 
+    def call_after_flush(self, callback: Callable[[], None]) -> None:
+        """Publish on the App loop after all earlier terminal writes flush."""
+        assert self._writer_thread is not None, "Driver must be in application mode"
+        self._writer_thread.call_after_flush(callback, self._loop)
+
     def _enable_mouse_support(self) -> None:
         """Enable reporting of mouse events."""
         if not self._mouse:
@@ -137,5 +142,6 @@ class WindowsDriver(Driver):
         """Perform cleanup."""
         if self._writer_thread is not None:
             self._writer_thread.stop()
+            self._writer_thread = None
         if self._restore_console:
             self._restore_console()
