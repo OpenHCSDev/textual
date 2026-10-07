@@ -1,0 +1,14 @@
+F..                                                                      [100%]
+=================================== FAILURES ===================================
+_______ test_native_line_measurements_survive_paint_and_retire_on_extent _______
+tests/test_line_surface_style_measurement.py:30: in test_native_line_measurements_survive_paint_and_retire_on_extent
+    assert {widget: widget._layout_updates for widget in originals} == originals
+E   assert {RichLog(): 8...ickness=2): 2} == {RichLog(): 7...ickness=2): 2}
+E     
+E     Omitting 3 identical items, use -vv to show
+E     Differing items:
+E     {RichLog(): 8} != {RichLog(): 7}
+E     Use -v to get more diff
+=========================== short test summary info ============================
+FAILED tests/test_line_surface_style_measurement.py::test_native_line_measurements_survive_paint_and_retire_on_extent
+1 failed, 2 passed in 0.49s

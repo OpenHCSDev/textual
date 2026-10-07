@@ -1,0 +1,12 @@
+.F                                                                       [100%]
+=================================== FAILURES ===================================
+___________ test_custom_extent_and_method_supply_stays_conservative ____________
+tests/test_line_surface_style_measurement.py:63: in test_custom_extent_and_method_supply_stays_conservative
+    assert widget._content_height_dependency.styles_sensitive(widget)
+E   assert False
+E    +  where False = depends(RichLog())
+E    +    where depends = <textual._measurement.StoredVirtualSize object at 0x7f0d126d9be0>.styles_sensitive
+E    +      where <textual._measurement.StoredVirtualSize object at 0x7f0d126d9be0> = RichLog()._content_height_dependency
+=========================== short test summary info ============================
+FAILED tests/test_line_surface_style_measurement.py::test_custom_extent_and_method_supply_stays_conservative
+1 failed, 1 passed in 0.41s
