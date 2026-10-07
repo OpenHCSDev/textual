@@ -114,7 +114,11 @@ def work(
                 "Can not create a worker from a non-async function unless `thread=True` is set on the work decorator."
             )
 
-        debug_description = method.__qualname__ if description is None else description
+        debug_description = (
+            getattr(method, "__qualname__", name or "<worker>")
+            if description is None
+            else description
+        )
 
         @wraps(method)
         def decorated(
