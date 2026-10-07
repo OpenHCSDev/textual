@@ -111,3 +111,28 @@ async def test_direct_pump_retirement_publishes_display_before_detachment():
         assert not parent._has_relative_children_height
         assert child not in parent.displayed_children
         await pilot.pause()
+
+
+async def test_custom_child_selection_has_its_own_live_lifetime():
+    class LiveChildren(VerticalGroup):
+        include_children = True
+
+        @property
+        def children(self):
+            return super().children if self.include_children else ()
+
+    app = App()
+    async with app.run_test() as pilot:
+        leaf = Static("relative")
+        leaf.styles.height = "1fr"
+        child = LiveChildren(leaf)
+        parent = VerticalGroup(child)
+        await app.mount(parent)
+        await pilot.pause()
+        try:
+            for include in (True, False, True):
+                child.include_children = include
+                assert parent._has_relative_children_height is include
+                assert "relative_children" not in parent._height_dependency_answers()
+        finally:
+            child.include_children = True
