@@ -1,6 +1,9 @@
 from fractions import Fraction
 
+import pytest
+
 from textual.app import App
+from textual.widget import NoScreen
 from textual.widgets import Static
 
 
@@ -35,3 +38,27 @@ async def test_ordinary_box_measurement_does_not_acquire_mutation_attachment():
         detached.styles.height = 2
         box = detached._get_box_model(app.size, app.size, Fraction(60), Fraction(20))
         assert (box.width, box.height) == (7, 2)
+
+
+class RefusedScreen(ObservedAttachment):
+    refuse_screen = False
+
+    @property
+    def screen(self):
+        if self.refuse_screen:
+            raise NoScreen("original custom source refused its screen")
+        return super().screen
+
+
+async def test_attached_custom_screen_refusal_is_not_unmounted_measurement():
+    app = App()
+    async with app.run_test() as pilot:
+        widget = RefusedScreen("attached source")
+        await app.mount(widget)
+        await pilot.pause()
+        widget.refuse_screen = True
+        try:
+            with pytest.raises(NoScreen, match="original custom source"):
+                widget._get_box_model(app.size, app.size, Fraction(80), Fraction(24))
+        finally:
+            widget.refuse_screen = False
