@@ -13,6 +13,15 @@ from textual.widget import Widget
 from textual.widgets import Button, Input, Label
 
 
+def test_layout_replacement_preserves_distinct_source_requests():
+    from textual.messages import Layout
+
+    first, second = Widget(), Widget()
+    request = Layout(first)
+    assert request.can_replace(Layout(first))
+    assert not request.can_replace(Layout(second))
+
+
 class ValidWidget(Widget):
     called_by = None
 

@@ -57,7 +57,9 @@ class Layout(Message, verbose=True):
         self.widget = widget
 
     def can_replace(self, message: Message) -> bool:
-        return isinstance(message, Layout)
+        # Screen retains requests by source while a subtree borrows committed
+        # geometry. Another widget's request cannot consume that source.
+        return isinstance(message, Layout) and self.widget is message.widget
 
 
 @rich.repr.auto
