@@ -1,0 +1,84 @@
+{
+  "scope": "source App height queries and authored response geometry, not live frame latency",
+  "tabs": 10,
+  "sweeps": 20,
+  "phases": {
+    "loaded": {
+      "widgets": 568,
+      "seconds": {
+        "original": [
+          0.045427089906297624,
+          0.05181200604420155,
+          0.06757318798918277,
+          0.08904787409119308,
+          0.05424024909734726
+        ],
+        "retained": [
+          0.03314762795343995,
+          0.045864460058510303,
+          0.03516618604771793,
+          0.07208854996133596,
+          0.05582378106191754
+        ]
+      },
+      "median_seconds": {
+        "original": 0.05424024909734726,
+        "retained": 0.045864460058510303
+      },
+      "profile_actual_calls": {
+        "original": {
+          "_has_relative_children_height": 16280,
+          "_relative_children_height": 0,
+          "is_container": 16280
+        },
+        "retained": {
+          "_has_relative_children_height": 11360,
+          "_relative_children_height": 14068,
+          "is_container": 4419
+        }
+      },
+      "answers_equal": true,
+      "geometry_unchanged_during_queries": true
+    },
+    "after_authored_response_burst": {
+      "widgets": 592,
+      "seconds": {
+        "original": [
+          0.05860715894959867,
+          0.05218407104257494,
+          0.05673567100893706,
+          0.0629461359931156,
+          0.07115682295989245
+        ],
+        "retained": [
+          0.053681319928728044,
+          0.04390930093359202,
+          0.045053731999360025,
+          0.05055906006600708,
+          0.04655407601967454
+        ]
+      },
+      "median_seconds": {
+        "original": 0.05860715894959867,
+        "retained": 0.04655407601967454
+      },
+      "profile_actual_calls": {
+        "original": {
+          "_has_relative_children_height": 18680,
+          "_relative_children_height": 0,
+          "is_container": 18840
+        },
+        "retained": {
+          "_has_relative_children_height": 11839,
+          "_relative_children_height": 16380,
+          "is_container": 4126
+        }
+      },
+      "answers_equal": true,
+      "geometry_unchanged_during_queries": true
+    }
+  },
+  "authored_burst_to_idle_seconds": 0.26241247402504086,
+  "inputs": 0,
+  "providers": 0
+}
