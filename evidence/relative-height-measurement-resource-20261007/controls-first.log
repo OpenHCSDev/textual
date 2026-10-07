@@ -1,0 +1,22 @@
+FF.F................                                                     [100%]
+=================================== FAILURES ===================================
+_________ test_native_relative_source_changes_before_idle_and_reparent _________
+tests/test_relative_height_resource.py:20: in test_native_relative_source_changes_before_idle_and_reparent
+    assert first._has_relative_children_height
+E   assert False
+E    +  where False = VerticalGroup()._has_relative_children_height
+__ test_opaque_display_and_container_getters_do_not_retire_with_native_epochs __
+tests/test_relative_height_resource.py:74: in test_opaque_display_and_container_getters_do_not_retire_with_native_epochs
+    assert display_parent._has_relative_children_height is enabled
+E   assert False is True
+E    +  where False = VerticalGroup()._has_relative_children_height
+_______ test_direct_pump_retirement_publishes_display_before_detachment ________
+tests/test_relative_height_resource.py:108: in test_direct_pump_retirement_publishes_display_before_detachment
+    assert parent._has_relative_children_height
+E   assert False
+E    +  where False = VerticalGroup()._has_relative_children_height
+=========================== short test summary info ============================
+FAILED tests/test_relative_height_resource.py::test_native_relative_source_changes_before_idle_and_reparent
+FAILED tests/test_relative_height_resource.py::test_opaque_display_and_container_getters_do_not_retire_with_native_epochs
+FAILED tests/test_relative_height_resource.py::test_direct_pump_retirement_publishes_display_before_detachment
+3 failed, 17 passed in 1.68s
