@@ -189,6 +189,9 @@ async def test_released_pending_layout_resumes_on_its_existing_owner_request():
         async with holder.lock:
             new = Label("RELEASED_SOURCE", id="released")
             await holder.mount(new)
+            # A child source change makes the holder itself a pending owner,
+            # while mount alone may publish only its parent's holder request.
+            new.styles.height = 4
             await pilot.pause()
             assert holder in screen._layout_widgets
             assert not screen._layout_required
