@@ -285,9 +285,10 @@ class ScrollBar(Widget):
         inputs. Select the live instance renderer, including runtime replacement.
         """
         return (
-            type(self).render is not ScrollBar.render
-            or type(self)._render_bar is not ScrollBar._render_bar
-            or type(self)._render is not Widget._render
+            type(self) is not ScrollBar
+            or getattr(self.render, "__func__", None) is not ScrollBar.render
+            or getattr(self._render_bar, "__func__", None) is not ScrollBar._render_bar
+            or getattr(self._render, "__func__", None) is not Widget._render
             or self.renderer is not ScrollBarRender
         )
 
@@ -420,8 +421,9 @@ class ScrollBarCorner(Widget):
     def _render_styles_sensitive(self) -> bool:
         """Original Blank measures width and one row independently of color."""
         return (
-            type(self).render is not ScrollBarCorner.render
-            or type(self)._render is not Widget._render
+            type(self) is not ScrollBarCorner
+            or getattr(self.render, "__func__", None) is not ScrollBarCorner.render
+            or getattr(self._render, "__func__", None) is not Widget._render
         )
 
     def render(self) -> Blank:
