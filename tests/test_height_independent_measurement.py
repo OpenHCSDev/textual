@@ -15,6 +15,47 @@ from textual.widget import Widget
 from textual.widgets import Static
 
 
+async def test_fractional_placement_and_optimal_measurement_keep_distinct_dependencies():
+    class HeightReadingWidth(Widget):
+        def get_content_width(self, container, viewport):
+            return container.height
+
+    async with App().run_test() as pilot:
+        child = HeightReadingWidth()
+        child.styles.width = "1fr"
+        child.styles.height = 3
+        column = VerticalGroup(child)
+        await pilot.app.mount(column)
+        await pilot.pause()
+        assert not child._box_depends_on_available_height(greedy=True)
+        assert child._box_depends_on_available_height(greedy=False)
+        assert not column._arrangement_depends_on_available_height(optimal=False)
+        assert column._arrangement_depends_on_available_height(optimal=True)
+
+        normal = column.arrange(Size(30, 10))
+        assert column.arrange(Size(30, 20)) is normal
+        optimal = column.arrange(Size(30, 10), optimal=True)
+        taller = column.arrange(Size(30, 20), optimal=True)
+        assert optimal.placements[0][1].region.width == 10
+        assert taller.placements[0][1].region.width == 20
+        assert taller is not optimal
+        assert column.arrange(Size(30, 20)) is normal
+        wider = column.arrange(Size(50, 20))
+        assert wider is not normal
+        assert wider.placements[0][1].region.width == 50
+
+        # The same original source publication retires both mode answers.
+        child.styles.width = "auto"
+        assert column._arrangement_depends_on_available_height()
+        changed = column.arrange(Size(30, 20))
+        assert changed is not normal
+        assert changed.placements[0][1].region.width == 20
+        await child.remove()
+        empty = column.arrange(Size(30, 20))
+        assert not empty.placements
+        assert not column._arrangement_depends_on_available_height(optimal=True)
+
+
 async def test_fixed_box_reuses_original_measurement_across_parent_widths():
     async with App().run_test():
         widget = Widget()
