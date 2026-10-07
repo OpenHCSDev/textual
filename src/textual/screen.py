@@ -1176,25 +1176,34 @@ class Screen(Generic[ScreenResultType], Widget):
         )
 
     @property
-    def _refresh_pending(self) -> bool:
-        """Whether the existing scene owners still have an unpainted update."""
+    def _refresh_requested(self) -> bool:
+        """Whether pending screen work requires the timer regardless of damage."""
         return bool(
             self._layout_required
             or self._scroll_required
             or self._repaint_required
             or self._recompose_required
-            or self._dirty_widgets
-            or self._compositor._dirty_regions
+        )
+
+    @property
+    def _refresh_pending(self) -> bool:
+        """Whether the existing scene owners still have an unpainted update."""
+        return bool(
+            self._refresh_requested or self._dirty_widgets or self._compositor._dirty_regions
         )
 
     async def _on_idle(self, event: events.Idle) -> None:
         # Check for any widgets marked as 'dirty' (needs a repaint)
         event.prevent_default()
+        # Borrow only within this synchronous admission. Paint reacquires its
+        # own cohort after queued source/layout work has had a chance to run.
+        roots: tuple[Widget, ...] | None = None
         if not self.app._batch_count and self.is_current:
-            if self._refresh_pending:
+            if self._refresh_requested or self._dirty_widgets:
+                self._update_timer.resume()
+            elif self._compositor._dirty_regions:
                 roots = tuple(root for _, roots in self._prepare_visible_screens() for root in roots)
-                if (self._layout_required or self._scroll_required or self._repaint_required
-                        or self._recompose_required or self._dirty_widgets
+                if (self._refresh_requested or self._dirty_widgets
                         or self._compositor._exclude_regions(
                             self._compositor._dirty_regions,
                             tuple(region for root in roots
@@ -1202,7 +1211,7 @@ class Screen(Generic[ScreenResultType], Widget):
                         )):
                     self._update_timer.resume()
 
-        await self._invoke_and_clear_callbacks()
+        self._invoke_and_clear_callbacks(roots)
 
     def _prepare_compositor_refresh(self) -> tuple[Widget, ...]:
         """Prepare the frame and return original subtrees whose paint is held."""
@@ -1327,8 +1336,7 @@ class Screen(Generic[ScreenResultType], Widget):
             return True
         owner = sender.screen
         for screen in (self, owner) if owner is not self else (self,):
-            if (screen._layout_required or screen._scroll_required or screen._recompose_required
-                    or screen._repaint_required):
+            if screen._refresh_requested:
                 return True
             if any(sender in widget.walk_ancestors(with_self=True)
                    for widget in screen._dirty_widgets):
@@ -1337,13 +1345,15 @@ class Screen(Generic[ScreenResultType], Widget):
                 return True
         return False
 
-    async def _invoke_and_clear_callbacks(self) -> None:
+    def _invoke_and_clear_callbacks(self, roots: tuple[Widget, ...] | None = None) -> None:
         """Admit painted senders back to their own original message pumps."""
         if self.app._batch_count or not self._callbacks:
             return
         # No callback runs during this synchronous admission. Borrow one scene
         # cohort, then let each sender's existing callback handler own execution.
-        roots = tuple(root for _, roots in self._prepare_visible_screens() for root in roots) if self.is_current else ()
+        # None means not acquired; an empty borrowed tuple is a valid cohort.
+        if roots is None:
+            roots = tuple(root for _, roots in self._prepare_visible_screens() for root in roots) if self.is_current else ()
         index = 0
         for _ in range(len(self._callbacks)):
             if self.app._batch_count or index >= len(self._callbacks):
