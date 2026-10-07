@@ -57,7 +57,7 @@ from textual._easing import DEFAULT_SCROLL_EASING
 from textual._extrema import Extrema
 from textual._measurement import (
     CONTEXT_HEIGHT, INDEPENDENT_HEIGHT, NATIVE_WIDGET_HEIGHT, NATIVE_WIDGET_WIDTH,
-    HeightDependency, _arrangement_wrapper_uses_height,
+    HeightDependency, _arrangement_wrapper_uses_height, _local_box_inputs,
     box_depends_on_available_height, height_dependency,
 )
 from textual.message_pump import MessagePump
@@ -531,7 +531,7 @@ class Widget(DOMNode):
         self._repaint_regions: set[Region] = set()
 
         self._box_model_cache: LRUCache[object, tuple[BoxModel, Extrema]] = LRUCache(16)
-        self._box_model_revision: tuple[int | None, ...] | None = None
+        self._box_model_revision: tuple[object, ...] | None = None
 
         # Cache the auto content dimensions
         self._content_width_cache: tuple[object, int] = (None, 0)
@@ -1960,8 +1960,15 @@ class Widget(DOMNode):
         nodes = self.__dict__.get("_nodes")
         revision = (self._layout_updates,
                     nodes._updates if nodes is not None else 0)
+        local_styles = self._native_box_measurement and _local_box_inputs(self)[3]
+        if local_styles:
+            # Fixed/fill native boxes never query child content. Their source
+            # is the original local style owner, not descendant layout epochs.
+            styles = self.styles
+            revision = (id(styles), styles, styles._cache_key)
         cache_container, cache_height_fraction = container, height_fraction
-        if not self._box_depends_on_available_height():
+        independent_height = not self._box_depends_on_available_height()
+        if local_styles or independent_height:
             # The class/method/layout declarations proved these two inputs unused.
             # Include the immediate parent's actual auto-size inputs before idle,
             # and retire prior epochs rather than accumulating stale aliases.
@@ -1971,6 +1978,7 @@ class Widget(DOMNode):
                 parent is not None and parent.styles.is_auto_width,
                 parent is not None and parent.styles.is_auto_height,
             )
+        if independent_height:
             cache_container = container.with_height(0)
             cache_height_fraction = Fraction(0)
         if revision != self._box_model_revision:
@@ -1989,7 +1997,6 @@ class Widget(DOMNode):
             cache_height_fraction,
             constrain_width,
             greedy,
-            *revision,
         )
         if cached_measurement := self._box_model_cache.get(cache_key):
             # Alignment consumes the same original constraints that produced
