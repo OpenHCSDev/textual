@@ -78,11 +78,8 @@ async def test_disabled_editor_batches_offscreen_focus_order():
         # This is the same original synchronous watcher/blur/reset path as a
         # send disabling its focused compose editor. No input is submitted.
         editor.disabled = True
-        assert len(compositor.arrangements) == 1
-        _, visible, retained, _ = compositor.arrangements[0]
-        assert visible and compositor._full_map is full_map
-        assert all(screen.query_one(f"#button-{index}") in retained for index in range(40))
-        assert screen.query_one("#source-39") not in retained
+        assert not compositor.arrangements
+        assert compositor._full_map is full_map
         assert editor.text == "original unsent draft" and screen.focused is not editor
         assert all(compositor._published_map[node] == geometry for node, geometry in committed.items())
 
@@ -92,6 +89,10 @@ async def test_disabled_editor_batches_offscreen_focus_order():
         ]
         assert "editor" not in actual
         assert len(compositor.arrangements) == 1
+        _, visible, retained, _ = compositor.arrangements[0]
+        assert visible and compositor._full_map is full_map
+        assert all(screen.query_one(f"#button-{index}") in retained for index in range(40))
+        assert screen.query_one("#source-39") not in retained
         # Complete geometry gives the same ordering, rather than treating the
         # viewport as the full focus scope or manufacturing missing positions.
         compositor.reflow(screen, app.size)
