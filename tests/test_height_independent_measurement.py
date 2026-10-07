@@ -92,6 +92,51 @@ async def test_custom_extrema_keeps_available_parent_width():
         assert second.width == 70
 
 
+async def test_auto_width_relative_child_keeps_parent_width_expansion():
+    async with App().run_test() as pilot:
+        child = Widget()
+        # Fraction is retained as a relative unit by the inline declaration.
+        # Inline percentages are normalized to WIDTH by ScalarProperty.
+        child.styles.width = "1fr"
+        child.styles.height = 1
+        parent = VerticalGroup(child)
+        parent.styles.width = "auto"
+        parent.styles.height = 3
+        await pilot.app.mount(parent)
+        await child._mounted_event.wait()
+        assert child in parent.children
+        assert parent._has_relative_children_width
+        first = parent._get_box_model(
+            Size(30, 10), Size(120, 40), Fraction(30), Fraction(10)
+        )
+        second = parent._get_box_model(
+            Size(50, 10), Size(120, 40), Fraction(50), Fraction(10)
+        )
+        assert first.width == 30
+        assert second.width == 50
+        assert first is not second
+
+
+async def test_custom_auto_height_keeps_independent_parent_width_input():
+    class WidthMeasuredHeight(Widget):
+        def get_content_height(self, container, viewport, width):
+            return container.width * 2
+
+    async with App().run_test():
+        widget = WidthMeasuredHeight()
+        widget.styles.width = 12
+        widget.styles.height = "auto"
+        first = widget._get_box_model(
+            Size(30, 10), Size(120, 40), Fraction(30), Fraction(10)
+        )
+        second = widget._get_box_model(
+            Size(50, 10), Size(120, 40), Fraction(50), Fraction(10)
+        )
+        assert first.height == 60
+        assert second.height == 100
+        assert first is not second
+
+
 def box(widget, height, *, width=40, greedy=True):
     return widget._get_box_model(Size(width, height), widget.app.size,
                                  Fraction(width), Fraction(height), greedy=greedy)

@@ -47,3 +47,22 @@ Results: `/home/ts/.cache/agent-scratch/native-parent-width-20261007/`
 (`native.log`, `app.stdout.log`, `app.stderr.log`, `drag01/result.json`).
 The original fixture owns private cleanup. Exact child birth records were not
 collected. No installed or live qualification is implied by the source App.
+
+## Auto-content review
+
+The published predicate already requires `styles_only`, which excludes both
+auto width and auto height. It also excludes fractional width. Therefore an
+independent-width answer implies no width-content call and `local_styles=True`
+for both greedy modes. Custom auto-height measurement cannot receive the
+normalized width key. No production correction or extra guard was added.
+
+Two additional real native controls passed: auto width with a genuinely relative
+`1fr` child expands from 30 to 50; a custom auto-height method reading parent
+width returns 60 then 100. Both keep distinct measurement resources.
+`auto-content-review.log` retains the custom-height pass and first invalid
+auto-width setup; `auto-width-mounted-review.log` retains the explicit refusal
+of that setup. Inline `50%` is normalized to Unit.WIDTH by ScalarProperty and
+does not enter the original relative-child expansion predicate. The corrected
+control uses the original fractional declaration and awaits child mount before
+asserting that required relation; `auto-width-relative-declaration-review.log`
+records its pass (0.41s). No accepted drag App was repeated.
