@@ -1,0 +1,40 @@
+{
+  "scope": "source Toad App recursive height queries, not burst/frame latency",
+  "widgets": 568,
+  "tabs": 10,
+  "sweeps_per_trial": 20,
+  "seconds": {
+    "original": [
+      0.05167253699619323,
+      0.04497357609216124,
+      0.043833934934809804,
+      0.0542515879496932,
+      0.04973278904799372
+    ],
+    "membership_first": [
+      0.0633440789533779,
+      0.04001189791597426,
+      0.04056658991612494,
+      0.048753642942756414,
+      0.04791633493732661
+    ]
+  },
+  "median_seconds": {
+    "original": 0.04973278904799372,
+    "membership_first": 0.04791633493732661
+  },
+  "profiles": {
+    "original": {
+      "is_container_seconds": 0.012723577,
+      "relative_height_seconds": 0.15487751200000002
+    },
+    "membership_first": {
+      "is_container_seconds": 0.013725005,
+      "relative_height_seconds": 0.006692936
+    }
+  },
+  "all_relative_answers_equal": true,
+  "geometry_unchanged": true,
+  "inputs": 0,
+  "providers": 0
+}
