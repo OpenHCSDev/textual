@@ -94,8 +94,8 @@ def work(
         exit_on_error: Exit the app if the worker raises an error. Set to `False` to suppress exceptions.
         exclusive: Cancel all workers in the same group.
         description: Readable description of the worker for debugging purposes.
-            By default, it uses a string representation of the decorated method
-            and its arguments.
+            By default, it uses the decorated method's qualified name, without
+            formatting its arguments.
         thread: Mark the method as a thread worker.
     """
 
@@ -114,6 +114,8 @@ def work(
                 "Can not create a worker from a non-async function unless `thread=True` is set on the work decorator."
             )
 
+        debug_description = method.__qualname__ if description is None else description
+
         @wraps(method)
         def decorated(
             *args: DecoratorParamSpec.args, **kwargs: DecoratorParamSpec.kwargs
@@ -124,18 +126,6 @@ def work(
             self = args[0]
             assert isinstance(self, DOMNode)
 
-            if description is not None:
-                debug_description = description
-            else:
-                try:
-                    positional_arguments = ", ".join(repr(arg) for arg in args[1:])
-                    keyword_arguments = ", ".join(
-                        f"{name}={value!r}" for name, value in kwargs.items()
-                    )
-                    tokens = [positional_arguments, keyword_arguments]
-                    debug_description = f"{method.__name__}({', '.join(token for token in tokens if token)})"
-                except Exception:
-                    debug_description = "<worker>"
             worker = cast(
                 "Worker[ReturnType]",
                 self.run_worker(
