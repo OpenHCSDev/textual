@@ -1960,8 +1960,11 @@ class Widget(DOMNode):
         nodes = self.__dict__.get("_nodes")
         revision: tuple[object, ...] = (self._layout_updates,
                     nodes._updates if nodes is not None else 0)
-        inputs = _local_box_inputs(self) if self._native_box_measurement else None
-        local_styles = inputs is not None and inputs[3] and (greedy or not inputs[1])
+        if self._native_box_measurement:
+            _, content_width, _, styles_only = _local_box_inputs(self)
+            local_styles = styles_only and (greedy or not content_width)
+        else:
+            local_styles = False
         if local_styles:
             # Fixed/fill native boxes never query child content. Their source
             # is the original local style owner, not descendant layout epochs.

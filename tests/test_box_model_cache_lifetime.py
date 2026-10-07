@@ -167,3 +167,57 @@ async def test_fractional_width_is_local_only_for_greedy_native_boxes():
         greedy = measured(True)
         widget.update('another changed line')
         assert measured(True) is greedy
+
+
+async def test_custom_scalar_keeps_descendant_measurement_source():
+    from textual.css.scalar import Scalar, Unit
+    leaf = Static('source')
+    leaf.styles.height = 2
+
+    class ChildWidth(Scalar):
+        def resolve(self, size, viewport, fraction_unit=Fraction(1)):
+            return Fraction(leaf.styles.height.value)
+
+    app = App()
+    async with app.run_test() as pilot:
+        container = Widget(leaf)
+        container.styles.width = ChildWidth(1.0, Unit.CELLS, Unit.WIDTH)
+        container.styles.height = 4
+        await app.mount(container)
+        await pilot.pause()
+        fraction = Fraction(1)
+        def measured():
+            return container._get_box_model(Size(80, 20), app.size, fraction, fraction)
+        assert measured().width == 2
+        leaf.styles.height = 8
+        assert measured().width == 8
+
+
+async def test_custom_style_getter_keeps_descendant_measurement_source():
+    from textual.css.scalar import Scalar
+    from textual.css.styles import RenderStyles
+
+    class ChildStyles(RenderStyles):
+        @property
+        def width(self):
+            return Scalar.from_number(self.node.children[0].styles.height.value)
+
+    app = App()
+    async with app.run_test() as pilot:
+        leaf = Static('source')
+        leaf.styles.height = 2
+        container = Widget(leaf)
+        container.styles.height = 4
+        await app.mount(container)
+        await pilot.pause()
+        original = container.styles
+        container.styles = ChildStyles(container, original.base, original.inline)
+        fraction = Fraction(1)
+        def measured():
+            return container._get_box_model(Size(80, 20), app.size, fraction, fraction)
+        try:
+            assert measured().width == 2
+            leaf.styles.height = 8
+            assert measured().width == 8
+        finally:
+            container.styles = original

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Callable, TypeVar
 
 from textual.css.scalar import Scalar, Unit
 from textual.css.styles import RenderStyles
+from textual.geometry import Spacing
 
 if TYPE_CHECKING:
     from textual.widget import Widget
@@ -266,7 +267,12 @@ def _local_box_inputs(widget: Widget) -> tuple[bool, bool, bool, bool]:
                 width, height, min_width, max_width, min_height, max_height,
             ))
             and (width is None or not width.is_auto)
-            and (height is None or not height.is_auto),
+            and (height is None or not height.is_auto)
+            and all(type(spacing) is Spacing and all(
+                type(cell) in (int, bool) for cell in spacing
+            ) for spacing in (styles.margin, styles.padding))
+            and all(type(edge) is tuple and type(edge[0]) is str
+                    for edge in styles.border),
         )
     widget._height_style_dependency_cache = revision, result
     return result
