@@ -388,7 +388,7 @@ class MessagePump(metaclass=_MessagePumpMeta):
         message = await self._message_queue.get()
 
         if message is None:
-            if not self._closing:
+            if not (self._closing or self._closed):
                 self._on_closing()
             self._closed = True
             raise MessagePumpClosed("The message pump is now closed")
@@ -409,7 +409,7 @@ class MessagePump(metaclass=_MessagePumpMeta):
         except QueueEmpty:
             return None
         if message is None:
-            if not self._closing:
+            if not (self._closing or self._closed):
                 self._on_closing()
             self._closed = True
             raise MessagePumpClosed("The message pump is now closed")
