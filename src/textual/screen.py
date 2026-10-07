@@ -1418,6 +1418,8 @@ class Screen(Generic[ScreenResultType], Widget):
 
     def _held_layout_requests(self) -> dict[DOMNode, set[Widget]]:
         """Borrow pending requests whose subtree still owns committed geometry."""
+        if not self._layout_widgets:
+            return {}
         mutation_roots = self._layout_mutation_roots()
         return {
             owner: held for owner, members in self._layout_widgets.items()
