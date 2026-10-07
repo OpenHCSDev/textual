@@ -231,14 +231,14 @@ def height_dependency(policy: HeightDependency) -> Callable[[Function], Function
     return decorate
 
 
-def _local_box_inputs(widget: Widget) -> tuple[bool, bool, bool, bool]:
+def _local_box_inputs(widget: Widget) -> tuple[bool, bool, bool, bool, bool]:
     """Resolve local scalar dependencies once per owning style generation."""
     styles = widget.styles
     if type(styles) is not RenderStyles:
-        return True, False, False, False
+        return True, False, False, False, False
     # Retain the actual source so replacement cannot reuse an unrelated epoch.
     revision = id(styles), styles, styles._cache_key
-    cached = widget.__dict__.get("_height_style_dependency_cache")
+    cached = widget.__dict__.get("_box_style_dependency_cache")
     if cached is not None and cached[0] == revision:
         return cached[1]
     width, height = styles.width, styles.height
@@ -249,20 +249,14 @@ def _local_box_inputs(widget: Widget) -> tuple[bool, bool, bool, bool]:
             # Compile this check at the style-plan boundary, not each cache hit.
             # A custom scalar resolver need not obey its nominal unit's inputs.
             if type(scalar).resolve is not Scalar.resolve:
-                result = (True, False, False, False)
+                result = (True, False, False, False, False)
                 break
             unit = scalar.percent_unit if scalar.unit is Unit.PERCENT else scalar.unit
             if unit is Unit.HEIGHT:
-                result = (True, False, False, False)
+                result = (True, False, False, False, False)
                 break
     else:
-        result = (
-            height is None or height.is_fraction
-            or (min_height is not None and min_height.is_fraction)
-            # Non-cell max heights have a zero-height auto-parent exception.
-            or (max_height is not None and not max_height.is_cells),
-            width is not None and (width.is_auto or width.is_fraction),
-            height is not None and height.is_auto,
+        styles_only = (
             all(scalar is None or type(scalar) is Scalar for scalar in (
                 width, height, min_width, max_width, min_height, max_height,
             ))
@@ -272,9 +266,30 @@ def _local_box_inputs(widget: Widget) -> tuple[bool, bool, bool, bool]:
                 type(cell) in (int, bool) for cell in spacing
             ) for spacing in (styles.margin, styles.padding))
             and all(type(edge) is tuple and type(edge[0]) is str
-                    for edge in styles.border),
+                    for edge in styles.border)
         )
-    widget._height_style_dependency_cache = revision, result
+        independent_width = (
+            styles_only
+            and width is not None
+            # Fill, percentages and fractions still read available width.
+            and all(scalar is None or (
+                (scalar.percent_unit if scalar.unit is Unit.PERCENT else scalar.unit)
+                not in (Unit.WIDTH, Unit.FRACTION)
+            ) for scalar in (width, height, min_width, max_width, min_height, max_height))
+            # Non-cell max widths have a zero-width auto-parent exception.
+            and (max_width is None or max_width.is_cells)
+        )
+        result = (
+            height is None or height.is_fraction
+            or (min_height is not None and min_height.is_fraction)
+            # Non-cell max heights have a zero-height auto-parent exception.
+            or (max_height is not None and not max_height.is_cells),
+            width is not None and (width.is_auto or width.is_fraction),
+            height is not None and height.is_auto,
+            styles_only,
+            independent_width,
+        )
+    widget._box_style_dependency_cache = revision, result
     return result
 
 
@@ -282,7 +297,7 @@ def box_depends_on_available_height(widget: Widget) -> bool:
     """Conservative proof for the native box resolver, including its extrema."""
     if not widget._native_box_measurement:
         return True
-    depends, content_width, content_height, _ = _local_box_inputs(widget)
+    depends, content_width, content_height, _, _ = _local_box_inputs(widget)
     if depends:
         return True
     if content_width and widget._content_width_dependency.depends(widget):

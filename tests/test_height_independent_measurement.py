@@ -15,6 +15,128 @@ from textual.widget import Widget
 from textual.widgets import Static
 
 
+async def test_fixed_box_reuses_original_measurement_across_parent_widths():
+    async with App().run_test():
+        widget = Widget()
+        widget.styles.width = 12
+        widget.styles.height = 3
+        widget.styles.padding = (1, 2)
+        widget.styles.margin = (2, 1)
+        widget.styles.min_width = 8
+        widget.styles.max_width = 20
+        first = widget._get_box_model(Size(30, 10), Size(120, 40), Fraction(30), Fraction(10))
+        second = widget._get_box_model(Size(70, 10), Size(120, 40), Fraction(70), Fraction(10))
+        assert first is second
+        assert len(widget._box_model_cache) == 1
+        widget.styles.width = 14
+        changed = widget._get_box_model(Size(70, 10), Size(120, 40), Fraction(70), Fraction(10))
+        assert changed.width != first.width
+
+
+@pytest.mark.parametrize("width,height", [(None, 3), ("50%", 3), ("1fr", 3), (12, "50w")])
+async def test_available_width_inputs_keep_distinct_box_measurements(width, height):
+    async with App().run_test():
+        widget = Widget()
+        widget.styles.width = width
+        widget.styles.height = height
+        first = widget._get_box_model(Size(30, 20), Size(120, 40), Fraction(30), Fraction(20))
+        second = widget._get_box_model(Size(70, 20), Size(120, 40), Fraction(70), Fraction(20))
+        assert first != second
+
+
+async def test_fixed_box_constrain_width_and_viewport_remain_inputs():
+    async with App().run_test():
+        widget = Widget()
+        widget.styles.width = 50
+        widget.styles.height = 3
+        narrow = widget._get_box_model(Size(20, 10), Size(120, 40), Fraction(20), Fraction(10), constrain_width=True)
+        wide = widget._get_box_model(Size(70, 10), Size(120, 40), Fraction(70), Fraction(10), constrain_width=True)
+        assert narrow.width == 20
+        assert wide.width == 50
+        widget.styles.width = "10vw"
+        first = widget._get_box_model(Size(30, 10), Size(100, 40), Fraction(30), Fraction(10))
+        second = widget._get_box_model(Size(70, 10), Size(200, 40), Fraction(70), Fraction(10))
+        assert first.width == 10
+        assert second.width == 20
+
+
+async def test_noncell_width_limit_keeps_original_zero_width_parent_exception():
+    async with App().run_test() as pilot:
+        child = Widget()
+        child.styles.width = 30
+        child.styles.height = 3
+        child.styles.max_width = "10vw"
+        parent = VerticalGroup(child)
+        parent.styles.width = "auto"
+        await pilot.app.mount(parent)
+        first = child._get_box_model(Size(0, 10), Size(120, 40), Fraction(0), Fraction(10))
+        second = child._get_box_model(Size(70, 10), Size(120, 40), Fraction(70), Fraction(10))
+        assert first.width == 30
+        assert second.width == 12
+
+
+async def test_custom_extrema_keeps_available_parent_width():
+    from textual._extrema import Extrema
+
+    class WidthSizedExtrema(Widget):
+        def _resolve_extrema(self, container, viewport, width_fraction, height_fraction):
+            return Extrema(min_width=Fraction(container.width))
+
+    async with App().run_test():
+        widget = WidthSizedExtrema()
+        widget.styles.width = 12
+        widget.styles.height = 3
+        first = widget._get_box_model(Size(30, 10), Size(120, 40), Fraction(30), Fraction(10))
+        second = widget._get_box_model(Size(70, 10), Size(120, 40), Fraction(70), Fraction(10))
+        assert first.width == 30
+        assert second.width == 70
+
+
+async def test_auto_width_relative_child_keeps_parent_width_expansion():
+    async with App().run_test() as pilot:
+        child = Widget()
+        # Fraction is retained as a relative unit by the inline declaration.
+        # Inline percentages are normalized to WIDTH by ScalarProperty.
+        child.styles.width = "1fr"
+        child.styles.height = 1
+        parent = VerticalGroup(child)
+        parent.styles.width = "auto"
+        parent.styles.height = 3
+        await pilot.app.mount(parent)
+        await child._mounted_event.wait()
+        assert child in parent.children
+        assert parent._has_relative_children_width
+        first = parent._get_box_model(
+            Size(30, 10), Size(120, 40), Fraction(30), Fraction(10)
+        )
+        second = parent._get_box_model(
+            Size(50, 10), Size(120, 40), Fraction(50), Fraction(10)
+        )
+        assert first.width == 30
+        assert second.width == 50
+        assert first is not second
+
+
+async def test_custom_auto_height_keeps_independent_parent_width_input():
+    class WidthMeasuredHeight(Widget):
+        def get_content_height(self, container, viewport, width):
+            return container.width * 2
+
+    async with App().run_test():
+        widget = WidthMeasuredHeight()
+        widget.styles.width = 12
+        widget.styles.height = "auto"
+        first = widget._get_box_model(
+            Size(30, 10), Size(120, 40), Fraction(30), Fraction(10)
+        )
+        second = widget._get_box_model(
+            Size(50, 10), Size(120, 40), Fraction(50), Fraction(10)
+        )
+        assert first.height == 60
+        assert second.height == 100
+        assert first is not second
+
+
 def box(widget, height, *, width=40, greedy=True):
     return widget._get_box_model(Size(width, height), widget.app.size,
                                  Fraction(width), Fraction(height), greedy=greedy)
