@@ -265,7 +265,7 @@ def _local_box_inputs(widget: Widget) -> tuple[bool, bool, bool, bool]:
             all(scalar is None or type(scalar) is Scalar for scalar in (
                 width, height, min_width, max_width, min_height, max_height,
             ))
-            and (width is None or not (width.is_auto or width.is_fraction))
+            and (width is None or not width.is_auto)
             and (height is None or not height.is_auto),
         )
     widget._height_style_dependency_cache = revision, result

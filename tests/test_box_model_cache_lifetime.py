@@ -18,6 +18,7 @@ async def test_obsolete_measurement_revisions_are_released_without_losing_width_
         def measured(width):
             return widget._get_box_model(Size(width, 20), app.size, fraction, fraction)
 
+        previous_models = ()
         for index in range(12):
             widget.update("changed paragraph " * (index + 1))
             widget.styles.padding = (0, index % 3)
@@ -25,10 +26,12 @@ async def test_obsolete_measurement_revisions_are_released_without_losing_width_
             models = {width: measured(width) for width in widths}
             for width, model in models.items():
                 assert measured(width) is model, "Same-revision width result should remain reusable"
-            expected = (widget._layout_updates, widget._geometry_revision, widget._nodes._updates)
-            assert all(key[-3:] == expected for key in widget._box_model_cache.keys()), (
-                "Unreachable previous-generation box models retained", list(widget._box_model_cache.keys())
-            )
+            assert not any(
+                widget._box_model_cache.get(key)[0] is previous
+                for key in tuple(widget._box_model_cache.keys())
+                for previous in previous_models
+            ), "Unreachable previous-generation box models retained"
+            previous_models = tuple(models.values())
 
 
 async def test_ancestor_measurements_remain_correct_after_child_layout_changes():
@@ -41,12 +44,18 @@ async def test_ancestor_measurements_remain_correct_after_child_layout_changes()
         await pilot.pause()
         before = container._layout_updates
         old_height = container.size.height
+        fraction = Fraction(1)
+        old_box = container._get_box_model(Size(80, 20), app.size, fraction, fraction)
         leaf.update("line\n" * 12)
         await pilot.pause()
         assert container._layout_updates > before
         assert container.size.height > old_height
-        key = (container._layout_updates, container._geometry_revision, container._nodes._updates)
-        assert all(entry[-3:] == key for entry in container._box_model_cache.keys())
+        new_box = container._get_box_model(Size(80, 20), app.size, fraction, fraction)
+        assert new_box.height > old_box.height
+        assert not any(
+            container._box_model_cache.get(key)[0] is old_box
+            for key in tuple(container._box_model_cache.keys())
+        )
 
 
 async def test_cached_box_return_restores_its_original_alignment_constraints():
@@ -78,3 +87,83 @@ async def test_cached_box_return_restores_its_original_alignment_constraints():
         arrangement = parent.arrange(Size(40, 20))
         placement = next(entry for _, entry in arrangement.placements if entry.widget is child)
         assert placement.region.x == 18
+
+
+async def test_fixed_box_retains_local_source_while_children_change():
+    app = App()
+    async with app.run_test() as pilot:
+        leaf = Static('first')
+        container = Widget(leaf)
+        container.styles.width = 20
+        container.styles.height = 4
+        await app.mount(container)
+        await pilot.pause()
+        fraction = Fraction(1)
+        def measured():
+            return container._get_box_model(Size(80, 20), app.size, fraction, fraction)
+        first = measured()
+        revision = container._layout_updates
+        leaf.styles.height = 12
+        assert container._layout_updates > revision
+        assert measured() is first
+        added = Static('added')
+        await container.mount(added)
+        assert measured() is first
+        await added.remove()
+        assert measured() is first
+        container.styles.padding = 1
+        assert measured() is not first
+        assert measured().width == 20
+        container.styles.width = 30
+        assert measured().width == 30
+        assert container._get_box_model(Size(80, 20), app.size, fraction, fraction,
+            constrain_width=True).width == 30
+
+
+async def test_replaced_native_style_source_does_not_reuse_equal_epoch():
+    app = App()
+    async with app.run_test() as pilot:
+        first, replacement = Widget(), Widget()
+        first.styles.width = 20
+        first.styles.height = 4
+        replacement.styles.width = 30
+        replacement.styles.height = 4
+        await app.mount(first, replacement)
+        await pilot.pause()
+        assert first.styles._cache_key == replacement.styles._cache_key
+        fraction = Fraction(1)
+        def measured():
+            return first._get_box_model(Size(80, 20), app.size, fraction, fraction)
+        assert measured().width == 20
+        original = first.styles
+        first.styles = replacement.styles
+        try:
+            assert measured().width == 30
+        finally:
+            first.styles = original
+        assert measured().width == 20
+
+
+async def test_fractional_width_is_local_only_for_greedy_native_boxes():
+    app = App()
+    async with app.run_test() as pilot:
+        widget = Static('first')
+        widget.styles.width = '1fr'
+        widget.styles.height = 4
+        await app.mount(widget)
+        await pilot.pause()
+        fraction = Fraction(30)
+        def measured(greedy):
+            return widget._get_box_model(Size(80, 20), app.size, fraction, fraction,
+                                        greedy=greedy)
+        greedy = measured(True)
+        intrinsic = measured(False)
+        widget.update('a substantially longer original line')
+        changed = measured(False)
+        assert changed.width > intrinsic.width
+        assert measured(True) == greedy
+        # After switching measurement sources, acquire the fixed/fractional
+        # source again; subsequent content mutations need not retire it.
+        greedy = measured(True)
+        widget.update('another changed line')
+        assert measured(True) is greedy
