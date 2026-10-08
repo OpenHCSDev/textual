@@ -221,6 +221,67 @@ async def test_released_pending_layout_resumes_on_its_existing_owner_request():
         assert not app._exception
 
 
+async def test_released_layout_fences_queued_callbacks_before_idle():
+    app = IndependentApp()
+    completed = asyncio.Event()
+    admitted = asyncio.Event()
+    order: list[str] = []
+    async with app.run_test(size=(40, 8)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        original = app.query_one("#original")
+        holder = app.query_one(HeldVertical)
+        transaction = screen.preserve_layout(holder)
+        entered = asyncio.Event()
+
+        async def enter() -> None:
+            await transaction.__aenter__()
+            entered.set()
+
+        def complete() -> None:
+            assert asyncio.current_task() is original.task
+            order.append("completion")
+            completed.set()
+
+        screen.call_later(enter)
+        await asyncio.wait_for(entered.wait(), 2)
+        # A genuine geometry-only refresh leaves no paint damage to mask
+        # the pending layout fence. The sender still awaits that request.
+        original.refresh(repaint=False, layout=True)
+        original.call_after_refresh(complete)
+        await pilot.pause()
+        assert screen._layout_widgets
+        assert not screen._refresh_pending
+        assert any(sender is original for _, sender in screen._callbacks)
+
+        def queued_admission() -> None:
+            assert asyncio.current_task() is screen.task
+            assert screen._layout_widgets and not screen._layout_mutation_roots()
+            screen._invoke_and_clear_callbacks()
+            assert screen._layout_required
+            assert any(sender is original for _, sender in screen._callbacks)
+            order.append("queued admission")
+            admitted.set()
+
+        screen.screen_layout_refresh_signal.subscribe(
+            app, lambda _: order.append("layout")
+        )
+
+        async def release() -> None:
+            # Enter and release on the same native pump. Its ordinary callback
+            # message owns this release and queues admission before Idle.
+            await transaction.__aexit__(None, None, None)
+            order.append("message")
+            screen.call_next(queued_admission)
+
+        screen.call_later(release)
+        await asyncio.wait_for(admitted.wait(), 2)
+        await asyncio.wait_for(completed.wait(), 2)
+        assert order[:2] == ["message", "queued admission"]
+        assert order.index("layout") < order.index("completion")
+        assert not screen._layout_widgets and not app._exception
+
+
 @pytest.mark.parametrize("held", [False, True])
 async def test_idle_shares_acquired_roots_and_paint_reacquires(held):
     from textual import events

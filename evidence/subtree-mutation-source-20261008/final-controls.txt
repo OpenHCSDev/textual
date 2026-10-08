@@ -1,0 +1,69 @@
+......F......                                                            [100%]
+=================================== FAILURES ===================================
+____ test_held_original_ancestry_honors_a_nested_self_painting_owner[True] _____
+
+screen_overlay = True
+
+    @pytest.mark.parametrize("screen_overlay", [False, True])
+    async def test_held_original_ancestry_honors_a_nested_self_painting_owner(screen_overlay):
+        from textual.content import Content
+    
+        class HeldGroup(VerticalGroup):
+            CACHE_SUBTREE_GEOMETRY = True
+    
+            def arrange(self, size, optimal=False):
+                assert self not in self.screen._layout_mutation_roots(), "Read changing child topology"
+                return super().arrange(size, optimal=optimal)
+    
+        class ContentBody(Static):
+            # This application declares a native child view for its initial text
+            # and a self-painted view when it acquires its actual Content resource.
+            @property
+            def is_container(self):
+                return not isinstance(self.content, Content)
+    
+        holder = HeldGroup(id="holder")
+    
+        class ChangingChild(Static):
+            def render_lines(self, crop):
+                assert not holder.lock.is_locked, "Read changing descendant paint"
+                return super().render_lines(crop)
+    
+        body = ContentBody("INITIAL_NATIVE_PARENT", id="content-body")
+        old = ChangingChild("OLD_NATIVE_CHILD")
+        if screen_overlay:
+            old.styles.overlay = "screen"
+    
+        class ContentScreen(TargetedScreen):
+            CSS = "#content-body { height: 18; } Static { height: 2; }"
+    
+            def compose(self):
+                with VerticalScroll(id="history"):
+                    yield holder
+    
+        app = App()
+        async with app.run_test(size=(40, 10)) as pilot:
+            screen = ContentScreen()
+            screen.targets = (holder,)
+            await app.push_screen(screen)
+            await holder.mount(body)
+            await body.mount(old)
+            await pilot.pause()
+            compositor = screen._compositor
+            resource = compositor.acquire_subtree_geometry(holder).source
+            assert resource.contains(old)
+            assert resource.captured_parent(old) is body
+            async with app.screen.preserve_layout(holder):
+                body.update(Content("\n".join(["ACQUIRED_ROOT_PAINT"] * 18)))
+                await body.mount(ChangingChild("UNCOMMITTED_DESCENDANT"))
+                screen.query_one("#history").scroll_to(y=4, animate=False, immediate=True)
+                await pilot.pause()
+                assert compositor._subtree_geometry[holder] is resource
+>               assert old not in compositor._published_map
+E               AssertionError: assert ChangingChild() not in {ChangingChild(): MapGeometry(region=Region(x=0, y=0, width=38, height=2), order=((1, 0, 0),), clip=Region(x=0, y=0, w...10), virtual_region=Region(x=38, y=0, width=2, height=10), dock_gutter=Spacing(top=0, right=0, bottom=0, left=0)), ...}
+E                +  where {ChangingChild(): MapGeometry(region=Region(x=0, y=0, width=38, height=2), order=((1, 0, 0),), clip=Region(x=0, y=0, w...10), virtual_region=Region(x=38, y=0, width=2, height=10), dock_gutter=Spacing(top=0, right=0, bottom=0, left=0)), ...} = <Compositor size=Size(width=40, height=10) widgets={ContentBody(id='content-body'), HeldGroup(id='holder'), ContentScreen(), ChangingChild(), VerticalScroll(id='history')}>._published_map
+
+tests/test_viewport_geometry_targets.py:473: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_viewport_geometry_targets.py::test_held_original_ancestry_honors_a_nested_self_painting_owner[True]
+1 failed, 12 passed in 3.38s

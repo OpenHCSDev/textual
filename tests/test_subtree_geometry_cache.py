@@ -258,6 +258,7 @@ async def test_nested_source_expansion_borrows_original_held_child_before_siblin
             incoming = Static("NEW_UNCOMMITTED_CHILD")
             await child.mount(incoming)
             await pilot.pause()
+            assert compositor.acquire_subtree_geometry(original) is None
             expanded = compositor.acquire_subtree_geometry(history)
             assert expanded is not None and expanded.source.complete
             assert expanded.source.contains(original)

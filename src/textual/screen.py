@@ -1243,7 +1243,7 @@ class Screen(Generic[ScreenResultType], Widget):
         if not self._layout_required and self._has_actionable_layout_requests(
             self._held_layout_requests()
         ):
-            self._layout_required = True
+            self._request_layout()
         if not self.app._batch_count and self.is_current:
             if self._refresh_requested or self._dirty_widgets:
                 self._update_timer.resume()
@@ -1413,9 +1413,16 @@ class Screen(Generic[ScreenResultType], Widget):
             # That publication does not complete the mutating sender's work.
             # Acquire source custody once for this synchronous admission,
             # separately from the original paint-readiness roots.
-            roots = (*roots, *(root
-                for screen in (*self.app._background_screens, self)
-                for root in screen._layout_mutation_roots()))
+            for screen in (*self.app._background_screens, self):
+                mutation_sources = screen._layout_mutation_roots()
+                roots = (*roots, *mutation_sources)
+                # A queued next callback may run before Idle following source
+                # release. Retained requests must fence that admission too.
+                screen._request_layout(
+                    screen._has_actionable_layout_requests(
+                        screen._held_layout_requests(mutation_sources)
+                    )
+                )
         index = 0
         for _ in range(len(self._callbacks)):
             if self.app._batch_count or index >= len(self._callbacks):
@@ -1478,11 +1485,14 @@ class Screen(Generic[ScreenResultType], Widget):
         """Additional native geometry required by a viewport-layout transaction."""
         return ()
 
-    def _held_layout_requests(self) -> dict[DOMNode, set[Widget]]:
+    def _held_layout_requests(
+        self, mutation_roots: Iterable[Widget] | None = None,
+    ) -> dict[DOMNode, set[Widget]]:
         """Borrow pending requests whose subtree still owns committed geometry."""
         if not self._layout_widgets:
             return {}
-        mutation_roots = self._layout_mutation_roots()
+        if mutation_roots is None:
+            mutation_roots = self._layout_mutation_roots()
         return {
             owner: held for owner, members in self._layout_widgets.items()
             if (held := {
@@ -1619,6 +1629,11 @@ class Screen(Generic[ScreenResultType], Widget):
                 break
             widget = ancestor
 
+        # Next callbacks can follow this message before Idle; record the
+        # original pending layout intent before their sender admission.
+        self._request_layout(
+            self._has_actionable_layout_requests(self._held_layout_requests())
+        )
         self.check_idle()
 
     async def _on_update_scroll(self, message: messages.UpdateScroll) -> None:

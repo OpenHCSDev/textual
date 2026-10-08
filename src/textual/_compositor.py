@@ -1361,11 +1361,23 @@ class Compositor:
                 else:
                     # Placed, resized or missing sources cannot authorize a
                     # projection. Keep their exact committed hit/paint bounds.
+                    snapshot = held[widget]
+                    if resource is not None and resource.complete:
+                        # A changed destination refuses translation, not the
+                        # original source's membership and self-paint lifetime.
+                        # Filter the committed rectangles along captured parent
+                        # edges; never infer ancestry from the changing DOM.
+                        snapshot = dict(
+                            resource._paint_entries(
+                                ((node, geometry) for node, geometry in snapshot.items()
+                                 if resource.contains(node)),
+                                source_held=True,
+                            )
+                        )
                     if capturing_source:
                         # The published fallback is a partial placed source,
                         # not an invented complete or translatable subtree.
                         # Keep that lending scope on the same child edge.
-                        snapshot = held[widget]
                         partial_key = SubtreeGeometryKey.from_widget(
                             widget, virtual_region, region, order, layer_order,
                             clip.region, visible, dock_gutter, size, True,
@@ -1379,9 +1391,12 @@ class Compositor:
                             source, partial_key, clip, source_held=True
                         )
                     else:
-                        for node, geometry in held[widget].items():
+                        for node, geometry in snapshot.items():
                             store_geometry(node, geometry, RootSceneClip(geometry.clip))
-                        widgets.update(held[widget])
+                        widgets.update(snapshot)
+                    # The filtered original membership replaces this held
+                    # fallback; the outer merge must not resurrect old children.
+                    held[widget].clear()
                 return
             explicit_root = capture_root and widget is root
             cache_source = bool(self.max_subtree_geometry_entries and widget.CACHE_SUBTREE_GEOMETRY)
@@ -1699,6 +1714,15 @@ class Compositor:
         """
         geometry = self._get_published_geometry(root)
         if geometry is None or self._arranging:
+            return None
+        # An enclosing held source owns this original member. Acquiring a new
+        # descendant scope would read its changing DOM; the containing source
+        # does not retain every descendant's independent arrangement inputs.
+        # Expansion to an unmodified ancestor remains a complete acquisition.
+        if any(
+            owner is not root and placement is not None and placement.source.contains(root)
+            for owner, placement in root.screen._layout_mutation_roots().items()
+        ):
             return None
         _, _, placement = self._arrange_root(
             root, self.size, visible_only=False, root_geometry=geometry,
