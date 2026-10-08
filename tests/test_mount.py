@@ -197,3 +197,28 @@ async def test_unawaited_mount_does_not_hold_parent_wheel_delivery():
         await pilot.pause()
         assert child.is_mounted
         assert child in app.screen._compositor.widgets
+
+
+async def test_completion_admission_applies_to_each_distinct_operation():
+    """Shared admission runs without borrowing another operation's constructor."""
+    from textual.await_complete import AwaitComplete
+
+    admissions = []
+    app = App()
+    async with app.run_test():
+        child = Widget()
+        mounting = app.mount(child)
+        mounting.set_pre_await_callback(lambda: admissions.append("mount"))
+        assert await mounting is None
+        removing = child.remove()
+        removing.set_pre_await_callback(lambda: admissions.append("remove"))
+        assert await removing is None
+        completed = AwaitComplete.nothing()
+        completed.set_pre_await_callback(lambda: admissions.append("group"))
+        assert await completed is None
+        assert mounting.is_done and removing.is_done and completed.is_done
+        # Explicit and scheduled receipt consumers each run admission. The
+        # completion itself still publishes once, regardless of waiter count.
+        assert admissions[0] == "mount"
+        assert "remove" in admissions
+        assert admissions[-1] == "group"

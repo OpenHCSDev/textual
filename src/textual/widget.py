@@ -5,7 +5,7 @@ This module contains the `Widget` class, the base class for all widgets.
 
 from __future__ import annotations
 
-from asyncio import gather, shield
+from asyncio import Task, create_task, gather, shield
 from collections import Counter
 from contextlib import asynccontextmanager
 from fractions import Fraction
@@ -14,10 +14,10 @@ from types import TracebackType
 from typing import (
     TYPE_CHECKING,
     AsyncGenerator,
+    Awaitable,
     Callable,
     ClassVar,
     Collection,
-    Generator,
     Iterable,
     Mapping,
     NamedTuple,
@@ -51,7 +51,6 @@ from textual import constants, errors, events, messages
 from textual._animator import DEFAULT_EASING, Animatable, BoundAnimator, EasingFunction
 from textual._arrange import DockArrangeResult, arrange
 from textual._context import NoActiveAppError
-from textual.await_complete import AwaitComplete
 from textual._dispatch_key import dispatch_key
 from textual._easing import DEFAULT_SCROLL_EASING
 from textual._extrema import Extrema
@@ -65,7 +64,7 @@ from textual.message_pump import MessagePump
 from textual._styles_cache import StylesCache
 from textual._types import AnimationLevel
 from textual.actions import SkipAction
-from textual.await_complete import AwaitComplete
+from textual.await_complete import AwaitComplete, AwaitCompletion
 from textual.await_remove import AwaitRemove
 from textual.box_model import BoxModel
 from textual.cache import FIFOCache, LRUCache
@@ -132,7 +131,7 @@ _MOUSE_EVENTS_ALLOW_IF_DISABLED = (
 
 
 @rich.repr.auto
-class AwaitMount(AwaitComplete):
+class AwaitMount(AwaitCompletion):
     """An *optional* awaitable returned by [mount][textual.widget.Widget.mount] and [mount_all][textual.widget.Widget.mount_all].
 
     Example:
@@ -142,9 +141,10 @@ class AwaitMount(AwaitComplete):
     """
 
     def __init__(self, parent: Widget, widgets: Sequence[Widget]) -> None:
+        super().__init__()
         self._parent = parent
         self._widgets = widgets
-        super().__init__(self._finish())
+        self._future: Task[None] = create_task(self._finish(), name="complete mount")
 
     def __rich_repr__(self) -> rich.repr.Result:
         yield "parent", self._parent
@@ -162,10 +162,13 @@ class AwaitMount(AwaitComplete):
                 except NoScreen:
                     pass
 
-    def __await__(self) -> Generator[None, None, None]:
+    def _start(self) -> Task[None]:
+        return self._future
+
+    def _await(self) -> Awaitable[None]:
         # Cancelling an optional caller cannot cancel registered child startup
         # or its completion publication to other callers / the parent.
-        return shield(self._future).__await__()
+        return shield(self._future)
 
 
 class _Styled:
