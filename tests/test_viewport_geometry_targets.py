@@ -71,11 +71,77 @@ async def test_capture_admits_original_complete_paint_cohort_and_refuses_hidden_
 
         result = compositor.render_subtree_strips(body, current, admit=admit)
         assert result is not None
-        size, strips = result
+        size, bands = result
+        strips = [strip for band in bands for strip in band]
         assert size == current.region.size
         assert len(strips) == size.height
         assert not any("PAINT_" in row.text or "HIDDEN_RESOURCE" in row.text for row in strips)
         assert any("Session details" in row.text for row in strips)
+        assert compositor._render_geometry is None
+
+
+async def test_banded_capture_releases_geometry_for_input_and_unrelated_paint():
+    from textual.geometry import Region
+
+    class PaintedRows(Static):
+        def __init__(self):
+            super().__init__("\n".join(f"ROW_{row:02} 界" for row in range(37)))
+            self.crops = []
+
+        def render_lines(self, crop):
+            self.crops.append(crop)
+            return super().render_lines(crop)
+
+    body = PaintedRows()
+    status = Static("INPUT_0", id="status")
+
+    class CaptureScreen(Screen):
+        CSS = "#status { height: 1; } VerticalScroll { height: 1fr; }"
+
+        def _use_viewport_layout(self):
+            return True
+
+        def compose(self):
+            yield status
+            with VerticalScroll():
+                yield body
+
+    class CaptureApp(App):
+        received = 0
+
+        def on_key(self, event):
+            if event.key == "a":
+                self.received += 1
+                status.update(f"INPUT_{self.received}")
+
+    app = CaptureApp()
+    async with app.run_test(size=(40, 8)) as pilot:
+        await app.push_screen(CaptureScreen())
+        await pilot.pause()
+        compositor = app.screen._compositor
+        _, placement = next(compositor.published_geometry((body,)))
+        published = compositor._published_map
+        body.crops.clear()
+        size, bands = compositor.render_subtree_strips(body, placement, admit=lambda participants: True)
+        assert body.crops == []  # Acquisition does not paint the complete body.
+        assert compositor._published_map is published
+        assert compositor._render_geometry is None
+
+        rows = []
+        for band in bands:
+            assert 0 < len(band) <= app.size.height
+            assert compositor._render_geometry is None
+            rows.extend(band)
+            if len(rows) < size.height:
+                # Real key delivery and visible paint may complete while the
+                # original offscreen capture still owns unfinished rows.
+                await pilot.press("a")
+                assert f"INPUT_{app.received}" in compositor.render_strips()[0].text
+                assert compositor.find_widget(status).region == Region(0, 0, 40, 1)
+        assert app.received == 4
+        assert len(rows) == size.height == 37
+        assert [row.text.rstrip() for row in rows] == [f"ROW_{row:02} 界" for row in range(37)]
+        assert all(crop.height <= app.size.height for crop in body.crops)
         assert compositor._render_geometry is None
 
 
@@ -161,7 +227,8 @@ async def test_complete_markdown_capture_keeps_offscreen_table_keylines():
         assert tables[-1] not in compositor._published_map
         _, placement = next(compositor.published_geometry((body,)))
         published = compositor._full_map, compositor._visible_map
-        _, strips = compositor.render_subtree_strips(body, placement, admit=lambda participants: True)
+        _, bands = compositor.render_subtree_strips(body, placement, admit=lambda participants: True)
+        strips = [strip for band in bands for strip in band]
         rows = [strip.text for strip in strips]
         for index in range(12):
             row = next(row for row in rows if f"TABLE_{index:02}" in row)
@@ -512,7 +579,8 @@ async def test_complete_cached_body_keeps_capture_and_explicit_reader_geometry()
             assert rows[235] not in {node for _, node in candidates}
             assert len(candidates) < len(resource.geometry)
             # Capture remains complete without replacing the published viewport.
-            size, strips = compositor.render_subtree_strips(body, placement, admit=lambda participants: True)
+            size, bands = compositor.render_subtree_strips(body, placement, admit=lambda participants: True)
+            strips = [strip for band in bands for strip in band]
             assert size.height == 240
             assert all(f"Original row {index}" in strip.text
                        for index, strip in enumerate(strips))
@@ -635,7 +703,8 @@ async def test_body_capture_descendants_use_original_arrangement_and_screen_coor
             return render_lines(crop)
 
         with patch.object(compositor, "_arrange_root", side_effect=arrange_body), patch.object(row, "render_lines", side_effect=render_row):
-            size, strips = compositor.render_subtree_strips(body, placement, admit=lambda participants: True)
+            size, bands = compositor.render_subtree_strips(body, placement, admit=lambda participants: True)
+            strips = [strip for band in bands for strip in band]
         assert size == bounds.size
         assert len(strips) == size.height
         assert all(strip.cell_length == size.width for strip in strips)
@@ -666,7 +735,8 @@ async def test_body_capture_descendants_use_original_arrangement_and_screen_coor
             return render_lines(crop)
 
         with patch.object(compositor, "_arrange_root", side_effect=arrange_body), patch.object(row, "render_lines", side_effect=render_with_hidden_query):
-            compositor.render_subtree_strips(body, placement, admit=lambda participants: True)
+            _, bands = compositor.render_subtree_strips(body, placement, admit=lambda participants: True)
+            tuple(bands)
         assert scoped_misses
         assert compositor._render_geometry is None
         assert compositor._full_map is published[0]
@@ -676,7 +746,8 @@ async def test_body_capture_descendants_use_original_arrangement_and_screen_coor
         # ordinary screen queries with their original publication.
         with patch.object(row, "render_lines", side_effect=ValueError("render failed")):
             try:
-                compositor.render_subtree_strips(body, placement, admit=lambda participants: True)
+                _, bands = compositor.render_subtree_strips(body, placement, admit=lambda participants: True)
+                tuple(bands)
             except ValueError as error:
                 assert str(error) == "render failed"
             else:

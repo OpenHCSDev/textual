@@ -212,7 +212,8 @@ async def test_body_capture_keeps_original_nonzero_row_coordinates():
         body = app.query_one("#body")
         [(original, placement)] = list(compositor.published_geometry([body]))
         assert placement.region.y == 4
-        size, strips = compositor.render_subtree_strips(original, placement, admit=lambda participants: True)
+        size, bands = compositor.render_subtree_strips(original, placement, admit=lambda participants: True)
+        strips = [strip for band in bands for strip in band]
         assert size == Size(12, 3)
         assert [strip.text.rstrip() for strip in strips] == ["ABC界DEF", "SECOND_ROW", "THIRD_ROW"]
 
@@ -232,7 +233,8 @@ async def test_body_capture_keeps_original_nonzero_row_coordinates():
         paint = compositor._paint_regions(compositor._ordered_geometry(geometry), placement.region)
         assert paint[body] == (placement.region, placement.region)
         assert compositor._cuts_for_regions(placement.region, paint) == [[-2, 10]] * 3
-        size, strips = compositor.render_subtree_strips(original, placement, admit=lambda participants: True)
+        size, bands = compositor.render_subtree_strips(original, placement, admit=lambda participants: True)
+        strips = [strip for band in bands for strip in band]
         assert size == Size(12, 3)
         assert [strip.text.rstrip() for strip in strips] == ["ABC界DEF", "SECOND_ROW", "THIRD_ROW"]
 

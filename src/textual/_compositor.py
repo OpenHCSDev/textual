@@ -2102,7 +2102,7 @@ class Compositor:
     def render_subtree_strips(
         self, root: Widget, root_geometry: MapGeometry, *,
         admit: Callable[[Mapping[Widget, tuple[Region, Region]]], bool],
-    ) -> tuple[Size, list[Strip]] | None:
+    ) -> tuple[Size, Iterator[list[Strip]]] | None:
         """Paint a body using its borrowed original published placement.
 
         The caller acquires the placement from published_geometry and consumes
@@ -2116,6 +2116,13 @@ class Compositor:
         children. It may refuse capture when those participants' resources are
         unavailable. Admission and painting borrow the same geometry; no second
         DOM walk or arrangement chooses another capture cohort.
+
+        The returned iterator paints viewport-height bands. A preceding-source
+        writer may drain it synchronously; a retirement task may yield between
+        bands. The caller retains and validates its original source witness
+        before advancing and before committing the complete result. Geometry
+        lending ends before each band is returned, so ordinary input and frame
+        publication never borrow a suspended capture's private arrangement.
         """
         bounds = root_geometry.region
         geometry, _ = self._arrange_root(
@@ -2125,10 +2132,24 @@ class Compositor:
         with self._using_geometry(root, geometry):
             if not admit(widgets):
                 return None
-            cuts = self._cuts_for_regions(bounds, widgets)
-            chops = self._render_chops(bounds, self._regions_to_spans((bounds,)),
-                                      widgets=widgets, cuts=cuts, bounds=bounds)
-        return bounds.size, [Strip.join(chop.values()) for chop in chops]
+        band_height = max(1, self.size.height)
+
+        def render_bands() -> Iterator[list[Strip]]:
+            for y in range(bounds.y, bounds.bottom, band_height):
+                band = Region(bounds.x, y, bounds.width, min(band_height, bounds.bottom - y))
+                participants = {
+                    widget: (region, paint)
+                    for widget, (region, original_paint) in widgets.items()
+                    if (paint := original_paint.intersection(band))
+                }
+                with self._using_geometry(root, geometry):
+                    cuts = self._cuts_for_regions(band, participants)
+                    chops = self._render_chops(band, self._regions_to_spans((band,)),
+                                              widgets=participants, cuts=cuts, bounds=band)
+                    strips = [Strip.join(chop.values()) for chop in chops]
+                yield strips
+
+        return bounds.size, render_bands()
 
     def _render_chops(
         self,
