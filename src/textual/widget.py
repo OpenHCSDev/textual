@@ -4903,12 +4903,13 @@ class Widget(DOMNode):
                     self.call_later(self.update_node_styles)
                 if self._scroll_required:
                     self._scroll_required = False
-                    if not self._layout_required:
-                        if self.styles.keyline[0] != "none":
-                            # TODO: Feels like a hack
-                            # Perhaps there should be an explicit mechanism for backgrounds to refresh when scrolled?
-                            self._set_dirty()
-                        screen.post_message(messages.UpdateScroll())
+                    if self.styles.keyline[0] != "none":
+                        # A keyline's background follows its content scroll.
+                        self._set_dirty()
+                    # Layout sources may be held at the screen. Preserve the
+                    # independent scroll intent; Screen owns whether actionable
+                    # sources require full layout or only visible reflow.
+                    screen.post_message(messages.UpdateScroll())
                 if self._repaint_required:
                     self._repaint_required = False
                     if self.display:
