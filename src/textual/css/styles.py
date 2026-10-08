@@ -514,7 +514,7 @@ class StylesBase:
     """Padding added to left and right of lines."""
 
     pointer: StringEnumProperty[PointerShape] = StringEnumProperty(
-        VALID_POINTER, "default", pointer=True
+        VALID_POINTER, "default", pointer=True, geometry=False
     )
     """Set the pointer (cursor) shape when the mouse is over this widget.
     
