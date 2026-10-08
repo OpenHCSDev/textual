@@ -170,6 +170,7 @@ async def test_grid_reuses_only_when_outer_measurement_is_not_called(unused_axis
             parent.styles.grid_columns = "auto"
         else:
             parent.styles.grid_rows = "auto"
+            child.styles.height = "auto"
         dependent = parent.arrange(Size(40, 10))
         assert parent.arrange(Size(40, 100)) is not dependent
         assert parent.arrange(Size(40, 100)).placements != dependent.placements
