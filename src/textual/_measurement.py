@@ -211,20 +211,32 @@ class GridHeight(FlowHeight):
                 or any(_scalar_uses_height(row, height_fraction=True) for row in rows)
                 or any(_scalar_uses_height(column) for column in columns)):
             return True
+        auto_rows = not rows or any(row.is_auto for row in rows)
+        auto_columns = any(column.is_auto for column in columns)
         for child in widget.displayed_children:
             child_styles = child.styles
             # Auto cells pass the outer size directly to content measurement
             # and extrema. Final boxes/offsets receive the already-resolved cell
             # size, so fractional child boxes are safe once tracks are proven.
-            if child._content_height_dependency.depends(child):
-                return True
-            if child._content_width_dependency.depends(child):
-                return True
-            if any(scalar is not None and _scalar_uses_height(scalar) for scalar in (
-                child_styles.min_width, child_styles.max_width,
-                child_styles.min_height, child_styles.max_height,
-            )):
-                return True
+            # Only auto tracks ask for content or resolve extrema against the
+            # incoming outer size. Fixed/fractional columns and fixed rows
+            # resolve their cell sizes first; final child boxes read those cell
+            # sizes, not the outer height. An unused custom measurement must
+            # not make measurement and placement arrange the same grid twice.
+            if auto_rows and child_styles.row_span == 1:
+                if child._content_height_dependency.depends(child):
+                    return True
+                if any(scalar is not None and _scalar_uses_height(scalar) for scalar in (
+                    child_styles.min_height, child_styles.max_height,
+                )):
+                    return True
+            if auto_columns and child_styles.column_span == 1:
+                if child._content_width_dependency.depends(child):
+                    return True
+                if any(scalar is not None and _scalar_uses_height(scalar) for scalar in (
+                    child_styles.min_width, child_styles.max_width,
+                )):
+                    return True
         return False
 
 
