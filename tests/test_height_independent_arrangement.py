@@ -132,6 +132,49 @@ async def test_grid_auto_track_extrema_keep_outer_height_dependency(field, value
         assert parent.arrange(Size(40, 100)) is not first
 
 
+@pytest.mark.parametrize("unused_axis", ["width", "height"])
+async def test_grid_reuses_only_when_outer_measurement_is_not_called(unused_axis):
+    class WidthFromHeight(Static):
+        def get_content_width(self, container, viewport):
+            return container.height
+
+    class HeightFromHeight(Static):
+        def get_content_height(self, container, viewport, width):
+            return container.height
+
+    app = App()
+    async with app.run_test(size=(80, 24)) as pilot:
+        child = (WidthFromHeight if unused_axis == "width" else HeightFromHeight)(
+            "wrapping text " * 10
+        )
+        child.styles.width = "1fr"
+        child.styles.height = "auto" if unused_axis == "width" else 2
+        parent = VerticalGroup(child)
+        parent.styles.layout = "grid"
+        parent.styles.height = "auto"
+        parent.styles.grid_columns = "1fr"
+        parent.styles.grid_rows = "auto" if unused_axis == "width" else "2"
+        await app.mount(parent)
+        await pilot.pause()
+
+        first = parent.arrange(Size(40, 10))
+        assert parent.arrange(Size(40, 100)) is first
+        # Reuse must agree with a fresh original placement, not just its key.
+        parent._clear_arrangement_cache()
+        assert parent.arrange(Size(40, 100)).placements == first.placements
+        assert parent.arrange(Size(30, 100)) is not first
+
+        # The exact same custom method becomes a real outer-size input as
+        # soon as the corresponding auto track actually calls it.
+        if unused_axis == "width":
+            parent.styles.grid_columns = "auto"
+        else:
+            parent.styles.grid_rows = "auto"
+        dependent = parent.arrange(Size(40, 10))
+        assert parent.arrange(Size(40, 100)) is not dependent
+        assert parent.arrange(Size(40, 100)).placements != dependent.placements
+
+
 async def test_local_style_projection_covers_all_raw_mutation_boundaries():
     app = App()
     async with app.run_test() as pilot:
