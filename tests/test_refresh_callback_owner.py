@@ -8,6 +8,61 @@ from textual.screen import Screen
 from textual.widgets import Static
 
 
+@pytest.mark.parametrize("request", ["layout", "scroll"])
+async def test_frame_preserves_requests_from_its_layout_publication(request):
+    class FrameApp(App):
+        def compose(self):
+            child = Static("native source", id="source")
+            child.styles.width = 10
+            child.styles.height = 40
+            yield child
+
+    app = FrameApp()
+
+    async def drive(pilot):
+        await pilot.pause()
+        screen = app.screen
+        source = app.query_one("#source")
+        received = asyncio.Event()
+
+        def request_next_frame(_screen):
+            screen.screen_layout_refresh_signal.unsubscribe(source)
+            if request == "layout":
+                source.styles.width = 20
+                screen.refresh(layout=True)
+            else:
+                screen.scroll_to(y=2, animate=False, immediate=True, force=True)
+
+        screen.screen_layout_refresh_signal.subscribe(
+            source, request_next_frame, immediate=True
+        )
+        screen.refresh(layout=True)
+        screen._on_timer_update()
+        # The completed geometry is still the first frame. Its subscriber
+        # requested independent work through the original native owner.
+        if request == "layout":
+            assert source.region.width == 10
+            assert screen._layout_required
+        else:
+            assert screen.scroll_y == 2
+            assert screen._scroll_required
+        assert screen._refresh_pending
+        screen.call_after_refresh(received.set)
+        await asyncio.wait_for(received.wait(), 5)
+        if request == "layout":
+            assert source.region.width == 20
+        else:
+            assert source.region.y == -2
+        assert not screen._refresh_pending
+        app.exit()
+
+    await asyncio.wait_for(
+        app.run_async(headless=True, size=(40, 8), auto_pilot=drive), 10
+    )
+    assert app._exception is None
+    assert app._task is None
+
+
 @pytest.mark.parametrize("sender_kind", ["app", "widget"])
 async def test_async_sender_callback_does_not_borrow_screen_task(sender_kind):
     """A suspended sender cannot own another sender's paint or callbacks."""
