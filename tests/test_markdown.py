@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Iterator
 
@@ -40,6 +41,62 @@ class MarkdownApp(App[None]):
 
     def compose(self) -> ComposeResult:
         yield FussyMarkdown(self._markdown)
+
+
+@pytest.mark.parametrize("parked", [False, True])
+async def test_stream_empty_stop_joins_without_publication(parked):
+    appends = []
+
+    class ObservedMarkdown(Markdown):
+        async def append(self, fragment):
+            appends.append(fragment)
+            await super().append(fragment)
+
+    document = ObservedMarkdown()
+    async with App().run_test() as pilot:
+        await pilot.app.mount(document)
+        stream = document.get_stream(document)
+        task = stream._task
+        if parked:
+            await asyncio.sleep(0)
+        await stream.stop()
+        assert appends == []
+        assert task.done() and not task.cancelled()
+        assert stream._task is None and stream._stopped
+        await stream.stop()
+        with pytest.raises(RuntimeError):
+            await stream.write("late")
+
+
+async def test_stream_stop_drains_real_append_before_propagating_caller_cancellation():
+    entered = asyncio.Event()
+    release = asyncio.Event()
+
+    class HeldMarkdown(Markdown):
+        async def append(self, fragment):
+            entered.set()
+            await release.wait()
+            await super().append(fragment)
+
+    document = HeldMarkdown()
+    async with App().run_test() as pilot:
+        await pilot.app.mount(document)
+        stream = document.get_stream(document)
+        await stream.write("first\n\n")
+        await entered.wait()
+        await stream.write("second")
+        worker = stream._task
+        stopping = asyncio.create_task(stream.stop())
+        await asyncio.sleep(0)
+        stopping.cancel()
+        await asyncio.sleep(0)
+        assert not stopping.done()
+        release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await stopping
+        assert worker.done() and not worker.cancelled()
+        assert stream._task is None and stream._stopped
+        assert document._markdown == "first\n\nsecond"
 
 
 async def test_document_supplies_inline_content_for_heading_paragraph_and_table():

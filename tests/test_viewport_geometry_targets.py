@@ -8,6 +8,58 @@ from textual.screen import Screen
 from textual.widgets import Static
 
 
+def test_borrowed_geometry_routes_preserve_membership_ancestry_and_assignment_order():
+    from types import MappingProxyType
+
+    from textual._compositor import (
+        IntrinsicSubtreeGeometry, PlacedSubtreeGeometry, RootSceneClip,
+        SubtreeGeometryKey, SubtreeGeometryPlacement, SubtreeMapGeometry,
+    )
+    from textual.geometry import Offset, Region, Size, Spacing
+    from textual.map_geometry import MapGeometry
+
+    root, first, second, shared, logical, invisible, unrelated = (
+        Static(name) for name in ("root", "first", "second", "shared", "logical", "invisible", "unrelated")
+    )
+    bounds = Region(0, 0, 20, 10)
+    clip = RootSceneClip(bounds)
+    key = SubtreeGeometryKey(0, 0, bounds, bounds, (), 0, bounds, True,
+                            Spacing(), bounds.size, False, Offset(), ())
+
+    def placed(y):
+        region = Region(0, y, 5, 1)
+        return MapGeometry(region, (), bounds, region.size, region.size, region, Spacing())
+
+    def source(owner, y):
+        return IntrinsicSubtreeGeometry(
+            key, MappingProxyType({
+                owner: (0, SubtreeMapGeometry(placed(y), (), None)),
+                shared: (1, SubtreeMapGeometry(placed(y + 1), (), owner)),
+            }), frozenset((owner, shared, logical)), frozenset((invisible,)),
+        )
+
+    first_source, second_source = source(first, 0), source(second, 5)
+    resource = PlacedSubtreeGeometry(
+        key, MappingProxyType({
+            first: (0, SubtreeGeometryPlacement(first_source, key, clip, root)),
+            second: (1, SubtreeGeometryPlacement(second_source, key, clip, root)),
+            root: (2, placed(9)),
+        }), frozenset((root,)), frozenset(),
+    )
+    assert resource.contains(shared)
+    assert logical in set(resource.members()) and not resource.contains(logical)
+    assert invisible in set(resource.members(invisible=True)) and not resource.contains(invisible)
+    assert not resource.contains(unrelated)
+    assert resource._geometry_routes[shared] == (first, second)
+    assert resource.captured_parent(shared) is first
+    assert resource.captured_parent(first) is root
+    published, clips = {}, {}
+    resource.project_into(published, key, clip, clips, root, visible_only=True,
+                          retained={shared, unrelated}, bounds=Region(30, 30, 1, 1))
+    assert published[shared] == placed(6)
+    assert unrelated not in published
+
+
 async def test_complete_markdown_capture_keeps_offscreen_table_keylines():
     from textual.widgets import Markdown
     from textual.widgets._markdown import MarkdownTableContent
