@@ -92,13 +92,14 @@ class AwaitComplete:
     @property
     def is_done(self) -> bool:
         """`True` if the task has completed."""
-        return self._future.done()
+        return self._start().done()
 
     @property
     def exception(self) -> BaseException | None:
         """An exception if the awaitables failed."""
-        if self._future.done():
-            return self._future.exception()
+        completion = self._start()
+        if completion.done():
+            return completion.exception()
         return None
 
     @classmethod
