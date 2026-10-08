@@ -94,7 +94,7 @@ from textual.await_complete import AwaitComplete
 from textual.await_remove import AwaitRemove
 from textual.binding import Binding, BindingsMap, BindingType, Keymap
 from textual.command import CommandListItem, CommandPalette, Provider, SimpleProvider
-from textual.compose import compose
+from textual.compose import compose_async
 from textual.content import Content
 from textual.css.errors import StylesheetError
 from textual.css.query import NoMatches
@@ -3567,7 +3567,7 @@ class App(Generic[ReturnType], DOMNode):
         _rich_traceback_omit = True
         self._compose_screen = self.screen
         try:
-            widgets = [*self.screen._nodes, *compose(self)]
+            widgets = [*self.screen._nodes, *await compose_async(self)]
         except TypeError as error:
             raise TypeError(
                 f"{self!r} compose() method returned an invalid result; {error}"
@@ -3591,7 +3591,7 @@ class App(Generic[ReturnType], DOMNode):
         try:
             async with self.screen.batch():
                 await self.screen.query("*").exclude(".-textual-system").remove()
-                await self.screen.mount_all(compose(self))
+                await self.screen.mount_all(await compose_async(self))
         except ScreenStackError:
             pass
 
