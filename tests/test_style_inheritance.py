@@ -67,17 +67,23 @@ async def test_text_style_inheritance():
 
     class InheritanceApp(App):
         def compose(self) -> ComposeResult:
-            yield Button("button1")
+            yield Button("button1", id="initial-focus")
             yield FocusableThing()
             yield Button("button2")
 
     app = InheritanceApp()
     async with app.run_test() as pilot:
+        # Headless startup does not promise application-focus admission.
+        # Establish the starting widget before testing the Tab transition.
+        initial_focus = app.query_one("#initial-focus", Button)
+        initial_focus.focus()
         await pilot.pause()
+        assert app.focused is initial_focus
         child = app.query_one("#child-of-focusable-thing")
         assert child.rich_style.bold
         assert not child.rich_style.reverse
         await pilot.press("tab")
         await pilot.pause()
+        assert app.focused is app.query_one(FocusableThing)
         assert child.rich_style.bold
         assert child.rich_style.reverse
