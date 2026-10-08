@@ -271,3 +271,39 @@ async def test_collapsible_title_reactive_change():
         assert get_title(collapsible).label == "Old title"
         collapsible.title = "New title"
         assert get_title(collapsible).label == "New title"
+
+
+async def test_parent_title_publishes_supplied_value_and_styled_changes():
+    class WatchedCollapsible(Collapsible):
+        def __init__(self, **kwargs):
+            self.publications = []
+            super().__init__(Label("arbitrary child"), **kwargs)
+
+        def watch_title(self, old, new):
+            self.publications.append((old, new))
+
+    original = Content.from_markup("[red]supplied[/red]")
+    changed = Content.from_markup("[blue]supplied[/blue]")
+    collapsible = WatchedCollapsible(title=original, collapsed=False)
+    default = WatchedCollapsible()
+    assert collapsible.publications == [("Toggle", original)]
+    assert default.publications == [("Toggle", "Toggle")]
+    assert collapsible._title.label.is_same(original)
+    app = App()
+    async with app.run_test() as pilot:
+        await app.mount(collapsible, default)
+        await pilot.pause()
+        child = get_contents(collapsible).query_one(Label)
+        revision = collapsible._title._layout_updates
+        collapsible.title = changed
+        assert collapsible._title.label.is_same(changed)
+        assert collapsible._title.content.is_same(
+            Content.assemble("▼", " ", changed)
+        )
+        assert collapsible._title._layout_updates == revision
+        assert collapsible.publications[-1] == (original, changed)
+        collapsible.collapsed = True
+        await pilot.pause()
+        assert not get_contents(collapsible).display
+        assert child.is_mounted
+        assert collapsible._title.content.plain == "▶ supplied"
