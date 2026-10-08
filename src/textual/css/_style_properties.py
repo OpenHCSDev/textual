@@ -834,6 +834,7 @@ class StringEnumProperty(StyleProperty[EnumType], Generic[EnumType]):
         refresh_parent: bool = False,
         display: bool = False,
         pointer: bool = False,
+        geometry: bool = True,
     ) -> None:
         self._valid_values = valid_values
         self._default = default
@@ -842,6 +843,13 @@ class StringEnumProperty(StyleProperty[EnumType], Generic[EnumType]):
         self._refresh_parent = refresh_parent
         self._display = display
         self._pointer = pointer
+        self._geometry = geometry
+
+    def affects_geometry(self, previous: object | None, value: object | None) -> bool:
+        # Geometry inputs and scheduled layout are distinct: native wrapping,
+        # positioning and constraints can change geometry without _layout.
+        # Undeclared enum effects remain conservative.
+        return self._geometry
 
     def __set_name__(self, owner: StylesBase, name: str) -> None:
         self.name = name
