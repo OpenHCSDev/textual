@@ -294,10 +294,11 @@ class MarkdownBlock(Static):
             token: The token from which this block is built.
         """
         self._inline_token = token
-        content = self._token_to_content(token)
+        content = self._markdown._get_token_content(token)
         self.set_content(content)
 
-    def _token_to_content(self, token: Token) -> Content:
+    @staticmethod
+    def _token_to_content(token: Token) -> Content:
         """Convert an inline token to Textual Content.
 
         Args:
@@ -1281,6 +1282,14 @@ class Markdown(Widget):
             those that can be raised by calling [`Path.read_text`][pathlib.Path.read_text].
         """
         await self.sanitize_location(path).load(self)
+
+    def _get_token_content(self, token: Token) -> Content:
+        """Supply inline content for every block, including headings and tables.
+
+        Prepared documents may return their acquired content here; ordinary
+        documents use the same native conversion without a separate parser.
+        """
+        return MarkdownBlock._token_to_content(token)
 
     def unhandled_token(self, token: Token) -> MarkdownBlock | None:
         """Process an unhandled token.

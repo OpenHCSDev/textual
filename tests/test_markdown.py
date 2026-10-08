@@ -12,6 +12,7 @@ from rich.text import Span
 import textual.widgets._markdown as MD
 from textual import on
 from textual.app import App, ComposeResult
+from textual.content import Content
 from textual.style import Style
 from textual.widget import Widget
 from textual.widgets import Markdown
@@ -39,6 +40,29 @@ class MarkdownApp(App[None]):
 
     def compose(self) -> ComposeResult:
         yield FussyMarkdown(self._markdown)
+
+
+async def test_document_supplies_inline_content_for_heading_paragraph_and_table():
+    class SuppliedMarkdown(Markdown):
+        def _get_token_content(self, token: Token) -> Content:
+            return super()._get_token_content(token) + Content(" supplied")
+
+    document = SuppliedMarkdown(
+        "# Heading\n\nParagraph [link](https://example.com)\n\n"
+        "| Header |\n| --- |\n| Cell |"
+    )
+    async with App().run_test() as pilot:
+        await pilot.app.mount(document)
+        await pilot.pause()
+        assert document.query_one(MD.MarkdownH1)._content.plain == "Heading supplied"
+        paragraph = document.query_one(MD.MarkdownParagraph)._content
+        assert paragraph.plain == "Paragraph link supplied"
+        assert paragraph.spans == [
+            MD.Span(10, 14, Style.from_meta({"@click": "link('https://example.com')"}))
+        ]
+        table = document.query_one(MD.MarkdownTable)
+        assert [content.plain for content in table._headers] == ["Header supplied"]
+        assert [[content.plain for content in row] for row in table._rows] == [["Cell supplied"]]
 
 
 @pytest.mark.parametrize(
