@@ -1396,6 +1396,14 @@ class Screen(Generic[ScreenResultType], Widget):
         # None means not acquired; an empty borrowed tuple is a valid cohort.
         if roots is None:
             roots = tuple(root for _, roots in self._prepare_visible_screens() for root in roots) if self.is_current else ()
+        if self.is_current:
+            # Original retained pixels may paint during a source mutation.
+            # That publication does not complete the mutating sender's work.
+            # Acquire source custody once for this synchronous admission,
+            # separately from the original paint-readiness roots.
+            roots = (*roots, *(root
+                for screen in (*self.app._background_screens, self)
+                for root in screen._layout_mutation_roots()))
         index = 0
         for _ in range(len(self._callbacks)):
             if self.app._batch_count or index >= len(self._callbacks):
