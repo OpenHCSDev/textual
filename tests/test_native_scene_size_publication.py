@@ -1,6 +1,7 @@
 """Exercise scene transitions and size receipts through original native Apps."""
 
 from textual import events
+from tests.test_batch_paint_admission import IndependentScreen
 from textual.app import App
 from textual.containers import VerticalScroll
 from textual.geometry import Size
@@ -9,12 +10,10 @@ from textual.widgets import Static
 
 
 async def test_scroll_intent_survives_layout_and_held_sources():
-    from textual.screen import Screen
 
     history = VerticalScroll(Static("\n".join(str(n) for n in range(50))))
 
-    class IntentScreen(Screen):
-        held = False
+    class IntentScreen(IndependentScreen):
 
         def __init__(self):
             super().__init__()
@@ -22,12 +21,6 @@ async def test_scroll_intent_survives_layout_and_held_sources():
 
         def compose(self):
             yield history
-
-        def _layout_mutation_roots(self):
-            return (history,) if self.held else ()
-
-        def _prepare_compositor_refresh(self):
-            return self._layout_mutation_roots()
 
         def _refresh_layout(self, size=None, scroll=False):
             self.admissions.append((
@@ -46,7 +39,7 @@ async def test_scroll_intent_survives_layout_and_held_sources():
         await pilot.pause()
         screen = app.screen
         original = screen._compositor.find_widget(history.children[0])
-        screen.held = True
+        screen.held_geometry = {history: screen._compositor.acquire_subtree_geometry(history)}
         screen.admissions.clear()
         history.refresh(layout=True)
         history.scroll_to(y=10, animate=False, immediate=True)
@@ -55,7 +48,8 @@ async def test_scroll_intent_survives_layout_and_held_sources():
         assert (True, False) in screen.admissions
         assert screen._compositor.find_widget(history.children[0]) == original
         assert screen._layout_widgets
-        screen.held = False
+        screen.held_geometry = {}
+        screen.check_idle()
         screen.admissions.clear()
         history.refresh(layout=True)
         history.scroll_to(y=15, animate=False, immediate=True)

@@ -1,8 +1,10 @@
+import asyncio
 from unittest.mock import patch
 
 import pytest
 
 from textual._compositor import Compositor
+from tests.test_batch_paint_admission import IndependentScreen
 from textual.app import App
 from textual.containers import VerticalGroup
 from textual.widgets import Static
@@ -10,6 +12,96 @@ from textual.widgets import Static
 
 class CachedGroup(VerticalGroup):
     CACHE_SUBTREE_GEOMETRY = True
+
+
+async def test_retained_positions_reuse_covered_partial_source_and_acquire_missing_paths():
+    from textual.containers import VerticalScroll
+
+    class ObservedGroup(CachedGroup):
+        arrangements = 0
+
+        def arrange(self, size, optimal=False):
+            self.arrangements += 1
+            return super().arrange(size, optimal=optimal)
+
+    rows = [Static(f"ORIGINAL_ROW_{index:03}") for index in range(100)]
+    source = ObservedGroup(*rows, id="source")
+
+    class PositionScreen(IndependentScreen):
+        CSS = """
+        VerticalScroll { height: 8; }
+        #source { height: 100; width: 1fr; }
+        Static { height: 1; }
+        """
+        targets = ()
+
+        def compose(self):
+            yield VerticalScroll(source, id="scroller")
+
+        def _use_viewport_layout(self):
+            return True
+
+        def _layout_geometry_targets(self):
+            return self.targets
+
+    app = App()
+    async with app.run_test(size=(40, 12)) as pilot:
+        screen = PositionScreen()
+        await app.push_screen(screen)
+        await pilot.pause()
+        compositor = screen._compositor
+        partial = compositor._subtree_geometry[source]
+        assert not partial.complete and partial.contains(rows[0])
+        assert not partial.contains(rows[90])
+
+        def compare_original_geometry():
+            reference = Compositor(max_subtree_geometry_entries=0)
+            reference.reflow_visible(screen, app.size, retain_geometry=screen.targets)
+            assert compositor._published_map == reference._published_map
+            assert tuple(compositor.render_strips()) == tuple(reference.render_strips())
+
+        # The partial source owns this existing position. Naming it does not
+        # turn the request into a complete offscreen descendant acquisition.
+        screen.targets = (rows[0],)
+        source.arrangements = 0
+        screen._refresh_layout(scroll=True)
+        assert source.arrangements == 0
+        assert compositor._subtree_geometry[source] is partial
+        assert not partial.matches(partial.key, require_complete=True,
+                                   required_geometry=screen.targets)
+        compare_original_geometry()
+
+        # A newly requested missing path must be acquired. The resulting
+        # partial source owns both explicit positions on the following frame.
+        for targets in ((rows[0], rows[90]), (rows[90], rows[40])):
+            screen.targets = targets
+            source.arrangements = 0
+            screen._refresh_layout(scroll=True)
+            assert source.arrangements > 0
+            acquired = compositor._subtree_geometry[source]
+            assert not acquired.complete and all(acquired.contains(row) for row in targets)
+            compare_original_geometry()
+            source.arrangements = 0
+            screen._refresh_layout(scroll=True)
+            assert source.arrangements == 0
+            assert compositor._subtree_geometry[source] is acquired
+            compare_original_geometry()
+
+        # Placement and child mutation still retire exact partial answers.
+        scroller = screen.query_one("#scroller", VerticalScroll)
+        for position in (15, 0):
+            scroller.scroll_to(y=position, animate=False, immediate=True)
+            await pilot.pause()
+            screen._refresh_layout(scroll=True)
+            compare_original_geometry()
+        before = compositor._subtree_geometry[source]
+        rows[40].styles.height = 3
+        await pilot.pause()
+        screen._refresh_layout(scroll=True)
+        assert compositor._subtree_geometry[source] is not before
+        assert compositor._published_map[rows[40]].region.height == 3
+        compare_original_geometry()
+        assert not app._exception
 
 
 @pytest.mark.parametrize("capacity", [0, 1, 2, 5])
@@ -56,21 +148,14 @@ async def test_changed_parent_borrows_original_children_without_flat_capture():
     from dataclasses import replace
     from textual._compositor import PlacedSubtreeGeometry, SubtreeGeometryPlacement
     from textual.containers import VerticalScroll
-    from textual.screen import Screen
 
     rows = [CachedGroup(Static(f"row {index}"), Static("wrapped " * 7))
             for index in range(20)]
     history = CachedGroup(*rows)
 
-    class SourceScreen(Screen):
+    class SourceScreen(IndependentScreen):
         def compose(self):
             yield VerticalScroll(history)
-
-        def _layout_mutation_roots(self):
-            return (history,) if history.lock.is_locked else ()
-
-        def _prepare_compositor_refresh(self):
-            return self._layout_mutation_roots()
 
     class SourceApp(App):
         CSS = "VerticalScroll { height: 10; } Static { height: auto; }"
@@ -157,7 +242,7 @@ async def test_changed_parent_borrows_original_children_without_flat_capture():
             )[1]
             assert compositor.find_widget(child) == reference.find_widget(child)
         held_source = compositor._subtree_geometry[history]
-        async with history.lock:
+        async with app.screen.preserve_layout(history):
             incomplete = CachedGroup(Static("NOT_COMMITTED"))
             await history.mount(incomplete)
             await pilot.pause()
@@ -185,3 +270,97 @@ async def test_changed_parent_borrows_original_children_without_flat_capture():
 def test_geometry_budget_rejects_invalid_capacities(capacity):
     with pytest.raises(ValueError, match="non-negative integer"):
         Compositor(max_subtree_geometry_entries=capacity)
+
+
+async def test_visible_source_stays_partial_and_mutation_keeps_explicit_complete_loan():
+    from textual._compositor import PlacedSubtreeGeometry, IntrinsicSubtreeGeometry
+    from textual.containers import VerticalScroll
+
+    rows = [CachedGroup(Static(f"ROW_{index:03}")) for index in range(120)]
+    history = CachedGroup(*rows, id="history-source")
+
+    class ViewportScreen(IndependentScreen):
+        CSS = "VerticalScroll { height: 8; } Static { height: 1; }"
+
+        def compose(self):
+            yield VerticalScroll(history, id="scroller")
+            yield Static("UNRELATED_PAINT", id="sidebar")
+
+        def _use_viewport_layout(self):
+            return True
+
+    app = App()
+    async with app.run_test(size=(40, 12)) as pilot:
+        screen = ViewportScreen()
+        await app.push_screen(screen)
+        await pilot.pause()
+        compositor = screen._compositor
+        assert compositor.acquire_subtree_geometry(Static("UNPLACED")) is None
+        partial = compositor._subtree_geometry[history]
+        assert isinstance(partial, PlacedSubtreeGeometry)
+        assert not partial.complete and not partial.contains(rows[-1])
+        original_scene = dict(compositor._published_map)
+        compositor.max_subtree_geometry_entries = 0
+        completed = asyncio.Event()
+        async with screen.preserve_layout(history) as placement:
+            assert placement.source.complete
+            assert isinstance(placement.source, IntrinsicSubtreeGeometry)
+            assert placement.source.contains(rows[-1].children[0])
+            assert not compositor._subtree_geometry
+            assert compositor._published_map == original_scene
+            added = CachedGroup(Static("UNCOMMITTED"))
+            await history.mount(added)
+            history.call_after_refresh(completed.set)
+            screen.query_one("#sidebar").update("UNRELATED_CHANGED")
+            scroller = screen.query_one("#scroller", VerticalScroll)
+            for position in (70, 5, 115, 0):
+                scroller.scroll_to(y=position, animate=False, immediate=True)
+                await pilot.pause()
+                assert added not in compositor._published_map
+                rendered = '\n'.join(strip.text for strip in compositor.render_strips())
+                assert "UNCOMMITTED" not in rendered
+                assert "UNRELATED_CHANGED" in rendered
+                assert not completed.is_set()
+        await asyncio.wait_for(completed.wait(), 2)
+        assert added in compositor.widgets
+        assert not screen._layout_widgets and not app._exception
+
+
+async def test_nested_source_expansion_borrows_original_held_child_before_sibling_arrangement():
+    from textual.containers import VerticalScroll
+
+    original = Static("ORIGINAL_CHILD")
+    child = CachedGroup(original)
+    sibling = CachedGroup(Static("UNMODIFIED_SIBLING"))
+    history = CachedGroup(child, sibling)
+
+    class SourceScreen(IndependentScreen):
+        def compose(self):
+            yield VerticalScroll(history)
+
+    app = App()
+    async with app.run_test(size=(30, 8)) as pilot:
+        screen = SourceScreen()
+        await app.push_screen(screen)
+        await pilot.pause()
+        compositor = screen._compositor
+        async with screen.preserve_layout(child) as first:
+            incoming = Static("NEW_UNCOMMITTED_CHILD")
+            await child.mount(incoming)
+            await pilot.pause()
+            assert compositor.acquire_subtree_geometry(original) is None
+            expanded = compositor.acquire_subtree_geometry(history)
+            assert expanded is not None and expanded.source.complete
+            assert expanded.source.contains(original)
+            assert expanded.source.contains(sibling.children[0])
+            assert not expanded.source.contains(incoming)
+            loan = expanded.source.geometry[child][1]
+            assert loan.source is first.source and loan.source_held
+            previous = screen.held_geometry
+            screen.held_geometry = {history: expanded}
+            screen.query_one(VerticalScroll).scroll_to(y=1, animate=False, immediate=True)
+            await pilot.pause()
+            assert incoming not in compositor._published_map
+            screen.held_geometry = previous
+        await pilot.pause()
+        assert incoming in compositor.widgets and not app._exception

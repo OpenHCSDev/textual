@@ -248,7 +248,7 @@ async def test_layer_inheritance_updates_between_reflows():
             await pilot.pause()
             compositor = app.screen._compositor
             geometry = compositor.full_map
-            captured, _ = compositor._arrange_root(
+            captured, _, _ = compositor._arrange_root(
                 inner, app.screen.size, visible_only=False,
                 root_geometry=geometry[inner],
             )

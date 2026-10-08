@@ -22,6 +22,7 @@ from typing import (
     Iterable,
     Iterator,
     Literal,
+    Mapping,
     NamedTuple,
     Optional,
     TypeVar,
@@ -36,7 +37,7 @@ from textual import constants, errors, events, messages
 from textual._arrange import arrange
 from textual._auto_scroll import get_auto_scroll_regions
 from textual._callback import invoke
-from textual._compositor import Compositor, MapGeometry
+from textual._compositor import Compositor, MapGeometry, SubtreeGeometryPlacement
 from textual._context import active_message_pump, visible_screen_stack
 from textual._path import (
     CSSPathType,
@@ -1236,6 +1237,13 @@ class Screen(Generic[ScreenResultType], Widget):
         # Borrow only within this synchronous admission. Paint reacquires its
         # own cohort after queued source/layout work has had a chance to run.
         roots: tuple[Widget, ...] | None = None
+        # A mutation release wakes this owner with check_idle(). Its original
+        # retained members now become actionable; no new source invalidation
+        # or window-sized layout request is needed to resume them.
+        if not self._layout_required and self._has_actionable_layout_requests(
+            self._held_layout_requests()
+        ):
+            self._request_layout()
         if not self.app._batch_count and self.is_current:
             if self._refresh_requested or self._dirty_widgets:
                 self._update_timer.resume()
@@ -1255,9 +1263,13 @@ class Screen(Generic[ScreenResultType], Widget):
         """Prepare the frame and return original subtrees whose paint is held."""
         return ()
 
-    def _layout_mutation_roots(self) -> tuple[Widget, ...]:
-        """Subtrees borrowing their committed geometry during source mutation."""
-        return ()
+    def _layout_mutation_roots(self) -> Mapping[Widget, SubtreeGeometryPlacement | None]:
+        """Mutation owners lending sources acquired before their writes.
+
+        None holds only the exact placed publication; it cannot authorize a
+        complete or translated source. Release wakes this screen with check_idle.
+        """
+        return {}
 
     def _on_frame_published(self, deferred_roots: tuple[Widget, ...]) -> None:
         """Observe an actual displayed update with its acquired admission roots."""
@@ -1401,9 +1413,16 @@ class Screen(Generic[ScreenResultType], Widget):
             # That publication does not complete the mutating sender's work.
             # Acquire source custody once for this synchronous admission,
             # separately from the original paint-readiness roots.
-            roots = (*roots, *(root
-                for screen in (*self.app._background_screens, self)
-                for root in screen._layout_mutation_roots()))
+            for screen in (*self.app._background_screens, self):
+                mutation_sources = screen._layout_mutation_roots()
+                roots = (*roots, *mutation_sources)
+                # A queued next callback may run before Idle following source
+                # release. Retained requests must fence that admission too.
+                screen._request_layout(
+                    screen._has_actionable_layout_requests(
+                        screen._held_layout_requests(mutation_sources)
+                    )
+                )
         index = 0
         for _ in range(len(self._callbacks)):
             if self.app._batch_count or index >= len(self._callbacks):
@@ -1466,11 +1485,14 @@ class Screen(Generic[ScreenResultType], Widget):
         """Additional native geometry required by a viewport-layout transaction."""
         return ()
 
-    def _held_layout_requests(self) -> dict[DOMNode, set[Widget]]:
+    def _held_layout_requests(
+        self, mutation_roots: Iterable[Widget] | None = None,
+    ) -> dict[DOMNode, set[Widget]]:
         """Borrow pending requests whose subtree still owns committed geometry."""
         if not self._layout_widgets:
             return {}
-        mutation_roots = self._layout_mutation_roots()
+        if mutation_roots is None:
+            mutation_roots = self._layout_mutation_roots()
         return {
             owner: held for owner, members in self._layout_widgets.items()
             if (held := {
@@ -1593,7 +1615,6 @@ class Screen(Generic[ScreenResultType], Widget):
         message.stop()
         message.prevent_default()
 
-        layout_required = False
         widget: DOMNode = message.widget
         if widget._pruning or widget._closed:
             return
@@ -1604,20 +1625,16 @@ class Screen(Generic[ScreenResultType], Widget):
                 self._layout_widgets[ancestor] = set()
             if widget not in self._layout_widgets:
                 self._layout_widgets[ancestor].add(widget)
-                layout_required = True
             if not ancestor.styles.auto_dimensions:
                 break
             widget = ancestor
 
-        if not self._layout_required:
-            # A prior frame keeps held requests but consumes its timer intent.
-            # Membership is not a new-source notification: after release the
-            # SAME pending request becomes actionable under current roots.
-            if layout_required or self._has_actionable_layout_requests(
-                self._held_layout_requests()
-            ):
-                self._layout_required = True
-                self.check_idle()
+        # Next callbacks can follow this message before Idle; record the
+        # original pending layout intent before their sender admission.
+        self._request_layout(
+            self._has_actionable_layout_requests(self._held_layout_requests())
+        )
+        self.check_idle()
 
     async def _on_update_scroll(self, message: messages.UpdateScroll) -> None:
         message.stop()

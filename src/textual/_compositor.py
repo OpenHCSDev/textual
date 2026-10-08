@@ -22,14 +22,13 @@ from fractions import Fraction
 from types import MappingProxyType
 from typing import (
     TYPE_CHECKING,
+    AbstractSet,
     Callable,
-    Generic,
     Iterable,
     Iterator,
     Mapping,
     NamedTuple,
     Sequence,
-    TypeVar,
     cast,
 )
 
@@ -195,9 +194,6 @@ class SubtreeMapGeometry(NamedTuple):
         ), clip
 
 
-GeometryEntry = TypeVar("GeometryEntry", MapGeometry, SubtreeMapGeometry)
-
-
 @dataclass(frozen=True)
 class SubtreeGeometryPlacement:
     """A borrowed child source at its original acquired parent placement.
@@ -223,25 +219,30 @@ class SubtreeGeometryPlacement:
 
 
 @dataclass(frozen=True)
-class SubtreeGeometry(ABC, Generic[GeometryEntry]):
+class SubtreeGeometry(ABC):
     """One immutable native arrangement resource in the compositor's cache."""
 
     key: SubtreeGeometryKey
-    geometry: Mapping[Widget, tuple[int, GeometryEntry | SubtreeGeometryPlacement]]
+    geometry: Mapping[Widget, tuple[int, SubtreeMapGeometry | SubtreeGeometryPlacement]]
     """Ordered local placements and borrowed child sources, without flattening."""
     widgets: frozenset[Widget]
     invisible_widgets: frozenset[Widget]
 
     @classmethod
-    def complete_arrangement(cls, enclosing_complete: bool) -> bool:
-        return enclosing_complete
-
-    @classmethod
     def capture(cls, key, geometry, widgets, invisible_widgets, clips, clip, screen_coordinates):
-        return cls(key, MappingProxyType({
-            node: (ordinal, entry)
-            for ordinal, (node, entry) in enumerate(geometry.items())
-        }), widgets, invisible_widgets)
+        routes = cls._route_geometry(geometry)
+        captured = {}
+        for ordinal, (node, entry) in enumerate(geometry.items()):
+            parent = node.parent
+            parent = parent._render_widget if isinstance(parent, Widget) else None
+            parent = parent if parent is not node and parent in routes else None
+            if isinstance(entry, MapGeometry):
+                entry = SubtreeMapGeometry(entry, (), parent)
+            else:
+                entry = (replace(entry, parent=parent) if isinstance(entry, SubtreeGeometryPlacement)
+                         else entry._replace(parent=parent))
+            captured[node] = ordinal, entry
+        return cls(key, MappingProxyType(captured), widgets, invisible_widgets)
 
     @staticmethod
     def _route_geometry(geometry) -> Mapping[Widget, tuple[Widget, ...]]:
@@ -264,7 +265,7 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
         return self._route_geometry({node: entry for node, (_, entry) in self.geometry.items()})
 
     def contains(self, node: Widget) -> bool:
-        """Membership in this complete source, including borrowed children."""
+        """Membership in this acquired geometry, including borrowed children."""
         return node in self._geometry_routes
 
     def captured_parent(self, node: Widget) -> Widget | None:
@@ -316,26 +317,45 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
         )
         return spatial_map
 
-    @abstractmethod
     def matches(self, key: SubtreeGeometryKey, *, require_complete: bool = False,
-                source_held: bool = False) -> bool:
-        ...
+                source_held: bool = False,
+                required_geometry: Iterable[Widget] = ()) -> bool:
+        if not self.reusable and not source_held:
+            return False
+        if require_complete and not self.complete:
+            return False
+        if source_held:
+            # Original source custody owns revisions during the write. Size,
+            # internal scrolling, layers and destination placement still agree.
+            key = key._replace(geometry_revision=self.key.geometry_revision,
+                               nodes_revision=self.key.nodes_revision)
+        if self.complete and key.visible_only:
+            key = key._replace(visible_only=False)
+        if not self._matches_placement(key):
+            return False
+        # A position demand needs its original placed answer, not every
+        # offscreen descendant. A complete source also owns absent answers;
+        # an incomplete source must contain each explicitly requested target.
+        return self.complete or all(self.contains(node) for node in required_geometry)
+
+    @abstractmethod
+    def _matches_placement(self, key: SubtreeGeometryKey) -> bool: ...
 
     def restore_into(
         self, geometry: CompositorMap, widgets: set[Widget], invisible_widgets: set[Widget],
         key: SubtreeGeometryKey, clip: SceneClip, clips: dict[Widget, SceneClip],
-        root: Widget, *, visible_only: bool, retained: set[Widget], bounds: Region,
+        root: Widget, *, visible_only: bool, retained: AbstractSet[Widget], bounds: Region,
         source_held: bool = False,
     ) -> None:
         self.project_into(geometry, key, clip, clips, root,
                           visible_only=visible_only, retained=retained, bounds=bounds,
                           source_held=source_held)
-        widgets.update(self.members())
-        invisible_widgets.update(self.members(invisible=True))
+        widgets.update(node for node in self.members() if not node._pruning)
+        invisible_widgets.update(node for node in self.members(invisible=True) if not node._pruning)
 
     def project_into(self, geometry: CompositorMap, key: SubtreeGeometryKey,
                      clip: SceneClip, clips: dict[Widget, SceneClip], root: Widget,
-                     *, visible_only: bool, retained: set[Widget], bounds: Region,
+                     *, visible_only: bool, retained: AbstractSet[Widget], bounds: Region,
                      source_held: bool = False, require_root: bool = True) -> None:
         """Publish the requested scene without retiring complete source geometry.
 
@@ -349,7 +369,9 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
             candidates = dict(self._spatial_map.get_values_in_region(source_bounds))
             if (indexed_root := self.geometry.get(root)) is not None:
                 candidates[indexed_root[0]] = root
-            for node in retained:
+            # Captured membership scopes this source's demands. Unrelated
+            # retained paths must not be rediscovered in every borrowed child.
+            for node in (retained & self._geometry_routes.keys() if retained else ()):
                 if (indexed := self.geometry.get(node)) is not None:
                     candidates[indexed[0]] = node
                     if isinstance(indexed[1], SubtreeGeometryPlacement):
@@ -369,6 +391,10 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
             entries = ((node, entry) for node, (_, entry) in self.geometry.items())
         no_demand: set[Widget] = set()
         for node, entry in self._paint_entries(entries, source_held=source_held):
+            # The source can outlive its cache entry. Original prune admission
+            # still retires native participation before pump teardown.
+            if node._pruning:
+                continue
             required = not visible_only or (node is root and require_root) or node in retained
             if isinstance(entry, SubtreeGeometryPlacement):
                 child_key, child_clip = self._project_child(entry, key, clip)
@@ -389,8 +415,20 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
                 clips[node] = node_clip
 
     def _paint_entries(self, entries, *, source_held: bool):
-        """Placed sources retain their original native participation."""
-        return entries
+        """Retained self-paint follows the source's original captured ancestry."""
+        if not source_held:
+            return entries
+        participation: dict[Widget, bool] = {}
+
+        def participates(node: Widget) -> bool:
+            if node not in participation:
+                parent = self.captured_parent(node)
+                participation[node] = node._render_widget is node and (
+                    parent is None or (parent.is_container and participates(parent))
+                )
+            return participation[node]
+
+        return ((node, entry) for node, entry in entries if participates(node))
 
     def _project_child(self, entry: SubtreeGeometryPlacement, key: SubtreeGeometryKey,
                        clip: SceneClip) -> tuple[SubtreeGeometryKey, SceneClip]:
@@ -398,7 +436,7 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
         return entry.key, entry.clip
 
     @abstractmethod
-    def _project_entry(self, entry: GeometryEntry, key: SubtreeGeometryKey,
+    def _project_entry(self, entry: SubtreeMapGeometry, key: SubtreeGeometryKey,
                        clip: SceneClip, *, root: bool) -> tuple[MapGeometry, SceneClip]:
         ...
 
@@ -412,40 +450,27 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
 
 
 @dataclass(frozen=True)
-class PlacedSubtreeGeometry(SubtreeGeometry[MapGeometry]):
+class PlacedSubtreeGeometry(SubtreeGeometry):
     """A culled or screen-dependent arrangement keeps its exact placement."""
 
-    def matches(self, key: SubtreeGeometryKey, *, require_complete: bool = False,
-                source_held: bool = False) -> bool:
-        if not self.reusable and not source_held:
-            return False
-        if require_complete and not self.complete:
-            return False
-        return self.key == key or (
-            not self.key.visible_only and key.visible_only
-            and self.key._replace(visible_only=True) == key
-        )
+    def _matches_placement(self, key: SubtreeGeometryKey) -> bool:
+        return self.key == key
 
-    def _project_entry(self, entry: MapGeometry, key: SubtreeGeometryKey,
+    def _project_entry(self, entry: SubtreeMapGeometry, key: SubtreeGeometryKey,
                        clip: SceneClip, *, root: bool) -> tuple[MapGeometry, SceneClip]:
-        return entry, RootSceneClip(entry.clip)
+        return entry.geometry, RootSceneClip(entry.geometry.clip)
 
 @dataclass(frozen=True)
-class IntrinsicSubtreeGeometry(SubtreeGeometry[SubtreeMapGeometry]):
+class IntrinsicSubtreeGeometry(SubtreeGeometry):
     """The same bounded resource, reusable under a new original outer clip."""
 
     @classmethod
-    def complete_arrangement(cls, enclosing_complete: bool) -> bool:
-        return True
-
-    @classmethod
     def capture(cls, key, geometry, widgets, invisible_widgets, clips, clip, screen_coordinates):
-        if not (widgets | invisible_widgets).isdisjoint(screen_coordinates):
+        if key.visible_only or not (widgets | invisible_widgets).isdisjoint(screen_coordinates):
             return PlacedSubtreeGeometry.capture(
                 key, geometry, widgets, invisible_widgets, clips, clip, screen_coordinates)
         intrinsic = {}
         origin = key.region.offset
-        geometry_routes = cls._route_geometry(geometry)
         for node, entry in geometry.items():
             child = isinstance(entry, SubtreeGeometryPlacement)
             scope, bounds = (entry.clip if child else clips[node]).relative_bounds(clip, origin)
@@ -457,29 +482,14 @@ class IntrinsicSubtreeGeometry(SubtreeGeometry[SubtreeMapGeometry]):
             if scope is not clip:
                 return PlacedSubtreeGeometry.capture(
                     key, geometry, widgets, invisible_widgets, clips, clip, screen_coordinates)
-            parent = node.parent
-            parent = parent._render_widget if isinstance(parent, Widget) else None
-            parent = (parent if parent is not node and parent in geometry_routes
-                      else None)
             intrinsic[node] = (
-                replace(entry, parent=parent, clip_bounds=bounds) if child
-                else SubtreeMapGeometry(entry, bounds, parent)
+                replace(entry, clip_bounds=bounds) if child
+                else SubtreeMapGeometry(entry, bounds, None)
             )
         return super().capture(key, intrinsic, widgets, invisible_widgets,
                                clips, clip, screen_coordinates)
 
-    def matches(self, key: SubtreeGeometryKey, *, require_complete: bool = False,
-                source_held: bool = False) -> bool:
-        if not self.reusable and not source_held:
-            return False
-        if require_complete and not self.complete:
-            return False
-        if source_held:
-            # The mutation owner lends the original source, not the changing
-            # DOM. Internal scroll and all arrangement inputs still agree;
-            # only source revisions belong to the ongoing mutation.
-            key = key._replace(geometry_revision=self.key.geometry_revision,
-                               nodes_revision=self.key.nodes_revision)
+    def _matches_placement(self, key: SubtreeGeometryKey) -> bool:
         return self.key.intrinsic() == key.intrinsic()
 
     def _project_entry(self, entry: SubtreeMapGeometry, key: SubtreeGeometryKey,
@@ -496,26 +506,6 @@ class IntrinsicSubtreeGeometry(SubtreeGeometry[SubtreeMapGeometry]):
             layer_order=entry.key.layer_order + key.layer_order - self.key.layer_order,
             clip=clip.region,
         ), clip
-
-    def _paint_entries(self, entries, *, source_held: bool):
-        if not source_held:
-            return entries
-        participation: dict[Widget, bool] = {}
-
-        def participates(node: Widget) -> bool:
-            if node not in participation:
-                parent = self.captured_parent(node)
-                participation[node] = node._render_widget is node and (
-                    parent is None or (parent.is_container and participates(parent))
-                )
-            return participation[node]
-
-        # A retained-paint owner can now render itself rather than its old
-        # native children. Consult that declaration along captured ancestry,
-        # never walk or arrange the changing child tree. Each parent answers
-        # once within this projection; the resource remains immutable.
-        return ((node, entry) for node, entry in entries if participates(node))
-
 
 class CompositorUpdate:
     """An update generated by the compositor, which also doubles as console renderables."""
@@ -904,7 +894,7 @@ class Compositor:
         old_map = previous_map
         old_widgets = old_map.keys()
 
-        map, widgets = self._arrange_root(
+        map, widgets, _ = self._arrange_root(
             parent, size, visible_only=visible_only, retain_geometry=retain_geometry,
         )
 
@@ -954,7 +944,7 @@ class Compositor:
 
         # Keep a copy of the old map because we're going to compare it with the update
         old_map = self._visible_map or {}
-        map, widgets = self._arrange_root(
+        map, widgets, _ = self._arrange_root(
             parent, size, visible_only=True, retain_geometry=retain_geometry,
         )
 
@@ -1004,7 +994,7 @@ class Compositor:
         if self.root is None:
             return {}
         if self._full_map_invalidated and not self._arranging:
-            map, _widgets = self._arrange_root(self.root, self.size, visible_only=False)
+            map, _widgets, _ = self._arrange_root(self.root, self.size, visible_only=False)
             # A geometry query also publishes this scene. Retain the damage
             # from its original visible coordinates before replacing the map;
             # a later reflow can no longer recover that previous geometry.
@@ -1047,20 +1037,23 @@ class Compositor:
         self, root: Widget, size: Size, visible_only: bool = True,
         retain_geometry: Iterable[Widget] = (),
         *, root_geometry: MapGeometry | None = None,
-    ) -> tuple[CompositorMap, set[Widget]]:
+        root_clip: SceneClip | None = None,
+    ) -> tuple[CompositorMap, set[Widget], SubtreeGeometryPlacement | None]:
         """Arrange a widget's children based on its layout attribute.
 
         Args:
             root: Top level widget.
             size: Size of visible area (screen).
             visible_only: Only update visible widgets (used in scrolling).
-            root_geometry: Original placement when arranging a complete body.
+            root_geometry: Original placement for explicit subtree acquisition.
+            root_clip: Original outer clip, or complete body bounds for painting.
 
         Returns:
-            Compositor map and set of widgets.
+            Compositor map, logical members, and the explicitly acquired source.
         """
 
-        mutation_roots = set(root.screen._layout_mutation_roots())
+        mutation_sources = root.screen._layout_mutation_roots()
+        mutation_roots = set(mutation_sources)
         previous = self._published_map
         held: dict[Widget, CompositorMap] = {owner: {} for owner in mutation_roots}
         mutation_paths: set[Widget] = set()
@@ -1074,6 +1067,8 @@ class Compositor:
             self._subtree_geometry.pop(owner, None)
         map: dict[Widget, MapGeometry | SubtreeGeometryPlacement] = {}
         capturing_source = False
+        capture_root = root_geometry is not None
+        acquired: SubtreeGeometryPlacement | None = None
         # Transient declaration paths manufacture the one retained resource.
         # The published MapGeometry continues to own the actual clipped scene.
         clips: dict[Widget, SceneClip] = {}
@@ -1091,7 +1086,11 @@ class Compositor:
                 size, size, size.region, NULL_SPACING,
             )
         layer_order = root_geometry.order[-1][2]
-        no_clip = RootSceneClip(root_geometry.region)
+        # Screen overlays retain their original screen clip, even when a body
+        # is acquired with expanded paint bounds or its own incoming clip.
+        no_clip = RootSceneClip(size.region)
+        incoming_clip = (root_clip if root_clip is not None else
+                         RootSceneClip(root_geometry.region) if capture_root else no_clip)
         # Widget owns layer inheritance. Acquire external ancestry only at the
         # root, then carry that original declaration through this traversal.
         root_layers = root._get_layer_order(root.walk_ancestors(with_self=True))
@@ -1100,7 +1099,7 @@ class Compositor:
             else {name: index for index, name in enumerate(root_layers)}
         )
         default_layers = {"default": 0}
-        retained_paths: set[Widget] = set()
+        retained_paths: dict[Widget, set[Widget]] = {}
         if visible_only:
             # A held root still needs its new outer placement when scrolling
             # takes it offscreen. Its resource owns descendants; this acquires
@@ -1108,17 +1107,15 @@ class Compositor:
             for target in (*retain_geometry, *mutation_roots):
                 path: list[Widget] = []
                 node = target
-                # Existing members already own a path to this same root.
-                # Shared ancestors need admission once, not per target.
-                while (
-                    isinstance(node, Widget)
-                    and node is not root
-                    and node not in retained_paths
-                ):
+                while isinstance(node, Widget) and node is not root:
                     path.append(node)
                     node = node.parent
-                if node is root or node in retained_paths:
-                    retained_paths.update(path)
+                if node is root:
+                    # The same acquired relation supplies path admission and
+                    # the targets required within each source. Keys are routing
+                    # ancestors, values are original requested positions.
+                    for member in path:
+                        retained_paths.setdefault(member, set()).add(target)
 
         def arrange_widget(
             widget: Widget,
@@ -1202,7 +1199,7 @@ class Compositor:
                     if visible_only and not complete:
                         placements = arrange_result.get_visible_placements(
                             sub_clip.region - child_region.offset + widget.scroll_offset,
-                            retain=retained_paths,
+                            retain=retained_paths.keys(),
                         )
                     else:
                         placements = arrange_result.placements
@@ -1332,11 +1329,12 @@ class Compositor:
 
         def add_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter, complete,
                        inherited_layers):
-            nonlocal map, widgets, invisible_widgets, capturing_source
+            nonlocal map, widgets, invisible_widgets, capturing_source, acquired
             if inherited_layers is None and (order_names := widget._get_layer_order((widget,))) is not None:
                 inherited_layers = {name: index for index, name in enumerate(order_names)}
             if widget in held:
-                resource = self._subtree_geometry.get(widget)
+                placement = mutation_sources[widget]
+                resource = placement.source if placement is not None else None
                 key = SubtreeGeometryKey.from_widget(
                     widget, virtual_region, region, order, layer_order, clip.region,
                     visible, dock_gutter, size, False,
@@ -1345,6 +1343,8 @@ class Compositor:
                 if resource is not None and resource.contains(widget._render_widget) and resource.matches(
                     key, require_complete=True, source_held=True,
                 ):
+                    if capture_root and widget is root:
+                        acquired = SubtreeGeometryPlacement(resource, key, clip, source_held=True)
                     # Complete intrinsic geometry retains original descendants
                     # and clip declarations. Ancestor scrolling changes only
                     # their placement; no mutating DOM arrangement is read.
@@ -1356,7 +1356,7 @@ class Compositor:
                         resource.restore_into(
                             map, widgets, invisible_widgets, key, clip, clips,
                             widget._render_widget, visible_only=visible_only and not complete,
-                            retained=retained_paths, bounds=root_geometry.region,
+                            retained=retained_paths.keys(), bounds=root_geometry.region,
                             source_held=True,
                         )
                     # The complete resource has replaced these old viewport
@@ -1368,11 +1368,23 @@ class Compositor:
                 else:
                     # Placed, resized or missing sources cannot authorize a
                     # projection. Keep their exact committed hit/paint bounds.
+                    snapshot = held[widget]
+                    if resource is not None and resource.complete:
+                        # A changed destination refuses translation, not the
+                        # original source's membership and self-paint lifetime.
+                        # Filter the committed rectangles along captured parent
+                        # edges; never infer ancestry from the changing DOM.
+                        snapshot = dict(
+                            resource._paint_entries(
+                                ((node, geometry) for node, geometry in snapshot.items()
+                                 if resource.contains(node)),
+                                source_held=True,
+                            )
+                        )
                     if capturing_source:
                         # The published fallback is a partial placed source,
                         # not an invented complete or translatable subtree.
                         # Keep that lending scope on the same child edge.
-                        snapshot = held[widget]
                         partial_key = SubtreeGeometryKey.from_widget(
                             widget, virtual_region, region, order, layer_order,
                             clip.region, visible, dock_gutter, size, True,
@@ -1386,36 +1398,34 @@ class Compositor:
                             source, partial_key, clip, source_held=True
                         )
                     else:
-                        for node, geometry in held[widget].items():
+                        for node, geometry in snapshot.items():
                             store_geometry(node, geometry, RootSceneClip(geometry.clip))
-                        widgets.update(held[widget])
+                        widgets.update(snapshot)
+                    # The filtered original membership replaces this held
+                    # fallback; the outer merge must not resurrect old children.
+                    held[widget].clear()
                 return
-            if (widget in mutation_paths or not self.max_subtree_geometry_entries
-                    or not widget.CACHE_SUBTREE_GEOMETRY or not widget._is_mounted):
+            explicit_root = capture_root and widget is root
+            cache_source = bool(self.max_subtree_geometry_entries and widget.CACHE_SUBTREE_GEOMETRY)
+            if not explicit_root and (widget in mutation_paths or not cache_source or not widget._is_mounted):
                 arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
                                complete, inherited_layers)  # noqa: F821 -- closure cleared after traversal
                 return
             resource_type = widget.subtree_geometry_resource()
             enclosing_complete = complete
-            complete = resource_type.complete_arrangement(complete)
             key = SubtreeGeometryKey.from_widget(widget,
                    virtual_region, region, order, layer_order, clip.region, visible, dock_gutter,
                    size, visible_only and not complete,
                    tuple(inherited_layers.items()) if inherited_layers is not None else ())
             resource = self._subtree_geometry.get(widget)
-            require_complete = widget in retained_paths and not complete
-            matches = resource is not None and resource.matches(key, require_complete=require_complete)
-            # A complete captured source already owns every requested path.
-            # A partial or changed source still acquires the original path;
-            # do not retain a partial capture whose key omits that request.
-            if require_complete and not matches:
-                arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
-                               complete, inherited_layers)  # noqa: F821 -- closure cleared after traversal
-                return
+            matches = resource is not None and resource.matches(
+                key, require_complete=explicit_root and not visible_only,
+                required_geometry=retained_paths.get(widget, ()),
+            )
             if not matches:
-                # Capture complete source geometry before its viewport publication.
-                # Enclosing complete captures borrow all child entries; ordinary
-                # viewport publication retains only exposed and required boxes.
+                # Capture this acquisition before its viewport publication.
+                # Enclosing captures borrow the original child sources;
+                # viewport acquisition includes exposed and requested boxes.
                 parent_map, parent_widgets, parent_invisible, parent_capture = (
                     map, widgets, invisible_widgets, capturing_source
                 )
@@ -1429,12 +1439,15 @@ class Compositor:
                 finally:
                     map, widgets, invisible_widgets = parent_map, parent_widgets, parent_invisible
                     capturing_source = parent_capture
-                if (widget not in self._subtree_geometry
-                        and len(self._subtree_geometry) >= self.max_subtree_geometry_entries):
-                    self._subtree_geometry.pop(next(iter(self._subtree_geometry)))
                 resource = resource_type.capture(
                     key, geometry, added_widgets, added_invisible, clips, clip, screen_coordinates)
-                self._subtree_geometry[widget] = resource
+                if cache_source:
+                    if (widget not in self._subtree_geometry
+                            and len(self._subtree_geometry) >= self.max_subtree_geometry_entries):
+                        self._subtree_geometry.pop(next(iter(self._subtree_geometry)))
+                    self._subtree_geometry[widget] = resource
+            if explicit_root:
+                acquired = SubtreeGeometryPlacement(resource, key, clip)
             if capturing_source:
                 # Retain the child source and its placement. A containing
                 # capture does not consume a second flat copy of descendants.
@@ -1442,7 +1455,7 @@ class Compositor:
             else:
                 resource.restore_into(map, widgets, invisible_widgets, key, clip, clips, widget._render_widget,
                                       visible_only=visible_only and not enclosing_complete,
-                                      retained=retained_paths, bounds=root_geometry.region)
+                                      retained=retained_paths.keys(), bounds=root_geometry.region)
 
         # Add top level (root) widget
         previous_layout_geometry = self._layout_geometry
@@ -1458,7 +1471,7 @@ class Compositor:
                 root_geometry.region,
                 root_geometry.order,
                 layer_order,
-                no_clip,
+                incoming_clip,
                 True,
                 root_geometry.dock_gutter,
                 False,
@@ -1476,7 +1489,7 @@ class Compositor:
             map.update(geometry)
             widgets.update(geometry)
         widgets -= invisible_widgets
-        return cast(CompositorMap, map), widgets
+        return cast(CompositorMap, map), widgets, acquired
 
     @property
     def layers(self) -> list[tuple[Widget, MapGeometry]]:
@@ -1692,6 +1705,33 @@ class Compositor:
         if geometry is None:
             raise errors.NoWidget("Widget is not in layout")
         return geometry
+
+    def acquire_subtree_geometry(self, root: Widget) -> SubtreeGeometryPlacement | None:
+        """Acquire the complete original source before a mutation begins.
+
+        The transaction retains this placement, independently of cache eviction.
+        Nested acquisition lends existing held sources while arranging only the
+        unmodified remainder. It never publishes or paints a replacement scene.
+        An absent root or incomplete held source supplies no complete resource.
+        """
+        geometry = self._get_published_geometry(root)
+        if geometry is None or self._arranging:
+            return None
+        # An enclosing held source owns this original member. Acquiring a new
+        # descendant scope would read its changing DOM; the containing source
+        # does not retain every descendant's independent arrangement inputs.
+        # Expansion to an unmodified ancestor remains a complete acquisition.
+        if any(
+            owner is not root and placement is not None and placement.source.contains(root)
+            for owner, placement in root.screen._layout_mutation_roots().items()
+        ):
+            return None
+        _, _, placement = self._arrange_root(
+            root, self.size, visible_only=False, root_geometry=geometry,
+            root_clip=RootSceneClip(geometry.clip),
+        )
+        return placement if (placement is not None and placement.source.complete
+                             and placement.source.contains(root._render_widget)) else None
 
     def acquire_geometry(self, widgets: Iterable[Widget]) -> bool:
         """Acquire missing reader paths in one original scene publication.
@@ -2100,8 +2140,9 @@ class Compositor:
                 yield root, geometry
 
     def render_subtree_strips(
-        self, root: Widget, root_geometry: MapGeometry,
-    ) -> tuple[Size, list[Strip]]:
+        self, root: Widget, root_geometry: MapGeometry, *,
+        admit: Callable[[Mapping[Widget, tuple[Region, Region]]], bool],
+    ) -> tuple[Size, Iterator[list[Strip]]] | None:
         """Paint a body using its borrowed original published placement.
 
         The caller acquires the placement from published_geometry and consumes
@@ -2109,17 +2150,46 @@ class Compositor:
         or manufactures a scene to decide whether a body can be retired. The
         same original arrangement/line/chop algorithm supplies complete rows
         without replacing any published map or constructing another compositor.
+
+        The synchronous admission callback receives the exact complete paint
+        mapping, including offscreen participants and excluding hidden or clipped
+        children. It may refuse capture when those participants' resources are
+        unavailable. Admission and painting borrow the same geometry; no second
+        DOM walk or arrangement chooses another capture cohort.
+
+        The returned iterator paints viewport-height bands. A preceding-source
+        writer may drain it synchronously; a retirement task may yield between
+        bands. The caller retains and validates its original source witness
+        before advancing and before committing the complete result. Geometry
+        lending ends before each band is returned, so ordinary input and frame
+        publication never borrow a suspended capture's private arrangement.
         """
         bounds = root_geometry.region
-        geometry, _ = self._arrange_root(
+        geometry, _, _ = self._arrange_root(
             root, self.size, visible_only=False, root_geometry=root_geometry,
         )
-        widgets = self._paint_regions(self._ordered_geometry(geometry), bounds)
-        cuts = self._cuts_for_regions(bounds, widgets)
+        widgets = MappingProxyType(self._paint_regions(self._ordered_geometry(geometry), bounds))
         with self._using_geometry(root, geometry):
-            chops = self._render_chops(bounds, self._regions_to_spans((bounds,)),
-                                      widgets=widgets, cuts=cuts, bounds=bounds)
-        return bounds.size, [Strip.join(chop.values()) for chop in chops]
+            if not admit(widgets):
+                return None
+        band_height = max(1, self.size.height)
+
+        def render_bands() -> Iterator[list[Strip]]:
+            for y in range(bounds.y, bounds.bottom, band_height):
+                band = Region(bounds.x, y, bounds.width, min(band_height, bounds.bottom - y))
+                participants = {
+                    widget: (region, paint)
+                    for widget, (region, original_paint) in widgets.items()
+                    if (paint := original_paint.intersection(band))
+                }
+                with self._using_geometry(root, geometry):
+                    cuts = self._cuts_for_regions(band, participants)
+                    chops = self._render_chops(band, self._regions_to_spans((band,)),
+                                              widgets=participants, cuts=cuts, bounds=band)
+                    strips = [Strip.join(chop.values()) for chop in chops]
+                yield strips
+
+        return bounds.size, render_bands()
 
     def _render_chops(
         self,

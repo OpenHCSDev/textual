@@ -1,7 +1,7 @@
 """Real framework lifecycle checks, not installed terminal acceptance."""
 
 import asyncio
-from contextlib import nullcontext
+from contextlib import asynccontextmanager, nullcontext
 
 import pytest
 
@@ -138,7 +138,7 @@ class HeldVertical(Vertical):
     """A real changing subtree refuses layout and paint until its owner releases."""
 
     def arrange(self, size, optimal=False):
-        assert not self.lock.is_locked, "Layout descended into a mutation"
+        assert self not in self.screen._layout_mutation_roots(), "Layout descended into a mutation"
         return super().arrange(size, optimal=optimal)
 
     def render_lines(self, crop):
@@ -150,12 +150,25 @@ class IndependentScreen(ObservedScreen):
     def __init__(self):
         super().__init__()
         self.publications = []
+        self.held_geometry = {}
+
+    @asynccontextmanager
+    async def preserve_layout(self, root):
+        async with root.lock:
+            previous = self.held_geometry
+            placement = self._compositor.acquire_subtree_geometry(root)
+            self.held_geometry = {**previous, root: placement}
+            try:
+                yield placement
+            finally:
+                self.held_geometry = previous
+                self.check_idle()
 
     def _layout_mutation_roots(self):
-        return tuple(root for root in self.query(HeldVertical) if root.lock.is_locked)
+        return self.held_geometry
 
     def _prepare_compositor_refresh(self):
-        return self._layout_mutation_roots()
+        return tuple(self._layout_mutation_roots())
 
     def _on_frame_published(self, deferred_roots):
         self.publications.append(deferred_roots)
@@ -186,7 +199,7 @@ async def test_released_pending_layout_resumes_on_its_existing_owner_request():
         holder = app.query_one(HeldVertical)
         original = app.query_one("#original")
         committed = screen._compositor.find_widget(original)
-        async with holder.lock:
+        async with holder.screen.preserve_layout(holder):
             new = Label("RELEASED_SOURCE", id="released")
             await holder.mount(new)
             # A child source change makes the holder itself a pending owner,
@@ -199,13 +212,74 @@ async def test_released_pending_layout_resumes_on_its_existing_owner_request():
             assert new not in screen._compositor._published_map
 
         # Subscribe only after the held frame, then exercise the SAME owner's
-        # refresh. No sidebar update, geometry query or manual timer wakeup.
+        # idle wakeup. No new source invalidation, geometry query or timer.
         screen.screen_layout_refresh_signal.subscribe(app, lambda _: completed.set())
-        holder.refresh(layout=True)
+        screen.check_idle()
         await asyncio.wait_for(completed.wait(), 2)
         assert new in screen._compositor._published_map
         assert not screen._layout_widgets
         assert not app._exception
+
+
+async def test_released_layout_fences_queued_callbacks_before_idle():
+    app = IndependentApp()
+    completed = asyncio.Event()
+    admitted = asyncio.Event()
+    order: list[str] = []
+    async with app.run_test(size=(40, 8)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        original = app.query_one("#original")
+        holder = app.query_one(HeldVertical)
+        transaction = screen.preserve_layout(holder)
+        entered = asyncio.Event()
+
+        async def enter() -> None:
+            await transaction.__aenter__()
+            entered.set()
+
+        def complete() -> None:
+            assert asyncio.current_task() is original.task
+            order.append("completion")
+            completed.set()
+
+        screen.call_later(enter)
+        await asyncio.wait_for(entered.wait(), 2)
+        # A genuine geometry-only refresh leaves no paint damage to mask
+        # the pending layout fence. The sender still awaits that request.
+        original.refresh(repaint=False, layout=True)
+        original.call_after_refresh(complete)
+        await pilot.pause()
+        assert screen._layout_widgets
+        assert not screen._refresh_pending
+        assert any(sender is original for _, sender in screen._callbacks)
+
+        def queued_admission() -> None:
+            assert asyncio.current_task() is screen.task
+            assert screen._layout_widgets and not screen._layout_mutation_roots()
+            screen._invoke_and_clear_callbacks()
+            assert screen._layout_required
+            assert any(sender is original for _, sender in screen._callbacks)
+            order.append("queued admission")
+            admitted.set()
+
+        screen.screen_layout_refresh_signal.subscribe(
+            app, lambda _: order.append("layout")
+        )
+
+        async def release() -> None:
+            # Enter and release on the same native pump. Its ordinary callback
+            # message owns this release and queues admission before Idle.
+            await transaction.__aexit__(None, None, None)
+            order.append("message")
+            screen.call_next(queued_admission)
+
+        screen.call_later(release)
+        await asyncio.wait_for(admitted.wait(), 2)
+        await asyncio.wait_for(completed.wait(), 2)
+        assert order[:2] == ["message", "queued admission"]
+        assert order.index("layout") < order.index("completion")
+        assert not screen._layout_widgets and not app._exception
 
 
 @pytest.mark.parametrize("held", [False, True])
@@ -248,7 +322,7 @@ async def test_idle_shares_acquired_roots_and_paint_reacquires(held):
         assert len(screen.acquisitions) > before
         await pilot.pause()
 
-        async with (holder.lock if held else nullcontext()):
+        async with (screen.preserve_layout(holder) if held else nullcontext()):
             assert not screen._refresh_pending
             compositor._dirty_regions.add((holder if held else sidebar).region)
             screen._invoke_later(completed.set, app)
@@ -294,7 +368,7 @@ async def test_partial_publication_keeps_geometry_and_owner_callbacks():
         original_hit = compositor.get_widget_at(15, 1)[0]
         app.frames.clear()
         screen.publications.clear()
-        async with holder.lock:
+        async with holder.screen.preserve_layout(holder):
             await holder.mount(Label("NEW_HELD", id="new"))
             sidebar.update("SIDEBAR_NEW")
             original.call_after_refresh(held_done.set)
@@ -380,7 +454,7 @@ async def test_inline_partial_cells_preserve_held_content_and_clear_after_releas
         await pilot.pause()
         compositor = app.screen._compositor
         holder = app.query_one(HeldVertical)
-        async with holder.lock:
+        async with holder.screen.preserve_layout(holder):
             update = compositor.render_inline(app.size, clear=True,
                 excluded_regions=compositor.deferred_regions((holder,)))
             assert isinstance(update, InlineUpdate)
@@ -406,7 +480,7 @@ async def test_partial_translucent_publication_never_reads_held_backdrop():
         await app.push_screen(ModalScreen())
         await pilot.pause()
         foreground = app.screen
-        async with holder.lock:
+        async with holder.screen.preserve_layout(holder):
             compositor = foreground._compositor
             compositor._dirty_regions.add(compositor.size.region)
             regions = source._compositor.deferred_regions((holder,))

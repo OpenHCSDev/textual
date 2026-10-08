@@ -1,11 +1,151 @@
 import asyncio
 from unittest.mock import patch
 
+import pytest
+
 from textual import errors
+from tests.test_batch_paint_admission import IndependentScreen
 from textual.app import App
 from textual.containers import VerticalGroup, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Static
+
+
+async def test_capture_admits_original_complete_paint_cohort_and_refuses_hidden_children():
+    from textual.widgets import Collapsible
+
+    shown = Static("\n".join(f"PAINT_{row}" for row in range(24)))
+    hidden = Static("HIDDEN_RESOURCE")
+    expanded = Collapsible(shown, title="Expanded", collapsed=False)
+    collapsed = Collapsible(hidden, title="Collapsed")
+    footer = Static("Session details")
+
+    class Body(VerticalGroup):
+        CACHE_SUBTREE_GEOMETRY = True
+
+    body = Body(expanded, collapsed, footer)
+
+    class CaptureScreen(Screen):
+        def _use_viewport_layout(self):
+            return True
+
+        def compose(self):
+            with VerticalScroll():
+                yield body
+
+    app = App()
+    async with app.run_test(size=(60, 8)) as pilot:
+        await app.push_screen(CaptureScreen())
+        await pilot.pause()
+        compositor = app.screen._compositor
+        _, placement = next(compositor.published_geometry((body,)))
+        published = compositor._published_map
+        seen = []
+
+        def refuse(participants):
+            seen.append(tuple(participants))
+            assert shown in participants
+            assert hidden not in participants
+            assert collapsed.query_one(Collapsible.Contents) not in participants
+            assert footer in participants
+            # Complete capture admits the actual offscreen paragraph, without
+            # arranging a second scene when its geometry is read by admission.
+            assert participants[shown][1].height == 24
+            assert compositor.find_widget(footer).region.y >= app.size.height
+            return False
+
+        assert compositor.render_subtree_strips(body, placement, admit=refuse) is None
+        assert len(seen) == 1
+        assert compositor._published_map is published
+        assert compositor._render_geometry is None
+
+        expanded.collapsed = True
+        await pilot.pause()
+        _, current = next(compositor.published_geometry((body,)))
+        assert current.region.height < placement.region.height
+
+        def admit(participants):
+            assert shown not in participants
+            assert hidden not in participants
+            assert expanded._title in participants
+            assert collapsed._title in participants
+            assert footer in participants
+            return True
+
+        result = compositor.render_subtree_strips(body, current, admit=admit)
+        assert result is not None
+        size, bands = result
+        strips = [strip for band in bands for strip in band]
+        assert size == current.region.size
+        assert len(strips) == size.height
+        assert not any("PAINT_" in row.text or "HIDDEN_RESOURCE" in row.text for row in strips)
+        assert any("Session details" in row.text for row in strips)
+        assert compositor._render_geometry is None
+
+
+async def test_banded_capture_releases_geometry_for_input_and_unrelated_paint():
+    from textual.geometry import Region
+
+    class PaintedRows(Static):
+        def __init__(self):
+            super().__init__("\n".join(f"ROW_{row:02} 界" for row in range(37)))
+            self.crops = []
+
+        def render_lines(self, crop):
+            self.crops.append(crop)
+            return super().render_lines(crop)
+
+    body = PaintedRows()
+    status = Static("INPUT_0", id="status")
+
+    class CaptureScreen(Screen):
+        CSS = "#status { height: 1; } VerticalScroll { height: 1fr; }"
+
+        def _use_viewport_layout(self):
+            return True
+
+        def compose(self):
+            yield status
+            with VerticalScroll():
+                yield body
+
+    class CaptureApp(App):
+        received = 0
+
+        def on_key(self, event):
+            if event.key == "a":
+                self.received += 1
+                status.update(f"INPUT_{self.received}")
+
+    app = CaptureApp()
+    async with app.run_test(size=(40, 8)) as pilot:
+        await app.push_screen(CaptureScreen())
+        await pilot.pause()
+        compositor = app.screen._compositor
+        _, placement = next(compositor.published_geometry((body,)))
+        published = compositor._published_map
+        body.crops.clear()
+        size, bands = compositor.render_subtree_strips(body, placement, admit=lambda participants: True)
+        assert body.crops == []  # Acquisition does not paint the complete body.
+        assert compositor._published_map is published
+        assert compositor._render_geometry is None
+
+        rows = []
+        for band in bands:
+            assert 0 < len(band) <= app.size.height
+            assert compositor._render_geometry is None
+            rows.extend(band)
+            if len(rows) < size.height:
+                # Real key delivery and visible paint may complete while the
+                # original offscreen capture still owns unfinished rows.
+                await pilot.press("a")
+                assert f"INPUT_{app.received}" in compositor.render_strips()[0].text
+                assert compositor.find_widget(status).region == Region(0, 0, 40, 1)
+        assert app.received == 4
+        assert len(rows) == size.height == 37
+        assert [row.text.rstrip() for row in rows] == [f"ROW_{row:02} 界" for row in range(37)]
+        assert all(crop.height <= app.size.height for crop in body.crops)
+        assert compositor._render_geometry is None
 
 
 def test_borrowed_geometry_routes_preserve_membership_ancestry_and_assignment_order():
@@ -43,7 +183,7 @@ def test_borrowed_geometry_routes_preserve_membership_ancestry_and_assignment_or
         key, MappingProxyType({
             first: (0, SubtreeGeometryPlacement(first_source, key, clip, root)),
             second: (1, SubtreeGeometryPlacement(second_source, key, clip, root)),
-            root: (2, placed(9)),
+            root: (2, SubtreeMapGeometry(placed(9), (), None)),
         }), frozenset((root,)), frozenset(),
     )
     assert resource.contains(shared)
@@ -90,7 +230,8 @@ async def test_complete_markdown_capture_keeps_offscreen_table_keylines():
         assert tables[-1] not in compositor._published_map
         _, placement = next(compositor.published_geometry((body,)))
         published = compositor._full_map, compositor._visible_map
-        _, strips = compositor.render_subtree_strips(body, placement)
+        _, bands = compositor.render_subtree_strips(body, placement, admit=lambda participants: True)
+        strips = [strip for band in bands for strip in band]
         rows = [strip.text for strip in strips]
         for index in range(12):
             row = next(row for row in rows if f"TABLE_{index:02}" in row)
@@ -100,7 +241,7 @@ async def test_complete_markdown_capture_keeps_offscreen_table_keylines():
         assert tables[-1].outer_size.height == 0
 
 
-class TargetedScreen(Screen):
+class TargetedScreen(IndependentScreen):
     CSS = "VerticalScroll { width: 1fr; } VerticalGroup, Static { height: auto; }"
     targets = ()
 
@@ -126,7 +267,7 @@ async def test_held_complete_body_projects_original_scene_during_ancestor_scroll
         CACHE_SUBTREE_GEOMETRY = True
 
         def arrange(self, size, optimal=False):
-            assert not self.lock.is_locked, "Read changing body layout"
+            assert self not in self.screen._layout_mutation_roots(), "Read changing body layout"
             return super().arrange(size, optimal=optimal)
 
     rows = [Static(f"COMMITTED_ROW_{index:02}", id=f"held-row-{index}")
@@ -139,9 +280,6 @@ async def test_held_complete_body_projects_original_scene_during_ancestor_scroll
         #held-body Static { height: 2; }
         #outside-body { height: 30; }
         """
-
-        def _layout_mutation_roots(self):
-            return (body,) if body.lock.is_locked else ()
 
         def compose(self):
             with VerticalScroll(id="history"):
@@ -156,7 +294,7 @@ async def test_held_complete_body_projects_original_scene_during_ancestor_scroll
         await pilot.pause()
         history = screen.query_one("#history", VerticalScroll)
         compositor = screen._compositor
-        resource = compositor._subtree_geometry[body]
+        resource = compositor.acquire_subtree_geometry(body).source
         assert isinstance(resource, IntrinsicSubtreeGeometry)
         assert all(resource.contains(row) for row in rows)
         # Holding revisions does not permit resizing or changing the source's
@@ -188,7 +326,7 @@ async def test_held_complete_body_projects_original_scene_during_ancestor_scroll
 
         completed = asyncio.Event()
         unrelated = asyncio.Event()
-        async with body.lock:
+        async with app.screen.preserve_layout(body):
             incomplete = Static("UNCOMMITTED_CHILD", id="incomplete")
             await body.mount(incomplete)
             body.call_after_refresh(completed.set)
@@ -235,7 +373,7 @@ async def test_held_screen_relative_source_keeps_placement_and_retires_children(
         CACHE_SUBTREE_GEOMETRY = True
 
         def arrange(self, size, optimal=False):
-            assert not self.lock.is_locked, "Read changing overlay layout"
+            assert self not in self.screen._layout_mutation_roots(), "Read changing overlay layout"
             return super().arrange(size, optimal=optimal)
 
     overlay = Static("SCREEN_OVERLAY", id="overlay")
@@ -249,9 +387,6 @@ async def test_held_screen_relative_source_keeps_placement_and_retires_children(
             with VerticalScroll(id="history"):
                 yield body
 
-        def _layout_mutation_roots(self):
-            return (body,) if body.lock.is_locked else ()
-
     app = App()
     async with app.run_test(size=(40, 10)) as pilot:
         screen = HeldScreen()
@@ -259,10 +394,10 @@ async def test_held_screen_relative_source_keeps_placement_and_retires_children(
         await app.push_screen(screen)
         await pilot.pause()
         compositor = screen._compositor
-        resource = compositor._subtree_geometry[body]
+        resource = compositor.acquire_subtree_geometry(body).source
         assert isinstance(resource, PlacedSubtreeGeometry)
         original = dict(compositor._published_map)
-        async with body.lock:
+        async with app.screen.preserve_layout(body):
             await body.mount(Static("INCOMPLETE"))
             screen.query_one("#history").scroll_to(y=10, animate=False, immediate=True)
             await pilot.pause()
@@ -280,14 +415,15 @@ async def test_held_screen_relative_source_keeps_placement_and_retires_children(
         assert not app._exception
 
 
-async def test_held_original_ancestry_honors_a_nested_self_painting_owner():
+@pytest.mark.parametrize("screen_overlay", [False, True])
+async def test_held_original_ancestry_honors_a_nested_self_painting_owner(screen_overlay):
     from textual.content import Content
 
     class HeldGroup(VerticalGroup):
         CACHE_SUBTREE_GEOMETRY = True
 
         def arrange(self, size, optimal=False):
-            assert not self.lock.is_locked, "Read changing child topology"
+            assert self not in self.screen._layout_mutation_roots(), "Read changing child topology"
             return super().arrange(size, optimal=optimal)
 
     class ContentBody(Static):
@@ -306,6 +442,8 @@ async def test_held_original_ancestry_honors_a_nested_self_painting_owner():
 
     body = ContentBody("INITIAL_NATIVE_PARENT", id="content-body")
     old = ChangingChild("OLD_NATIVE_CHILD")
+    if screen_overlay:
+        old.styles.overlay = "screen"
 
     class ContentScreen(TargetedScreen):
         CSS = "#content-body { height: 18; } Static { height: 2; }"
@@ -313,9 +451,6 @@ async def test_held_original_ancestry_honors_a_nested_self_painting_owner():
         def compose(self):
             with VerticalScroll(id="history"):
                 yield holder
-
-        def _layout_mutation_roots(self):
-            return (holder,) if holder.lock.is_locked else ()
 
     app = App()
     async with app.run_test(size=(40, 10)) as pilot:
@@ -326,10 +461,10 @@ async def test_held_original_ancestry_honors_a_nested_self_painting_owner():
         await body.mount(old)
         await pilot.pause()
         compositor = screen._compositor
-        resource = compositor._subtree_geometry[holder]
+        resource = compositor.acquire_subtree_geometry(holder).source
         assert resource.contains(old)
         assert resource.captured_parent(old) is body
-        async with holder.lock:
+        async with app.screen.preserve_layout(holder):
             body.update(Content("\n".join(["ACQUIRED_ROOT_PAINT"] * 18)))
             await body.mount(ChangingChild("UNCOMMITTED_DESCENDANT"))
             screen.query_one("#history").scroll_to(y=4, animate=False, immediate=True)
@@ -382,8 +517,8 @@ async def test_cached_overlay_and_fixed_children_match_the_original_scene():
             screen._refresh_layout(app.size, scroll=True)
             # The overlay's clip reaches the outer screen, so this resource
             # keeps placed geometry rather than manufacturing an intrinsic clip.
-            assert isinstance(compositor._subtree_geometry[body], PlacedSubtreeGeometry)
-            expected, _ = Compositor(max_subtree_geometry_entries=0)._arrange_root(
+            assert isinstance(compositor.acquire_subtree_geometry(body).source, PlacedSubtreeGeometry)
+            expected, _, _ = Compositor(max_subtree_geometry_entries=0)._arrange_root(
                 screen, app.size, visible_only=False,
             )
             paint = compositor._paint_regions(compositor._ordered_geometry(expected), app.size.region)
@@ -420,7 +555,7 @@ async def test_complete_cached_body_keeps_capture_and_explicit_reader_geometry()
         await pilot.pause()
         history = screen.query_one("#history", VerticalScroll)
         compositor = screen._compositor
-        resource = compositor._subtree_geometry[body]
+        resource = compositor.acquire_subtree_geometry(body).source
         assert all(resource.contains(row) for row in rows)
 
         for position in (0, 200, 0):
@@ -441,7 +576,8 @@ async def test_complete_cached_body_keeps_capture_and_explicit_reader_geometry()
             assert rows[235] not in {node for _, node in candidates}
             assert len(candidates) < len(resource.geometry)
             # Capture remains complete without replacing the published viewport.
-            size, strips = compositor.render_subtree_strips(body, placement)
+            size, bands = compositor.render_subtree_strips(body, placement, admit=lambda participants: True)
+            strips = [strip for band in bands for strip in band]
             assert size.height == 240
             assert all(f"Original row {index}" in strip.text
                        for index, strip in enumerate(strips))
@@ -564,7 +700,8 @@ async def test_body_capture_descendants_use_original_arrangement_and_screen_coor
             return render_lines(crop)
 
         with patch.object(compositor, "_arrange_root", side_effect=arrange_body), patch.object(row, "render_lines", side_effect=render_row):
-            size, strips = compositor.render_subtree_strips(body, placement)
+            size, bands = compositor.render_subtree_strips(body, placement, admit=lambda participants: True)
+            strips = [strip for band in bands for strip in band]
         assert size == bounds.size
         assert len(strips) == size.height
         assert all(strip.cell_length == size.width for strip in strips)
@@ -595,7 +732,8 @@ async def test_body_capture_descendants_use_original_arrangement_and_screen_coor
             return render_lines(crop)
 
         with patch.object(compositor, "_arrange_root", side_effect=arrange_body), patch.object(row, "render_lines", side_effect=render_with_hidden_query):
-            compositor.render_subtree_strips(body, placement)
+            _, bands = compositor.render_subtree_strips(body, placement, admit=lambda participants: True)
+            tuple(bands)
         assert scoped_misses
         assert compositor._render_geometry is None
         assert compositor._full_map is published[0]
@@ -605,7 +743,8 @@ async def test_body_capture_descendants_use_original_arrangement_and_screen_coor
         # ordinary screen queries with their original publication.
         with patch.object(row, "render_lines", side_effect=ValueError("render failed")):
             try:
-                compositor.render_subtree_strips(body, placement)
+                _, bands = compositor.render_subtree_strips(body, placement, admit=lambda participants: True)
+                tuple(bands)
             except ValueError as error:
                 assert str(error) == "render failed"
             else:
