@@ -85,10 +85,13 @@ class StreamLayout(Layout):
             margin = styles.margin
             gutter_width, gutter_height = styles.gutter.totals
             top, right, bottom, left = margin
+            child_width = width - (left + right)
             y += top if top > previous_margin else previous_margin
             previous_margin = bottom
             height = (
-                widget.get_content_height(size, viewport, width - gutter_width)
+                widget.get_content_height(
+                    size, viewport, max(0, child_width - gutter_width)
+                )
                 + gutter_height
             )
             if (max_height := styles.max_height) is not None and max_height.is_cells:
@@ -105,7 +108,7 @@ class StreamLayout(Layout):
                 )
             placements.append(
                 _WidgetPlacement(
-                    _Region(left, y, width - (left + right), height),
+                    _Region(left, y, child_width, height),
                     null_offset,
                     margin,
                     widget,
