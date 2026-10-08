@@ -110,7 +110,8 @@ class MarkdownStream:
                 new_markdown = "".join(self._pending)
                 self._pending.clear()
                 self._new_markup.clear()
-                await asyncio.shield(self.markdown_widget.append(new_markdown))
+                if new_markdown:
+                    await asyncio.shield(self.markdown_widget.append(new_markdown))
         except asyncio.CancelledError:
             # Task has been cancelled, add any outstanding markdown
             pass
