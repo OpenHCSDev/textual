@@ -808,6 +808,12 @@ class MessagePump(metaclass=_MessagePumpMeta):
                                 break
                     await self._flush_next_callbacks()
 
+            if not self._closed and not self._message_queue.empty():
+                # A ready queue and synchronous handlers need not suspend at
+                # any of the awaits above. Complete this delivery before
+                # handing execution to input, peer pumps and frame timers.
+                await asyncio.sleep(0)
+
     def _can_replace_message(self, message: Message, pending: Message) -> bool:
         """Whether this receiver may consume the pending message instead.
 

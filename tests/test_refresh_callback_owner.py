@@ -4,12 +4,62 @@ import pytest
 
 from textual._context import active_message_pump
 from textual.app import App, ComposeResult
+from textual.message import Message
 from textual.screen import Screen
 from textual.widgets import Static
 
 
-@pytest.mark.parametrize("request", ["layout", "scroll"])
-async def test_frame_preserves_requests_from_its_layout_publication(request):
+async def test_busy_sender_hands_execution_to_peer_after_completed_delivery():
+    class Notice(Message):
+        def __init__(self, sequence):
+            super().__init__()
+            self.sequence = sequence
+
+    delivered = []
+    peer_received = asyncio.Event()
+    finished = asyncio.Event()
+    peer_position = []
+
+    class Sender(Static):
+        def on_notice(self, message):
+            message.stop()
+            delivered.append(message.sequence)
+            if message.sequence == 0:
+                self.app.query_one("#peer").call_later(peer_delivery)
+            if message.sequence == 63:
+                finished.set()
+
+    def peer_delivery():
+        peer_position.append(len(delivered))
+        peer_received.set()
+
+    class BurstApp(App):
+        def compose(self):
+            yield Sender("sender", id="sender")
+            yield Static("peer", id="peer")
+
+    app = BurstApp()
+
+    async def drive(pilot):
+        await pilot.pause()
+        sender = app.query_one("#sender")
+        for sequence in range(64):
+            sender.post_message(Notice(sequence))
+        await asyncio.wait_for(peer_received.wait(), 5)
+        await asyncio.wait_for(finished.wait(), 5)
+        assert delivered == list(range(64))
+        assert 0 < peer_position[0] < 64
+        app.exit()
+
+    await asyncio.wait_for(
+        app.run_async(headless=True, size=(40, 8), auto_pilot=drive), 10
+    )
+    assert app._exception is None
+    assert app._task is None
+
+
+@pytest.mark.parametrize("work", ["layout", "scroll"])
+async def test_frame_preserves_requests_from_its_layout_publication(work):
     class FrameApp(App):
         def compose(self):
             child = Static("native source", id="source")
@@ -27,7 +77,7 @@ async def test_frame_preserves_requests_from_its_layout_publication(request):
 
         def request_next_frame(_screen):
             screen.screen_layout_refresh_signal.unsubscribe(source)
-            if request == "layout":
+            if work == "layout":
                 source.styles.width = 20
                 screen.refresh(layout=True)
             else:
@@ -40,7 +90,7 @@ async def test_frame_preserves_requests_from_its_layout_publication(request):
         screen._on_timer_update()
         # The completed geometry is still the first frame. Its subscriber
         # requested independent work through the original native owner.
-        if request == "layout":
+        if work == "layout":
             assert source.region.width == 10
             assert screen._layout_required
         else:
@@ -49,7 +99,7 @@ async def test_frame_preserves_requests_from_its_layout_publication(request):
         assert screen._refresh_pending
         screen.call_after_refresh(received.set)
         await asyncio.wait_for(received.wait(), 5)
-        if request == "layout":
+        if work == "layout":
             assert source.region.width == 20
         else:
             assert source.region.y == -2
