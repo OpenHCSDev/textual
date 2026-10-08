@@ -1679,10 +1679,25 @@ class Compositor:
             return ()
         regions: set[Region] = set()
         placed: set[Widget] = set()
+        # This synchronous read shares parent answers only for this invocation.
+        # Read the original parent path, including covers and virtual widgets;
+        # DOM child traversal is not equivalent to committed-map membership.
+        membership = {}
         for widget, geometry in self._published_map.items():
-            members = roots.intersection(widget.walk_ancestors(with_self=True))
-            if members:
-                placed.update(members)
+            path = []
+            for ancestor in widget.walk_ancestors(with_self=True):
+                if ancestor in membership:
+                    held = membership[ancestor]
+                    break
+                path.append(ancestor)
+            else:
+                held = False
+            for ancestor in reversed(path):
+                if ancestor in roots:
+                    placed.add(ancestor)
+                    held = True
+                membership[ancestor] = held
+            if held:
                 if region := geometry.visible_region.intersection(self.size.region):
                     regions.add(region)
         for root in roots - placed:
