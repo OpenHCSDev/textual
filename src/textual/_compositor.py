@@ -244,19 +244,28 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
         }), widgets, invisible_widgets)
 
     @staticmethod
-    def _contains_geometry(geometry, entries, node: Widget) -> bool:
-        if node is None:
-            return False
-        return node in geometry or any(
-            isinstance(entry, SubtreeGeometryPlacement) and entry.source.contains(node)
-            for entry in entries
-        )
+    def _route_geometry(geometry) -> Mapping[Widget, tuple[Widget, ...]]:
+        """Index original geometry membership by its ordered borrowed edges.
+
+        Logical and invisible membership do not imply a geometry placement.
+        A widget may belong to multiple child sources; every edge remains in
+        original order so projection keeps its last-assignment semantics.
+        """
+        routes: dict[Widget, list[Widget]] = {node: [] for node in geometry}
+        for child, entry in geometry.items():
+            if isinstance(entry, SubtreeGeometryPlacement):
+                for node in entry.source._geometry_routes:
+                    routes.setdefault(node, []).append(child)
+        return MappingProxyType({node: tuple(children) for node, children in routes.items()})
+
+    @cached_property
+    def _geometry_routes(self) -> Mapping[Widget, tuple[Widget, ...]]:
+        """Geometry routing belongs to this immutable source, not the DOM."""
+        return self._route_geometry({node: entry for node, (_, entry) in self.geometry.items()})
 
     def contains(self, node: Widget) -> bool:
         """Membership in this complete source, including borrowed children."""
-        return self._contains_geometry(
-            self.geometry, (entry for _, entry in self.geometry.values()), node
-        )
+        return node in self._geometry_routes
 
     def captured_parent(self, node: Widget) -> Widget | None:
         """The original parent edge, independent of the live child tree."""
@@ -264,9 +273,9 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
             entry = indexed[1]
             return (entry.parent if isinstance(entry, (SubtreeMapGeometry, SubtreeGeometryPlacement))
                     else None)
-        for _, entry in self.geometry.values():
-            if isinstance(entry, SubtreeGeometryPlacement) and entry.source.contains(node):
-                return entry.source.captured_parent(node)
+        if children := self._geometry_routes.get(node):
+            entry = self.geometry[children[0]][1]
+            return entry.source.captured_parent(node)
         raise errors.NoWidget("Widget is not in captured subtree")
 
     def members(self, *, invisible: bool = False) -> Iterator[Widget]:
@@ -350,11 +359,10 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
                     # their own demands, never the unrelated global path set.
                     # More than one edge may contain an original widget; keep
                     # source order and its original last-assignment semantics.
-                    for child, (ordinal, entry) in self.geometry.items():
-                        if (isinstance(entry, SubtreeGeometryPlacement)
-                                and entry.source.contains(node)):
-                            candidates[ordinal] = child
-                            child_demands.setdefault(child, set()).add(node)
+                    for child in self._geometry_routes.get(node, ()):
+                        ordinal = self.geometry[child][0]
+                        candidates[ordinal] = child
+                        child_demands.setdefault(child, set()).add(node)
             entries = ((node, self.geometry[node][1])
                        for _, node in sorted(candidates.items()))
         else:
@@ -437,6 +445,7 @@ class IntrinsicSubtreeGeometry(SubtreeGeometry[SubtreeMapGeometry]):
                 key, geometry, widgets, invisible_widgets, clips, clip, screen_coordinates)
         intrinsic = {}
         origin = key.region.offset
+        geometry_routes = cls._route_geometry(geometry)
         for node, entry in geometry.items():
             child = isinstance(entry, SubtreeGeometryPlacement)
             scope, bounds = (entry.clip if child else clips[node]).relative_bounds(clip, origin)
@@ -450,7 +459,7 @@ class IntrinsicSubtreeGeometry(SubtreeGeometry[SubtreeMapGeometry]):
                     key, geometry, widgets, invisible_widgets, clips, clip, screen_coordinates)
             parent = node.parent
             parent = parent._render_widget if isinstance(parent, Widget) else None
-            parent = (parent if parent is not node and cls._contains_geometry(geometry, geometry.values(), parent)
+            parent = (parent if parent is not node and parent in geometry_routes
                       else None)
             intrinsic[node] = (
                 replace(entry, parent=parent, clip_bounds=bounds) if child

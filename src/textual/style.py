@@ -7,7 +7,7 @@ But you might want to use styles for more customized widgets.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import cached_property, lru_cache
 from operator import attrgetter
 from pickle import dumps, loads
@@ -38,6 +38,7 @@ _get_hash_attributes = attrgetter(
     "link",
     "auto_color",
     "_meta",
+    "overline",
 )
 
 
@@ -54,21 +55,8 @@ _get_simple_attributes = attrgetter(
     "blink",
     "link",
     "_meta",
+    "overline",
 )
-
-_get_simple_attributes_sans_color = attrgetter(
-    "bold",
-    "dim",
-    "italic",
-    "underline",
-    "underline2",
-    "reverse",
-    "strike",
-    "blink",
-    "link",
-    "_meta",
-)
-
 
 _get_attributes = attrgetter(
     "background",
@@ -109,6 +97,7 @@ class Style:
     link: str | None = None
     _meta: bytes | None = None
     auto_color: bool = False
+    overline: bool | None = None
 
     def __rich_repr__(self) -> rich.repr.Result:
         yield "background", self.background, None
@@ -121,6 +110,7 @@ class Style:
         yield "reverse", self.reverse, None
         yield "strike", self.strike, None
         yield "blink", self.blink, None
+        yield "overline", self.overline, None
         yield "link", self.link, None
 
         if self._meta is not None:
@@ -129,6 +119,7 @@ class Style:
     @cached_property
     def _is_null(self) -> bool:
         return _get_simple_attributes(self) == (
+            None,
             None,
             None,
             None,
@@ -185,6 +176,8 @@ class Style:
             output_append("strike" if self.strike else "not strike")
         if self.blink is not None:
             output_append("blink" if self.blink else "not blink")
+        if self.overline is not None:
+            output_append("overline" if self.overline else "not overline")
         if self.link is not None:
             if "'" not in self.link:
                 output_append(f"link='{self.link}'")
@@ -227,6 +220,8 @@ class Style:
             output_append("strike" if self.strike else "not strike")
         if self.blink is not None:
             output_append("blink" if self.blink else "not blink")
+        if self.overline is not None:
+            output_append("overline" if self.overline else "not overline")
         if self.link is not None:
             output_append("link")
         if self._meta is not None:
@@ -300,6 +295,7 @@ class Style:
                     if _meta is not None and other__meta is not None
                     else (_meta if other__meta is None else other__meta)
                 ),
+                overline=self.overline if other.overline is None else other.overline,
             )
             return new_style
         elif other is None:
@@ -384,6 +380,7 @@ class Style:
             blink=rich_style.blink,
             link=rich_style.link,
             _meta=rich_style._meta,
+            overline=rich_style.overline,
         )
 
     @classmethod
@@ -411,6 +408,7 @@ class Style:
             strike=text_style.strike,
             blink=text_style.blink,
             auto_color=styles.auto_color,
+            overline=text_style.overline,
         )
 
     @classmethod
@@ -446,6 +444,7 @@ class Style:
             blink,
             link,
             _meta,
+            overline,
         ) = _get_simple_attributes(self)
 
         color = None if foreground is None else background + foreground
@@ -463,6 +462,7 @@ class Style:
             blink=blink,
             link=link,
             meta=None if _meta is None else self.meta,
+            overline=overline,
         )
 
     def rich_style_with_offset(self, x: int, y: int) -> RichStyle:
@@ -490,6 +490,7 @@ class Style:
             blink,
             link,
             _meta,
+            overline,
         ) = _get_simple_attributes(self)
         color = None if foreground is None else background + foreground
         return RichStyle(
@@ -505,12 +506,13 @@ class Style:
             blink=blink,
             link=link,
             meta={**self.meta, "offset": (x, y)},
+            overline=overline,
         )
 
     @cached_property
     def without_color(self) -> Style:
         """The style without any colors."""
-        return Style(None, None, *_get_simple_attributes_sans_color(self))
+        return replace(self, background=None, foreground=None, auto_color=False)
 
     @cached_property
     def background_style(self) -> Style:

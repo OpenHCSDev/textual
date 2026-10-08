@@ -71,11 +71,19 @@ class MarkdownStream:
 
     async def stop(self) -> None:
         """Stop the stream and await its finish."""
-        if self._task is not None:
-            self._task.cancel()
-            await self._task
-            self._task = None
-            self._stopped = True
+        self._stopped = True
+        self._new_markup.set()
+        task = self._task
+        if task is not None:
+            try:
+                await asyncio.shield(task)
+            except asyncio.CancelledError:
+                # Caller cancellation must not abandon the stream's append drain.
+                await asyncio.shield(task)
+                raise
+            finally:
+                if task.done() and self._task is task:
+                    self._task = None
 
     async def write(self, markdown_fragment: str) -> None:
         """Append or enqueue a markdown fragment.
@@ -97,11 +105,13 @@ class MarkdownStream:
     async def _run(self) -> None:
         """Run a task to append markdown fragments when available."""
         try:
-            while await self._new_markup.wait():
+            while not self._stopped or self._pending:
+                await self._new_markup.wait()
                 new_markdown = "".join(self._pending)
                 self._pending.clear()
                 self._new_markup.clear()
-                await asyncio.shield(self.markdown_widget.append(new_markdown))
+                if new_markdown:
+                    await asyncio.shield(self.markdown_widget.append(new_markdown))
         except asyncio.CancelledError:
             # Task has been cancelled, add any outstanding markdown
             pass
