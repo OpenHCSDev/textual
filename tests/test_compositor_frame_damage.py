@@ -4,6 +4,43 @@ from textual.app import App
 from textual.geometry import Size
 from textual.widgets import Static
 
+
+async def test_completed_chops_preserve_partial_and_held_paint():
+    from textual.geometry import Region
+
+    class CoveredApp(App):
+        CSS = """
+        Screen { layers: back front; }
+        #back { layer: back; width: 100%; height: 100%; }
+        #front { layer: front; width: 100%; height: 100%; }
+        """
+
+        def compose(self):
+            yield Static("background", id="back")
+            yield Static("[bold]foreground 界[/bold]", id="front")
+
+    app = CoveredApp()
+    async with app.run_test(size=(24, 8)) as pilot:
+        await pilot.pause()
+        compositor = app.screen._compositor
+        reference = compositor.render_strips()
+        assert "foreground" in reference[0].text
+        assert not any("background" in strip.text for strip in reference)
+        compositor._dirty_regions = {Region(0, 0, 24, 2)}
+        held = Region(3, 0, 5, 1)
+        update = compositor.render_partial_update(excluded_regions=(held,))
+        assert update is not None
+        for y, left, right in update.spans:
+            assert not Region(left, y, right - left, 1).overlaps(held)
+            for x, strip in update._get_line_chops(y, left, right):
+                assert strip == reference[y].crop(x, x + strip.cell_length)
+        assert compositor._dirty_regions == {held}
+        released = compositor.render_partial_update()
+        assert released is not None
+        assert compositor._dirty_regions == set()
+        assert compositor.render_partial_update() is None
+        assert compositor.render_strips() == reference
+
 @pytest.mark.parametrize('before,after', [(Size(139,40),Size(139,25)),(Size(80,40),Size(30,12)),(Size(30,12),Size(80,40))])
 async def test_partial_damage_uses_current_frame_for_spans_and_chops(before,after):
     class FrameApp(App):

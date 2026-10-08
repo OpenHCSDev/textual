@@ -1963,7 +1963,9 @@ class Compositor:
         chops: list[dict[int, Strip | None]] = [{} for _ in cuts]
         for y, x, _end in ChopsUpdate._span_cuts(spans, cuts, bounds.y):
             chops[y - bounds.y][x] = None
-        remaining = [len(line) for line in chops]
+        remaining = {row: len(line) for row, line in enumerate(chops) if line}
+        if not remaining:
+            return cast("Sequence[Mapping[int, Strip]]", chops)
 
         def render_regions(region: Region) -> Iterable[Region]:
             """Request exposed chop spans, coalesced across adjacent rows.
@@ -1977,7 +1979,7 @@ class Compositor:
             for y in region.line_range:
                 row = y - bounds.y
                 spans: set[tuple[int, int]] = set()
-                if remaining[row]:
+                if row in remaining:
                     start_x = None
                     row_cuts = cuts[row]
                     for index in range(bisect_left(row_cuts, first), bisect_left(row_cuts, last)):
@@ -2022,7 +2024,16 @@ class Compositor:
                 for cut, strip in zip(final_cuts, cut_strips):
                     if cut in chops_line and chops_line[cut] is None:
                         chops_line[cut] = strip
-                        remaining[row] -= 1
+                        count = remaining[row] - 1
+                        if count:
+                            remaining[row] = count
+                        else:
+                            del remaining[row]
+            # These are the original pending chop rows, not widget readiness.
+            # Once foreground paint has supplied every requested cut, no lower
+            # widget can contribute. Do not scan its covered exposure again.
+            if not remaining:
+                break
         return cast("Sequence[Mapping[int, Strip]]", chops)
 
     def __rich__(self) -> StripRenderable:
