@@ -879,8 +879,6 @@ class MessagePump(metaclass=_MessagePumpMeta):
             method_name: Handler method name.
             message: Message object.
         """
-        from textual.widget import Widget
-
         methods_dispatched: set[Callable] | None = None
         message_types = message.__class__.__mro__
         message_mro: list[type[Message]] | None = None
@@ -914,6 +912,11 @@ class MessagePump(metaclass=_MessagePumpMeta):
                         else:
                             if not message._sender:
                                 continue
+                            # Widget is required only by selector matching.
+                            # Idle, named and unfiltered decorated delivery
+                            # do not acquire this unrelated type boundary.
+                            from textual.widget import Widget
+
                             for attribute, selector in selectors.items():
                                 node = getattr(message, attribute)
                                 if node is None:
