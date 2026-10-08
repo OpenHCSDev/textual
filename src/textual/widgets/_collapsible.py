@@ -104,7 +104,10 @@ class Collapsible(Widget):
 
     ALLOW_MAXIMIZE = True
     collapsed = reactive(True, init=False)
-    title = reactive("Toggle")
+    # The constructor publishes the supplied title through the normal watcher
+    # path. The default is not a separate title publication; Content's text-only
+    # equality must also not suppress changes to spans or action metadata.
+    title: reactive[ContentText] = reactive("Toggle", init=False, always_update=True)
 
     DEFAULT_CSS = """
     Collapsible {
@@ -177,7 +180,7 @@ class Collapsible(Widget):
     def __init__(
         self,
         *children: Widget,
-        title: str = "Toggle",
+        title: ContentText = "Toggle",
         collapsed: bool = True,
         collapsed_symbol: str = "▶",
         expanded_symbol: str = "▼",
@@ -249,5 +252,5 @@ class Collapsible(Widget):
         """
         self._contents_list.append(widget)
 
-    def _watch_title(self, title: str) -> None:
+    def _watch_title(self, title: ContentText) -> None:
         self._title.label = title
