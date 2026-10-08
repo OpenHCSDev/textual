@@ -2,10 +2,36 @@ from __future__ import annotations
 
 from textual import on
 from textual.app import App, ComposeResult
+from textual.content import Content
 from textual.widgets import Collapsible, Label
 from textual.widgets._collapsible import CollapsibleTitle
 
 COLLAPSED_CLASS = "-collapsed"
+
+
+async def test_title_initial_content_and_same_text_style():
+    title = CollapsibleTitle(
+        label=Content.from_markup("[red]original[/red]"),
+        collapsed_symbol="+",
+        expanded_symbol="---",
+        collapsed=False,
+    )
+    assert title.content.is_same(Content.assemble("---", " ", Content.from_markup("[red]original[/red]")))
+    app = App()
+    async with app.run_test() as pilot:
+        await app.mount(title)
+        await pilot.pause()
+        revision = title._layout_updates
+        title.label = Content.from_markup("[blue]original[/blue]")
+        assert title.content.is_same(
+            Content.assemble("---", " ", Content.from_markup("[blue]original[/blue]"))
+        )
+        assert title._layout_updates == revision
+        title.collapsed = True
+        assert title.content.plain == "+ original"
+        assert title._layout_updates > revision
+        await pilot.pause()
+        assert title.region.width == len("+ original") + 2
 
 
 def get_title(collapsible: Collapsible) -> CollapsibleTitle:

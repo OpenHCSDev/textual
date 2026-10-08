@@ -51,7 +51,7 @@ class CollapsibleTitle(Static, can_focus=True):
     """
 
     collapsed = reactive(True)
-    label: reactive[ContentText] = reactive(Content("Toggle"))
+    label: reactive[ContentText] = reactive(Content("Toggle"), always_update=True)
 
     def __init__(
         self,
@@ -64,8 +64,11 @@ class CollapsibleTitle(Static, can_focus=True):
         super().__init__()
         self.collapsed_symbol = collapsed_symbol
         self.expanded_symbol = expanded_symbol
-        self.label = Content.from_text(label)
-        self.collapsed = collapsed
+        # Both inputs belong to the initial title. Do not render reactive
+        # defaults or an intermediate collapsed symbol before acquiring them.
+        self.set_reactive(CollapsibleTitle.label, Content.from_text(label))
+        self.set_reactive(CollapsibleTitle.collapsed, collapsed)
+        self._update_label()
 
     class Toggle(Message):
         """Request toggle."""
