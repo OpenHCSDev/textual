@@ -1346,12 +1346,16 @@ class Screen(Generic[ScreenResultType], Widget):
                 self._dirty_widgets.clear()
                 self._dirty_widgets.add(self)
                 self._repaint_required = False
-            if self._layout_required:
-                self._refresh_layout(scroll=self._scroll_required)
-                self._layout_required = False
-            elif self._scroll_required:
-                self._refresh_layout(scroll=True)
+            # Consume the acquired intents before layout. Resize watchers and
+            # immediate layout-signal subscribers may request another frame
+            # synchronously; those requests belong to the next admission.
+            layout_required, scroll_required = self._layout_required, self._scroll_required
+            self._layout_required = False
             self._scroll_required = False
+            if layout_required:
+                self._refresh_layout(scroll=scroll_required)
+            elif scroll_required:
+                self._refresh_layout(scroll=True)
 
             if self._dirty_widgets:
                 self._compositor.update_widgets(self._dirty_widgets)
