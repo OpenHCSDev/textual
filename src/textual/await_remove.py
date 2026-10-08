@@ -6,34 +6,32 @@ from __future__ import annotations
 
 import asyncio
 from asyncio import Future, Task, gather
-from typing import TYPE_CHECKING, Generator
+from typing import TYPE_CHECKING, Awaitable
 
 import rich.repr
 
 from textual._callback import invoke
-from textual._debug import get_caller_file_and_line
 from textual._types import CallbackType
+from textual.await_complete import AwaitCompletion
 
 if TYPE_CHECKING:
     from textual.dom import DOMNode
-    from textual.message_pump import MessagePump
     from textual.screen import Screen
     from textual.widget import Widget
 
 
 @rich.repr.auto
-class AwaitRemove:
+class AwaitRemove(AwaitCompletion):
     """An awaitable that waits for nodes to be removed."""
 
     def __init__(
         self, tasks: list[Task], post_remove: CallbackType | None = None
     ) -> None:
+        super().__init__()
         self._tasks = list(tasks)
         self._post_remove = post_remove
-        self._caller = get_caller_file_and_line()
         self._completion: Future[None] | None = None
         self._finisher: Task[None] | None = None
-        self._scheduled = False
 
     @classmethod
     def prune(cls, *nodes: Widget, parent: DOMNode | None = None) -> AwaitRemove:
@@ -92,9 +90,6 @@ class AwaitRemove:
         yield "post_remove", self._post_remove
         yield "caller", self._caller, None
 
-    async def __call__(self) -> None:
-        await self
-
     def _start(self) -> Future[None]:
         """One independently-owned teardown completion for all optional waiters."""
         if self._completion is None:
@@ -121,27 +116,7 @@ class AwaitRemove:
             self._post_remove = None
             self._finisher = None
 
-    def call_when_ready(self, node: MessagePump) -> None:
-        """Deliver the completed receipt without blocking the receiver's queue.
-
-        The application's message pump must remain available while another
-        widget runs an asynchronous unmount handler. Observe errors through the
-        ordinary callback path only after this transaction has actually ended.
-        """
-        if self._scheduled:
-            return
-        self._scheduled = True
-
-        def completed(future: Future[None]) -> None:
-            if node._closing or node._closed:
-                if not future.cancelled():
-                    future.exception()
-                return
-            node.call_next(self)
-
-        self._start().add_done_callback(completed)
-
-    def __await__(self) -> Generator[None, None, None]:
+    def _await(self) -> Awaitable[None]:
         current_task = asyncio.current_task()
         self_removal = current_task in self._tasks
         other_tasks = [task for task in self._tasks if task is not current_task]
@@ -156,4 +131,4 @@ class AwaitRemove:
                 return
             await asyncio.shield(completion)
 
-        return await_prune().__await__()
+        return await_prune()

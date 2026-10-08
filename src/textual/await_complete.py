@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from asyncio import Future, gather
 from typing import TYPE_CHECKING, Any, Awaitable, Generator
 
@@ -13,27 +14,18 @@ if TYPE_CHECKING:
     from textual.types import CallbackType
 
 
-@rich.repr.auto(angular=True)
-class AwaitComplete:
-    """An 'optionally-awaitable' object which runs one or more coroutines (or other awaitables) concurrently."""
+class AwaitCompletion(ABC):
+    """Shared receipt behavior, independent of how its operation is acquired.
 
-    def __init__(
-        self, *awaitables: Awaitable, pre_await: CallbackType | None = None
-    ) -> None:
-        """Create an AwaitComplete.
+    Coroutine groups, mounts and removals have distinct constructors and wait
+    lifetimes. They share completion notification and pre-await admission,
+    not a zero-argument operation factory or cancellation policy.
+    """
 
-        Args:
-            awaitables: One or more awaitables to run concurrently.
-        """
-        self._awaitables = awaitables
-        self._future: Future[Any] = gather(*awaitables)
+    def __init__(self, *, pre_await: CallbackType | None = None) -> None:
         self._pre_await: CallbackType | None = pre_await
         self._caller = get_caller_file_and_line()
-
-    def __rich_repr__(self) -> rich.repr.Result:
-        yield self._awaitables
-        yield "pre_await", self._pre_await, None
-        yield "caller", self._caller, None
+        self._scheduled = False
 
     def set_pre_await_callback(self, pre_await: CallbackType | None) -> None:
         """Set a callback to run prior to awaiting.
@@ -55,6 +47,34 @@ class AwaitComplete:
         node.call_next(self)
         return self
 
+    @abstractmethod
+    def _start(self) -> Future[Any]:
+        """The completion owned by this optional awaitable."""
+
+    @abstractmethod
+    def _await(self) -> Awaitable[Any]:
+        """Acquire the concrete operation's wait / cancellation contract."""
+
+    def call_when_ready(self, node: MessagePump) -> None:
+        """Deliver completion without occupying the receiver's message pump.
+
+        Mount and removal retain their own completion lifetimes. The original
+        callback path observes their result only when awaiting it cannot block
+        input or other messages behind another widget's startup / teardown.
+        """
+        if self._scheduled:
+            return
+        self._scheduled = True
+
+        def completed(future: Future[Any]) -> None:
+            if node._closing or node._closed:
+                if not future.cancelled():
+                    future.exception()
+                return
+            node.call_next(self)
+
+        self._start().add_done_callback(completed)
+
     async def __call__(self) -> Any:
         return await self
 
@@ -62,19 +82,43 @@ class AwaitComplete:
         _rich_traceback_omit = True
         if self._pre_await is not None:
             self._pre_await()
-        return self._future.__await__()
+        return self._await().__await__()
 
     @property
     def is_done(self) -> bool:
         """`True` if the task has completed."""
-        return self._future.done()
+        return self._start().done()
 
     @property
     def exception(self) -> BaseException | None:
         """An exception if the awaitables failed."""
-        if self._future.done():
-            return self._future.exception()
+        completion = self._start()
+        if completion.done():
+            return completion.exception()
         return None
+
+
+@rich.repr.auto(angular=True)
+class AwaitComplete(AwaitCompletion):
+    """An optional awaitable which runs a group of awaitables concurrently."""
+
+    def __init__(
+        self, *awaitables: Awaitable, pre_await: CallbackType | None = None
+    ) -> None:
+        super().__init__(pre_await=pre_await)
+        self._awaitables = awaitables
+        self._future: Future[Any] = gather(*awaitables)
+
+    def __rich_repr__(self) -> rich.repr.Result:
+        yield self._awaitables
+        yield "pre_await", self._pre_await, None
+        yield "caller", self._caller, None
+
+    def _start(self) -> Future[Any]:
+        return self._future
+
+    def _await(self) -> Awaitable[Any]:
+        return self._future
 
     @classmethod
     def nothing(cls):
