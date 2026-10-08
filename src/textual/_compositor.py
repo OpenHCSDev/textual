@@ -211,6 +211,8 @@ class SubtreeGeometryPlacement:
     clip: SceneClip
     parent: Widget | None = None
     clip_bounds: tuple[Region, ...] = ()
+    source_held: bool = False
+    """This edge borrows mutation-owned participation for one publication."""
 
     @property
     def region(self) -> Region:
@@ -275,6 +277,19 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
                 yield from entry.source.members(invisible=invisible)
 
     @cached_property
+    def reusable(self) -> bool:
+        """Whether this immutable source can supply ordinary reuse.
+
+        A captured loan needs fresh acquisition unless the containing mutation
+        owner explicitly lends that original whole-source snapshot.
+        """
+        return all(
+            not entry.source_held and entry.source.reusable
+            for _, entry in self.geometry.values()
+            if isinstance(entry, SubtreeGeometryPlacement)
+        )
+
+    @cached_property
     def _spatial_map(self) -> SpatialMap[tuple[int, Widget]]:
         """Derive spatial admission from this immutable arrangement, once."""
         spatial_map: SpatialMap[tuple[int, Widget]] = SpatialMap()
@@ -312,30 +327,39 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
         entry. Both newly captured and reused resources publish through here.
         """
         source_bounds = bounds - (key.region.offset - self.key.region.offset)
+        child_demands: dict[Widget, set[Widget]] = {}
         if visible_only:
             candidates = dict(self._spatial_map.get_values_in_region(source_bounds))
-            for node in (root, *retained):
+            if (indexed_root := self.geometry.get(root)) is not None:
+                candidates[indexed_root[0]] = root
+            for node in retained:
                 if (indexed := self.geometry.get(node)) is not None:
                     candidates[indexed[0]] = node
-                elif node in retained:
-                    # Usually retained_paths includes the child root already.
-                    # A held source may have a different captured ancestry.
+                    if isinstance(indexed[1], SubtreeGeometryPlacement):
+                        child_demands.setdefault(node, set()).add(node)
+                else:
+                    # Route once through captured membership. Children receive
+                    # their own demands, never the unrelated global path set.
+                    # More than one edge may contain an original widget; keep
+                    # source order and its original last-assignment semantics.
                     for child, (ordinal, entry) in self.geometry.items():
                         if (isinstance(entry, SubtreeGeometryPlacement)
                                 and entry.source.contains(node)):
                             candidates[ordinal] = child
+                            child_demands.setdefault(child, set()).add(node)
             entries = ((node, self.geometry[node][1])
                        for _, node in sorted(candidates.items()))
         else:
             entries = ((node, entry) for node, (_, entry) in self.geometry.items())
+        no_demand: set[Widget] = set()
         for node, entry in self._paint_entries(entries, source_held=source_held):
             required = not visible_only or (node is root and require_root) or node in retained
             if isinstance(entry, SubtreeGeometryPlacement):
                 child_key, child_clip = self._project_child(entry, key, clip)
                 entry.source.project_into(
                     geometry, child_key, child_clip, clips, node,
-                    visible_only=visible_only, retained=retained, bounds=bounds,
-                    source_held=source_held, require_root=required,
+                    visible_only=visible_only, retained=child_demands.get(node, no_demand), bounds=bounds,
+                    source_held=source_held or entry.source_held, require_root=required,
                 )
                 continue
             # Clip intersection can only reduce these original rectangle bounds.
@@ -377,6 +401,8 @@ class PlacedSubtreeGeometry(SubtreeGeometry[MapGeometry]):
 
     def matches(self, key: SubtreeGeometryKey, *, require_complete: bool = False,
                 source_held: bool = False) -> bool:
+        if not self.reusable and not source_held:
+            return False
         if self.key.visible_only and require_complete:
             return False
         return self.key == key or (
@@ -427,6 +453,8 @@ class IntrinsicSubtreeGeometry(SubtreeGeometry[SubtreeMapGeometry]):
 
     def matches(self, key: SubtreeGeometryKey, *, require_complete: bool = False,
                 source_held: bool = False) -> bool:
+        if not self.reusable and not source_held:
+            return False
         if source_held:
             # The mutation owner lends the original source, not the changing
             # DOM. Internal scroll and all arrangement inputs still agree;
@@ -1301,12 +1329,17 @@ class Compositor:
                     # Complete intrinsic geometry retains original descendants
                     # and clip declarations. Ancestor scrolling changes only
                     # their placement; no mutating DOM arrangement is read.
-                    resource.restore_into(
-                        map, widgets, invisible_widgets, key, clip, clips,
-                        widget._render_widget, visible_only=visible_only and not complete,
-                        retained=retained_paths, bounds=root_geometry.region,
-                        source_held=True,
-                    )
+                    if capturing_source:
+                        map[widget._render_widget] = SubtreeGeometryPlacement(
+                            resource, key, clip, source_held=True
+                        )
+                    else:
+                        resource.restore_into(
+                            map, widgets, invisible_widgets, key, clip, clips,
+                            widget._render_widget, visible_only=visible_only and not complete,
+                            retained=retained_paths, bounds=root_geometry.region,
+                            source_held=True,
+                        )
                     # The complete resource has replaced these old viewport
                     # entries, including nested holds. Do not merge them back
                     # after projection and resurrect stale absolute placement.

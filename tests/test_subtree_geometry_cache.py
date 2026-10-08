@@ -53,6 +53,7 @@ async def test_unchanged_subtree_reuses_geometry_and_nested_changes_invalidate_i
 
 
 async def test_changed_parent_borrows_original_children_without_flat_capture():
+    from dataclasses import replace
     from textual._compositor import SubtreeGeometryPlacement
     from textual.containers import VerticalScroll
     from textual.screen import Screen
@@ -89,6 +90,22 @@ async def test_changed_parent_borrows_original_children_without_flat_capture():
         assert child not in original.geometry
         assert original.contains(child)
         assert original.captured_parent(child) is stable
+        # Capture the same acquired source with one original child loan. The
+        # immutable lifetime must be refused at the parent's reuse owner.
+        incoming_clip = stable_source.clip.source
+        local = {node: (entry if isinstance(entry, SubtreeGeometryPlacement) else entry.geometry)
+                 for node, (_, entry) in original.geometry.items()}
+        local[stable] = replace(stable_source, source_held=True)
+        loan = type(original).capture(
+            original.key, local, original.widgets, original.invisible_widgets,
+            {history: incoming_clip}, incoming_clip, set(),
+        )
+        assert loan.geometry[stable][1].source is stable_source.source
+        assert loan.geometry[stable][1].source_held
+        assert not loan.reusable
+        assert not loan.matches(loan.key)
+        assert loan.matches(loan.key, source_held=True)
+        assert original.reusable
 
         rows[0].children[0].update("changed\nheight\nthree")
         inserted = CachedGroup(Static("new row"), Static("new second child"))
@@ -101,14 +118,15 @@ async def test_changed_parent_borrows_original_children_without_flat_capture():
         assert child not in current.geometry
         assert current.contains(child)
         scroll = app.query_one(VerticalScroll)
+        targets = (child, rows[12].children[0], rows[-1].children[-1])
         expected = {}
         for position in (0, 18, 3, 55):
             scroll.scroll_to(y=position, animate=False, immediate=True)
             await pilot.pause()
-            compositor.reflow_visible(app.screen, app.size, retain_geometry=(child,))
+            compositor.reflow_visible(app.screen, app.size, retain_geometry=targets)
             reference = Compositor(max_subtree_geometry_entries=0)
-            reference.reflow_visible(app.screen, app.size, retain_geometry=(child,))
-            demanded = set(child.walk_ancestors(with_self=True))
+            reference.reflow_visible(app.screen, app.size, retain_geometry=targets)
+            demanded = {node for target in targets for node in target.walk_ancestors(with_self=True)}
             # Cached complete sources may retain extra empty clipped boxes.
             # Visible paint and every explicitly required reader must agree.
             def required_scene(source):
@@ -130,7 +148,7 @@ async def test_changed_parent_borrows_original_children_without_flat_capture():
             for position in (3, 18, 55, 0):
                 scroll.scroll_to(y=position, animate=False, immediate=True)
                 await pilot.pause()
-                compositor.reflow_visible(app.screen, app.size, retain_geometry=(child,))
+                compositor.reflow_visible(app.screen, app.size, retain_geometry=targets)
                 assert compositor._subtree_geometry[history] is held_source
                 assert not held_source.contains(incomplete)
                 assert incomplete not in compositor._published_map
