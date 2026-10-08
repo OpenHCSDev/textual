@@ -5,6 +5,43 @@ from textual.containers import Grid
 from textual.widgets import Label
 
 
+async def test_pointer_shape_preserves_native_measurement_and_unknown_renderers():
+    """Cursor publication has no native size input; custom renderers retain it."""
+    from textual.content import Content
+    from textual.widgets import Static
+
+    class PointerContent(Static):
+        def render(self):
+            return Content(self.styles.pointer)
+
+    native, custom = Label("original row"), PointerContent()
+    app = App()
+    async with app.run_test(size=(40, 12)) as pilot:
+        await app.mount(native, custom)
+        await pilot.pause()
+        await pilot.hover(native)
+        before = native.region
+        measurement, geometry = native._layout_updates, native._geometry_revision
+        custom_measurement = custom._layout_updates
+        native.styles.pointer = "text"
+        assert app.screen._pointer_shape == "text"
+        assert native._layout_updates == measurement
+        assert native._geometry_revision == geometry
+        custom.styles.pointer = "crosshair"
+        assert custom._layout_updates > custom_measurement
+        await pilot.pause()
+        assert native.region == before
+        assert app.screen.get_widget_at(before.x, before.y)[0] is native
+        # Raw source writes and stylesheet replacement share the descriptor.
+        native._inline_styles.set_rule("pointer", "pointer")
+        native._css_styles.replace_rules(dict(native._css_styles.get_rules(), pointer="help"))
+        assert native._layout_updates == measurement
+        assert native._geometry_revision == geometry
+        # Not every unscheduled enum is paint-only: wrapping remains a size input.
+        native.styles.text_wrap = "nowrap"
+        assert native._layout_updates > measurement
+
+
 async def test_style_publication_preserves_source_and_content_lifetimes():
     """A frame request must not retire measurements twice or hide new content."""
     from textual.css.scalar import Scalar
