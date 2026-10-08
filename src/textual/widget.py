@@ -8,6 +8,7 @@ from __future__ import annotations
 from asyncio import Task, create_task, gather, shield
 from collections import Counter
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from fractions import Fraction
 from time import monotonic
 from types import TracebackType
@@ -1325,14 +1326,10 @@ class Widget(DOMNode):
                 if has_rule("auto_color") and styles.auto_color:
                     color = text_background.get_contrast_text(color.a)
 
-            visual_style = VisualStyle(
-                background,
-                color,
-                bold=style.bold,
-                dim=style.dim,
-                italic=style.italic,
-                underline=style.underline,
-                strike=style.strike,
+            visual_style = replace(
+                VisualStyle.from_rich_style(style),
+                background=background,
+                foreground=color,
             )
             self._visual_style_cache[cache_key] = visual_style
 
@@ -4501,15 +4498,10 @@ class Widget(DOMNode):
             or not resolved.same_paint(self._visual_paint_state)
         ):
             background, color, style = resolved.background, resolved.foreground, resolved.text_style
-            self._visual_style = VisualStyle(
-                background,
-                color,
-                bold=style.bold,
-                dim=style.dim,
-                italic=style.italic,
-                reverse=style.reverse,
-                underline=style.underline,
-                strike=style.strike,
+            self._visual_style = replace(
+                VisualStyle.from_rich_style(style),
+                background=background,
+                foreground=color,
             )
         self._visual_paint_state = resolved
         return self._visual_style
