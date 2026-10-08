@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import asyncio
+from types import GeneratorType
+from typing import TYPE_CHECKING, Generator
 
 if TYPE_CHECKING:
     from textual.app import App, ComposeResult
@@ -35,6 +37,47 @@ def compose(
     Returns:
         A list of widgets.
     """
+    composition = _compose(node, compose_result)
+    try:
+        while True:
+            next(composition)
+    except StopIteration as completed:
+        return completed.value
+    finally:
+        composition.close()
+
+
+async def compose_async(
+    node: App | Widget, compose_result: ComposeResult | None = None
+) -> list[Widget]:
+    """Collect the same declaration without occupying the loop between children.
+
+    Children stay private until the complete result enters registration. A
+    suspended ``with`` belongs to this generator, not another pump's compose;
+    lend its original stacks only while that generator is executing.
+    """
+    app = node.app
+    composition = _compose(node, compose_result)
+    try:
+        while True:
+            next(composition)
+            compose_stack = app._compose_stacks.pop()
+            composed = app._composed.pop()
+            try:
+                await asyncio.sleep(0)
+            finally:
+                app._compose_stacks.append(compose_stack)
+                app._composed.append(composed)
+    except StopIteration as completed:
+        return completed.value
+    finally:
+        composition.close()
+
+
+def _compose(
+    node: App | Widget, compose_result: ComposeResult | None
+) -> Generator[None, None, list[Widget]]:
+    """Own declaration traversal and validation for both acquisition paths."""
     _rich_traceback_omit = True
     from textual.widget import MountError, Widget
 
@@ -44,11 +87,12 @@ def compose(
     composed: list[Widget] = []
     app._compose_stacks.append(compose_stack)
     app._composed.append(composed)
-    iter_compose = iter(
-        compose_result if compose_result is not None else node.compose()
-    )
-    is_generator = hasattr(iter_compose, "throw")
+    iter_compose = None
     try:
+        iter_compose = iter(
+            compose_result if compose_result is not None else node.compose()
+        )
+        is_generator = hasattr(iter_compose, "throw")
         while True:
             try:
                 child = next(iter_compose)
@@ -90,10 +134,17 @@ def compose(
                         raise
             else:
                 nodes.append(child)
+            yield
         if composed:
             nodes.extend(composed)
             composed.clear()
     finally:
-        app._compose_stacks.pop()
-        app._composed.pop()
+        try:
+            # Cancellation may occur while a declaration's with-block is open.
+            # Close it with its own stacks installed before releasing them.
+            if isinstance(iter_compose, GeneratorType):
+                iter_compose.close()
+        finally:
+            app._compose_stacks.pop()
+            app._composed.pop()
     return nodes

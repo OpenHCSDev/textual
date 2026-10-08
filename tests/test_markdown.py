@@ -43,6 +43,64 @@ class MarkdownApp(App[None]):
         yield FussyMarkdown(self._markdown)
 
 
+@pytest.mark.parametrize("kind", ["list", "table"])
+async def test_driver_wheel_completes_during_nested_markdown_construction(kind):
+    """A single root must not retain the UI turn for its whole token tree."""
+    from textual import events
+    from textual.containers import Horizontal, VerticalScroll
+    from textual.widgets import Static
+
+    delivered = asyncio.Event()
+    construction = []
+    at_delivery = []
+    rows = 40
+    source = (
+        "\n".join(f"- row {index}\n  - nested {index}" for index in range(rows))
+        if kind == "list" else
+        "| Heading |\n| --- |\n" + "\n".join(f"| row {index} |" for index in range(rows))
+    )
+
+    class Document(Markdown):
+        def get_block_class(self, name):
+            if name in ("paragraph_open", "td_open"):
+                construction.append(name)
+                if len(construction) == 1:
+                    point = self.app.query_one("#reader-body").region.offset
+                    self.app._driver.process_message(events.MouseScrollDown(
+                        None, point.x + 1, point.y + 1, 0, 0, 0, False, False, False
+                    ))
+            return super().get_block_class(name)
+
+    class ReadingApp(App):
+        def compose(self):
+            with Horizontal():
+                with VerticalScroll(id="reader"):
+                    yield Static("Existing body\n" * 60, id="reader-body")
+                yield Document(id="document")
+
+        async def on_event(self, event):
+            ingress = isinstance(event, events.MouseScrollDown) and not event.is_forwarded
+            result = await super().on_event(event)
+            if ingress:
+                at_delivery.append(len(construction))
+                delivered.set()
+            return result
+
+    app = ReadingApp()
+    async with app.run_test(size=(60, 16)):
+        document = app.query_one(Document)
+        publication = document.update(source)
+        await asyncio.wait_for(delivered.wait(), 3)
+        assert not publication.is_done
+        assert app.query_one("#reader", VerticalScroll).scroll_y > 0
+        await publication
+        assert at_delivery[0] < len(construction)
+        assert len(document.children) == 1
+        assert all(child.is_mounted for child in document.walk_children())
+        assert document.source == source
+        assert app._compose_stacks == [] and app._composed == []
+
+
 @pytest.mark.parametrize("parked", [False, True])
 async def test_stream_empty_stop_joins_without_publication(parked):
     appends = []
