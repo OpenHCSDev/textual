@@ -65,10 +65,45 @@ The census covers production and current tests with zero parse omissions;
 historical evidence scripts retain their original private API shape.
 
 Parent owns matching history transaction/reader lifetime and saved-history
-application verification. Parent reports four matching source application paths
-passed, but source was changing during those runs; the final committed pair still
-needs its immutable saved-history measurement. No installed change or latency
-gain is claimed here. Explicit complete geometry acquisition remains synchronous.
+application verification. Four matching source application paths passed. The
+immutable 3c7d5ec0/de83aa39 saved-history run then completed without application
+error: median 25.1ms, p95 210.7ms, maximum 369.6ms versus published 32.8/191.3/228.2ms.
+The tail regressed; this pair is not published and no overall gain is claimed.
+The subsequent diagnostic main-thread sample found 142 samples through ordinary
+arrangement and six through explicit acquisition. Those samples neither identify
+acquisition as the cause nor supply call counts or CPU durations.
+Explicit complete geometry acquisition remains synchronous.
 One uncached custom visual can still render a whole widget within a band; no
 renderer deadline or readiness exemption is introduced.
 Historical evidence scripts remain at their original source/API scope in Git.
+
+## Requested positions in partial geometry
+
+Ordinary visible arrangement previously required a complete source for every
+retained position path. A matching partial source therefore could not supply a
+position it already owned: the compositor bypassed the capture/reuse path and
+descended again. The same original acquired path relation now carries the actual
+requested positions to each ancestor. `SubtreeGeometry.matches` checks placement
+first, then requires those positions in its captured geometry. Complete sources
+also own absent answers; partial logical/invisible membership does not establish
+a position. Missing positions use the original acquisition path, and the new
+partial source can supply them on the next unchanged frame. Full capture still
+requires complete scope; held-source, revision, internal scroll, clip and layer
+checks remain intact.
+
+Source projection intersects those requests with its original immutable geometry
+membership before routing them through borrowed children. It preserves original
+ordinals, captured ancestry and last-assignment ordering, without scanning every
+unrelated global request in every child source. The synchronous ancestor relation
+still walks each requested target's path; this change does not remove that work
+or make partial placed geometry translatable.
+
+One affected real native App check passed (0.64s): 100 rows, acquired and missing
+offscreen targets, changing target membership, scroll/reversal and a child height
+write. Every phase compares actual published geometry and rendered strips with
+the original uncached compositor. An already covered partial source is reused;
+a missing target is acquired before reuse, and that partial source still refuses
+complete capture. This is geometry/paint confirmation, not saved-history latency
+acceptance. The next affected saved-history run belongs to Parent; no installed
+or public change is made here. Raw control output and the original Package
+before/after consumer census are retained beside this file.

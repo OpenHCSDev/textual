@@ -14,6 +14,96 @@ class CachedGroup(VerticalGroup):
     CACHE_SUBTREE_GEOMETRY = True
 
 
+async def test_retained_positions_reuse_covered_partial_source_and_acquire_missing_paths():
+    from textual.containers import VerticalScroll
+
+    class ObservedGroup(CachedGroup):
+        arrangements = 0
+
+        def arrange(self, size, optimal=False):
+            self.arrangements += 1
+            return super().arrange(size, optimal=optimal)
+
+    rows = [Static(f"ORIGINAL_ROW_{index:03}") for index in range(100)]
+    source = ObservedGroup(*rows, id="source")
+
+    class PositionScreen(IndependentScreen):
+        CSS = """
+        VerticalScroll { height: 8; }
+        #source { height: 100; width: 1fr; }
+        Static { height: 1; }
+        """
+        targets = ()
+
+        def compose(self):
+            yield VerticalScroll(source, id="scroller")
+
+        def _use_viewport_layout(self):
+            return True
+
+        def _layout_geometry_targets(self):
+            return self.targets
+
+    app = App()
+    async with app.run_test(size=(40, 12)) as pilot:
+        screen = PositionScreen()
+        await app.push_screen(screen)
+        await pilot.pause()
+        compositor = screen._compositor
+        partial = compositor._subtree_geometry[source]
+        assert not partial.complete and partial.contains(rows[0])
+        assert not partial.contains(rows[90])
+
+        def compare_original_geometry():
+            reference = Compositor(max_subtree_geometry_entries=0)
+            reference.reflow_visible(screen, app.size, retain_geometry=screen.targets)
+            assert compositor._published_map == reference._published_map
+            assert tuple(compositor.render_strips()) == tuple(reference.render_strips())
+
+        # The partial source owns this existing position. Naming it does not
+        # turn the request into a complete offscreen descendant acquisition.
+        screen.targets = (rows[0],)
+        source.arrangements = 0
+        screen._refresh_layout(scroll=True)
+        assert source.arrangements == 0
+        assert compositor._subtree_geometry[source] is partial
+        assert not partial.matches(partial.key, require_complete=True,
+                                   required_geometry=screen.targets)
+        compare_original_geometry()
+
+        # A newly requested missing path must be acquired. The resulting
+        # partial source owns both explicit positions on the following frame.
+        for targets in ((rows[0], rows[90]), (rows[90], rows[40])):
+            screen.targets = targets
+            source.arrangements = 0
+            screen._refresh_layout(scroll=True)
+            assert source.arrangements > 0
+            acquired = compositor._subtree_geometry[source]
+            assert not acquired.complete and all(acquired.contains(row) for row in targets)
+            compare_original_geometry()
+            source.arrangements = 0
+            screen._refresh_layout(scroll=True)
+            assert source.arrangements == 0
+            assert compositor._subtree_geometry[source] is acquired
+            compare_original_geometry()
+
+        # Placement and child mutation still retire exact partial answers.
+        scroller = screen.query_one("#scroller", VerticalScroll)
+        for position in (15, 0):
+            scroller.scroll_to(y=position, animate=False, immediate=True)
+            await pilot.pause()
+            screen._refresh_layout(scroll=True)
+            compare_original_geometry()
+        before = compositor._subtree_geometry[source]
+        rows[40].styles.height = 3
+        await pilot.pause()
+        screen._refresh_layout(scroll=True)
+        assert compositor._subtree_geometry[source] is not before
+        assert compositor._published_map[rows[40]].region.height == 3
+        compare_original_geometry()
+        assert not app._exception
+
+
 @pytest.mark.parametrize("capacity", [0, 1, 2, 5])
 async def test_geometry_budget_bounds_retention_without_changing_the_scene(capacity):
     app = App()
