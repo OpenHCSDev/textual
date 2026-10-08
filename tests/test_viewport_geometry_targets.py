@@ -1,7 +1,10 @@
 import asyncio
 from unittest.mock import patch
 
+import pytest
+
 from textual import errors
+from tests.test_batch_paint_admission import IndependentScreen
 from textual.app import App
 from textual.containers import VerticalGroup, VerticalScroll
 from textual.screen import Screen
@@ -180,7 +183,7 @@ def test_borrowed_geometry_routes_preserve_membership_ancestry_and_assignment_or
         key, MappingProxyType({
             first: (0, SubtreeGeometryPlacement(first_source, key, clip, root)),
             second: (1, SubtreeGeometryPlacement(second_source, key, clip, root)),
-            root: (2, placed(9)),
+            root: (2, SubtreeMapGeometry(placed(9), (), None)),
         }), frozenset((root,)), frozenset(),
     )
     assert resource.contains(shared)
@@ -238,7 +241,7 @@ async def test_complete_markdown_capture_keeps_offscreen_table_keylines():
         assert tables[-1].outer_size.height == 0
 
 
-class TargetedScreen(Screen):
+class TargetedScreen(IndependentScreen):
     CSS = "VerticalScroll { width: 1fr; } VerticalGroup, Static { height: auto; }"
     targets = ()
 
@@ -264,7 +267,7 @@ async def test_held_complete_body_projects_original_scene_during_ancestor_scroll
         CACHE_SUBTREE_GEOMETRY = True
 
         def arrange(self, size, optimal=False):
-            assert not self.lock.is_locked, "Read changing body layout"
+            assert self not in self.screen._layout_mutation_roots(), "Read changing body layout"
             return super().arrange(size, optimal=optimal)
 
     rows = [Static(f"COMMITTED_ROW_{index:02}", id=f"held-row-{index}")
@@ -277,9 +280,6 @@ async def test_held_complete_body_projects_original_scene_during_ancestor_scroll
         #held-body Static { height: 2; }
         #outside-body { height: 30; }
         """
-
-        def _layout_mutation_roots(self):
-            return (body,) if body.lock.is_locked else ()
 
         def compose(self):
             with VerticalScroll(id="history"):
@@ -294,7 +294,7 @@ async def test_held_complete_body_projects_original_scene_during_ancestor_scroll
         await pilot.pause()
         history = screen.query_one("#history", VerticalScroll)
         compositor = screen._compositor
-        resource = compositor._subtree_geometry[body]
+        resource = compositor.acquire_subtree_geometry(body).source
         assert isinstance(resource, IntrinsicSubtreeGeometry)
         assert all(resource.contains(row) for row in rows)
         # Holding revisions does not permit resizing or changing the source's
@@ -326,7 +326,7 @@ async def test_held_complete_body_projects_original_scene_during_ancestor_scroll
 
         completed = asyncio.Event()
         unrelated = asyncio.Event()
-        async with body.lock:
+        async with app.screen.preserve_layout(body):
             incomplete = Static("UNCOMMITTED_CHILD", id="incomplete")
             await body.mount(incomplete)
             body.call_after_refresh(completed.set)
@@ -373,7 +373,7 @@ async def test_held_screen_relative_source_keeps_placement_and_retires_children(
         CACHE_SUBTREE_GEOMETRY = True
 
         def arrange(self, size, optimal=False):
-            assert not self.lock.is_locked, "Read changing overlay layout"
+            assert self not in self.screen._layout_mutation_roots(), "Read changing overlay layout"
             return super().arrange(size, optimal=optimal)
 
     overlay = Static("SCREEN_OVERLAY", id="overlay")
@@ -387,9 +387,6 @@ async def test_held_screen_relative_source_keeps_placement_and_retires_children(
             with VerticalScroll(id="history"):
                 yield body
 
-        def _layout_mutation_roots(self):
-            return (body,) if body.lock.is_locked else ()
-
     app = App()
     async with app.run_test(size=(40, 10)) as pilot:
         screen = HeldScreen()
@@ -397,10 +394,10 @@ async def test_held_screen_relative_source_keeps_placement_and_retires_children(
         await app.push_screen(screen)
         await pilot.pause()
         compositor = screen._compositor
-        resource = compositor._subtree_geometry[body]
+        resource = compositor.acquire_subtree_geometry(body).source
         assert isinstance(resource, PlacedSubtreeGeometry)
         original = dict(compositor._published_map)
-        async with body.lock:
+        async with app.screen.preserve_layout(body):
             await body.mount(Static("INCOMPLETE"))
             screen.query_one("#history").scroll_to(y=10, animate=False, immediate=True)
             await pilot.pause()
@@ -418,14 +415,15 @@ async def test_held_screen_relative_source_keeps_placement_and_retires_children(
         assert not app._exception
 
 
-async def test_held_original_ancestry_honors_a_nested_self_painting_owner():
+@pytest.mark.parametrize("screen_overlay", [False, True])
+async def test_held_original_ancestry_honors_a_nested_self_painting_owner(screen_overlay):
     from textual.content import Content
 
     class HeldGroup(VerticalGroup):
         CACHE_SUBTREE_GEOMETRY = True
 
         def arrange(self, size, optimal=False):
-            assert not self.lock.is_locked, "Read changing child topology"
+            assert self not in self.screen._layout_mutation_roots(), "Read changing child topology"
             return super().arrange(size, optimal=optimal)
 
     class ContentBody(Static):
@@ -444,6 +442,8 @@ async def test_held_original_ancestry_honors_a_nested_self_painting_owner():
 
     body = ContentBody("INITIAL_NATIVE_PARENT", id="content-body")
     old = ChangingChild("OLD_NATIVE_CHILD")
+    if screen_overlay:
+        old.styles.overlay = "screen"
 
     class ContentScreen(TargetedScreen):
         CSS = "#content-body { height: 18; } Static { height: 2; }"
@@ -451,9 +451,6 @@ async def test_held_original_ancestry_honors_a_nested_self_painting_owner():
         def compose(self):
             with VerticalScroll(id="history"):
                 yield holder
-
-        def _layout_mutation_roots(self):
-            return (holder,) if holder.lock.is_locked else ()
 
     app = App()
     async with app.run_test(size=(40, 10)) as pilot:
@@ -464,10 +461,10 @@ async def test_held_original_ancestry_honors_a_nested_self_painting_owner():
         await body.mount(old)
         await pilot.pause()
         compositor = screen._compositor
-        resource = compositor._subtree_geometry[holder]
+        resource = compositor.acquire_subtree_geometry(holder).source
         assert resource.contains(old)
         assert resource.captured_parent(old) is body
-        async with holder.lock:
+        async with app.screen.preserve_layout(holder):
             body.update(Content("\n".join(["ACQUIRED_ROOT_PAINT"] * 18)))
             await body.mount(ChangingChild("UNCOMMITTED_DESCENDANT"))
             screen.query_one("#history").scroll_to(y=4, animate=False, immediate=True)
@@ -520,8 +517,8 @@ async def test_cached_overlay_and_fixed_children_match_the_original_scene():
             screen._refresh_layout(app.size, scroll=True)
             # The overlay's clip reaches the outer screen, so this resource
             # keeps placed geometry rather than manufacturing an intrinsic clip.
-            assert isinstance(compositor._subtree_geometry[body], PlacedSubtreeGeometry)
-            expected, _ = Compositor(max_subtree_geometry_entries=0)._arrange_root(
+            assert isinstance(compositor.acquire_subtree_geometry(body).source, PlacedSubtreeGeometry)
+            expected, _, _ = Compositor(max_subtree_geometry_entries=0)._arrange_root(
                 screen, app.size, visible_only=False,
             )
             paint = compositor._paint_regions(compositor._ordered_geometry(expected), app.size.region)
@@ -558,7 +555,7 @@ async def test_complete_cached_body_keeps_capture_and_explicit_reader_geometry()
         await pilot.pause()
         history = screen.query_one("#history", VerticalScroll)
         compositor = screen._compositor
-        resource = compositor._subtree_geometry[body]
+        resource = compositor.acquire_subtree_geometry(body).source
         assert all(resource.contains(row) for row in rows)
 
         for position in (0, 200, 0):

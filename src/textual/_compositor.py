@@ -23,13 +23,11 @@ from types import MappingProxyType
 from typing import (
     TYPE_CHECKING,
     Callable,
-    Generic,
     Iterable,
     Iterator,
     Mapping,
     NamedTuple,
     Sequence,
-    TypeVar,
     cast,
 )
 
@@ -195,9 +193,6 @@ class SubtreeMapGeometry(NamedTuple):
         ), clip
 
 
-GeometryEntry = TypeVar("GeometryEntry", MapGeometry, SubtreeMapGeometry)
-
-
 @dataclass(frozen=True)
 class SubtreeGeometryPlacement:
     """A borrowed child source at its original acquired parent placement.
@@ -223,21 +218,30 @@ class SubtreeGeometryPlacement:
 
 
 @dataclass(frozen=True)
-class SubtreeGeometry(ABC, Generic[GeometryEntry]):
+class SubtreeGeometry(ABC):
     """One immutable native arrangement resource in the compositor's cache."""
 
     key: SubtreeGeometryKey
-    geometry: Mapping[Widget, tuple[int, GeometryEntry | SubtreeGeometryPlacement]]
+    geometry: Mapping[Widget, tuple[int, SubtreeMapGeometry | SubtreeGeometryPlacement]]
     """Ordered local placements and borrowed child sources, without flattening."""
     widgets: frozenset[Widget]
     invisible_widgets: frozenset[Widget]
 
     @classmethod
     def capture(cls, key, geometry, widgets, invisible_widgets, clips, clip, screen_coordinates):
-        return cls(key, MappingProxyType({
-            node: (ordinal, entry)
-            for ordinal, (node, entry) in enumerate(geometry.items())
-        }), widgets, invisible_widgets)
+        routes = cls._route_geometry(geometry)
+        captured = {}
+        for ordinal, (node, entry) in enumerate(geometry.items()):
+            parent = node.parent
+            parent = parent._render_widget if isinstance(parent, Widget) else None
+            parent = parent if parent is not node and parent in routes else None
+            if isinstance(entry, MapGeometry):
+                entry = SubtreeMapGeometry(entry, (), parent)
+            else:
+                entry = (replace(entry, parent=parent) if isinstance(entry, SubtreeGeometryPlacement)
+                         else entry._replace(parent=parent))
+            captured[node] = ordinal, entry
+        return cls(key, MappingProxyType(captured), widgets, invisible_widgets)
 
     @staticmethod
     def _route_geometry(geometry) -> Mapping[Widget, tuple[Widget, ...]]:
@@ -402,8 +406,20 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
                 clips[node] = node_clip
 
     def _paint_entries(self, entries, *, source_held: bool):
-        """Placed sources retain their original native participation."""
-        return entries
+        """Retained self-paint follows the source's original captured ancestry."""
+        if not source_held:
+            return entries
+        participation: dict[Widget, bool] = {}
+
+        def participates(node: Widget) -> bool:
+            if node not in participation:
+                parent = self.captured_parent(node)
+                participation[node] = node._render_widget is node and (
+                    parent is None or (parent.is_container and participates(parent))
+                )
+            return participation[node]
+
+        return ((node, entry) for node, entry in entries if participates(node))
 
     def _project_child(self, entry: SubtreeGeometryPlacement, key: SubtreeGeometryKey,
                        clip: SceneClip) -> tuple[SubtreeGeometryKey, SceneClip]:
@@ -411,7 +427,7 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
         return entry.key, entry.clip
 
     @abstractmethod
-    def _project_entry(self, entry: GeometryEntry, key: SubtreeGeometryKey,
+    def _project_entry(self, entry: SubtreeMapGeometry, key: SubtreeGeometryKey,
                        clip: SceneClip, *, root: bool) -> tuple[MapGeometry, SceneClip]:
         ...
 
@@ -425,18 +441,18 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
 
 
 @dataclass(frozen=True)
-class PlacedSubtreeGeometry(SubtreeGeometry[MapGeometry]):
+class PlacedSubtreeGeometry(SubtreeGeometry):
     """A culled or screen-dependent arrangement keeps its exact placement."""
 
     def _matches_placement(self, key: SubtreeGeometryKey) -> bool:
         return self.key == key
 
-    def _project_entry(self, entry: MapGeometry, key: SubtreeGeometryKey,
+    def _project_entry(self, entry: SubtreeMapGeometry, key: SubtreeGeometryKey,
                        clip: SceneClip, *, root: bool) -> tuple[MapGeometry, SceneClip]:
-        return entry, RootSceneClip(entry.clip)
+        return entry.geometry, RootSceneClip(entry.geometry.clip)
 
 @dataclass(frozen=True)
-class IntrinsicSubtreeGeometry(SubtreeGeometry[SubtreeMapGeometry]):
+class IntrinsicSubtreeGeometry(SubtreeGeometry):
     """The same bounded resource, reusable under a new original outer clip."""
 
     @classmethod
@@ -446,7 +462,6 @@ class IntrinsicSubtreeGeometry(SubtreeGeometry[SubtreeMapGeometry]):
                 key, geometry, widgets, invisible_widgets, clips, clip, screen_coordinates)
         intrinsic = {}
         origin = key.region.offset
-        geometry_routes = cls._route_geometry(geometry)
         for node, entry in geometry.items():
             child = isinstance(entry, SubtreeGeometryPlacement)
             scope, bounds = (entry.clip if child else clips[node]).relative_bounds(clip, origin)
@@ -458,13 +473,9 @@ class IntrinsicSubtreeGeometry(SubtreeGeometry[SubtreeMapGeometry]):
             if scope is not clip:
                 return PlacedSubtreeGeometry.capture(
                     key, geometry, widgets, invisible_widgets, clips, clip, screen_coordinates)
-            parent = node.parent
-            parent = parent._render_widget if isinstance(parent, Widget) else None
-            parent = (parent if parent is not node and parent in geometry_routes
-                      else None)
             intrinsic[node] = (
-                replace(entry, parent=parent, clip_bounds=bounds) if child
-                else SubtreeMapGeometry(entry, bounds, parent)
+                replace(entry, clip_bounds=bounds) if child
+                else SubtreeMapGeometry(entry, bounds, None)
             )
         return super().capture(key, intrinsic, widgets, invisible_widgets,
                                clips, clip, screen_coordinates)
@@ -486,26 +497,6 @@ class IntrinsicSubtreeGeometry(SubtreeGeometry[SubtreeMapGeometry]):
             layer_order=entry.key.layer_order + key.layer_order - self.key.layer_order,
             clip=clip.region,
         ), clip
-
-    def _paint_entries(self, entries, *, source_held: bool):
-        if not source_held:
-            return entries
-        participation: dict[Widget, bool] = {}
-
-        def participates(node: Widget) -> bool:
-            if node not in participation:
-                parent = self.captured_parent(node)
-                participation[node] = node._render_widget is node and (
-                    parent is None or (parent.is_container and participates(parent))
-                )
-            return participation[node]
-
-        # A retained-paint owner can now render itself rather than its old
-        # native children. Consult that declaration along captured ancestry,
-        # never walk or arrange the changing child tree. Each parent answers
-        # once within this projection; the resource remains immutable.
-        return ((node, entry) for node, entry in entries if participates(node))
-
 
 class CompositorUpdate:
     """An update generated by the compositor, which also doubles as console renderables."""
@@ -1086,7 +1077,11 @@ class Compositor:
                 size, size, size.region, NULL_SPACING,
             )
         layer_order = root_geometry.order[-1][2]
-        no_clip = root_clip if root_clip is not None else RootSceneClip(root_geometry.region)
+        # Screen overlays retain their original screen clip, even when a body
+        # is acquired with expanded paint bounds or its own incoming clip.
+        no_clip = RootSceneClip(size.region)
+        incoming_clip = (root_clip if root_clip is not None else
+                         RootSceneClip(root_geometry.region) if capture_root else no_clip)
         # Widget owns layer inheritance. Acquire external ancestry only at the
         # root, then carry that original declaration through this traversal.
         root_layers = root._get_layer_order(root.walk_ancestors(with_self=True))
@@ -1459,7 +1454,7 @@ class Compositor:
                 root_geometry.region,
                 root_geometry.order,
                 layer_order,
-                no_clip,
+                incoming_clip,
                 True,
                 root_geometry.dock_gutter,
                 False,

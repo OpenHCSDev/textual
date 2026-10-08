@@ -227,7 +227,7 @@ async def test_body_capture_keeps_original_nonzero_row_coordinates():
         assert compositor.visible_widgets[body] == (
             placement.region, Region(0, 0, 10, 2),
         )
-        geometry, _ = compositor._arrange_root(
+        geometry, _, _ = compositor._arrange_root(
             original, compositor.size, visible_only=False, root_geometry=placement,
         )
         paint = compositor._paint_regions(compositor._ordered_geometry(geometry), placement.region)
@@ -315,7 +315,7 @@ async def test_capture_geometry_and_offsets_share_original_scene_custody():
         publication = compositor._visible_map
         assert far not in publication
         [(original, placement)] = compositor.published_geometry((body,))
-        capture, _ = compositor._arrange_root(
+        capture, _, _ = compositor._arrange_root(
             original, compositor.size, visible_only=False, root_geometry=placement,
         )
         assert far in capture and omitted not in capture
@@ -332,7 +332,7 @@ async def test_capture_geometry_and_offsets_share_original_scene_custody():
             assert compositor._full_map_invalidated
 
             # A failed nested paint must restore the enclosing original resource.
-            nested, _ = compositor._arrange_root(
+            nested, _, _ = compositor._arrange_root(
                 far, compositor.size, visible_only=False, root_geometry=capture[far],
             )
             with pytest.raises(RuntimeError, match="native renderer failed"):
