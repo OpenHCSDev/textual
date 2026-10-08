@@ -43,13 +43,24 @@ class MarkdownApp(App[None]):
         yield FussyMarkdown(self._markdown)
 
 
-async def test_stream_immediate_stop_joins_unstarted_worker():
-    document = Markdown()
+@pytest.mark.parametrize("parked", [False, True])
+async def test_stream_empty_stop_joins_without_publication(parked):
+    appends = []
+
+    class ObservedMarkdown(Markdown):
+        async def append(self, fragment):
+            appends.append(fragment)
+            await super().append(fragment)
+
+    document = ObservedMarkdown()
     async with App().run_test() as pilot:
         await pilot.app.mount(document)
         stream = document.get_stream(document)
         task = stream._task
+        if parked:
+            await asyncio.sleep(0)
         await stream.stop()
+        assert appends == []
         assert task.done() and not task.cancelled()
         assert stream._task is None and stream._stopped
         await stream.stop()
