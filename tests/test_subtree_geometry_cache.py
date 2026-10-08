@@ -54,7 +54,7 @@ async def test_unchanged_subtree_reuses_geometry_and_nested_changes_invalidate_i
 
 async def test_changed_parent_borrows_original_children_without_flat_capture():
     from dataclasses import replace
-    from textual._compositor import SubtreeGeometryPlacement
+    from textual._compositor import PlacedSubtreeGeometry, SubtreeGeometryPlacement
     from textual.containers import VerticalScroll
     from textual.screen import Screen
 
@@ -106,6 +106,22 @@ async def test_changed_parent_borrows_original_children_without_flat_capture():
         assert not loan.matches(loan.key)
         assert loan.matches(loan.key, source_held=True)
         assert original.reusable
+        # A missing complete child source can lend only its known placed
+        # snapshot. A containing capture must not promote that scope.
+        partial = PlacedSubtreeGeometry.capture(
+            stable_source.key._replace(visible_only=True),
+            {stable: stable_source.source.geometry[stable][1].geometry},
+            frozenset({stable}), frozenset(), {}, stable_source.clip, set(),
+        )
+        local[stable] = replace(stable_source, source=partial, source_held=True)
+        partial_loan = type(original).capture(
+            original.key, local, original.widgets, original.invisible_widgets,
+            {history: incoming_clip}, incoming_clip, set(),
+        )
+        assert partial_loan.contains(stable)
+        assert not partial_loan.contains(child)
+        assert not partial_loan.complete
+        assert not partial_loan.matches(partial_loan.key, require_complete=True, source_held=True)
 
         rows[0].children[0].update("changed\nheight\nthree")
         inserted = CachedGroup(Static("new row"), Static("new second child"))

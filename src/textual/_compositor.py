@@ -290,6 +290,14 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
         )
 
     @cached_property
+    def complete(self) -> bool:
+        """Complete acquisition includes the scope of every borrowed source."""
+        return not self.key.visible_only and all(
+            entry.source.complete for _, entry in self.geometry.values()
+            if isinstance(entry, SubtreeGeometryPlacement)
+        )
+
+    @cached_property
     def _spatial_map(self) -> SpatialMap[tuple[int, Widget]]:
         """Derive spatial admission from this immutable arrangement, once."""
         spatial_map: SpatialMap[tuple[int, Widget]] = SpatialMap()
@@ -403,7 +411,7 @@ class PlacedSubtreeGeometry(SubtreeGeometry[MapGeometry]):
                 source_held: bool = False) -> bool:
         if not self.reusable and not source_held:
             return False
-        if self.key.visible_only and require_complete:
+        if require_complete and not self.complete:
             return False
         return self.key == key or (
             not self.key.visible_only and key.visible_only
@@ -454,6 +462,8 @@ class IntrinsicSubtreeGeometry(SubtreeGeometry[SubtreeMapGeometry]):
     def matches(self, key: SubtreeGeometryKey, *, require_complete: bool = False,
                 source_held: bool = False) -> bool:
         if not self.reusable and not source_held:
+            return False
+        if require_complete and not self.complete:
             return False
         if source_held:
             # The mutation owner lends the original source, not the changing
@@ -1349,9 +1359,27 @@ class Compositor:
                 else:
                     # Placed, resized or missing sources cannot authorize a
                     # projection. Keep their exact committed hit/paint bounds.
-                    for node, geometry in held[widget].items():
-                        store_geometry(node, geometry, RootSceneClip(geometry.clip))
-                    widgets.update(held[widget])
+                    if capturing_source:
+                        # The published fallback is a partial placed source,
+                        # not an invented complete or translatable subtree.
+                        # Keep that lending scope on the same child edge.
+                        snapshot = held[widget]
+                        partial_key = SubtreeGeometryKey.from_widget(
+                            widget, virtual_region, region, order, layer_order,
+                            clip.region, visible, dock_gutter, size, True,
+                            tuple(inherited_layers.items()) if inherited_layers is not None else (),
+                        )
+                        source = PlacedSubtreeGeometry.capture(
+                            partial_key, snapshot, frozenset(snapshot), frozenset(),
+                            clips, clip, screen_coordinates,
+                        )
+                        map[widget._render_widget] = SubtreeGeometryPlacement(
+                            source, partial_key, clip, source_held=True
+                        )
+                    else:
+                        for node, geometry in held[widget].items():
+                            store_geometry(node, geometry, RootSceneClip(geometry.clip))
+                        widgets.update(held[widget])
                 return
             if (widget in mutation_paths or not self.max_subtree_geometry_entries
                     or not widget.CACHE_SUBTREE_GEOMETRY or not widget._is_mounted):
