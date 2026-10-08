@@ -52,6 +52,101 @@ async def test_unchanged_subtree_reuses_geometry_and_nested_changes_invalidate_i
         assert not compositor._subtree_geometry
 
 
+async def test_changed_parent_borrows_original_children_without_flat_capture():
+    from textual._compositor import SubtreeGeometryPlacement
+    from textual.containers import VerticalScroll
+    from textual.screen import Screen
+
+    rows = [CachedGroup(Static(f"row {index}"), Static("wrapped " * 7))
+            for index in range(20)]
+    history = CachedGroup(*rows)
+
+    class SourceScreen(Screen):
+        def compose(self):
+            yield VerticalScroll(history)
+
+        def _layout_mutation_roots(self):
+            return (history,) if history.lock.is_locked else ()
+
+        def _prepare_compositor_refresh(self):
+            return self._layout_mutation_roots()
+
+    class SourceApp(App):
+        CSS = "VerticalScroll { height: 10; } Static { height: auto; }"
+
+        def get_default_screen(self):
+            return SourceScreen()
+
+    app = SourceApp()
+    async with app.run_test(size=(30, 12)) as pilot:
+        await pilot.pause()
+        compositor = app.screen._compositor
+        original = compositor._subtree_geometry[history]
+        stable = rows[5]
+        stable_source = original.geometry[stable][1]
+        assert isinstance(stable_source, SubtreeGeometryPlacement)
+        child = stable.children[1]
+        assert child not in original.geometry
+        assert original.contains(child)
+        assert original.captured_parent(child) is stable
+
+        rows[0].children[0].update("changed\nheight\nthree")
+        inserted = CachedGroup(Static("new row"), Static("new second child"))
+        await history.mount(inserted, before=rows[1])
+        await pilot.pause()
+        current = compositor._subtree_geometry[history]
+        assert current is not original
+        assert current.geometry[stable][1].source is stable_source.source
+        assert len(current.geometry) == len(history.children) + 1
+        assert child not in current.geometry
+        assert current.contains(child)
+        scroll = app.query_one(VerticalScroll)
+        expected = {}
+        for position in (0, 18, 3, 55):
+            scroll.scroll_to(y=position, animate=False, immediate=True)
+            await pilot.pause()
+            compositor.reflow_visible(app.screen, app.size, retain_geometry=(child,))
+            reference = Compositor(max_subtree_geometry_entries=0)
+            reference.reflow_visible(app.screen, app.size, retain_geometry=(child,))
+            demanded = set(child.walk_ancestors(with_self=True))
+            # Cached complete sources may retain extra empty clipped boxes.
+            # Visible paint and every explicitly required reader must agree.
+            def required_scene(source):
+                return {node: geometry for node, geometry in source._published_map.items()
+                        if geometry.visible_region or node in demanded}
+            assert required_scene(compositor) == required_scene(reference)
+            expected[position] = required_scene(reference)
+            # Complete source membership includes offscreen descendants;
+            # uncached visible traversal intentionally does not visit them.
+            assert compositor.widgets == reference._arrange_root(
+                app.screen, app.size, visible_only=False
+            )[1]
+            assert compositor.find_widget(child) == reference.find_widget(child)
+        held_source = compositor._subtree_geometry[history]
+        async with history.lock:
+            incomplete = CachedGroup(Static("NOT_COMMITTED"))
+            await history.mount(incomplete)
+            await pilot.pause()
+            for position in (3, 18, 55, 0):
+                scroll.scroll_to(y=position, animate=False, immediate=True)
+                await pilot.pause()
+                compositor.reflow_visible(app.screen, app.size, retain_geometry=(child,))
+                assert compositor._subtree_geometry[history] is held_source
+                assert not held_source.contains(incomplete)
+                assert incomplete not in compositor._published_map
+                assert required_scene(compositor) == expected[position]
+        await incomplete.remove()
+        await pilot.pause()
+        compositor.reflow(app.screen, app.size)
+        reference.reflow(app.screen, app.size)
+        assert compositor._published_map == reference._published_map
+        await stable.remove()
+        await pilot.pause()
+        assert stable not in compositor._subtree_geometry
+        assert not any(source.contains(child) for source in compositor._subtree_geometry.values())
+        assert child not in compositor._published_map
+
+
 @pytest.mark.parametrize("capacity", [-1, True, 1.5, None])
 def test_geometry_budget_rejects_invalid_capacities(capacity):
     with pytest.raises(ValueError, match="non-negative integer"):

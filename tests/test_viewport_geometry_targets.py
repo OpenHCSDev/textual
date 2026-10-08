@@ -106,7 +106,7 @@ async def test_held_complete_body_projects_original_scene_during_ancestor_scroll
         compositor = screen._compositor
         resource = compositor._subtree_geometry[body]
         assert isinstance(resource, IntrinsicSubtreeGeometry)
-        assert all(row in resource.geometry for row in rows)
+        assert all(resource.contains(row) for row in rows)
         # Holding revisions does not permit resizing or changing the source's
         # own scroll scope. Those answers still require a fresh arrangement.
         assert not resource.matches(
@@ -215,7 +215,7 @@ async def test_held_screen_relative_source_keeps_placement_and_retires_children(
             screen.query_one("#history").scroll_to(y=10, animate=False, immediate=True)
             await pilot.pause()
             for node, geometry in original.items():
-                if node in resource.geometry:
+                if resource.contains(node):
                     assert compositor._published_map[node] == geometry
             await retired.remove()
             await pilot.pause()
@@ -275,8 +275,8 @@ async def test_held_original_ancestry_honors_a_nested_self_painting_owner():
         await pilot.pause()
         compositor = screen._compositor
         resource = compositor._subtree_geometry[holder]
-        assert old in resource.geometry
-        assert resource.geometry[old][1].parent is body
+        assert resource.contains(old)
+        assert resource.captured_parent(old) is body
         async with holder.lock:
             body.update(Content("\n".join(["ACQUIRED_ROOT_PAINT"] * 18)))
             await body.mount(ChangingChild("UNCOMMITTED_DESCENDANT"))
@@ -369,7 +369,7 @@ async def test_complete_cached_body_keeps_capture_and_explicit_reader_geometry()
         history = screen.query_one("#history", VerticalScroll)
         compositor = screen._compositor
         resource = compositor._subtree_geometry[body]
-        assert all(row in resource.geometry for row in rows)
+        assert all(resource.contains(row) for row in rows)
 
         for position in (0, 200, 0):
             history.scroll_to(y=position, immediate=True, animate=False)
@@ -378,7 +378,7 @@ async def test_complete_cached_body_keeps_capture_and_explicit_reader_geometry()
             assert body in viewport and rows[235] in viewport
             omitted = rows[200] if position == 0 else rows[0]
             assert omitted not in viewport
-            assert all(row in resource.geometry for row in rows)
+            assert all(resource.contains(row) for row in rows)
             assert all(row in compositor.widgets for row in rows)
             _, placement = next(compositor.published_geometry((body,)))
             source_bounds = app.size.region - (placement.region.offset - resource.key.region.offset)

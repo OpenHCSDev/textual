@@ -242,20 +242,30 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
         }), widgets, invisible_widgets)
 
     @staticmethod
-    def _contains_geometry(geometry, node: Widget) -> bool:
+    def _contains_geometry(geometry, entries, node: Widget) -> bool:
         if node is None:
             return False
         return node in geometry or any(
             isinstance(entry, SubtreeGeometryPlacement) and entry.source.contains(node)
-            for entry in geometry.values()
+            for entry in entries
         )
 
     def contains(self, node: Widget) -> bool:
         """Membership in this complete source, including borrowed children."""
-        return node in self.geometry or any(
-            isinstance(entry, SubtreeGeometryPlacement) and entry.source.contains(node)
-            for _, entry in self.geometry.values()
+        return self._contains_geometry(
+            self.geometry, (entry for _, entry in self.geometry.values()), node
         )
+
+    def captured_parent(self, node: Widget) -> Widget | None:
+        """The original parent edge, independent of the live child tree."""
+        if (indexed := self.geometry.get(node)) is not None:
+            entry = indexed[1]
+            return (entry.parent if isinstance(entry, (SubtreeMapGeometry, SubtreeGeometryPlacement))
+                    else None)
+        for _, entry in self.geometry.values():
+            if isinstance(entry, SubtreeGeometryPlacement) and entry.source.contains(node):
+                return entry.source.captured_parent(node)
+        raise errors.NoWidget("Widget is not in captured subtree")
 
     def members(self, *, invisible: bool = False) -> Iterator[Widget]:
         """Logical membership stays with each original source."""
@@ -294,7 +304,7 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
     def project_into(self, geometry: CompositorMap, key: SubtreeGeometryKey,
                      clip: SceneClip, clips: dict[Widget, SceneClip], root: Widget,
                      *, visible_only: bool, retained: set[Widget], bounds: Region,
-                     source_held: bool = False) -> None:
+                     source_held: bool = False, require_root: bool = True) -> None:
         """Publish the requested scene without retiring complete source geometry.
 
         A viewport needs exposed descendants and its explicit geometry targets.
@@ -319,15 +329,15 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
         else:
             entries = ((node, entry) for node, (_, entry) in self.geometry.items())
         for node, entry in self._paint_entries(entries, source_held=source_held):
+            required = not visible_only or (node is root and require_root) or node in retained
             if isinstance(entry, SubtreeGeometryPlacement):
                 child_key, child_clip = self._project_child(entry, key, clip)
                 entry.source.project_into(
                     geometry, child_key, child_clip, clips, node,
                     visible_only=visible_only, retained=retained, bounds=bounds,
-                    source_held=source_held,
+                    source_held=source_held, require_root=required,
                 )
                 continue
-            required = not visible_only or node is root or node in retained
             # Clip intersection can only reduce these original rectangle bounds.
             # Reject an offscreen, unrequired entry before resolving its clip
             # chain, descendant rank and destination MapGeometry allocation.
@@ -406,7 +416,7 @@ class IntrinsicSubtreeGeometry(SubtreeGeometry[SubtreeMapGeometry]):
                     key, geometry, widgets, invisible_widgets, clips, clip, screen_coordinates)
             parent = node.parent
             parent = parent._render_widget if isinstance(parent, Widget) else None
-            parent = (parent if parent is not node and cls._contains_geometry(geometry, parent)
+            parent = (parent if parent is not node and cls._contains_geometry(geometry, geometry.values(), parent)
                       else None)
             intrinsic[node] = (
                 replace(entry, parent=parent, clip_bounds=bounds) if child
@@ -447,7 +457,7 @@ class IntrinsicSubtreeGeometry(SubtreeGeometry[SubtreeMapGeometry]):
 
         def participates(node: Widget) -> bool:
             if node not in participation:
-                parent = self.geometry[node][1].parent
+                parent = self.captured_parent(node)
                 participation[node] = node._render_widget is node and (
                     parent is None or (parent.is_container and participates(parent))
                 )
