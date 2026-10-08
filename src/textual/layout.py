@@ -336,7 +336,10 @@ class Layout(ABC):
         Returns:
             A renderable to draw the keylines.
         """
-        width, height = container.outer_size
+        # Keylines and their child rectangles belong to the same geometry.
+        # A complete subtree capture admits offscreen boxes before those
+        # widgets receive resize notifications; outer_size is that older value.
+        width, height = container.region.size
         canvas = Canvas(width, height)
 
         line_style, keyline_color = container.styles.keyline
