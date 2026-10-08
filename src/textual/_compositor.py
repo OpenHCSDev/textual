@@ -923,8 +923,8 @@ class Compositor:
         for owner in mutation_roots:
             mutation_paths.update(owner.walk_ancestors(with_self=True))
         if mutation_roots:
-            for node, geometry in previous.items():
-                for owner in mutation_roots.intersection(node.walk_ancestors(with_self=True)):
+            for node, geometry, owners in self._geometry_for_roots(mutation_roots):
+                for owner in owners:
                     held[owner][node] = geometry
         for owner in mutation_paths - mutation_roots:
             self._subtree_geometry.pop(owner, None)
@@ -1667,6 +1667,34 @@ class Compositor:
                         ),
                     )
 
+    def _geometry_for_roots(
+        self, roots: Iterable[Widget],
+    ) -> Iterator[tuple[Widget, MapGeometry, frozenset[Widget]]]:
+        """Read committed placements with their original current root membership.
+
+        Share parent answers only during this synchronous traversal. Reading
+        children instead would omit covers and native virtual widgets.
+        """
+        roots = set(roots)
+        if not roots:
+            return
+        membership = {}
+        for widget, geometry in self._published_map.items():
+            path = []
+            for ancestor in widget.walk_ancestors(with_self=True):
+                if ancestor in membership:
+                    held = membership[ancestor]
+                    break
+                path.append(ancestor)
+            else:
+                held = frozenset()
+            for ancestor in reversed(path):
+                if ancestor in roots:
+                    held = held | {ancestor}
+                membership[ancestor] = held
+            if held:
+                yield widget, geometry, held
+
     def deferred_regions(self, roots: Iterable[Widget]) -> tuple[Region, ...]:
         """Derive held paint bounds from committed geometry, never lazy layout.
 
@@ -1679,27 +1707,10 @@ class Compositor:
             return ()
         regions: set[Region] = set()
         placed: set[Widget] = set()
-        # This synchronous read shares parent answers only for this invocation.
-        # Read the original parent path, including covers and virtual widgets;
-        # DOM child traversal is not equivalent to committed-map membership.
-        membership = {}
-        for widget, geometry in self._published_map.items():
-            path = []
-            for ancestor in widget.walk_ancestors(with_self=True):
-                if ancestor in membership:
-                    held = membership[ancestor]
-                    break
-                path.append(ancestor)
-            else:
-                held = False
-            for ancestor in reversed(path):
-                if ancestor in roots:
-                    placed.add(ancestor)
-                    held = True
-                membership[ancestor] = held
-            if held:
-                if region := geometry.visible_region.intersection(self.size.region):
-                    regions.add(region)
+        for _, geometry, owners in self._geometry_for_roots(roots):
+            placed.update(owners)
+            if region := geometry.visible_region.intersection(self.size.region):
+                regions.add(region)
         for root in roots - placed:
             if not root.is_attached:
                 continue
