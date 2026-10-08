@@ -171,6 +171,8 @@ class SubtreeMapGeometry(NamedTuple):
 
     geometry: MapGeometry
     clip_bounds: tuple[Region, ...]
+    parent: Widget | None
+    """Original rendered parent within this capture, not the mutating DOM."""
 
     @property
     def region(self) -> Region:
@@ -228,22 +230,26 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
         return spatial_map
 
     @abstractmethod
-    def matches(self, key: SubtreeGeometryKey, *, require_complete: bool = False) -> bool:
+    def matches(self, key: SubtreeGeometryKey, *, require_complete: bool = False,
+                source_held: bool = False) -> bool:
         ...
 
     def restore_into(
         self, geometry: CompositorMap, widgets: set[Widget], invisible_widgets: set[Widget],
         key: SubtreeGeometryKey, clip: SceneClip, clips: dict[Widget, SceneClip],
         root: Widget, *, visible_only: bool, retained: set[Widget], bounds: Region,
+        source_held: bool = False,
     ) -> None:
         self.project_into(geometry, key, clip, clips, root,
-                          visible_only=visible_only, retained=retained, bounds=bounds)
+                          visible_only=visible_only, retained=retained, bounds=bounds,
+                          source_held=source_held)
         widgets.update(self.widgets)
         invisible_widgets.update(self.invisible_widgets)
 
     def project_into(self, geometry: CompositorMap, key: SubtreeGeometryKey,
                      clip: SceneClip, clips: dict[Widget, SceneClip], root: Widget,
-                     *, visible_only: bool, retained: set[Widget], bounds: Region) -> None:
+                     *, visible_only: bool, retained: set[Widget], bounds: Region,
+                     source_held: bool = False) -> None:
         """Publish the requested scene without retiring complete source geometry.
 
         A viewport needs exposed descendants and its explicit geometry targets.
@@ -260,7 +266,7 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
                        for _, node in sorted(candidates.items()))
         else:
             entries = ((node, entry) for node, (_, entry) in self.geometry.items())
-        for node, entry in entries:
+        for node, entry in self._paint_entries(entries, source_held=source_held):
             required = not visible_only or node is root or node in retained
             # Clip intersection can only reduce these original rectangle bounds.
             # Reject an offscreen, unrequired entry before resolving its clip
@@ -271,6 +277,10 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
             if required or placement.visible_region.overlaps(bounds):
                 geometry[node] = placement
                 clips[node] = node_clip
+
+    def _paint_entries(self, entries, *, source_held: bool):
+        """Placed sources retain their original native participation."""
+        return entries
 
     @abstractmethod
     def _project_entry(self, entry: GeometryEntry, key: SubtreeGeometryKey,
@@ -287,7 +297,8 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
 class PlacedSubtreeGeometry(SubtreeGeometry[MapGeometry]):
     """A culled or screen-dependent arrangement keeps its exact placement."""
 
-    def matches(self, key: SubtreeGeometryKey, *, require_complete: bool = False) -> bool:
+    def matches(self, key: SubtreeGeometryKey, *, require_complete: bool = False,
+                source_held: bool = False) -> bool:
         if self.key.visible_only and require_complete:
             return False
         return self.key == key or (
@@ -320,16 +331,46 @@ class IntrinsicSubtreeGeometry(SubtreeGeometry[SubtreeMapGeometry]):
             if scope is not clip:
                 return PlacedSubtreeGeometry.capture(
                     key, geometry, widgets, invisible_widgets, clips, clip, screen_coordinates)
-            intrinsic[node] = SubtreeMapGeometry(entry, bounds)
+            parent = node.parent
+            parent = parent._render_widget if isinstance(parent, Widget) else None
+            intrinsic[node] = SubtreeMapGeometry(
+                entry, bounds, parent if parent in geometry and parent is not node else None,
+            )
         return super().capture(key, intrinsic, widgets, invisible_widgets,
                                clips, clip, screen_coordinates)
 
-    def matches(self, key: SubtreeGeometryKey, *, require_complete: bool = False) -> bool:
+    def matches(self, key: SubtreeGeometryKey, *, require_complete: bool = False,
+                source_held: bool = False) -> bool:
+        if source_held:
+            # The mutation owner lends the original source, not the changing
+            # DOM. Internal scroll and all arrangement inputs still agree;
+            # only source revisions belong to the ongoing mutation.
+            key = key._replace(geometry_revision=self.key.geometry_revision,
+                               nodes_revision=self.key.nodes_revision)
         return self.key.intrinsic() == key.intrinsic()
 
     def _project_entry(self, entry: SubtreeMapGeometry, key: SubtreeGeometryKey,
                        clip: SceneClip, *, root: bool) -> tuple[MapGeometry, SceneClip]:
         return entry.project(self.key, key, clip, root=root)
+
+    def _paint_entries(self, entries, *, source_held: bool):
+        if not source_held:
+            return entries
+        participation: dict[Widget, bool] = {}
+
+        def participates(node: Widget) -> bool:
+            if node not in participation:
+                parent = self.geometry[node][1].parent
+                participation[node] = node._render_widget is node and (
+                    parent is None or (parent.is_container and participates(parent))
+                )
+            return participation[node]
+
+        # A retained-paint owner can now render itself rather than its old
+        # native children. Consult that declaration along captured ancestry,
+        # never walk or arrange the changing child tree. Each parent answers
+        # once within this projection; the resource remains immutable.
+        return ((node, entry) for node, entry in entries if participates(node))
 
 
 class CompositorUpdate:
@@ -885,7 +926,7 @@ class Compositor:
             for node, geometry in previous.items():
                 for owner in mutation_roots.intersection(node.walk_ancestors(with_self=True)):
                     held[owner][node] = geometry
-        for owner in mutation_paths:
+        for owner in mutation_paths - mutation_roots:
             self._subtree_geometry.pop(owner, None)
         map: CompositorMap = {}
         # Transient declaration paths manufacture the one retained resource.
@@ -916,7 +957,10 @@ class Compositor:
         default_layers = {"default": 0}
         retained_paths: set[Widget] = set()
         if visible_only:
-            for target in retain_geometry:
+            # A held root still needs its new outer placement when scrolling
+            # takes it offscreen. Its resource owns descendants; this acquires
+            # only the ancestor path, not the mutating subtree's arrangement.
+            for target in (*retain_geometry, *mutation_roots):
                 path: list[Widget] = []
                 node = target
                 # Existing members already own a path to this same root.
@@ -1144,15 +1188,39 @@ class Compositor:
         def add_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter, complete,
                        inherited_layers):
             nonlocal map, widgets, invisible_widgets
-            if widget in held:
-                # Retain exact hit/paint placement. Moving or resizing this
-                # subtree belongs to the mutation owner's next layout.
-                for node, geometry in held[widget].items():
-                    store_geometry(node, geometry, RootSceneClip(geometry.clip))
-                widgets.update(held[widget])
-                return
             if inherited_layers is None and (order_names := widget._get_layer_order((widget,))) is not None:
                 inherited_layers = {name: index for index, name in enumerate(order_names)}
+            if widget in held:
+                resource = self._subtree_geometry.get(widget)
+                key = SubtreeGeometryKey.from_widget(
+                    widget, virtual_region, region, order, layer_order, clip.region,
+                    visible, dock_gutter, size, False,
+                    tuple(inherited_layers.items()) if inherited_layers is not None else (),
+                )
+                if resource is not None and widget._render_widget in resource.geometry and resource.matches(
+                    key, require_complete=True, source_held=True,
+                ):
+                    # Complete intrinsic geometry retains original descendants
+                    # and clip declarations. Ancestor scrolling changes only
+                    # their placement; no mutating DOM arrangement is read.
+                    resource.restore_into(
+                        map, widgets, invisible_widgets, key, clip, clips,
+                        widget._render_widget, visible_only=visible_only and not complete,
+                        retained=retained_paths, bounds=root_geometry.region,
+                        source_held=True,
+                    )
+                    # The complete resource has replaced these old viewport
+                    # entries, including nested holds. Do not merge them back
+                    # after projection and resurrect stale absolute placement.
+                    for owner in held.keys() & resource.widgets:
+                        held[owner].clear()
+                else:
+                    # Placed, resized or missing sources cannot authorize a
+                    # projection. Keep their exact committed hit/paint bounds.
+                    for node, geometry in held[widget].items():
+                        store_geometry(node, geometry, RootSceneClip(geometry.clip))
+                    widgets.update(held[widget])
+                return
             if (widget in mutation_paths or not self.max_subtree_geometry_entries
                     or not widget.CACHE_SUBTREE_GEOMETRY or not widget._is_mounted):
                 arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,

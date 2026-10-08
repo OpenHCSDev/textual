@@ -361,7 +361,11 @@ async def test_partial_publication_keeps_geometry_and_owner_callbacks():
             await pilot.pause()
             assert compositor.get_widget_at(15, 1)[0] is original_hit
         holder.refresh(layout=True)
-        await asyncio.wait_for(scene_done.wait(), 2)
+        # Admission returns each callback to its original sender pump; the
+        # App callback cannot establish completion of the two widget tasks.
+        await asyncio.wait_for(asyncio.gather(
+            scene_done.wait(), held_done.wait(), parent_done.wait(),
+        ), 2)
         assert held_done.is_set() and parent_done.is_set()
         assert screen.publications[-1] == ()
         assert not compositor._dirty_regions
