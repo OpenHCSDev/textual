@@ -2091,8 +2091,9 @@ class Compositor:
                 yield root, geometry
 
     def render_subtree_strips(
-        self, root: Widget, root_geometry: MapGeometry,
-    ) -> tuple[Size, list[Strip]]:
+        self, root: Widget, root_geometry: MapGeometry, *,
+        admit: Callable[[Mapping[Widget, tuple[Region, Region]]], bool],
+    ) -> tuple[Size, list[Strip]] | None:
         """Paint a body using its borrowed original published placement.
 
         The caller acquires the placement from published_geometry and consumes
@@ -2100,14 +2101,22 @@ class Compositor:
         or manufactures a scene to decide whether a body can be retired. The
         same original arrangement/line/chop algorithm supplies complete rows
         without replacing any published map or constructing another compositor.
+
+        The synchronous admission callback receives the exact complete paint
+        mapping, including offscreen participants and excluding hidden or clipped
+        children. It may refuse capture when those participants' resources are
+        unavailable. Admission and painting borrow the same geometry; no second
+        DOM walk or arrangement chooses another capture cohort.
         """
         bounds = root_geometry.region
         geometry, _ = self._arrange_root(
             root, self.size, visible_only=False, root_geometry=root_geometry,
         )
-        widgets = self._paint_regions(self._ordered_geometry(geometry), bounds)
-        cuts = self._cuts_for_regions(bounds, widgets)
+        widgets = MappingProxyType(self._paint_regions(self._ordered_geometry(geometry), bounds))
         with self._using_geometry(root, geometry):
+            if not admit(widgets):
+                return None
+            cuts = self._cuts_for_regions(bounds, widgets)
             chops = self._render_chops(bounds, self._regions_to_spans((bounds,)),
                                       widgets=widgets, cuts=cuts, bounds=bounds)
         return bounds.size, [Strip.join(chop.values()) for chop in chops]

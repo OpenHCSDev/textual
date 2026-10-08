@@ -8,6 +8,77 @@ from textual.screen import Screen
 from textual.widgets import Static
 
 
+async def test_capture_admits_original_complete_paint_cohort_and_refuses_hidden_children():
+    from textual.widgets import Collapsible
+
+    shown = Static("\n".join(f"PAINT_{row}" for row in range(24)))
+    hidden = Static("HIDDEN_RESOURCE")
+    expanded = Collapsible(shown, title="Expanded", collapsed=False)
+    collapsed = Collapsible(hidden, title="Collapsed")
+    footer = Static("Session details")
+
+    class Body(VerticalGroup):
+        CACHE_SUBTREE_GEOMETRY = True
+
+    body = Body(expanded, collapsed, footer)
+
+    class CaptureScreen(Screen):
+        def _use_viewport_layout(self):
+            return True
+
+        def compose(self):
+            with VerticalScroll():
+                yield body
+
+    app = App()
+    async with app.run_test(size=(60, 8)) as pilot:
+        await app.push_screen(CaptureScreen())
+        await pilot.pause()
+        compositor = app.screen._compositor
+        _, placement = next(compositor.published_geometry((body,)))
+        published = compositor._published_map
+        seen = []
+
+        def refuse(participants):
+            seen.append(tuple(participants))
+            assert shown in participants
+            assert hidden not in participants
+            assert collapsed.query_one(Collapsible.Contents) not in participants
+            assert footer in participants
+            # Complete capture admits the actual offscreen paragraph, without
+            # arranging a second scene when its geometry is read by admission.
+            assert participants[shown][1].height == 24
+            assert compositor.find_widget(footer).region.y >= app.size.height
+            return False
+
+        assert compositor.render_subtree_strips(body, placement, admit=refuse) is None
+        assert len(seen) == 1
+        assert compositor._published_map is published
+        assert compositor._render_geometry is None
+
+        expanded.collapsed = True
+        await pilot.pause()
+        _, current = next(compositor.published_geometry((body,)))
+        assert current.region.height < placement.region.height
+
+        def admit(participants):
+            assert shown not in participants
+            assert hidden not in participants
+            assert expanded._title in participants
+            assert collapsed._title in participants
+            assert footer in participants
+            return True
+
+        result = compositor.render_subtree_strips(body, current, admit=admit)
+        assert result is not None
+        size, strips = result
+        assert size == current.region.size
+        assert len(strips) == size.height
+        assert not any("PAINT_" in row.text or "HIDDEN_RESOURCE" in row.text for row in strips)
+        assert any("Session details" in row.text for row in strips)
+        assert compositor._render_geometry is None
+
+
 async def test_complete_markdown_capture_keeps_offscreen_table_keylines():
     from textual.widgets import Markdown
     from textual.widgets._markdown import MarkdownTableContent
@@ -38,7 +109,7 @@ async def test_complete_markdown_capture_keeps_offscreen_table_keylines():
         assert tables[-1] not in compositor._published_map
         _, placement = next(compositor.published_geometry((body,)))
         published = compositor._full_map, compositor._visible_map
-        _, strips = compositor.render_subtree_strips(body, placement)
+        _, strips = compositor.render_subtree_strips(body, placement, admit=lambda participants: True)
         rows = [strip.text for strip in strips]
         for index in range(12):
             row = next(row for row in rows if f"TABLE_{index:02}" in row)
@@ -389,7 +460,7 @@ async def test_complete_cached_body_keeps_capture_and_explicit_reader_geometry()
             assert rows[235] not in {node for _, node in candidates}
             assert len(candidates) < len(resource.geometry)
             # Capture remains complete without replacing the published viewport.
-            size, strips = compositor.render_subtree_strips(body, placement)
+            size, strips = compositor.render_subtree_strips(body, placement, admit=lambda participants: True)
             assert size.height == 240
             assert all(f"Original row {index}" in strip.text
                        for index, strip in enumerate(strips))
@@ -512,7 +583,7 @@ async def test_body_capture_descendants_use_original_arrangement_and_screen_coor
             return render_lines(crop)
 
         with patch.object(compositor, "_arrange_root", side_effect=arrange_body), patch.object(row, "render_lines", side_effect=render_row):
-            size, strips = compositor.render_subtree_strips(body, placement)
+            size, strips = compositor.render_subtree_strips(body, placement, admit=lambda participants: True)
         assert size == bounds.size
         assert len(strips) == size.height
         assert all(strip.cell_length == size.width for strip in strips)
@@ -543,7 +614,7 @@ async def test_body_capture_descendants_use_original_arrangement_and_screen_coor
             return render_lines(crop)
 
         with patch.object(compositor, "_arrange_root", side_effect=arrange_body), patch.object(row, "render_lines", side_effect=render_with_hidden_query):
-            compositor.render_subtree_strips(body, placement)
+            compositor.render_subtree_strips(body, placement, admit=lambda participants: True)
         assert scoped_misses
         assert compositor._render_geometry is None
         assert compositor._full_map is published[0]
@@ -553,7 +624,7 @@ async def test_body_capture_descendants_use_original_arrangement_and_screen_coor
         # ordinary screen queries with their original publication.
         with patch.object(row, "render_lines", side_effect=ValueError("render failed")):
             try:
-                compositor.render_subtree_strips(body, placement)
+                compositor.render_subtree_strips(body, placement, admit=lambda participants: True)
             except ValueError as error:
                 assert str(error) == "render failed"
             else:
