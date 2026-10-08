@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from functools import partial
 from pathlib import Path, PurePath
 from types import MethodType
-from typing import Callable, Iterable, Optional
+from typing import AsyncIterator, Callable, Iterable, Optional
 from urllib.parse import unquote
 
 from markdown_it import MarkdownIt
@@ -732,6 +732,7 @@ class MarkdownTableContent(Widget):
                         classes=f"row{row_index} cell",
                     ).with_tooltip(cell)
                 )
+                await asyncio.sleep(0)
         self.last_row = row_index
         await self.mount_all(new_cells)
 
@@ -1329,7 +1330,7 @@ class Markdown(Widget):
         """
         return None
 
-    def _parse_markdown(self, tokens: Iterable[Token]) -> Iterable[MarkdownBlock]:
+    async def _parse_markdown(self, tokens: Iterable[Token]) -> AsyncIterator[MarkdownBlock]:
         """Create a stream of MarkdownBlock widgets from markdown.
 
         Args:
@@ -1345,6 +1346,9 @@ class Markdown(Widget):
         get_block_class = self.get_block_class
 
         for token in tokens:
+            # One root may own a whole nested list or table. Resume other pumps
+            # between token-owned construction, not after a fixed root count.
+            await asyncio.sleep(0)
             token_type = token.type
             if token_type == "heading_open":
                 stack_append(get_block_class(token.tag)(self, token))
@@ -1418,23 +1422,6 @@ class Markdown(Widget):
                     else:
                         yield external
 
-    def _build_from_source(self, markdown: str) -> list[MarkdownBlock]:
-        """Build blocks from markdown source.
-
-        Args:
-            markdown: A Markdown document, or partial document.
-
-        Returns:
-            A list of MarkdownBlock instances.
-        """
-        parser = (
-            MarkdownIt("gfm-like")
-            if self._parser_factory is None
-            else self._parser_factory()
-        )
-        tokens = parser.parse(markdown)
-        return list(self._parse_markdown(tokens))
-
     async def _parse_tokens(
         self, parser: MarkdownIt, markdown: str, *, use_thread: bool
     ) -> list[Token] | None:
@@ -1470,9 +1457,7 @@ class Markdown(Widget):
         self._table_of_contents = None
 
         async def await_update() -> None:
-            """Update in batches."""
-            BATCH_SIZE = 200
-            batch: list[MarkdownBlock] = []
+            """Construct and complete each original root before starting the next."""
 
             # Lock so that you can't update with more than one document simultaneously
             async with self.lock:
@@ -1480,31 +1465,17 @@ class Markdown(Widget):
                 if tokens is None:
                     return
 
-                # Remove existing blocks for the first batch only
+                # Replace existing blocks with the first completed root only.
                 removed: bool = False
 
-                async def mount_batch(batch: list[MarkdownBlock]) -> None:
-                    """Mount a single match of blocks.
-
-                    Args:
-                        batch: A list of blocks to mount.
-                    """
-                    nonlocal removed
+                async for block in self._parse_markdown(tokens):
                     if removed:
-                        await self.mount_all(batch)
+                        await self.mount(block)
                     else:
                         async with self.batch():
                             await markdown_block.remove()
-                            await self.mount_all(batch)
+                            await self.mount(block)
                         removed = True
-
-                for block in self._parse_markdown(tokens):
-                    batch.append(block)
-                    if len(batch) == BATCH_SIZE:
-                        await mount_batch(batch)
-                        batch.clear()
-                if batch:
-                    await mount_batch(batch)
                 if not removed:
                     await markdown_block.remove()
 
@@ -1559,7 +1530,7 @@ class Markdown(Widget):
                         self._last_parsed_line += token.map[0]
                         break
 
-                new_blocks = list(self._parse_markdown(tokens))
+                new_blocks = [block async for block in self._parse_markdown(tokens)]
                 any_headers = any(
                     isinstance(block, MarkdownHeader) for block in new_blocks
                 )
@@ -1581,8 +1552,8 @@ class Markdown(Widget):
                         else:
                             new_blocks = new_blocks[1:]
 
-                    if new_blocks:
-                        await self.mount_all(new_blocks)
+                    for block in new_blocks:
+                        await self.mount(block)
 
                 if any_headers:
                     self._table_of_contents = None

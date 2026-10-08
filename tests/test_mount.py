@@ -12,6 +12,65 @@ from textual.app import App
 from textual.widget import AwaitMount, Widget
 
 
+async def test_concurrent_composition_keeps_nested_declarations_private():
+    from textual.containers import Horizontal, Vertical
+    from textual.widgets import Static
+
+    class Nested(Widget):
+        def compose(self):
+            with Vertical(id=f"{self.id}-outer"):
+                with Horizontal(id=f"{self.id}-inner"):
+                    yield Static("first", id=f"{self.id}-first")
+                    yield Static("second", id=f"{self.id}-second")
+
+    app = App()
+    async with app.run_test():
+        left, right = Nested(id="left"), Nested(id="right")
+        await app.mount(left, right)
+        for root in (left, right):
+            outer = root.query_one(f"#{root.id}-outer")
+            inner = root.query_one(f"#{root.id}-inner")
+            assert list(root.children) == [outer]
+            assert list(outer.children) == [inner]
+            assert [child.id for child in inner.children] == [
+                f"{root.id}-first", f"{root.id}-second"
+            ]
+        assert app._compose_stacks == [] and app._composed == []
+
+
+async def test_cancelled_private_composition_closes_its_original_context():
+    from textual.compose import compose, compose_async
+    from textual.containers import Vertical
+    from textual.widgets import Static
+
+    entered = asyncio.Event()
+    closed = []
+
+    def declaration():
+        try:
+            with Vertical(id="private"):
+                entered.set()
+                yield Static("first")
+                yield Static("second")
+        finally:
+            closed.append(True)
+
+    app = App()
+    async with app.run_test():
+        collecting = asyncio.create_task(compose_async(app, declaration()))
+        await entered.wait()
+        collecting.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await collecting
+        assert closed == [True]
+        assert app._compose_stacks == [] and app._composed == []
+        assert not app.query("#private")
+        # The synchronous public entry still uses the same validation / scope.
+        complete = compose(app, iter([Static("complete")]))
+        await app.mount_all(complete)
+        assert list(app.screen.children) == complete
+
+
 class W(Widget):
     def render(self):
         return self.renderable

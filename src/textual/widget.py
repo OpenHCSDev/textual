@@ -70,7 +70,7 @@ from textual.await_remove import AwaitRemove
 from textual.box_model import BoxModel
 from textual.cache import FIFOCache, LRUCache
 from textual.color import Color
-from textual.compose import compose
+from textual.compose import compose, compose_async
 from textual.content import Content, ContentType
 from textual.css.match import match
 from textual.css.parse import parse_selectors
@@ -1843,7 +1843,7 @@ class Widget(DOMNode):
         async with self.batch():
             await self.query_children("*").exclude(".-textual-system").remove()
             if self.is_attached:
-                compose_nodes = compose(self)
+                compose_nodes = await compose_async(self)
                 await self.mount_all(compose_nodes)
 
     def _post_register(self, app: App) -> None:
@@ -5072,7 +5072,7 @@ class Widget(DOMNode):
 
     async def _compose(self) -> None:
         try:
-            widgets = [*self._pending_children, *compose(self)]
+            widgets = [*self._pending_children, *await compose_async(self)]
             self._pending_children.clear()
         except TypeError as error:
             raise TypeError(
