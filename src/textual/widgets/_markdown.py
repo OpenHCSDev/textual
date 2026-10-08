@@ -1171,14 +1171,31 @@ class Markdown(Widget):
     async def _on_mount(self, _: Mount) -> None:
         initial_markdown = self._initial_markdown
         self._initial_markdown = None
-        await self.update(initial_markdown or "")
+        await self._initialize_document(initial_markdown)
 
-        if initial_markdown is None:
+    def _initialize_document(self, markdown: str | None) -> AwaitComplete:
+        """Acquire initial publication and its complete document / TOC receipt.
+
+        Ordinary Markdown mount awaits this receipt. A subclass whose body
+        owner supplies preparation readiness and cancellation may observe the
+        same receipt with ``call_later`` instead, after mount preprocessing.
+        Acquisition is synchronous so that owner marks publication pending
+        before its parent can observe mount completion. ``call_next`` still
+        runs inside Mount dispatch and does not change that completion boundary.
+        """
+        publication = self.update(markdown or "")
+        if markdown is not None:
+            return publication
+
+        async def complete_empty_document() -> None:
+            await publication
             self.post_message(
                 Markdown.TableOfContentsUpdated(
                     self, self._table_of_contents
                 ).set_sender(self)
             )
+
+        return AwaitComplete(complete_empty_document())
 
     @classmethod
     def get_stream(cls, markdown: Markdown) -> MarkdownStream:
