@@ -8,6 +8,64 @@ from textual.scroll_view import ScrollView
 from textual.widgets import Static
 
 
+async def test_scroll_intent_survives_layout_and_held_sources():
+    from textual.screen import Screen
+
+    history = VerticalScroll(Static("\n".join(str(n) for n in range(50))))
+
+    class IntentScreen(Screen):
+        held = False
+
+        def __init__(self):
+            super().__init__()
+            self.admissions = []
+
+        def compose(self):
+            yield history
+
+        def _layout_mutation_roots(self):
+            return (history,) if self.held else ()
+
+        def _prepare_compositor_refresh(self):
+            return self._layout_mutation_roots()
+
+        def _refresh_layout(self, size=None, scroll=False):
+            self.admissions.append((
+                scroll, self._has_actionable_layout_requests(self._held_layout_requests())
+            ))
+            super()._refresh_layout(size, scroll=scroll)
+
+    class IntentApp(App):
+        CSS = "VerticalScroll { height: 8; } Static { height: auto; }"
+
+        def get_default_screen(self):
+            return IntentScreen()
+
+    app = IntentApp()
+    async with app.run_test(size=(30, 12)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        original = screen._compositor.find_widget(history.children[0])
+        screen.held = True
+        screen.admissions.clear()
+        history.refresh(layout=True)
+        history.scroll_to(y=10, animate=False, immediate=True)
+        history._check_refresh()
+        await pilot.pause()
+        assert (True, False) in screen.admissions
+        assert screen._compositor.find_widget(history.children[0]) == original
+        assert screen._layout_widgets
+        screen.held = False
+        screen.admissions.clear()
+        history.refresh(layout=True)
+        history.scroll_to(y=15, animate=False, immediate=True)
+        history._check_refresh()
+        await pilot.pause()
+        assert (True, True) in screen.admissions
+        assert not screen._layout_widgets
+        assert screen._compositor.find_widget(history.children[0]).region.y == -15
+
+
 class SizeReceipts:
     def on_resize(self, event: events.Resize) -> None:
         self.receipts.append((event.size, event.virtual_size, event.container_size))
