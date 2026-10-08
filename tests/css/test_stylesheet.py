@@ -100,7 +100,8 @@ async def test_style_batch_keeps_child_damage_separate_and_flushes_interrupted_e
                 parent.styles.refresh(layout=True)
                 with parent.styles.batch_update():
                     parent.styles.color = "green"
-            refresh.assert_called_once_with(layout=False, repaint=True)
+            refresh.assert_called_once_with(repaint=True)
+            assert not child._layout_required
         assert child.rich_style.color == Color.parse("green").rich_color
         with pytest.raises(StyleValueError), parent.styles.batch_update():
             parent.styles.color = "red"

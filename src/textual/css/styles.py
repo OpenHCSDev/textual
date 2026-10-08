@@ -975,7 +975,10 @@ class Styles(StylesBase):
         changes = updates + removed
         if not changes:
             return False
-        geometry = any(
+        # Detached styles normalize rules (including mount's prepared copy)
+        # but have no node geometry to invalidate. Keep validation and rule
+        # publication intact; acquire placement effects only for their owner.
+        geometry = self.node is not None and any(
             descriptor.affects_geometry(previous, value)
             for descriptor, key, previous, value in changes
         )
