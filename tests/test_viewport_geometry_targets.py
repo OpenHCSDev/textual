@@ -8,6 +8,46 @@ from textual.screen import Screen
 from textual.widgets import Static
 
 
+async def test_complete_markdown_capture_keeps_offscreen_table_keylines():
+    from textual.widgets import Markdown
+    from textual.widgets._markdown import MarkdownTableContent
+
+    source = "\n\n".join(
+        f"| key | value |\n| --- | --- |\n| TABLE_{index:02} | owned source |"
+        for index in range(12)
+    )
+    body = Markdown(source)
+
+    class TableScreen(Screen):
+        def _use_viewport_layout(self):
+            return True
+
+        def compose(self):
+            with VerticalScroll():
+                yield body
+
+    app = App()
+    async with app.run_test(size=(60, 12)) as pilot:
+        screen = TableScreen()
+        await app.push_screen(screen)
+        await pilot.pause()
+        compositor = screen._compositor
+        tables = list(body.query(MarkdownTableContent))
+        assert len(tables) == 12
+        assert tables[-1].outer_size.height == 0
+        assert tables[-1] not in compositor._published_map
+        _, placement = next(compositor.published_geometry((body,)))
+        published = compositor._full_map, compositor._visible_map
+        _, strips = compositor.render_subtree_strips(body, placement)
+        rows = [strip.text for strip in strips]
+        for index in range(12):
+            row = next(row for row in rows if f"TABLE_{index:02}" in row)
+            assert "│" in row, f"Offscreen table {index} lost its captured keyline"
+        assert compositor._full_map is published[0]
+        assert compositor._visible_map is published[1]
+        assert tables[-1].outer_size.height == 0
+
+
 class TargetedScreen(Screen):
     CSS = "VerticalScroll { width: 1fr; } VerticalGroup, Static { height: auto; }"
     targets = ()
