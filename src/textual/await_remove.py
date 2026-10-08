@@ -13,16 +13,16 @@ import rich.repr
 from textual._callback import invoke
 from textual._debug import get_caller_file_and_line
 from textual._types import CallbackType
+from textual.await_complete import AwaitComplete
 
 if TYPE_CHECKING:
     from textual.dom import DOMNode
-    from textual.message_pump import MessagePump
     from textual.screen import Screen
     from textual.widget import Widget
 
 
 @rich.repr.auto
-class AwaitRemove:
+class AwaitRemove(AwaitComplete):
     """An awaitable that waits for nodes to be removed."""
 
     def __init__(
@@ -120,26 +120,6 @@ class AwaitRemove:
             self._tasks.clear()
             self._post_remove = None
             self._finisher = None
-
-    def call_when_ready(self, node: MessagePump) -> None:
-        """Deliver the completed receipt without blocking the receiver's queue.
-
-        The application's message pump must remain available while another
-        widget runs an asynchronous unmount handler. Observe errors through the
-        ordinary callback path only after this transaction has actually ended.
-        """
-        if self._scheduled:
-            return
-        self._scheduled = True
-
-        def completed(future: Future[None]) -> None:
-            if node._closing or node._closed:
-                if not future.cancelled():
-                    future.exception()
-                return
-            node.call_next(self)
-
-        self._start().add_done_callback(completed)
 
     def __await__(self) -> Generator[None, None, None]:
         current_task = asyncio.current_task()

@@ -2822,11 +2822,11 @@ class App(Generic[ReturnType], DOMNode):
         if not _screen.is_running:
             widgets = self._register(self, _screen)
             await_mount = AwaitMount(_screen, widgets)
-            self.call_next(await_mount)
+            await_mount.call_when_ready(self)
             return (_screen, await_mount)
         else:
             await_mount = AwaitMount(_screen, [])
-            self.call_next(await_mount)
+            await_mount.call_when_ready(self)
             return (_screen, await_mount)
 
     def _load_screen_css(self, screen: Screen):

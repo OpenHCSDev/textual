@@ -32,6 +32,7 @@ async def test_render_only_after_mount():
 
 async def test_mount_completion_is_shared_by_explicit_and_scheduled_awaiters():
     parent = Mock(spec=Widget)
+    parent._closing = parent._closed = parent._pruning = False
     children = [Widget(), Widget()]
     mounted = AwaitMount(parent, children)
     explicit = asyncio.create_task(mounted())
@@ -49,6 +50,7 @@ async def test_mount_completion_is_shared_by_explicit_and_scheduled_awaiters():
 
 async def test_cancelling_one_mount_awaiter_does_not_cancel_completion():
     parent = Mock(spec=Widget)
+    parent._closing = parent._closed = parent._pruning = False
     child = Widget()
     mounted = AwaitMount(parent, [child])
     first = asyncio.create_task(mounted())
@@ -143,3 +145,55 @@ async def test_initial_notifications_observe_complete_tree_styles_and_css_source
         assert observed == ["left", "right", "last", "parent-a", "parent-b"]
         assert list(app.screen.children) == [first, second]
         assert list(first.children) == [left, right]
+
+
+async def test_unawaited_mount_does_not_hold_parent_wheel_delivery():
+    """Real driver input can use the existing viewport during child startup."""
+    from textual import events
+    from textual.containers import VerticalScroll
+    from textual.widgets import Static
+
+    entered, release, delivered = asyncio.Event(), asyncio.Event(), asyncio.Event()
+
+    class AcquiringChild(Static):
+        async def on_mount(self):
+            entered.set()
+            await release.wait()
+
+    class MountingApp(App):
+        def compose(self):
+            with VerticalScroll(id="viewport"):
+                yield Static("Existing body\n" * 40, id="body")
+
+        async def on_event(self, event):
+            ingress = isinstance(event, events.MouseScrollDown) and not event.is_forwarded
+            result = await super().on_event(event)
+            if ingress:
+                delivered.set()
+            return result
+
+    app = MountingApp()
+    async with app.run_test(size=(40, 12)) as pilot:
+        viewport = app.query_one("#viewport", VerticalScroll)
+        child = AcquiringChild("New body")
+        receipts = []
+
+        def acquire():
+            receipts.append(viewport.mount(child))
+
+        viewport.call_later(acquire)
+        try:
+            await asyncio.wait_for(entered.wait(), 1)
+            assert not receipts[0].is_done
+            point = app.query_one("#body").region.offset
+            app._driver.process_message(events.MouseScrollDown(None, point.x + 1, point.y + 1,
+                                                               0, 0, 0, False, False, False))
+            await asyncio.wait_for(delivered.wait(), 1)
+            assert viewport.scroll_y > 0
+            assert not child.is_mounted
+        finally:
+            release.set()
+        await receipts[0]
+        await pilot.pause()
+        assert child.is_mounted
+        assert child in app.screen._compositor.widgets

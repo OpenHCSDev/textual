@@ -5,7 +5,7 @@ This module contains the `Widget` class, the base class for all widgets.
 
 from __future__ import annotations
 
-from asyncio import Lock, create_task, gather, wait
+from asyncio import gather, shield
 from collections import Counter
 from contextlib import asynccontextmanager
 from fractions import Fraction
@@ -51,7 +51,7 @@ from textual import constants, errors, events, messages
 from textual._animator import DEFAULT_EASING, Animatable, BoundAnimator, EasingFunction
 from textual._arrange import DockArrangeResult, arrange
 from textual._context import NoActiveAppError
-from textual._debug import get_caller_file_and_line
+from textual.await_complete import AwaitComplete
 from textual._dispatch_key import dispatch_key
 from textual._easing import DEFAULT_SCROLL_EASING
 from textual._extrema import Extrema
@@ -132,7 +132,7 @@ _MOUSE_EVENTS_ALLOW_IF_DISABLED = (
 
 
 @rich.repr.auto
-class AwaitMount:
+class AwaitMount(AwaitComplete):
     """An *optional* awaitable returned by [mount][textual.widget.Widget.mount] and [mount_all][textual.widget.Widget.mount_all].
 
     Example:
@@ -144,48 +144,28 @@ class AwaitMount:
     def __init__(self, parent: Widget, widgets: Sequence[Widget]) -> None:
         self._parent = parent
         self._widgets = widgets
-        self._caller = get_caller_file_and_line()
-        self._completion_lock = Lock()
-        self._completed = False
+        super().__init__(self._finish())
 
     def __rich_repr__(self) -> rich.repr.Result:
         yield "parent", self._parent
         yield "widgets", self._widgets
         yield "caller", self._caller, None
 
-    async def __call__(self) -> None:
-        """Allows awaiting via a call operation."""
-        await self
+    async def _finish(self) -> None:
+        """Complete registered child startup once, independently of waiters."""
+        if self._widgets:
+            await gather(*(widget._mounted_event.wait() for widget in self._widgets))
+            if not (self._parent._closing or self._parent._closed or self._parent._pruning):
+                self._parent.refresh(layout=True)
+                try:
+                    self._parent.app._update_mouse_over(self._parent.screen)
+                except NoScreen:
+                    pass
 
     def __await__(self) -> Generator[None, None, None]:
-        async def await_mount() -> None:
-            # mount() schedules this same object with call_next, and the caller
-            # may await it explicitly too. Complete one mount transaction, not
-            # a second set of waiters and layout invalidations for each await.
-            async with self._completion_lock:
-                if self._completed:
-                    return
-                if self._widgets:
-                    aws = [
-                        create_task(widget._mounted_event.wait(), name="await mount")
-                        for widget in self._widgets
-                    ]
-                    try:
-                        await wait(aws)
-                    finally:
-                        pending = [task for task in aws if not task.done()]
-                        if pending:
-                            for task in pending:
-                                task.cancel()
-                            await gather(*pending, return_exceptions=True)
-                    self._parent.refresh(layout=True)
-                    try:
-                        self._parent.app._update_mouse_over(self._parent.screen)
-                    except NoScreen:
-                        pass
-                self._completed = True
-
-        return await_mount().__await__()
+        # Cancelling an optional caller cannot cancel registered child startup
+        # or its completion publication to other callers / the parent.
+        return shield(self._future).__await__()
 
 
 class _Styled:
@@ -1591,7 +1571,7 @@ class Widget(DOMNode):
 
         self.call_later(update_styles, self.displayed_children)
         await_mount = AwaitMount(self, mounted)
-        self.call_next(await_mount)
+        await_mount.call_when_ready(self)
 
         return await_mount
 

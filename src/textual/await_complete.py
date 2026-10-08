@@ -29,6 +29,7 @@ class AwaitComplete:
         self._future: Future[Any] = gather(*awaitables)
         self._pre_await: CallbackType | None = pre_await
         self._caller = get_caller_file_and_line()
+        self._scheduled = False
 
     def __rich_repr__(self) -> rich.repr.Result:
         yield self._awaitables
@@ -54,6 +55,30 @@ class AwaitComplete:
         """
         node.call_next(self)
         return self
+
+    def _start(self) -> Future[Any]:
+        """The completion owned by this optional awaitable."""
+        return self._future
+
+    def call_when_ready(self, node: MessagePump) -> None:
+        """Deliver completion without occupying the receiver's message pump.
+
+        Mount and removal retain their own completion lifetimes. The original
+        callback path observes their result only when awaiting it cannot block
+        input or other messages behind another widget's startup / teardown.
+        """
+        if self._scheduled:
+            return
+        self._scheduled = True
+
+        def completed(future: Future[Any]) -> None:
+            if node._closing or node._closed:
+                if not future.cancelled():
+                    future.exception()
+                return
+            node.call_next(self)
+
+        self._start().add_done_callback(completed)
 
     async def __call__(self) -> Any:
         return await self
