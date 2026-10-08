@@ -43,9 +43,15 @@ class MarkdownApp(App[None]):
 
 
 async def test_document_supplies_inline_content_for_heading_paragraph_and_table():
+    class CustomParagraph(MD.MarkdownParagraph):
+        def _token_to_content(self, token: Token) -> Content:
+            return super()._token_to_content(token) + Content(" custom")
+
     class SuppliedMarkdown(Markdown):
-        def _get_token_content(self, token: Token) -> Content:
-            return super()._get_token_content(token) + Content(" supplied")
+        BLOCKS = {**Markdown.BLOCKS, "paragraph_open": CustomParagraph}
+
+        def _get_token_content(self, token: Token, *, block: MarkdownBlock) -> Content:
+            return super()._get_token_content(token, block=block) + Content(" supplied")
 
     document = SuppliedMarkdown(
         "# Heading\n\nParagraph [link](https://example.com)\n\n"
@@ -56,7 +62,7 @@ async def test_document_supplies_inline_content_for_heading_paragraph_and_table(
         await pilot.pause()
         assert document.query_one(MD.MarkdownH1)._content.plain == "Heading supplied"
         paragraph = document.query_one(MD.MarkdownParagraph)._content
-        assert paragraph.plain == "Paragraph link supplied"
+        assert paragraph.plain == "Paragraph link custom supplied"
         assert paragraph.spans == [
             MD.Span(10, 14, Style.from_meta({"@click": "link('https://example.com')"}))
         ]
