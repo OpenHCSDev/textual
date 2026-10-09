@@ -518,16 +518,15 @@ class Stylesheet:
         nodes: list[DOMNode],
         relevant_classes: frozenset[str],
     ) -> tuple:
-        """Build an ancestry key from the nodes' actual declared acquisition."""
+        """Build an ancestry key from each node's actual pseudo-class owner."""
         result = []
-        inputs: dict = {}
         for node in nodes:
             result.append(
                 (
                     node._id if node._id in self._ids_in_rules else None,
                     node.classes & relevant_classes,
                     node.css_type_name,
-                    node._acquire_pseudo_property("_pseudo_classes_cache_key", inputs),
+                    node._pseudo_classes_cache_key,
                     node.name,
                 )
             )

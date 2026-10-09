@@ -452,31 +452,16 @@ class Widget(DOMNode):
     # Default sort order, incremented by constructor
     _sort_order: ClassVar[int] = 0
 
-    def _pseudo_disabled(self, *, _inputs: dict | None = None) -> bool:
-        return self._acquire_pseudo_property("is_disabled", _inputs)
-
-    _pseudo_disabled._acquire_pseudo = _pseudo_disabled  # type: ignore[attr-defined]
-
-    def _pseudo_enabled(self, *, _inputs: dict | None = None) -> bool:
-        return not self._acquire_pseudo_property("is_disabled", _inputs)
-
-    _pseudo_enabled._acquire_pseudo = _pseudo_enabled  # type: ignore[attr-defined]
-
-    def _pseudo_focus_within(self, *, _inputs: dict | None = None) -> bool:
-        return self._acquire_pseudo_property("has_focus_within", _inputs)
-
-    _pseudo_focus_within._acquire_pseudo = _pseudo_focus_within  # type: ignore[attr-defined]
-
     _PSEUDO_CLASSES: ClassVar[dict[str, Callable[[Widget], bool]]] = {
         "hover": lambda widget: widget.mouse_hover,
         "focus": lambda widget: widget.has_focus,
         "blur": lambda widget: not widget.has_focus,
         "can-focus": lambda widget: widget.allow_focus(),
-        "disabled": _pseudo_disabled,
-        "enabled": _pseudo_enabled,
+        "disabled": lambda widget: widget.is_disabled,
+        "enabled": lambda widget: not widget.is_disabled,
         "dark": lambda widget: widget.app.current_theme.dark,
         "light": lambda widget: not widget.app.current_theme.dark,
-        "focus-within": _pseudo_focus_within,
+        "focus-within": lambda widget: widget.has_focus_within,
         "inline": lambda widget: widget.app.is_inline,
         "ansi": lambda widget: widget.app.native_ansi_color,
         "nocolor": lambda widget: widget.app.no_color,
@@ -975,119 +960,36 @@ class Widget(DOMNode):
         self._pending_children.append(widget)
 
     @staticmethod
-    def _inherited_disabled(
-        node: MessagePump | None, *, _inputs: dict | None = None,
-    ) -> bool:
+    def _inherited_disabled(node: MessagePump | None) -> bool:
         """Derive disabled state from physical Widgets, not ancestor overrides.
 
-        Stored native inputs can share their acquired ancestry within one
-        synchronous borrow. Computed reactives and custom descriptors still
-        run on every query and do not certify a reusable inherited answer.
+        Read live values on each call: a custom predicate or descriptor may
+        synchronously change an ancestor's state or physical parent.
         """
-        path = [] if _inputs is not None else None
-        share = _inputs is not None
         while isinstance(node, Widget):
-            if share:
-                share = (
-                    type(node).__getattribute__ is object.__getattribute__
-                    and type(type(node)).__getattribute__ is type.__getattribute__
-                )
-            if share:
-                declaration = getattr(type(node), "disabled", None)
-                parent = getattr(type(node), "_parent", None)
-                share = (
-                    type(declaration) is Reactive
-                    and declaration._has_stored_input(node)
-                    and type(parent) is property
-                    and parent.fget is not None
-                    and getattr(parent.fget, "_stored_input", None) is parent.fget
-                )
-            value = node.disabled
-            # A stored custom truth value can itself change between reads.
-            # Only native booleans certify a shared inherited answer.
-            if share:
-                share = type(value) is bool
-                if share and (key := (Widget._inherited_disabled, id(node))) in _inputs:
-                    _, disabled = _inputs[key]
-                    break
-            if share:
-                path.append(node)
-            if value:
-                disabled = True
-                break
-            node = node._parent
-        else:
-            disabled = False
-        if share:
-            for ancestor in path:
-                # Retain the exact owner alongside the derived answer. Widget
-                # equality cannot merge independent ancestry or recycle an id.
-                _inputs[Widget._inherited_disabled, id(ancestor)] = (ancestor, disabled)
-        return disabled
-
-    @property
-    def is_disabled(self, *, _inputs: dict | None = None) -> bool:
-        """Is the widget disabled either because `disabled=True` or an ancestor has `disabled=True`."""
-        return Widget._inherited_disabled(self, _inputs=_inputs)
-
-    is_disabled.fget._acquire_pseudo = (  # type: ignore[union-attr, attr-defined]
-        is_disabled.fget
-    )
-
-    @property
-    def has_focus_within(self, *, _inputs: dict | None = None) -> bool:
-        """Are any descendants focused?"""
-        try:
-            screen = self.screen
-            share = (
-                _inputs is not None
-                and type(screen).__getattribute__ is object.__getattribute__
-                and type(type(screen)).__getattribute__ is type.__getattribute__
-            )
-            if share:
-                declaration = getattr(type(screen), "focused", None)
-                share = (
-                    type(declaration) is Reactive
-                    and declaration._has_stored_input(screen)
-                )
-                key = (type(self).has_focus_within.fget, id(screen))
-                if share and key in _inputs:
-                    _, path = _inputs[key]
-                    return path.get(id(self)) is self
-            node = screen.focused
-        except NoScreen:
-            return False
-        # Keep the actual ancestors alive and compare their identity, just as
-        # the live walk does; custom equality/hash cannot substitute a widget.
-        path = {} if share else None
-        found = False
-        while node is not None:
-            found = found or node is self
-            if share:
-                share = (
-                    type(node).__getattribute__ is object.__getattribute__
-                    and type(type(node)).__getattribute__ is type.__getattribute__
-                )
-            if share:
-                parent = getattr(type(node), "_parent", None)
-                share = (
-                    type(parent) is property
-                    and parent.fget is not None
-                    and getattr(parent.fget, "_stored_input", None) is parent.fget
-                )
-            if not share and found:
+            if node.disabled:
                 return True
-            if share:
-                path[id(node)] = node
             node = node._parent
-        if share:
-            _inputs[key] = (screen, path)
-            return path.get(id(self)) is self
         return False
 
-    has_focus_within.fget._acquire_pseudo = (  # type: ignore[union-attr, attr-defined]
-        has_focus_within.fget
-    )
+    @property
+    def is_disabled(self) -> bool:
+        """Is the widget disabled either because `disabled=True` or an ancestor has `disabled=True`."""
+        return Widget._inherited_disabled(self)
+
+    @property
+    def has_focus_within(self) -> bool:
+        """Are any descendants focused?"""
+        try:
+            focused = self.screen.focused
+        except NoScreen:
+            return False
+        node = focused
+        while node is not None:
+            if node is self:
+                return True
+            node = node._parent
+        return False
 
     def __enter__(self) -> Self:
         """Use as context manager when composing."""
@@ -4021,19 +3923,13 @@ class Widget(DOMNode):
         return pseudo_classes
 
     @property
-    def _pseudo_classes_cache_key(
-        self, *, _inputs: dict | None = None,
-    ) -> tuple[int, ...]:
+    def _pseudo_classes_cache_key(self) -> tuple[int, ...]:
         """A cache key that changes when the pseudo-classes change."""
         return (
             self.mouse_hover,
             self.has_focus,
-            self._acquire_pseudo_property("is_disabled", _inputs),
+            self.is_disabled,
         )
-
-    _pseudo_classes_cache_key.fget._acquire_pseudo = (  # type: ignore[union-attr, attr-defined]
-        _pseudo_classes_cache_key.fget
-    )
 
     def _get_justify_method(self) -> JustifyMethod | None:
         """Get the justify method that may be passed to a Rich renderable."""
