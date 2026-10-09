@@ -562,6 +562,25 @@ class Stylesheet:
             self._candidate_rules[selectors] = candidates
         return candidates
 
+    def _get_component_candidate_rules(self, component_classes: frozenset[str]):
+        return [
+            (component, self._get_candidate_rules({"*", "DOMNode", f".{component}"}))
+            for component in sorted(component_classes)
+        ]
+
+    def pseudo_class_dependencies(self, node: DOMNode) -> frozenset[str]:
+        """Potential selector observations for this declaration and its components.
+
+        Include rules that don't currently match: a false pseudo can become
+        true without changing a declaration. The original parsed candidate
+        plans supply ancestry/combinator dependencies as well as target state.
+        """
+        return self._get_candidate_rules(node._selector_names)[1].union(
+            *(candidate[1] for _, candidate in self._get_component_candidate_rules(
+                node._get_component_classes()
+            ))
+        )
+
     def apply(
         self,
         node: DOMNode,
@@ -749,10 +768,7 @@ class Stylesheet:
             # inherited values still follow its current styles. Positional,
             # focus-within and empty selectors need a fresh match because a
             # sibling/descendant can change without changing this path key.
-            component_candidates = [
-                (component, self._get_candidate_rules({"*", "DOMNode", f".{component}"}))
-                for component in sorted(component_classes)
-            ]
+            component_candidates = self._get_component_candidate_rules(component_classes)
             if all(
                 pseudo_classes.isdisjoint(self._EXCLUDE_PSEUDO_CLASSES_FROM_CACHE)
                 for _, (_, pseudo_classes, _, _) in component_candidates
