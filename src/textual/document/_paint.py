@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import dataclass, replace
 from fractions import Fraction
+from types import MappingProxyType, MethodType
 from typing import TYPE_CHECKING, Callable, Iterable
 from weakref import ref
 
 from rich.style import Style as RichStyle
 from rich.palette import Palette
+from rich.terminal_theme import TerminalTheme
 
 from textual._arrange import arrange
 from textual._compositor import Compositor, RootSceneClip
@@ -21,7 +24,7 @@ from textual.css.styles import RenderStyles, Styles
 from textual.css.stylesheet import Stylesheet
 from textual.dom import DOMNode
 from textual.geometry import NULL_OFFSET, NULL_SPACING, Offset, Region, Size, Spacing
-from textual.layout import WidgetPlacement
+from textual.layout import Layout, WidgetPlacement
 from textual.map_geometry import MapGeometry
 from textual.layouts.vertical import VerticalLayout
 from textual.selection import SELECT_ALL, Selection
@@ -30,9 +33,8 @@ from textual.style import Style
 from textual.visual import RenderOptions, Visual
 
 if TYPE_CHECKING:
-    from rich.terminal_theme import TerminalTheme
     from textual.filter import LineFilter
-    from textual.layout import DockArrangeResult, Layout
+    from textual.layout import DockArrangeResult
     from textual.document._markdown import MarkdownSourceBlock
 
 
@@ -409,9 +411,10 @@ class DocumentNode(StyleContext):
 
 def _input_value(value):
     """Freeze actual native value inputs, never scene epochs or CSS guesses."""
-    from rich.terminal_theme import TerminalTheme
-    from textual.layout import Layout
-
+    # These exact native leaves already ARE their immutable acquisition.
+    # Keep subclass/custom copy semantics and mutable input validation below.
+    if value is None or type(value) in (bool, int, float, str, bytes):
+        return value
     if isinstance(value, Layout):
         return value.document_key()
     if isinstance(value, TerminalTheme):
@@ -445,6 +448,39 @@ class StyleInput:
     inline_rules: dict
     components: tuple
     key: tuple
+
+    @staticmethod
+    def current_admission(
+        node: DOMNode, *, pseudo_classes: frozenset[str] | None = None,
+        _inputs: dict | None = None,
+    ) -> tuple:
+        """Acquire this actual CSS participant, sharing only within one borrow."""
+        if _inputs is not None and node in _inputs:
+            return _inputs[node]
+        inputs = (
+            id(node),
+            type(node),
+            node._parent_revision,
+            node.styles._cache_key,
+            None if node.styles.layout is None else node.styles.layout.document_key(),
+            node.id,
+            node.name,
+            node.classes,
+        )
+        get_pseudo_classes = node.get_pseudo_classes
+        # Keep the original observation order: custom getters can change the
+        # inputs read above. Their full call and dynamic behavior stay live.
+        observed = frozenset(
+            get_pseudo_classes(restrict=pseudo_classes)
+            if isinstance(get_pseudo_classes, MethodType)
+            and getattr(get_pseudo_classes.__func__, "_document_restrict", None)
+            is get_pseudo_classes.__func__
+            else get_pseudo_classes()
+        )
+        inputs = (*inputs, observed)
+        if _inputs is not None:
+            _inputs[node] = inputs
+        return inputs
 
     @classmethod
     def acquire(cls, node: DOMNode, *, source_root: bool = False):
@@ -537,37 +573,18 @@ class DocumentPresentation:
     filters: tuple[LineFilter, ...]
     key: tuple
     admission: tuple
+    ancestor_pseudo_classes: frozenset[str] | None
+    """Source-declared observations in addition to actual CSS dependencies.
+
+    None preserves full live ancestor observation for undeclared custom hooks.
+    """
 
     @staticmethod
-    def current_admission(owner) -> tuple:
-        """Original invalidation facts for this actual publication participant.
-
-        These facts qualify repeated queries only on the same admitted scene
-        lifetime. A replacement widget requires value comparison at publication;
-        an equal new counter never certifies retained document paint.
-        """
-        app = owner.app
-        stylesheet = app.stylesheet
-        return (
-            tuple(
-                (
-                    id(node),
-                    type(node),
-                    node._parent_revision,
-                    node.styles._cache_key,
-                    (
-                        None
-                        if node.styles.layout is None
-                        else node.styles.layout.document_key()
-                    ),
-                    node.id,
-                    node.name,
-                    node.classes,
-                    frozenset(node.get_pseudo_classes()),
-                )
-                for node in owner.css_path_nodes
-            ),
-            owner._subtree_style_revision,
+    def _application_admission(app, stylesheet, *, _inputs: dict | None = None) -> tuple:
+        """Acquire the actual stylesheet, terminal and mutable palette inputs."""
+        if _inputs is not None and app in _inputs:
+            return _inputs[app]
+        inputs = (
             id(stylesheet),
             id(stylesheet._rules),
             stylesheet._require_parse,
@@ -576,17 +593,138 @@ class DocumentPresentation:
             app.theme,
             app.native_ansi_color,
             _input_value(app.ansi_theme),
+        )
+        if _inputs is not None:
+            _inputs[app] = inputs
+        return inputs
+
+    @staticmethod
+    def current_admission(
+        owner, *, ancestor_pseudo_classes: frozenset[str] | None = None,
+        _nodes: dict | None = None, _applications: dict | None = None,
+        _pseudo_classes: Mapping[DOMNode, frozenset[str] | None] | None = None,
+    ) -> tuple:
+        """Original invalidation facts for this actual publication participant.
+
+        These facts qualify repeated queries only on the same admitted scene
+        lifetime. A replacement widget requires value comparison at publication;
+        an equal new counter never certifies retained document paint.
+        """
+        app = owner.app
+        stylesheet = app.stylesheet
+        admission = (
+            tuple(
+                StyleInput.current_admission(
+                    node,
+                    pseudo_classes=(
+                        _pseudo_classes[node] if _pseudo_classes is not None else
+                        None if node is owner else ancestor_pseudo_classes
+                    ),
+                    _inputs=_nodes,
+                )
+                for node in owner.css_path_nodes
+            ),
+            owner._subtree_style_revision,
+            *DocumentPresentation._application_admission(
+                app, stylesheet, _inputs=_applications,
+            ),
             tuple(
                 (type(filter), type(filter).apply, _input_value(vars(filter)))
                 for filter in owner.get_line_filters()
             ),
         )
+        return DocumentPresentation._restrict_admission(
+            admission, ancestor_pseudo_classes
+        )
 
-    def current_for(self, owner) -> bool:
-        return self.admission == self.current_admission(owner)
+    @staticmethod
+    def _restrict_admission(admission, ancestor_pseudo_classes):
+        if ancestor_pseudo_classes is None:
+            return admission
+        path, *inputs = admission
+        return (
+            tuple(
+                (*node[:-1], node[-1] & ancestor_pseudo_classes)
+                for node in path[:-1]
+            ) + path[-1:],
+            *inputs,
+        )
 
     @classmethod
-    def acquire(cls, owner, declarations) -> DocumentPresentation:
+    def acquire_admissions(
+        cls, paints: Mapping[DOMNode, DocumentPaint],
+    ) -> Mapping[DOMNode, tuple[DocumentPaint, tuple]]:
+        """Acquire immutable admissions for one synchronous presentation borrow.
+
+        Shared ancestors and application inputs are read once, by identity;
+        each participant retains its original published paint, path, source
+        revision and filters. Dependencies come from that actual worker result,
+        including source-only default CSS and virtual components.
+        The acquisition retains no state on the scene or presentation.
+
+        The borrower must end or reacquire on input changes, including layout,
+        source, styles, membership and mutable supplier values. In particular,
+        a layout acquisition cannot certify the subsequent paint. Custom
+        admission producers must also supply their batch acquisition contract.
+        """
+        nodes: dict[DOMNode, tuple] = {}
+        applications: dict[DOMNode, tuple] = {}
+        pseudo_classes: dict[DOMNode, frozenset[str] | None] = {}
+        for owner, paint in paints.items():
+            for node in owner.css_path_nodes:
+                required = None if node is owner else paint.ancestor_pseudo_classes
+                if node in pseudo_classes:
+                    previous = pseudo_classes[node]
+                    required = (
+                        None if previous is None or required is None else
+                        previous | required
+                    )
+                pseudo_classes[node] = required
+        return MappingProxyType({
+            owner: (paint, cls.current_admission(
+                owner, ancestor_pseudo_classes=paint.ancestor_pseudo_classes,
+                _nodes=nodes, _applications=applications,
+                _pseudo_classes=pseudo_classes,
+            ))
+            for owner, paint in paints.items()
+        })
+
+    def current_for(
+        self, owner, *, paint: DocumentPaint | None = None,
+        admissions: Mapping[DOMNode, tuple[DocumentPaint, tuple]] | None = None,
+    ) -> bool:
+        """Check live inputs, or borrow this exact published paint's acquisition.
+
+        Missing membership is an error. Another source/presentation cannot use
+        the supplier's observations, even when its current fields happen to
+        agree. A rebind must first acquire its own publication admission.
+        """
+        if admissions is not None:
+            supplier, admission = admissions[owner]
+            if paint is not None and paint is not supplier:
+                return False
+            paint = supplier
+        if paint is not None and paint.document.presentation is not self:
+            return False
+        if admissions is None:
+            admission = self.current_admission(
+                owner, ancestor_pseudo_classes=(
+                    None if paint is None else paint.ancestor_pseudo_classes
+                ),
+            )
+        return self._restrict_admission(
+            self.admission, None if paint is None else paint.ancestor_pseudo_classes
+        ) == admission
+
+    @classmethod
+    def acquire(
+        cls, owner, declarations, *,
+        ancestor_pseudo_classes: frozenset[str] | None = None,
+    ) -> DocumentPresentation:
+        if ancestor_pseudo_classes is not None and not isinstance(
+            ancestor_pseudo_classes, frozenset
+        ):
+            raise TypeError("Document ancestor observations must be a frozenset or None")
         css_path = owner.css_path_nodes
         if css_path != list(reversed(owner.ancestors_with_self)):
             raise TypeError(
@@ -642,6 +780,7 @@ class DocumentPresentation:
             filters,
             key,
             cls.current_admission(owner),
+            ancestor_pseudo_classes,
         )
 
     def prepare(
@@ -683,10 +822,13 @@ class DocumentPresentation:
         declarations = {item.declaration: item for item in self.declarations}
         nodes = list(root.walk_children(with_self=True))
         empty_inputs = {}
+        ancestor_pseudo_classes = self.ancestor_pseudo_classes
         for node in nodes:
             node.presentation = self
             node._document_stylesheet = stylesheet
             node.bind_declaration(declarations[node.declaration])
+            if ancestor_pseudo_classes is not None:
+                ancestor_pseudo_classes |= stylesheet.pseudo_class_dependencies(node)
             if "empty" in stylesheet._get_candidate_rules(node._selector_names)[1]:
                 empty_inputs[node] = tuple(
                     (ancestor, ancestor.is_empty)
@@ -798,6 +940,8 @@ class DocumentPresentation:
                     content_region.size,
                     virtual_region,
                     dock_gutter,
+                    ancestors=tuple(node.walk_ancestors()),
+                    gutter=node.styles.gutter,
                 )
                 if not node.is_container:
                     node.paint_leaf_index = len(leaves)
@@ -894,6 +1038,7 @@ class DocumentPresentation:
             selection_style,
             selecting,
             roots,
+            ancestor_pseudo_classes,
         )
 
 
@@ -975,6 +1120,8 @@ class DocumentPaint:
     borrow this completed source; placements and composed leaves remain
     separate native geometry answers.
     """
+    ancestor_pseudo_classes: frozenset[str] | None
+    """Complete ancestor observations required by this prepared source and CSS."""
 
     @property
     def table_of_contents(self):
@@ -994,30 +1141,68 @@ class DocumentPaint:
         self, *, root_selection=None, selections=None, selection_style=None,
         selecting=False,
     ) -> bool:
+        return self.selection_inputs == self._selection_inputs(
+            root_selection=root_selection, selections=selections,
+            selection_style=selection_style, selecting=selecting,
+        )
+
+    @staticmethod
+    def _selection_inputs(
+        *, root_selection=None, selections=None, selection_style=None,
+        selecting=False,
+    ):
         return (
-            root_selection == self.root_selection
-            and (
-                None if selections is None else tuple(sorted(selections.items()))
-            ) == self.selections
-            and selection_style == self.selection_style
-            and selecting == self.selecting
+            root_selection,
+            None if selections is None else tuple(sorted(selections.items())),
+            selection_style,
+            selecting,
+        )
+
+    @property
+    def selection_inputs(self):
+        """Actual prepared selection, including absent versus empty ranges."""
+        return self.root_selection, self.selections, self.selection_style, self.selecting
+
+    @staticmethod
+    def preparation_inputs(
+        document, width: int, *, root_selection=None, selections=None,
+        selection_style=None, selecting=False,
+    ) -> tuple:
+        """Rendered answer inputs, separate from participant admission.
+
+        A rebind with equal effective presentation can use the same answer.
+        An independent source acquisition or changed supplier cannot, even
+        when its text is equal. Publication still requires current_for().
+        """
+        return (
+            width, document.source_key, document.presentation.key,
+            *DocumentPaint._selection_inputs(
+                root_selection=root_selection, selections=selections,
+                selection_style=selection_style, selecting=selecting,
+            ),
+        )
+
+    @property
+    def preparation_key(self) -> tuple:
+        """Inputs certified by this original worker result."""
+        return (
+            self.width, self.document.source_key, self.presentation_key,
+            *self.selection_inputs,
         )
 
     def matches(
         self, document, width: int, *, root_selection=None, selections=None,
         selection_style=None, selecting=False,
     ) -> bool:
-        return (
-            width == self.width
-            and document.same_source(self.document)
-            and document.presentation.key == self.presentation_key
-            and self.matches_selection(
-                root_selection=root_selection, selections=selections,
-                selection_style=selection_style, selecting=selecting,
-            )
+        return self.preparation_key == self.preparation_inputs(
+            document, width, root_selection=root_selection, selections=selections,
+            selection_style=selection_style, selecting=selecting,
         )
 
-    def is_current(self, owner, width: int, *, selections=None) -> bool:
+    def is_current(
+        self, owner, width: int, *, selections=None,
+        admissions: Mapping[DOMNode, tuple[DocumentPaint, tuple]] | None = None,
+    ) -> bool:
         """Compare current declared presentation without reading any descendants.
 
         The source owner must still hold this exact acquired document. A source
@@ -1025,11 +1210,13 @@ class DocumentPaint:
         with_presentation(). Scene eviction cannot certify different source.
         Selection and active pointer state come from their original Screen;
         a selection update never admits rows prepared for the previous input.
+        admissions lends only the caller's explicit synchronous acquisition;
+        omitting it keeps the original live validation.
         """
         root_selection = owner.text_selection
         return (
             width == self.width
-            and self.document.presentation.current_for(owner)
+            and self.document.presentation.current_for(owner, paint=self, admissions=admissions)
             and self.matches_selection(
                 root_selection=root_selection,
                 selections=selections,

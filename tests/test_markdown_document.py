@@ -1,6 +1,7 @@
 """Detached native preparation against the actual mounted Markdown owner."""
 
 import asyncio
+from copy import deepcopy
 from concurrent.futures import ProcessPoolExecutor
 import multiprocessing
 import os
@@ -63,6 +64,112 @@ class AcquiredMarkdown(Markdown):
         tokens = await super()._parse_tokens(*args, **kwargs)
         self.acquired_tokens = tokens
         return tokens
+
+
+async def test_document_admission_keeps_mutable_layout_palette_and_filter_inputs():
+    from textual.filter import DimFilter
+    from textual.layouts.grid import GridLayout
+
+    class AdmissionApp(App):
+        def compose(self):
+            with VerticalScroll():
+                yield AcquiredMarkdown("Original native paragraph.")
+
+    app = AdmissionApp()
+    # Acquire private native terminal inputs; do not mutate the shared theme.
+    app.ansi_theme_dark = deepcopy(app.ansi_theme_dark)
+    app.ansi_theme_light = deepcopy(app.ansi_theme_light)
+    dim = DimFilter()
+    app._filters.append(dim)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        markdown = app.query_one(AcquiredMarkdown)
+        ancestor = app.query_one(VerticalScroll)
+        ancestor.styles.layout = "grid"
+        await pilot.pause()
+        layout = ancestor.styles.layout
+        assert isinstance(layout, GridLayout)
+        document = markdown.acquire_document(markdown.source, markdown.acquired_tokens)
+        presentation = document.presentation
+        assert presentation.current_for(markdown)
+
+        layout.stretch_height = not layout.stretch_height
+        assert not presentation.current_for(markdown)
+        layout.stretch_height = not layout.stretch_height
+        assert presentation.current_for(markdown)
+
+        palette = app.ansi_theme.ansi_colors._colors
+        original_color = palette[0]
+        palette[0] = (1, 2, 3)
+        assert not presentation.current_for(markdown)
+        palette[0] = original_color
+        assert presentation.current_for(markdown)
+
+        original_factor = dim.dim_factor
+        dim.dim_factor = 0.75
+        assert not presentation.current_for(markdown)
+        dim.dim_factor = original_factor
+        assert presentation.current_for(markdown)
+
+        ancestor.styles.color = "red"
+        assert not presentation.current_for(markdown)
+
+
+async def test_document_preparation_inputs_share_matches_without_participant_admission():
+    from textual.document._paint import DocumentPaint
+
+    markdown = AcquiredMarkdown("One original paragraph.")
+    ancestor = VerticalScroll(markdown)
+    app = App()
+    async with app.run_test(size=(54, 20)) as pilot:
+        await app.mount(ancestor)
+        await pilot.pause()
+        document = markdown.acquire_document(markdown.source, markdown.acquired_tokens)
+        width = markdown.region.width
+        paint = await asyncio.to_thread(document.prepare, width)
+        original = DocumentPaint.preparation_inputs(document, width)
+        assert paint.preparation_key == original
+        assert paint.matches(document, width)
+
+        # Genuine style writes change admission; restoring the original rule
+        # absence restores answer inputs, not that publication lifetime.
+        ancestor.styles.color = "red"
+        ancestor.styles.clear_rule("color")
+        await pilot.pause()
+        rebound = document.with_presentation(markdown)
+        assert document.presentation.admission != rebound.presentation.admission
+        assert DocumentPaint.preparation_inputs(rebound, width) == original
+        assert paint.matches(rebound, width)
+        assert not paint.is_current(markdown, width)
+        assert paint.with_presentation(rebound).is_current(markdown, width)
+
+        independent = markdown.acquire_document(markdown.source, markdown.acquired_tokens)
+        assert DocumentPaint.preparation_inputs(independent, width) != original
+        assert not paint.matches(independent, width)
+        assert not paint.matches(document, width + 1)
+
+        assert paint.leaves
+        for selected in (
+            {"root_selection": SELECT_ALL},
+            {"selections": {}},
+            {"selections": {0: SELECT_ALL}},
+            {"selection_style": Visual.selection_style(markdown)},
+            {"selecting": True},
+        ):
+            assert DocumentPaint.preparation_inputs(document, width, **selected) != original
+            assert not paint.matches(document, width, **selected)
+
+        # Same acquired UUID with a genuinely changed grammar configuration
+        # still refuses reuse. Effective style change independently refuses it.
+        markdown.BULLETS = ("different native bullet",)
+        changed = document.with_presentation(markdown)
+        assert not document.same_source(changed)
+        assert DocumentPaint.preparation_inputs(changed, width) != original
+        assert not paint.matches(changed, width)
+        ancestor.styles.color = "red"
+        changed_style = rebound.with_presentation(markdown)
+        assert changed_style.presentation.key != rebound.presentation.key
+        assert DocumentPaint.preparation_inputs(changed_style, width) != original
 
 
 class DocumentCodeLabel(Label):
@@ -396,7 +503,7 @@ async def test_source_empty_membership_before_native_mount(
         assert "last-child" in markdown.document.presentation.root.pseudo_classes
         assert paint.root_empty == markdown.is_empty
         assert paint.root_empty is expected_empty
-        size, mounted = app.screen._compositor.render_subtree_strips(
+        size, mounted, _ = app.screen._compositor.render_subtree_strips(
             markdown, app.screen._compositor.find_widget(markdown)
         )
         assert paint.size == size
@@ -451,7 +558,7 @@ async def test_root_selection_before_leaves_matches_native_scene_and_readiness(m
         # detached preparation above had only the root selection at ingress.
         app.screen._select_all_in_widget(markdown)
         await pilot.pause()
-        _, mounted = app.screen._compositor.render_subtree_strips(
+        _, mounted, _ = app.screen._compositor.render_subtree_strips(
             markdown, app.screen._compositor.find_widget(markdown)
         )
         assert painted_characters(markdown.document_paint.lines) == painted_characters(mounted)
@@ -493,7 +600,7 @@ async def test_partial_leaf_selection_uses_original_offsets_and_native_style(mon
         assert not selected.is_current(markdown, paint.width)
         selections.clear()
         assert selected.selections == ((index, selection),)
-        _, mounted = app.screen._compositor.render_subtree_strips(
+        _, mounted, _ = app.screen._compositor.render_subtree_strips(
             markdown, app.screen._compositor.find_widget(markdown)
         )
         assert painted_characters(selected.lines) == painted_characters(mounted)
@@ -591,7 +698,7 @@ async def test_native_document_rows_currentness_and_interactions(monkeypatch):
         markdown = app.query_one(AcquiredMarkdown)
         document = markdown.acquire_document(SOURCE, markdown.acquired_tokens)
         paint = await asyncio.to_thread(document.prepare, markdown.region.width)
-        size, mounted = app.screen._compositor.render_subtree_strips(
+        size, mounted, _ = app.screen._compositor.render_subtree_strips(
             markdown,
             app.screen._compositor.find_widget(markdown),
         )
@@ -650,7 +757,7 @@ async def test_native_document_rows_currentness_and_interactions(monkeypatch):
         current = document.with_presentation(markdown)
         assert not paint.matches(current, markdown.region.width)
         resized = await asyncio.to_thread(current.prepare, markdown.region.width)
-        size, mounted = app.screen._compositor.render_subtree_strips(
+        size, mounted, _ = app.screen._compositor.render_subtree_strips(
             markdown,
             app.screen._compositor.find_widget(markdown),
         )

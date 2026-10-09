@@ -959,15 +959,23 @@ class Widget(DOMNode):
         _rich_traceback_omit = True
         self._pending_children.append(widget)
 
-    @property
-    def is_disabled(self) -> bool:
-        """Is the widget disabled either because `disabled=True` or an ancestor has `disabled=True`."""
-        node: MessagePump | None = self
+    @staticmethod
+    def _inherited_disabled(node: MessagePump | None) -> bool:
+        """Derive disabled state from physical Widgets, not ancestor overrides.
+
+        Read live values on each call: a custom predicate or descriptor may
+        synchronously change an ancestor's state or physical parent.
+        """
         while isinstance(node, Widget):
             if node.disabled:
                 return True
             node = node._parent
         return False
+
+    @property
+    def is_disabled(self) -> bool:
+        """Is the widget disabled either because `disabled=True` or an ancestor has `disabled=True`."""
+        return Widget._inherited_disabled(self)
 
     @property
     def has_focus_within(self) -> bool:
@@ -1209,9 +1217,14 @@ class Widget(DOMNode):
             return text_content
         return Content.from_markup(text_content)
 
-    def _after_refresh_pending(self, screen, roots: tuple[Widget, ...]) -> bool:
+    def _after_refresh_pending(
+        self, screen, roots: tuple[Widget, ...], *,
+        refresh_requested: dict[Screen, bool], refresh_pending: bool,
+    ) -> bool:
         """A spatial sender borrows its original screen's geometry and damage."""
-        return self.is_attached and screen._sender_refresh_pending(self, roots)
+        return self.is_attached and screen._sender_refresh_pending(
+            self, roots, refresh_requested=refresh_requested,
+        )
 
     def arrange(self, size: Size, optimal: bool = False) -> DockArrangeResult:
         """Arrange child widgets.
@@ -2384,7 +2397,7 @@ class Widget(DOMNode):
         position readers still request those paths through ``find_widget``.
         """
         try:
-            return self.screen._compositor._get_published_geometry(self) is not None
+            return self.screen._compositor._layout_map.get(self) is not None
         except NoScreen:
             return False
 
@@ -3902,16 +3915,8 @@ class Widget(DOMNode):
         Returns:
             A PseudoClasses object describing the pseudo classes that are present.
         """
-        node: MessagePump | None = self
-        disabled = False
-        while isinstance(node, Widget):
-            if node.disabled:
-                disabled = True
-                break
-            node = node._parent
-
         pseudo_classes = PseudoClasses(
-            enabled=not disabled,
+            enabled=not Widget._inherited_disabled(self),
             hover=self.mouse_hover,
             focus=self.has_focus,
         )

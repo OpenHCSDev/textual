@@ -26,15 +26,16 @@ def test_borrowed_geometry_routes_preserve_membership_ancestry_and_assignment_or
     key = SubtreeGeometryKey(0, 0, bounds, bounds, (), 0, bounds, True,
                             Spacing(), bounds.size, False, Offset(), ())
 
-    def placed(y):
+    def placed(owner, y, ancestors):
         region = Region(0, y, 5, 1)
-        return MapGeometry(region, (), bounds, region.size, region.size, region, Spacing())
+        return MapGeometry(region, (), bounds, region.size, region.size, region,
+                           Spacing(), ancestors, owner.gutter)
 
     def source(owner, y):
         return IntrinsicSubtreeGeometry(
             key, MappingProxyType({
-                owner: (0, SubtreeMapGeometry(placed(y), (), None)),
-                shared: (1, SubtreeMapGeometry(placed(y + 1), (), owner)),
+                owner: (0, SubtreeMapGeometry(placed(owner, y, (root,)), (), None)),
+                shared: (1, SubtreeMapGeometry(placed(shared, y + 1, (owner, root)), (), owner)),
             }), frozenset((owner, shared, logical)), frozenset((invisible,)),
         )
 
@@ -43,7 +44,7 @@ def test_borrowed_geometry_routes_preserve_membership_ancestry_and_assignment_or
         key, MappingProxyType({
             first: (0, SubtreeGeometryPlacement(first_source, key, clip, root)),
             second: (1, SubtreeGeometryPlacement(second_source, key, clip, root)),
-            root: (2, placed(9)),
+            root: (2, placed(root, 9, ())),
         }), frozenset((root,)), frozenset(),
     )
     assert resource.contains(shared)
@@ -55,8 +56,9 @@ def test_borrowed_geometry_routes_preserve_membership_ancestry_and_assignment_or
     assert resource.captured_parent(first) is root
     published, clips = {}, {}
     resource.project_into(published, key, clip, clips, root, visible_only=True,
-                          retained={shared, unrelated}, bounds=Region(30, 30, 1, 1))
-    assert published[shared] == placed(6)
+                          retained={shared, unrelated}, bounds=Region(30, 30, 1, 1),
+                          ancestry_root=root, ancestors=())
+    assert published[shared] == placed(shared, 6, (second, root))
     assert unrelated not in published
 
 
@@ -90,7 +92,7 @@ async def test_complete_markdown_capture_keeps_offscreen_table_keylines():
         assert tables[-1] not in compositor._published_map
         _, placement = next(compositor.published_geometry((body,)))
         published = compositor._full_map, compositor._visible_map
-        _, strips = compositor.render_subtree_strips(body, placement)
+        _, strips, _ = compositor.render_subtree_strips(body, placement)
         rows = [strip.text for strip in strips]
         for index in range(12):
             row = next(row for row in rows if f"TABLE_{index:02}" in row)
@@ -441,7 +443,7 @@ async def test_complete_cached_body_keeps_capture_and_explicit_reader_geometry()
             assert rows[235] not in {node for _, node in candidates}
             assert len(candidates) < len(resource.geometry)
             # Capture remains complete without replacing the published viewport.
-            size, strips = compositor.render_subtree_strips(body, placement)
+            size, strips, _ = compositor.render_subtree_strips(body, placement)
             assert size.height == 240
             assert all(f"Original row {index}" in strip.text
                        for index, strip in enumerate(strips))
@@ -564,7 +566,7 @@ async def test_body_capture_descendants_use_original_arrangement_and_screen_coor
             return render_lines(crop)
 
         with patch.object(compositor, "_arrange_root", side_effect=arrange_body), patch.object(row, "render_lines", side_effect=render_row):
-            size, strips = compositor.render_subtree_strips(body, placement)
+            size, strips, _ = compositor.render_subtree_strips(body, placement)
         assert size == bounds.size
         assert len(strips) == size.height
         assert all(strip.cell_length == size.width for strip in strips)

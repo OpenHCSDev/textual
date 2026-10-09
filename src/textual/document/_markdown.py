@@ -256,6 +256,7 @@ class MarkdownDocument:
         )
         dark = owner.app.current_theme.dark
         process_layout = owner.get_document_process_layout()
+        ancestor_pseudo_classes = owner.get_document_ancestor_pseudo_classes()
         block_classes = owner.acquire_document_blocks()
         producers = {
             block_type: block_type.document_node
@@ -292,7 +293,9 @@ class MarkdownDocument:
                 for support in block_type.document_declarations()
             ),
         }
-        presentation = DocumentPresentation.acquire(owner, declarations)
+        presentation = DocumentPresentation.acquire(
+            owner, declarations, ancestor_pseudo_classes=ancestor_pseudo_classes
+        )
         root_producer = declaration.document_root
         source_key = (
             source,
@@ -309,6 +312,7 @@ class MarkdownDocument:
             ),
             bullets,
             process_layout,
+            ancestor_pseudo_classes,
             cls._supplier_identity(inline_content),
             cls._supplier_identity(fence_content),
             cls._supplier_identity(unhandled),
@@ -347,13 +351,15 @@ class MarkdownDocument:
             return id(supplier.__self__), supplier.__func__
         return id(supplier)
 
+    @property
+    def source_key(self):
+        """Original acquisition identity and complete grammar/supplier inputs."""
+        return self._source_identity, self._source_key
+
     def same_source(self, other):
         # Acquisition owns this identity; it survives worker serialization.
         # Equal text or a new resolved cohort cannot replace this source.
-        return (
-            self._source_identity == other._source_identity
-            and self._source_key == other._source_key
-        )
+        return self.source_key == other.source_key
 
     def with_presentation(self, owner: Markdown) -> MarkdownDocument:
         """Reacquire only current declarations/style, retaining this exact source.

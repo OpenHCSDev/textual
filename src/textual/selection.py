@@ -355,7 +355,7 @@ class SelectState(NamedTuple):
                 or not region.contains_point(self.screen_offset)):
             return None
 
-        visible = screen._compositor.visible_widgets
+        visible = screen._compositor.published_widgets
         if start not in visible or end not in visible:
             return None
         bounds = self.selection_bounds
