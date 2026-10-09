@@ -198,7 +198,11 @@ async def test_sender_delivery_preserves_held_subtree_and_whole_frame_admission(
         def published(sender, written):
             assert asyncio.current_task() is sender.task
             assert active_message_pump.get() is sender
-            assert not sender._after_refresh_pending(screen, screen._prepare_compositor_refresh())
+            roots = screen._prepare_compositor_refresh()
+            assert not sender._after_refresh_pending(
+                screen, roots, refresh_requested={screen: screen._refresh_requested},
+                refresh_pending=screen._refresh_pending,
+            )
             written.set()
 
         source.call_after_refresh(published, source, held_written)

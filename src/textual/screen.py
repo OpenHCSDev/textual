@@ -1291,9 +1291,15 @@ class Screen(Generic[ScreenResultType], Widget):
             screens = (*self.app._background_screens, self) if self is self.app.screen else (self,)
         return tuple((screen, screen._prepare_compositor_refresh()) for screen in screens)
 
-    def _after_refresh_pending(self, screen, roots: tuple[Widget, ...]) -> bool:
+    def _after_refresh_pending(
+        self, screen, roots: tuple[Widget, ...], *,
+        refresh_requested: dict[Screen, bool], refresh_pending: bool,
+    ) -> bool:
         """Screen-owned work retains the original whole-frame admission."""
-        return MessagePump._after_refresh_pending(self, screen, roots)
+        return MessagePump._after_refresh_pending(
+            self, screen, roots, refresh_requested=refresh_requested,
+            refresh_pending=refresh_pending,
+        )
 
     def _compositor_refresh(self) -> None:
         """Publish admitted damage, retaining held subtree damage in Compositor."""
@@ -1411,7 +1417,10 @@ class Screen(Generic[ScreenResultType], Widget):
         if self._callbacks:
             self.call_next(self._invoke_and_clear_callbacks)
 
-    def _sender_refresh_pending(self, sender: Widget, roots: tuple[Widget, ...]) -> bool:
+    def _sender_refresh_pending(
+        self, sender: Widget, roots: tuple[Widget, ...], *,
+        refresh_requested: dict[Screen, bool],
+    ) -> bool:
         """Admit the original spatial sender, including its backdrop publication."""
         if roots and (
             set(sender.walk_ancestors(with_self=True)).intersection(roots)
@@ -1420,7 +1429,11 @@ class Screen(Generic[ScreenResultType], Widget):
             return True
         owner = sender.screen
         for screen in (self, owner) if owner is not self else (self,):
-            if screen._refresh_requested:
+            # An independently owned backdrop or inactive sender screen has
+            # its own answer, acquired once when this pass first consumes it.
+            if screen not in refresh_requested:
+                refresh_requested[screen] = screen._refresh_requested
+            if refresh_requested[screen]:
                 return True
             if any(sender in widget.walk_ancestors(with_self=True)
                    for widget in screen._dirty_widgets):
@@ -1446,12 +1459,21 @@ class Screen(Generic[ScreenResultType], Widget):
             roots = (*roots, *(root
                 for screen in (*self.app._background_screens, self)
                 for root in screen._layout_mutation_roots()))
+        # Preparation may change source/layout intent synchronously. Acquire
+        # the original virtual queries after those effects, once for this pass.
+        # Sender queueing doesn't dispatch callbacks here; their original pumps
+        # execute them after this admission returns. No answer outlives the pass.
+        refresh_requested = {self: self._refresh_requested}
+        refresh_pending = self._refresh_pending
         index = 0
         for _ in range(len(self._callbacks)):
             if self.app._batch_count or index >= len(self._callbacks):
                 return
             callback, sender = self._callbacks[index]
-            if self.is_current and sender._after_refresh_pending(self, roots):
+            if self.is_current and sender._after_refresh_pending(
+                self, roots, refresh_requested=refresh_requested,
+                refresh_pending=refresh_pending,
+            ):
                 index += 1
                 continue
             self._callbacks.pop(index)

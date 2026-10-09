@@ -488,9 +488,12 @@ class MessagePump(metaclass=_MessagePumpMeta):
         self._timers.add(timer)
         return timer
 
-    def _after_refresh_pending(self, screen: Screen, roots: tuple[Widget, ...]) -> bool:
+    def _after_refresh_pending(
+        self, screen: Screen, roots: tuple[Widget, ...], *,
+        refresh_requested: dict[Screen, bool], refresh_pending: bool,
+    ) -> bool:
         """Non-spatial owners await the complete admitted screen publication."""
-        return screen._refresh_pending or bool(roots)
+        return refresh_pending or bool(roots)
 
     def call_after_refresh(self, callback: Callback, *args: Any, **kwargs: Any) -> bool:
         """Schedule a callback after this owner's messages and publication complete.
