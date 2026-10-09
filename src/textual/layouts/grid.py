@@ -398,14 +398,7 @@ class GridLayout(Layout):
             "auto_minimum": self.auto_minimum,
         }
 
-    def document_key(
-        self, *, _arrange=arrange, _width=Layout.get_content_width,
-        _height=Layout.get_content_height, _constructor=__init__,
-    ) -> tuple:
-        return self._native_document_key(
-            _arrange, _width, _height, tuple(self._document_inputs().items()),
-            constructor=_constructor,
-        )
-
-    def acquire_document(self):
-        return self._acquire_native_document(**self._document_inputs())
+    _document_methods = (
+        arrange, Layout.get_content_width, Layout.get_content_height,
+        __init__, Layout.clear_cache, Layout.render_keyline, _document_inputs,
+    )
