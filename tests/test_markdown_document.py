@@ -291,8 +291,8 @@ async def test_source_binding_refuses_a_new_resolved_supplier():
 class IndependentlyAcquiredMarkdown(AcquiredMarkdown):
     document = None
 
-    def is_current_document(self, document):
-        return self.document is not None and self.document.same_source(document)
+    def get_current_document(self):
+        return self.document
 
 
 @pytest.mark.asyncio
@@ -314,6 +314,10 @@ async def test_independent_source_owner_revokes_scene_without_native_update():
         markdown.styles.color = "red"
         markdown.document = document.with_presentation(markdown)
         assert root.source_block is paint.roots[0]
+        # A requested source string is not the acquired source of old controls.
+        markdown._markdown = "A pending independent source."
+        assert root.source == paint.roots[0].source_text()
+        markdown._markdown = document.source
         # The owner's fresh acquisition supersedes old controls despite equal
         # source text, without calling either native update or append.
         markdown.document = markdown.acquire_document(markdown.source, markdown.acquired_tokens)
@@ -323,6 +327,16 @@ async def test_independent_source_owner_revokes_scene_without_native_update():
             markdown.materialize_document(paint)
         assert tuple(markdown.children) == before
         assert markdown.source == "Original acquired source."
+        # Native source requests revoke scene custody even if the independently
+        # acquired owner still retains the preceding document.
+        markdown.document = document
+        await markdown.materialize_document(paint)
+        root = markdown.children[0]
+        assert root.source_block is paint.roots[0]
+        publication = markdown.append(" A native successor.")
+        assert root.source_block is None
+        await publication
+        assert root.source_block is None
 
 
 class BeforeMountMarkdown(Markdown):

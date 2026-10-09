@@ -335,6 +335,9 @@ class MarkdownBlock(Static):
     @property
     def source(self) -> str | None:
         """The source of this block if known, otherwise `None`."""
+        source = self.source_block
+        if source is not None:
+            return source.source_text()
         if self.source_range is None:
             return None
         return self.source_text(self._markdown.source, self.source_range)
@@ -1883,13 +1886,25 @@ class Markdown(Widget):
     def is_current_document(self, document: MarkdownDocument) -> bool:
         """Admit source lineage through the Markdown owner's current resource.
 
-        Native source requests own the scene document here. A subclass which
-        publishes acquired source without update/append overrides this method
-        from that original resource. Style/width changes retain same_source();
-        equal text alone never admits a newly acquired document.
+        Native update/append revoke scene custody independently of a subclass
+        source publication. Both facts must agree; a current acquired document
+        cannot re-admit controls consumed by an older native source request.
         """
-        current = self._scene_document
-        return current is not None and current.same_source(document)
+        scene = self._scene_document
+        current = self.get_current_document()
+        return (
+            scene is not None and scene.same_source(document)
+            and current is not None
+            and (current is scene or current.same_source(document))
+        )
+
+    def get_current_document(self) -> MarkdownDocument | None:
+        """The current source resource, independent of style/width inputs.
+
+        Acquired-source subclasses supply their original current document here
+        without duplicating native scene-admission or update/append decisions.
+        """
+        return self._scene_document
 
     def update(self, markdown: str) -> AwaitComplete:
         """Update the document with new Markdown.
