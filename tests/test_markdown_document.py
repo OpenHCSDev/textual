@@ -1,12 +1,16 @@
 """Detached native preparation against the actual mounted Markdown owner."""
 
 import asyncio
+from concurrent.futures import ProcessPoolExecutor
+import multiprocessing
+import os
 import pickle
 
 import pytest
 
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll
+from textual.geometry import Size, Spacing
 from textual.selection import Selection
 from textual.widgets import Label, Markdown
 from textual.widgets._markdown import MarkdownFence
@@ -184,6 +188,41 @@ class EmptyDisplayApp(BeforeMountApp):
     CSS = (
         BeforeMountApp.CSS + "BeforeMountMarkdown MarkdownParagraph { display: none; }"
     )
+
+
+@pytest.mark.asyncio
+async def test_complete_document_request_and_paint_cross_spawn_process(monkeypatch):
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    app = BeforeMountApp()
+    async with app.run_test(size=(54, 30)) as pilot:
+        await pilot.pause()
+        markdown = app.query_one(BeforeMountMarkdown)
+        await markdown.update(SOURCE)
+        markdown.update_node_styles()
+        await pilot.pause()
+        document = markdown.document.with_presentation(markdown)
+        local = markdown.document_paint
+
+    # The request no longer borrows a running App or widget. Both complete
+    # request and complete result traverse the original spawn/pickle boundary.
+    with ProcessPoolExecutor(
+        max_workers=1, mp_context=multiprocessing.get_context("spawn")
+    ) as executor:
+        future = executor.submit(document.prepare, local.width)
+        remote = await asyncio.wrap_future(future)
+        worker_pids = tuple(executor._processes)
+
+    assert all(not os.path.exists(f"/proc/{pid}") for pid in worker_pids)
+    assert remote.matches(document, local.width)
+    assert type(remote.gutter) is Spacing
+    assert type(remote.size) is Size
+    assert remote.gutter == local.gutter
+    assert remote.size == local.size
+    assert remote.content_size == local.content_size
+    assert remote.root_empty == local.root_empty
+    assert remote.blocks == local.blocks
+    assert remote.table_of_contents == local.table_of_contents
+    assert painted_characters(remote.lines) == painted_characters(local.lines)
 
 
 @pytest.mark.asyncio

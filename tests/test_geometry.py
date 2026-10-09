@@ -1,8 +1,20 @@
+from copy import deepcopy
+import pickle
 from typing import Literal
 
 import pytest
 
 from textual.geometry import Offset, Region, Shape, Size, Spacing, clamp
+
+
+@pytest.mark.parametrize(
+    "value",
+    (Offset(-3, 7), Size(31, 19), Region(-5, 11, 31, 19), Spacing(1, 2, 3, 4)),
+)
+def test_geometry_transport_preserves_selected_native_type(value):
+    for restored in (pickle.loads(pickle.dumps(value, protocol=5)), deepcopy(value)):
+        assert type(restored) is type(value)
+        assert tuple(restored) == tuple(value)
 
 
 def test_dimensions_region():

@@ -332,6 +332,9 @@ class DocumentNode(StyleContext):
         self._layout_width = width
         return self._measure_content_height(container, viewport, width)
 
+    def _parse_visual_style(self, style: str):
+        return self._document_stylesheet.parse_style(style)
+
     def _render(self):
         return self.content if self.content is not None else self._render_container()
 
@@ -646,6 +649,7 @@ class DocumentPresentation:
         empty_inputs = {}
         for node in nodes:
             node.presentation = self
+            node._document_stylesheet = stylesheet
             node.bind_declaration(declarations[node.declaration])
             if "empty" in stylesheet._get_candidate_rules(node._selector_names)[1]:
                 empty_inputs[node] = tuple(

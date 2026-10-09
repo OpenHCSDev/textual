@@ -1534,9 +1534,13 @@ class DOMNode(MessagePump):
                 raise KeyError(f"No matching component class found for '{style}'")
             return NULL_STYLE
         try:
-            return VisualStyle.parse(style)
+            return self._parse_visual_style(style)
         except Exception:
             return NULL_STYLE
+
+    def _parse_visual_style(self, style: str) -> VisualStyle:
+        """Parse inline styles through this node's presentation owner."""
+        return VisualStyle.parse(style)
 
     @property
     def link_style(self) -> Style:

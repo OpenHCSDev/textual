@@ -271,7 +271,7 @@ class Stylesheet:
             return style_text
         if style_text in self._style_parse_cache:
             return self._style_parse_cache[style_text]
-        style = parse_style(style_text)
+        style = parse_style(style_text, self._variables)
         self._style_parse_cache[style_text] = style
         return style
 
