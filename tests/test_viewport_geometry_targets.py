@@ -90,7 +90,7 @@ async def test_complete_markdown_capture_keeps_offscreen_table_keylines():
         assert tables[-1] not in compositor._published_map
         _, placement = next(compositor.published_geometry((body,)))
         published = compositor._full_map, compositor._visible_map
-        _, strips = compositor.render_subtree_strips(body, placement)
+        _, strips, _ = compositor.render_subtree_strips(body, placement)
         rows = [strip.text for strip in strips]
         for index in range(12):
             row = next(row for row in rows if f"TABLE_{index:02}" in row)
@@ -441,7 +441,7 @@ async def test_complete_cached_body_keeps_capture_and_explicit_reader_geometry()
             assert rows[235] not in {node for _, node in candidates}
             assert len(candidates) < len(resource.geometry)
             # Capture remains complete without replacing the published viewport.
-            size, strips = compositor.render_subtree_strips(body, placement)
+            size, strips, _ = compositor.render_subtree_strips(body, placement)
             assert size.height == 240
             assert all(f"Original row {index}" in strip.text
                        for index, strip in enumerate(strips))
@@ -564,7 +564,7 @@ async def test_body_capture_descendants_use_original_arrangement_and_screen_coor
             return render_lines(crop)
 
         with patch.object(compositor, "_arrange_root", side_effect=arrange_body), patch.object(row, "render_lines", side_effect=render_row):
-            size, strips = compositor.render_subtree_strips(body, placement)
+            size, strips, _ = compositor.render_subtree_strips(body, placement)
         assert size == bounds.size
         assert len(strips) == size.height
         assert all(strip.cell_length == size.width for strip in strips)
