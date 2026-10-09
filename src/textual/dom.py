@@ -1758,55 +1758,18 @@ class DOMNode(MessagePump):
         """
         _watch(self, obj, attribute_name, callback, init=init)
 
-    def get_pseudo_classes(self, *, _inputs: dict | None = None) -> set[str]:
+    def get_pseudo_classes(self) -> set[str]:
         """Pseudo classes for a widget.
 
         Returns:
             Names of the pseudo classes.
         """
 
-        result = set()
-        for name, check_class in self._PSEUDO_CLASSES.items():
-            acquire = (
-                None if _inputs is None else getattr(check_class, "_acquire_pseudo", None)
-            )
-            present = (
-                check_class(self)
-                if acquire is None
-                else acquire(self, _inputs=_inputs)
-            )
-            if present:
-                result.add(name)
-        return result
-
-    # Acquisition belongs to the actual callable declaration. An override or
-    # an edited predicate table keeps its live call unless it declares this
-    # same synchronous input contract; no default implementation is inferred.
-    get_pseudo_classes._acquire_pseudo = get_pseudo_classes  # type: ignore[attr-defined]
-
-    def _acquire_pseudo_classes(self, inputs: dict) -> set[str]:
-        getter = self.get_pseudo_classes
-        acquire = getattr(getter, "_acquire_pseudo", None)
-        return getter() if acquire is None else acquire(self, _inputs=inputs)
-
-    def _acquire_pseudo_property(self, name: str, inputs: dict | None):
-        """Acquire a declared property, preserving actual custom lookup.
-
-        A native property is a data descriptor, so instance shadows cannot
-        replace it. Custom descriptors, instance attributes, metaclass lookup
-        and instance lookup keep their original access behavior.
-        """
-        if (
-            inputs is not None
-            and type(self).__getattribute__ is object.__getattribute__
-            and type(type(self)).__getattribute__ is type.__getattribute__
-        ):
-            declaration = getattr(type(self), name, None)
-            if type(declaration) is property:
-                acquire = getattr(declaration.fget, "_acquire_pseudo", None)
-                if acquire is not None:
-                    return acquire(self, _inputs=inputs)
-        return getattr(self, name)
+        return {
+            name
+            for name, check_class in self._PSEUDO_CLASSES.items()
+            if check_class(self)
+        }
 
     def reset_styles(self) -> None:
         """Reset styles back to their initial state."""

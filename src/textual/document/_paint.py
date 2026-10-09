@@ -463,11 +463,7 @@ class StyleInput:
             node.id,
             node.name,
             node.classes,
-            frozenset(
-                node.get_pseudo_classes()
-                if _inputs is None
-                else node._acquire_pseudo_classes(_inputs)
-            ),
+            frozenset(node.get_pseudo_classes()),
         )
         if _inputs is not None:
             _inputs[node] = inputs
@@ -624,7 +620,7 @@ class DocumentPresentation:
         a layout acquisition cannot certify the subsequent paint. Custom
         admission producers must also supply their batch acquisition contract.
         """
-        nodes: dict = {}
+        nodes: dict[DOMNode, tuple] = {}
         applications: dict[DOMNode, tuple] = {}
         return MappingProxyType({
             owner: cls.current_admission(

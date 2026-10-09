@@ -187,10 +187,6 @@ class MessagePump(metaclass=_MessagePumpMeta):
         """The current parent message pump (if set)."""
         return None if self.__parent is None else self.__parent()
 
-    # The native stored topology participates in a synchronous pseudo-input
-    # borrow. Replacing this getter does not inherit that declaration contract.
-    _parent.fget._stored_input = _parent.fget  # type: ignore[union-attr, attr-defined]
-
     @_parent.setter
     def _parent(self, parent: MessagePump | None) -> None:
         previous = self.__dict__.get("_MessagePump__parent")
