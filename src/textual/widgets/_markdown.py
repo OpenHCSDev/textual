@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from functools import partial
 from pathlib import Path, PurePath
 from types import MethodType
-from typing import AsyncIterator, Callable, Iterable, Optional, Sequence
+from typing import TYPE_CHECKING, AsyncIterator, Callable, Iterable, Optional, Sequence
 from urllib.parse import unquote
 
 from markdown_it import MarkdownIt
@@ -32,6 +32,10 @@ from textual.style import Style
 from textual.widget import Widget
 from textual.widgets import Static, Tree
 from textual.widgets._label import Label
+
+if TYPE_CHECKING:
+    from textual.document._markdown import MarkdownDocument, MarkdownSourceBlock
+    from textual.document._paint import DocumentPaint
 
 TableOfContentsType: TypeAlias = "list[tuple[int, str, str | None]]"
 """Information about the table of contents of a markdown document.
@@ -241,6 +245,7 @@ class MarkdownBlock(Static):
         token: Token,
         source_range: tuple[int, int] | None = None,
         *args,
+        source_block: MarkdownSourceBlock | None = None,
         **kwargs,
     ) -> None:
         self._markdown_ref = weakref.ref(markdown)
@@ -249,8 +254,12 @@ class MarkdownBlock(Static):
         self._token: Token = token
         self._blocks: list[MarkdownBlock] = []
         self._inline_token: Token | None = None
-        self.source_range: tuple[int, int] = source_range or (
-            (token.map[0], token.map[1]) if token.map is not None else (0, 0)
+        self._source_block = source_block
+        self.source_range: tuple[int, int] = (
+            source_block.source_range if source_block is not None else
+            source_range or (
+                (token.map[0], token.map[1]) if token.map is not None else (0, 0)
+            )
         )
 
         super().__init__(
@@ -263,6 +272,46 @@ class MarkdownBlock(Static):
 
     def _is_block_type(self, declaration: type[MarkdownBlock]) -> bool:
         return isinstance(self, declaration)
+
+    @property
+    def source_block(self) -> MarkdownSourceBlock | None:
+        """The actual acquired member, while this scene still owns its source.
+
+        A normal update or append revokes the detached-source relation even
+        when text or line ranges happen to agree. No descendant or placement
+        projection can recreate it.
+        """
+        source = self._source_block
+        return (
+            source if source is not None
+            and self._markdown.is_current_document(source.document) else None
+        )
+
+    @classmethod
+    async def from_source(
+        cls, markdown: Markdown, source: MarkdownSourceBlock
+    ) -> MarkdownBlock:
+        """Construct genuine controls from this original acquired grammar member.
+
+        Custom constructors receive their original grammar arguments and must
+        accept the source binding, or declare their own scene factory. Native
+        composition and callbacks still run on the real scene widgets.
+        """
+        if source.declaration is not cls:
+            raise TypeError("Scene declaration differs from its acquired grammar member")
+        await asyncio.sleep(0)
+        block = cls(
+            markdown, source._token, *source._arguments, source_block=source
+        )
+        if source._inline_token is not None:
+            block.build_from_token(source._inline_token)
+        block._blocks = [
+            await child.declaration.from_source(markdown, child)
+            for child in source._blocks
+        ]
+        if source.id is not None:
+            block.id = source.id
+        return block
 
     def heading_id(self) -> str:
         return self.make_heading_id(self._content, id(self))
@@ -298,6 +347,7 @@ class MarkdownBlock(Static):
     def _copy_context(self, block: MarkdownBlock) -> None:
         """Copy the context from another block."""
         self._token = block._token
+        self._source_block = block._source_block
 
     def compose(self) -> ComposeResult:
         yield from self._blocks
@@ -344,7 +394,13 @@ class MarkdownBlock(Static):
             token: The token from which this block is built.
         """
         self._inline_token = token
-        content = self._markdown._get_token_content(token, block=self)
+        source = self._source_block
+        if source is not None and token is not source._inline_token:
+            self._source_block = source = None
+        content = (
+            self._markdown._get_token_content(token, block=self)
+            if source is None else source._content
+        )
         self.set_content(content)
 
     @staticmethod
@@ -1041,9 +1097,12 @@ class MarkdownListItem(MarkdownBlock):
     }
     """
 
-    def __init__(self, markdown: Markdown, token: Token, bullet: str) -> None:
+    def __init__(
+        self, markdown: Markdown, token: Token, bullet: str, *,
+        source_block: MarkdownSourceBlock | None = None,
+    ) -> None:
         self.bullet = bullet
-        super().__init__(markdown, token)
+        super().__init__(markdown, token, source_block=source_block)
 
     @classmethod
     def document_node(
@@ -1094,8 +1153,11 @@ class MarkdownFence(MarkdownBlock):
     }
     """
 
-    def __init__(self, markdown: Markdown, token: Token, code: str) -> None:
-        super().__init__(markdown, token)
+    def __init__(
+        self, markdown: Markdown, token: Token, code: str, *,
+        source_block: MarkdownSourceBlock | None = None,
+    ) -> None:
+        super().__init__(markdown, token, source_block=source_block)
         self.code = code
         self.lexer = token.info
         self._highlighted_key: tuple[str, str, bool, bool] | None = None
@@ -1124,7 +1186,11 @@ class MarkdownFence(MarkdownBlock):
         )
         if native and self._highlighted_key == key:
             return
-        prepared = self._markdown._get_prepared_fence(*key) if native else None
+        source = self._source_block
+        prepared = (
+            source.highlight(key[2], key[3]) if source is not None else
+            self._markdown._get_prepared_fence(*key) if native else None
+        )
         self._highlighted_code = (
             prepared
             if prepared is not None
@@ -1297,6 +1363,7 @@ class Markdown(Widget):
         self._open_links = open_links
         self._last_parsed_line = 0
         self._theme = ""
+        self._scene_document: MarkdownDocument | None = None
 
     @property
     def table_of_contents(self) -> TableOfContentsType:
@@ -1742,6 +1809,88 @@ class Markdown(Widget):
         """Optional data-only highlighting prepared by the document parser."""
         return None
 
+    async def _replace_blocks(self, blocks: AsyncIterator[MarkdownBlock]) -> None:
+        """Commit original completed roots through the one native mount owner."""
+        previous = self.query("MarkdownBlock")
+        removed = False
+        async for block in blocks:
+            if removed:
+                await self.mount(block)
+            else:
+                async with self.batch():
+                    await previous.remove()
+                    await self.mount(block)
+                removed = True
+        if not removed:
+            await previous.remove()
+
+    def _complete_update(self, tokens: Sequence[Token]) -> None:
+        # append() replaces the final root, not merely the final physical line.
+        self._table_of_contents = None
+        self._last_parsed_line = next(
+            (
+                token.map[0]
+                for token in reversed(tokens)
+                if token.map is not None and token.level == 0
+            ),
+            0,
+        )
+        self.post_message(
+            Markdown.TableOfContentsUpdated(self, self.table_of_contents).set_sender(self)
+        )
+
+    def materialize_document(self, paint: DocumentPaint) -> AwaitComplete:
+        """Rebuild interaction controls from the actual acquired grammar roots.
+
+        Paint is the original completed grammar cohort, not a request to parse
+        equal source again. Its members and resolved suppliers bind directly
+        to the real controls; current scene CSS still owns their placement.
+        Ordinary update/append retain their parser, extension and streaming
+        contracts and invalidate this binding when they accept a new source.
+        """
+        document = paint.document
+        if document.declaration is not type(self):
+            raise TypeError("Acquired Markdown belongs to a different scene declaration")
+        if any(not document.same_source(root.document) for root in paint.roots):
+            raise ValueError("Acquired roots belong to a different Markdown source")
+        previous = self._scene_document
+        self._scene_document = document
+        if not self.is_current_document(document):
+            self._scene_document = previous
+            raise ValueError("Acquired Markdown is no longer the owner's current source")
+        self._theme = self.app.theme
+        self._markdown = document.source
+        self._table_of_contents = None
+
+        async def blocks():
+            for source in paint.roots:
+                block = await source.declaration.from_source(self, source)
+                if not self.is_current_document(document):
+                    return
+                yield block
+
+        async def materialize():
+            async with self.lock:
+                if not self.is_current_document(document):
+                    return
+                await self._replace_blocks(blocks())
+                if not self.is_current_document(document):
+                    return
+                self._complete_update(document.tokens)
+
+        return AwaitComplete(materialize())
+
+    def is_current_document(self, document: MarkdownDocument) -> bool:
+        """Admit source lineage through the Markdown owner's current resource.
+
+        Native source requests own the scene document here. A subclass which
+        publishes acquired source without update/append overrides this method
+        from that original resource. Style/width changes retain same_source();
+        equal text alone never admits a newly acquired document.
+        """
+        current = self._scene_document
+        return current is not None and current.same_source(document)
+
     def update(self, markdown: str) -> AwaitComplete:
         """Update the document with new Markdown.
 
@@ -1758,8 +1907,8 @@ class Markdown(Widget):
             else self._parser_factory()
         )
 
-        markdown_block = self.query("MarkdownBlock")
         self._markdown = markdown
+        self._scene_document = None
         self._table_of_contents = None
 
         async def await_update() -> None:
@@ -1771,36 +1920,9 @@ class Markdown(Widget):
                 if tokens is None:
                     return
 
-                # Replace existing blocks with the first completed root only.
-                removed: bool = False
+                await self._replace_blocks(self._parse_markdown(tokens))
 
-                async for block in self._parse_markdown(tokens):
-                    if removed:
-                        await self.mount(block)
-                    else:
-                        async with self.batch():
-                            await markdown_block.remove()
-                            await self.mount(block)
-                        removed = True
-                if not removed:
-                    await markdown_block.remove()
-
-            # append() replaces the final block, not merely the final physical
-            # line. Keep its opening token so partial fences/paragraphs survive
-            # an initial update followed by streamed chunks.
-            self._last_parsed_line = next(
-                (
-                    token.map[0]
-                    for token in reversed(tokens)
-                    if token.map is not None and token.level == 0
-                ),
-                0,
-            )
-            self.post_message(
-                Markdown.TableOfContentsUpdated(
-                    self, self.table_of_contents
-                ).set_sender(self)
-            )
+            self._complete_update(tokens)
 
         return AwaitComplete(await_update())
 
@@ -1820,6 +1942,7 @@ class Markdown(Widget):
         )
 
         self._markdown = self.source + markdown
+        self._scene_document = None
         updated_source = "".join(
             self._markdown.splitlines(keepends=True)[self._last_parsed_line :]
         )

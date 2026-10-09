@@ -36,6 +36,7 @@ class MarkdownSourceBlock:
         self.document = document
         self.declaration = declaration
         self._token = token
+        self._arguments = args
         self._blocks = []
         self._inline_token = None
         self._inline_content = None
@@ -168,14 +169,9 @@ class MarkdownSourceBlock:
         identity belongs to that declaration; the fence still owns highlighting
         and code-label attributes.
         """
-        content = self._highlight
-        if content is None:
-            content = self._highlighter(
-                self.code,
-                self._token.info,
-                ansi=self.document.presentation.native_ansi,
-                dark=self.document.dark,
-            )
+        content = self.highlight(
+            self.document.presentation.native_ansi, self.document.dark
+        )
         label = MarkdownFence.code_label(
             content,
             lambda content, **attributes: DocumentNode(
@@ -186,6 +182,23 @@ class MarkdownSourceBlock:
             ),
         )
         return self.node(children=(label,), auto_links=False)
+
+    def highlight(self, ansi: bool, dark: bool) -> Content:
+        """Use this acquired fence supplier for detached and scene lifetimes."""
+        if (
+            ansi == self.document.presentation.native_ansi
+            and dark == self.document.dark
+            and self._highlight is not None
+        ):
+            return self._highlight
+        content = (
+            None if self.document.fence_content is None else
+            self.document.fence_content(self.code, self._token.info, ansi, dark)
+        )
+        return (
+            self._highlighter(self.code, self._token.info, ansi=ansi, dark=dark)
+            if content is None else content
+        )
 
 
 @dataclass(frozen=True, eq=False)
@@ -299,7 +312,6 @@ class MarkdownDocument:
             cls._supplier_identity(inline_content),
             cls._supplier_identity(fence_content),
             cls._supplier_identity(unhandled),
-            dark,
         )
         return cls(
             source,

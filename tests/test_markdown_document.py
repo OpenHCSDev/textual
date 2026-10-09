@@ -15,7 +15,7 @@ from textual.layouts.stream import StreamLayout
 from textual.selection import SELECT_ALL, Selection
 from textual.visual import Visual
 from textual.widgets import Label, Markdown
-from textual.widgets._markdown import MarkdownFence
+from textual.widgets._markdown import MarkdownBlock, MarkdownFence
 
 SOURCE = """# Native document
 
@@ -118,6 +118,211 @@ class DocumentApp(App):
     def compose(self) -> ComposeResult:
         with VerticalScroll():
             yield AcquiredMarkdown(SOURCE)
+
+
+class BoundSourceMarkdown(AcquiredMarkdown):
+    """Observe actual scene suppliers without replacing native conversion."""
+
+    live_inline_calls = 0
+    live_fence_calls = 0
+
+    def _get_token_content(self, token, *, block):
+        self.live_inline_calls += 1
+        return super()._get_token_content(token, block=block)
+
+    def acquire_document_content(self):
+        return MarkdownBlock._token_to_content
+
+    def _get_prepared_fence(self, *args):
+        self.live_fence_calls += 1
+        return super()._get_prepared_fence(*args)
+
+
+class BoundSourceApp(DocumentApp):
+    def compose(self):
+        with VerticalScroll():
+            yield BoundSourceMarkdown(SOURCE)
+
+
+@pytest.mark.asyncio
+async def test_scene_controls_bind_process_returned_grammar_roots(monkeypatch):
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    app = BoundSourceApp()
+    with ProcessPoolExecutor(
+        max_workers=1, mp_context=multiprocessing.get_context("spawn")
+    ) as executor:
+        async with app.run_test(size=(54, 100)) as pilot:
+            await pilot.pause()
+            markdown = app.query_one(BoundSourceMarkdown)
+            document = markdown.acquire_document(SOURCE, markdown.acquired_tokens)
+            delivered = await asyncio.wrap_future(
+                executor.submit(document.prepare, markdown.region.width)
+            )
+            worker_pids = tuple(executor._processes)
+
+            calls = markdown.live_inline_calls, markdown.live_fence_calls
+            await markdown.materialize_document(delivered)
+            await pilot.pause()
+            assert markdown.table_of_contents == delivered.table_of_contents
+            original_members = {}
+
+            def members(source):
+                original_members[source.source_index] = source
+                for child in source._blocks:
+                    members(child)
+
+            for scene, source in zip(markdown.children, delivered.roots, strict=True):
+                assert scene.source_block is source
+                assert scene.source == source.source_text()
+                assert scene.id == source.id
+                members(source)
+            for scene in markdown.query(MarkdownBlock):
+                source = scene.source_block
+                assert source is original_members[source.source_index]
+                if source._inline_token is not None:
+                    assert scene._content is source._content
+                if isinstance(scene, MarkdownFence):
+                    assert scene.code == source.code
+                    assert scene._highlighted_code.is_same(
+                        source.highlight(app.native_ansi_color, app.current_theme.dark)
+                    )
+            assert (markdown.live_inline_calls, markdown.live_fence_calls) == calls
+
+            # Theme/style refresh is a new paint input, not a new source lineage.
+            app.theme = "textual-light"
+            markdown.disabled = True
+            await pilot.pause()
+            changed = delivered.document.with_presentation(markdown)
+            assert changed.dark != document.dark
+            assert changed.child_pseudo_classes != document.child_pseudo_classes
+            assert changed.presentation.key != document.presentation.key
+            assert changed.same_source(document)
+            assert not delivered.is_current(markdown, delivered.width)
+            assert all(scene.source_block is source for scene, source in
+                       zip(markdown.children, delivered.roots, strict=True))
+
+            # Eviction reconstructs the exact members, never a token-range match.
+            before = tuple(markdown.children)
+            await markdown.remove_children()
+            await markdown.materialize_document(delivered)
+            assert all(scene is not old and scene.source_block is source
+                       for scene, old, source in
+                       zip(markdown.children, before, delivered.roots, strict=True))
+            assert (markdown.live_inline_calls, markdown.live_fence_calls) == calls
+            retained = tuple(markdown.query(MarkdownBlock))
+            await markdown.append("\n\nA native streamed successor.")
+            assert markdown.source.endswith("A native streamed successor.")
+            assert all(scene.source_block is None for scene in retained)
+            assert all(scene.source_block is None for scene in markdown.query(MarkdownBlock))
+            await markdown.update(SOURCE)
+            assert all(scene.source_block is None for scene in markdown.query(MarkdownBlock))
+            replacement = markdown.acquire_document(SOURCE, markdown.acquired_tokens)
+            assert not replacement.same_source(document)
+
+    assert all(not os.path.exists(f"/proc/{pid}") for pid in worker_pids)
+
+
+class GrammarExtension(MarkdownBlock):
+    def __init__(self, markdown, token, marker, *, source_block=None):
+        self.marker = marker
+        super().__init__(markdown, token, source_block=source_block)
+
+    @classmethod
+    def document_node(cls, block):
+        cls._require_native_document(constructor=cls.__init__)
+        return cls.native_document_node(block)
+
+
+def acquired_grammar_extension(token, create):
+    if token.type == "html_block":
+        return create("html_block", token, "original-constructor-argument")
+    return None
+
+
+class ExtendedSourceMarkdown(AcquiredMarkdown):
+    BLOCKS = {**AcquiredMarkdown.BLOCKS, "html_block": GrammarExtension}
+
+    def unhandled_token(self, token):
+        if token.type == "html_block":
+            return GrammarExtension(self, token, "original-constructor-argument")
+        return None
+
+    def acquire_document_unhandled(self):
+        return acquired_grammar_extension
+
+
+@pytest.mark.asyncio
+async def test_scene_factory_retains_custom_grammar_and_constructor():
+    class GrammarApp(App):
+        def compose(self):
+            yield ExtendedSourceMarkdown("<native-extension>\noriginal\n</native-extension>\n")
+
+    app = GrammarApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        markdown = app.query_one(ExtendedSourceMarkdown)
+        document = markdown.acquire_document(markdown.source, markdown.acquired_tokens)
+        paint = await asyncio.to_thread(document.prepare, markdown.region.width)
+        assert len(paint.roots) == 1
+        assert paint.roots[0].declaration is GrammarExtension
+        await markdown.materialize_document(paint)
+        scene = markdown.query_one(GrammarExtension)
+        assert scene.source_block is paint.roots[0]
+        assert scene.marker == "original-constructor-argument"
+        await markdown.append("\n<native-extension>\nnext\n</native-extension>\n")
+        assert all(block.marker == "original-constructor-argument"
+                   and block.source_block is None
+                   for block in markdown.query(GrammarExtension))
+
+
+@pytest.mark.asyncio
+async def test_source_binding_refuses_a_new_resolved_supplier():
+    app = BoundSourceApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        markdown = app.query_one(BoundSourceMarkdown)
+        document = markdown.acquire_document(SOURCE, markdown.acquired_tokens)
+        # An independent supplier declaration is not a style-only refresh.
+        markdown.acquire_document_content = lambda: lambda token: MarkdownBlock._token_to_content(token)
+        changed = document.with_presentation(markdown)
+        assert not document.same_source(changed)
+
+
+class IndependentlyAcquiredMarkdown(AcquiredMarkdown):
+    document = None
+
+    def is_current_document(self, document):
+        return self.document is not None and self.document.same_source(document)
+
+
+@pytest.mark.asyncio
+async def test_independent_source_owner_revokes_scene_without_native_update():
+    class IndependentApp(App):
+        def compose(self):
+            yield IndependentlyAcquiredMarkdown("Original acquired source.")
+
+    app = IndependentApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        markdown = app.query_one(IndependentlyAcquiredMarkdown)
+        document = markdown.acquire_document(markdown.source, markdown.acquired_tokens)
+        markdown.document = document
+        paint = await asyncio.to_thread(document.prepare, markdown.region.width)
+        await markdown.materialize_document(paint)
+        root = markdown.children[0]
+        assert root.source_block is paint.roots[0]
+        markdown.styles.color = "red"
+        markdown.document = document.with_presentation(markdown)
+        assert root.source_block is paint.roots[0]
+        # The owner's fresh acquisition supersedes old controls despite equal
+        # source text, without calling either native update or append.
+        markdown.document = markdown.acquire_document(markdown.source, markdown.acquired_tokens)
+        assert root.source_block is None
+        before = tuple(markdown.children)
+        with pytest.raises(ValueError, match="current source"):
+            markdown.materialize_document(paint)
+        assert tuple(markdown.children) == before
+        assert markdown.source == "Original acquired source."
 
 
 class BeforeMountMarkdown(Markdown):
