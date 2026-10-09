@@ -1245,9 +1245,9 @@ class Screen(Generic[ScreenResultType], Widget):
     async def _on_idle(self, event: events.Idle) -> None:
         # Check for any widgets marked as 'dirty' (needs a repaint)
         event.prevent_default()
-        # Borrow only within this synchronous admission. Paint reacquires its
-        # own cohort after queued source/layout work has had a chance to run.
-        roots: tuple[Widget, ...] | None = None
+        # A held-only dirty frame still needs its original preparation hook to
+        # decide timer progress. This acquisition is not callback admission.
+        # Paint reacquires after queued source/layout work has had time to run.
         if not self.app._batch_count and self.is_current:
             if self._refresh_requested or self._dirty_widgets:
                 self._update_timer.resume()
@@ -1261,10 +1261,15 @@ class Screen(Generic[ScreenResultType], Widget):
                         )):
                     self._update_timer.resume()
 
-        self._invoke_and_clear_callbacks(roots)
+        self._invoke_and_clear_callbacks()
 
     def _prepare_compositor_refresh(self) -> tuple[Widget, ...]:
-        """Prepare the frame and return original subtrees whose paint is held."""
+        """Prepare pending frame work and return subtrees whose paint is held.
+
+        This owns frame preparation and actionable-damage discovery. Callback
+        admission consumes the resulting pending damage and source mutation;
+        it must not invoke preparation to manufacture another frame decision.
+        """
         return ()
 
     def _layout_mutation_roots(self) -> tuple[Widget, ...]:
@@ -1286,7 +1291,7 @@ class Screen(Generic[ScreenResultType], Widget):
     def _prepare_visible_screens(
         self, screens: tuple[Screen, ...] | None = None,
     ) -> tuple[tuple[Screen, tuple[Widget, ...]], ...]:
-        """Acquire the same original visible stack for paint and sender admission."""
+        """Acquire the original visible stack for frame preparation and paint."""
         if screens is None:
             screens = (*self.app._background_screens, self) if self is self.app.screen else (self,)
         return tuple((screen, screen._prepare_compositor_refresh()) for screen in screens)
@@ -1337,7 +1342,9 @@ class Screen(Generic[ScreenResultType], Widget):
                 excluded_regions = tuple(exclusions)
                 if foreground:
                     background_geometry = {
-                        screen: screen._compositor._layout_map for screen in background_screens
+                        screen: (screen._compositor._layout_map,
+                                 screen._compositor._dirty_regions.copy())
+                        for screen in background_screens
                     }
                     # BackgroundScreen can render inside the foreground's
                     # renderer. Both borrow this exact acquired admission.
@@ -1364,11 +1371,10 @@ class Screen(Generic[ScreenResultType], Widget):
                             deferred_roots=deferred_roots,
                         )
                     if update is not None:
-                        ready = self._compositor._exclude_regions(
-                            self._compositor._dirty_regions, excluded_regions)
                         for screen in background_screens:
-                            update.bind_publication(screen._compositor, background_geometry[screen],
-                                                    ready, excluded_regions, deferred_roots)
+                            arranged, background_damage = background_geometry[screen]
+                            update.bind_publication(screen._compositor, arranged, background_damage,
+                                                    update.rendered_regions, excluded_regions, deferred_roots)
                 elif self in background_screens and self._compositor._dirty_regions:
                     damage = self._compositor._exclude_regions(
                         self._compositor._dirty_regions, excluded_regions,
@@ -1463,25 +1469,18 @@ class Screen(Generic[ScreenResultType], Widget):
                 return True
         return False
 
-    def _invoke_and_clear_callbacks(self, roots: tuple[Widget, ...] | None = None) -> None:
+    def _invoke_and_clear_callbacks(self) -> None:
         """Admit painted senders back to their own original message pumps."""
         if self.app._batch_count or not self._callbacks:
             return
-        # No callback runs during this synchronous admission. Borrow one scene
-        # cohort, then let each sender's existing callback handler own execution.
-        # None means not acquired; an empty borrowed tuple is a valid cohort.
-        if roots is None:
-            roots = tuple(root for _, roots in self._prepare_visible_screens() for root in roots) if self.is_current else ()
-        if self.is_current:
-            # Original retained pixels may paint during a source mutation.
-            # That publication does not complete the mutating sender's work.
-            # Acquire source custody once for this synchronous admission,
-            # separately from the original paint-readiness roots.
-            roots = (*roots, *(root
-                for screen in (*self.app._background_screens, self)
-                for root in screen._layout_mutation_roots()))
-        # Preparation may change source/layout intent synchronously. Acquire
-        # the original virtual queries after those effects, once for this pass.
+        # A callback waits for its original pending publication. It does not
+        # start preparation, move a follow position or acquire CSS readiness.
+        # Held pixels still own dirty regions; retained pixels do not release
+        # a source writer, whose original mutation owner remains independent.
+        roots = tuple(root
+            for screen in (*self.app._background_screens, self)
+            for root in screen._layout_mutation_roots()) if self.is_current else ()
+        # Acquire the original virtual queries once for this synchronous pass.
         # Sender queueing doesn't dispatch callbacks here; their original pumps
         # execute them after this admission returns. No answer outlives the pass.
         refresh_requested = {self: self._refresh_requested}
