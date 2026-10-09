@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import dataclass, replace
 from fractions import Fraction
-from types import MappingProxyType
+from types import MappingProxyType, MethodType
 from typing import TYPE_CHECKING, Callable, Iterable
 from weakref import ref
 
@@ -472,8 +472,9 @@ class StyleInput:
         # inputs read above. Their full call and dynamic behavior stay live.
         observed = frozenset(
             get_pseudo_classes(restrict=pseudo_classes)
-            if getattr(get_pseudo_classes, "_document_restrict", None)
-            is getattr(get_pseudo_classes, "__func__", get_pseudo_classes)
+            if isinstance(get_pseudo_classes, MethodType)
+            and getattr(get_pseudo_classes.__func__, "_document_restrict", None)
+            is get_pseudo_classes.__func__
             else get_pseudo_classes()
         )
         inputs = (*inputs, observed)
