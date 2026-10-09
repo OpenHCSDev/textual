@@ -12,6 +12,85 @@ class CachedGroup(VerticalGroup):
     CACHE_SUBTREE_GEOMETRY = True
 
 
+async def test_scrolling_owner_rebuild_borrows_ordinary_child_arrangements():
+    """Moving a window preserves unchanged source, exact paint and hit targets."""
+    from textual.containers import VerticalScroll
+
+    class MeasuredGroup(VerticalGroup):
+        arrangement_calls = 0
+
+        def arrange(self, size, optimal=False):
+            self.arrangement_calls += 1
+            return super().arrange(size, optimal=optimal)
+
+    class RetainedScroll(VerticalScroll):
+        CACHE_SUBTREE_GEOMETRY = True
+
+    rows = [MeasuredGroup(Static(f"ROW {index:02}"), Static("wrapped text " * 9))
+            for index in range(30)]
+    history = RetainedScroll(*rows, id="history")
+
+    class WindowApp(App):
+        CSS = """
+        #chrome { dock: top; height: 1; }
+        #history { height: 10; }
+        Static { height: auto; }
+        """
+
+        def compose(self):
+            yield Static("UNCHANGED CHROME", id="chrome")
+            yield history
+
+    app = WindowApp()
+    async with app.run_test(size=(40, 12)) as pilot:
+        await pilot.pause()
+        compositor = app.screen._compositor
+        # Full acquisition also certifies the original offscreen reader path.
+        compositor.reflow(app.screen, app.size)
+        original = compositor._subtree_geometry[history]
+        first_source = original.child_source(rows[0])
+        assert first_source is not None
+        assert all(not row.CACHE_SUBTREE_GEOMETRY for row in rows)
+        assert all(row not in compositor._subtree_geometry for row in rows)
+
+        def required_scene(scene, targets):
+            required = {node for target in targets
+                        for node in target.walk_ancestors(with_self=True)}
+            return {node: geometry for node, geometry in scene._published_map.items()
+                    if geometry.visible_region or node in required}
+
+        def compare_original_scene(targets=()):
+            reference = Compositor(max_subtree_geometry_entries=0)
+            reference.reflow_visible(app.screen, app.size, retain_geometry=targets)
+            assert required_scene(compositor, targets) == required_scene(reference, targets)
+            assert compositor.render_strips() == reference.render_strips()
+            for y in range(app.size.height):
+                for x in range(app.size.width):
+                    assert compositor.get_widget_at(x, y) == reference.get_widget_at(x, y)
+
+        for position in (1, 2, 1, 0):
+            calls = rows[0].arrangement_calls
+            history.scroll_to(y=position, animate=False, immediate=True)
+            await pilot.pause()
+            assert rows[0].arrangement_calls == calls
+            current = compositor._subtree_geometry[history]
+            assert current.child_source(rows[0]) is first_source
+            compare_original_scene()
+
+        # A previously unexposed target must not receive an invented answer.
+        target = rows[25].children[1]
+        compositor.reflow_visible(app.screen, app.size, retain_geometry=(target,))
+        compare_original_scene((target,))
+
+        # Actual source and width changes revoke their original child resource.
+        rows[0].children[1].update("CHANGED SOURCE\n" * 4)
+        await pilot.pause()
+        assert compositor._subtree_geometry[history].child_source(rows[0]) is not first_source
+        compare_original_scene()
+        await pilot.resize_terminal(25, 12)
+        compare_original_scene()
+
+
 @pytest.mark.parametrize("capacity", [0, 1, 2, 5])
 async def test_geometry_budget_bounds_retention_without_changing_the_scene(capacity):
     app = App()
