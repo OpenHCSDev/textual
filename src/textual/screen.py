@@ -9,7 +9,7 @@ The `Screen` class is a special widget which represents the content in the termi
 from __future__ import annotations
 
 import asyncio
-from contextlib import ExitStack
+from contextlib import AbstractContextManager, ExitStack, nullcontext
 from functools import partial
 from operator import attrgetter
 from typing import (
@@ -1262,9 +1262,21 @@ class Screen(Generic[ScreenResultType], Widget):
     def _on_frame_published(self, deferred_roots: tuple[Widget, ...]) -> None:
         """Observe an actual displayed update with its acquired admission roots."""
 
-    def _prepare_visible_screens(self) -> tuple[tuple[Screen, tuple[Widget, ...]], ...]:
+    def _using_presentation_inputs(self) -> AbstractContextManager[None]:
+        """Lend acquired inputs only to synchronous preparation and rendering.
+
+        Layout and inline measurement have already returned. The borrow ends
+        before display/writer callbacks, and never certifies a later frame or
+        independently changing inputs. Ordinary screens keep live queries.
+        """
+        return nullcontext()
+
+    def _prepare_visible_screens(
+        self, screens: tuple[Screen, ...] | None = None,
+    ) -> tuple[tuple[Screen, tuple[Widget, ...]], ...]:
         """Acquire the same original visible stack for paint and sender admission."""
-        screens = (*self.app._background_screens, self) if self is self.app.screen else (self,)
+        if screens is None:
+            screens = (*self.app._background_screens, self) if self is self.app.screen else (self,)
         return tuple((screen, screen._prepare_compositor_refresh()) for screen in screens)
 
     def _after_refresh_pending(self, screen, roots: tuple[Widget, ...]) -> bool:
@@ -1279,60 +1291,73 @@ class Screen(Generic[ScreenResultType], Widget):
         background_screens = app._background_screens
         if self is app.screen and app.is_inline:
             inline_height = app._get_inline_height()
-        cohort = self._prepare_visible_screens()
-        deferred_roots = tuple(root for _, roots in cohort for root in roots)
-        excluded_regions = tuple(
-            region for screen, roots in cohort
-            for region in screen._compositor.deferred_regions(roots)
-        )
-        if self is app.screen:
-            # BackgroundScreen can render its compositor inside the foreground's
-            # renderer. Borrow this exact admission, including every backdrop.
-            with ExitStack() as frame:
-                for screen, _ in cohort:
-                    frame.enter_context(screen._compositor._using_exclusions(excluded_regions))
-                if app.is_inline:
-                    clear = (
-                        app._previous_inline_height is not None
-                        and inline_height < app._previous_inline_height
+        foreground = self is app.screen
+        screens = (*background_screens, self) if foreground else (self,)
+        damage = None
+        # Pixel exclusions continue through writer admission and pointer
+        # checks. Input borrows have the narrower preparation/render lifetime:
+        # a display callback may change the actual source or presentation.
+        with ExitStack() as frame:
+            with ExitStack() as inputs:
+                for screen in screens:
+                    inputs.enter_context(screen._using_presentation_inputs())
+                cohort = self._prepare_visible_screens(screens)
+                deferred_roots = tuple(root for _, roots in cohort for root in roots)
+                excluded_regions = tuple(
+                    region for screen, roots in cohort
+                    for region in screen._compositor.deferred_regions(roots)
+                )
+                if foreground:
+                    # BackgroundScreen can render inside the foreground's
+                    # renderer. Both borrow this exact acquired admission.
+                    for screen, _ in cohort:
+                        frame.enter_context(screen._compositor._using_exclusions(excluded_regions))
+                    if app.is_inline:
+                        clear = (
+                            app._previous_inline_height is not None
+                            and inline_height < app._previous_inline_height
+                        )
+                        update = self._compositor.render_inline(
+                            app.size.with_height(max(inline_height, app._previous_inline_height or 0)
+                                                 if deferred_roots else inline_height),
+                            screen_stack=background_screens, clear=clear,
+                            excluded_regions=excluded_regions,
+                        )
+                        if update is not None and not deferred_roots:
+                            app._previous_inline_height = inline_height
+                    else:
+                        update = self._compositor.render_update(
+                            screen_stack=background_screens,
+                            excluded_regions=excluded_regions,
+                        )
+                elif self in background_screens and self._compositor._dirty_regions:
+                    damage = self._compositor._exclude_regions(
+                        self._compositor._dirty_regions, excluded_regions,
                     )
-                    update = self._compositor.render_inline(
-                        app.size.with_height(max(inline_height, app._previous_inline_height or 0)
-                                             if deferred_roots else inline_height),
-                        screen_stack=background_screens, clear=clear,
-                        excluded_regions=excluded_regions,
-                    )
-                    if update is not None and not deferred_roots:
-                        app._previous_inline_height = inline_height
-                else:
-                    update = self._compositor.render_update(
-                        screen_stack=background_screens,
-                        excluded_regions=excluded_regions,
-                    )
+
+            if foreground:
                 if update is not None:
                     app._display(self, update)
                     self._on_frame_published(deferred_roots)
                 if not self._compositor._interaction_deferred(*app.mouse_position):
                     app._update_mouse_over(self)
+            elif damage is not None:
+                # The foreground owns terminal publication of the same
+                # backdrop damage. Transfer intent without consuming held work.
+                if damage:
+                    self._set_dirty(*damage)
+                    app.screen.refresh(*damage)
+                    self._compositor._dirty_regions = self._compositor._exclude_regions(
+                        self._compositor._dirty_regions, damage,
+                    )
+                self._dirty_widgets.clear()
+                if not self._compositor._interaction_deferred(*app.mouse_position):
+                    app._update_mouse_over(self)
+        if foreground:
             if background_screens:
                 for screen, _ in cohort:
                     screen._release_paint()
             self._dirty_widgets.clear()
-        elif self in background_screens and self._compositor._dirty_regions:
-            # The foreground owns terminal publication of the same backdrop
-            # damage. Transfer the intent without consuming the held portion.
-            damage = self._compositor._exclude_regions(
-                self._compositor._dirty_regions, excluded_regions,
-            )
-            if damage:
-                self._set_dirty(*damage)
-                app.screen.refresh(*damage)
-                self._compositor._dirty_regions = self._compositor._exclude_regions(
-                    self._compositor._dirty_regions, damage,
-                )
-            self._dirty_widgets.clear()
-            if not self._compositor._interaction_deferred(*app.mouse_position):
-                app._update_mouse_over(self)
 
     def _on_timer_update(self) -> None:
         """Called by the _update_timer."""

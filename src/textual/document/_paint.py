@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import dataclass, replace
 from fractions import Fraction
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Callable, Iterable
 from weakref import ref
 
@@ -447,6 +449,26 @@ class StyleInput:
     components: tuple
     key: tuple
 
+    @staticmethod
+    def current_admission(node: DOMNode, *, _inputs: dict | None = None) -> tuple:
+        """Acquire this actual CSS participant, sharing only within one borrow."""
+        if _inputs is not None and node in _inputs:
+            return _inputs[node]
+        inputs = (
+            id(node),
+            type(node),
+            node._parent_revision,
+            node.styles._cache_key,
+            None if node.styles.layout is None else node.styles.layout.document_key(),
+            node.id,
+            node.name,
+            node.classes,
+            frozenset(node.get_pseudo_classes()),
+        )
+        if _inputs is not None:
+            _inputs[node] = inputs
+        return inputs
+
     @classmethod
     def acquire(cls, node: DOMNode, *, source_root: bool = False):
         # Ancestors supply their actual effective rules. The constructed root's
@@ -540,7 +562,28 @@ class DocumentPresentation:
     admission: tuple
 
     @staticmethod
-    def current_admission(owner) -> tuple:
+    def _application_admission(app, stylesheet, *, _inputs: dict | None = None) -> tuple:
+        """Acquire the actual stylesheet, terminal and mutable palette inputs."""
+        if _inputs is not None and app in _inputs:
+            return _inputs[app]
+        inputs = (
+            id(stylesheet),
+            id(stylesheet._rules),
+            stylesheet._require_parse,
+            app.viewport_size,
+            app.size,
+            app.theme,
+            app.native_ansi_color,
+            _input_value(app.ansi_theme),
+        )
+        if _inputs is not None:
+            _inputs[app] = inputs
+        return inputs
+
+    @staticmethod
+    def current_admission(
+        owner, *, _nodes: dict | None = None, _applications: dict | None = None,
+    ) -> tuple:
         """Original invalidation facts for this actual publication participant.
 
         These facts qualify repeated queries only on the same admitted scene
@@ -551,40 +594,53 @@ class DocumentPresentation:
         stylesheet = app.stylesheet
         return (
             tuple(
-                (
-                    id(node),
-                    type(node),
-                    node._parent_revision,
-                    node.styles._cache_key,
-                    (
-                        None
-                        if node.styles.layout is None
-                        else node.styles.layout.document_key()
-                    ),
-                    node.id,
-                    node.name,
-                    node.classes,
-                    frozenset(node.get_pseudo_classes()),
-                )
+                StyleInput.current_admission(node, _inputs=_nodes)
                 for node in owner.css_path_nodes
             ),
             owner._subtree_style_revision,
-            id(stylesheet),
-            id(stylesheet._rules),
-            stylesheet._require_parse,
-            app.viewport_size,
-            app.size,
-            app.theme,
-            app.native_ansi_color,
-            _input_value(app.ansi_theme),
+            *DocumentPresentation._application_admission(
+                app, stylesheet, _inputs=_applications,
+            ),
             tuple(
                 (type(filter), type(filter).apply, _input_value(vars(filter)))
                 for filter in owner.get_line_filters()
             ),
         )
 
-    def current_for(self, owner) -> bool:
-        return self.admission == self.current_admission(owner)
+    @classmethod
+    def acquire_admissions(cls, owners: Iterable[DOMNode]) -> Mapping[DOMNode, tuple]:
+        """Acquire immutable admissions for one synchronous presentation borrow.
+
+        Shared ancestors and application inputs are read once, by identity;
+        each participant retains its own path, source revision and filters.
+        The acquisition retains no state on the scene or presentation.
+
+        The borrower must end or reacquire on input changes, including layout,
+        source, styles, membership and mutable supplier values. In particular,
+        a layout acquisition cannot certify the subsequent paint. Custom
+        admission producers must also supply their batch acquisition contract.
+        """
+        nodes: dict[DOMNode, tuple] = {}
+        applications: dict[DOMNode, tuple] = {}
+        return MappingProxyType({
+            owner: cls.current_admission(
+                owner, _nodes=nodes, _applications=applications,
+            )
+            for owner in dict.fromkeys(owners)
+        })
+
+    def current_for(
+        self, owner, *, admissions: Mapping[DOMNode, tuple] | None = None,
+    ) -> bool:
+        """Check live inputs, or an explicitly borrowed participant admission.
+
+        Missing membership in a supplied borrow is an error, not permission to
+        fall back to another acquisition or use a preceding readiness answer.
+        """
+        admission = (
+            self.current_admission(owner) if admissions is None else admissions[owner]
+        )
+        return self.admission == admission
 
     @classmethod
     def acquire(cls, owner, declarations) -> DocumentPresentation:
@@ -1053,7 +1109,10 @@ class DocumentPaint:
             selection_style=selection_style, selecting=selecting,
         )
 
-    def is_current(self, owner, width: int, *, selections=None) -> bool:
+    def is_current(
+        self, owner, width: int, *, selections=None,
+        admissions: Mapping[DOMNode, tuple] | None = None,
+    ) -> bool:
         """Compare current declared presentation without reading any descendants.
 
         The source owner must still hold this exact acquired document. A source
@@ -1061,11 +1120,13 @@ class DocumentPaint:
         with_presentation(). Scene eviction cannot certify different source.
         Selection and active pointer state come from their original Screen;
         a selection update never admits rows prepared for the previous input.
+        admissions lends only the caller's explicit synchronous acquisition;
+        omitting it keeps the original live validation.
         """
         root_selection = owner.text_selection
         return (
             width == self.width
-            and self.document.presentation.current_for(owner)
+            and self.document.presentation.current_for(owner, admissions=admissions)
             and self.matches_selection(
                 root_selection=root_selection,
                 selections=selections,
