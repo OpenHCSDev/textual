@@ -1239,11 +1239,8 @@ class Screen(Generic[ScreenResultType], Widget):
 
         self._invoke_and_clear_callbacks()
 
-    def _on_frame_published(self, deferred_roots: tuple[Widget, ...]) -> None:
-        """Observe an actual displayed update.
-
-        Nothing holds paint, so ``deferred_roots`` is always empty.
-        """
+    def _on_frame_published(self) -> None:
+        """Observe an actual displayed update."""
 
     def _after_refresh_pending(
         self, screen, *, refresh_requested: dict[Screen, bool], refresh_pending: bool,
@@ -1288,7 +1285,7 @@ class Screen(Generic[ScreenResultType], Widget):
                     update.bind_publication(screen._compositor, background_geometry[screen], ready)
                 app._display(self, update)
                 if update.admitted:
-                    self._on_frame_published(())
+                    self._on_frame_published()
             app._update_mouse_over(self)
             for screen in background_screens:
                 screen._release_paint()
