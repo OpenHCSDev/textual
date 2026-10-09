@@ -120,6 +120,10 @@ class _StoredReactiveAccess:
             reactive._initialize_reactive(obj, reactive.name)
             return obj.__dict__[reactive.internal_name]
 
+    # This declaration reads stored state. Computed access and runtime method
+    # replacements do not inherit its synchronous acquisition contract.
+    get._stored_input = get  # type: ignore[attr-defined]
+
     def initial_value(self, reactive: Reactive[ReactiveType], obj: Reactable) -> ReactiveType:
         return reactive._default_value(obj)
 
@@ -400,6 +404,30 @@ class Reactive(Generic[ReactiveType]):
             # obj is None means we are invoking the descriptor via the class, and not the instance
             return self
         return obj._reactive_accessors[self.name].get(self, obj)
+
+    __get__._stored_input = __get__  # type: ignore[attr-defined]
+
+    def _has_stored_input(self, obj: Reactable) -> bool:
+        """Whether the actual declaration/access pair reads native stored state.
+
+        A computed accessor or replaced descriptor/method retains its live
+        evaluation unless that actual implementation declares stored access.
+        """
+        descriptor_get = getattr(type(self), "__get__", None)
+        if (
+            descriptor_get is None
+            or getattr(descriptor_get, "_stored_input", None) is not descriptor_get
+            or self.internal_name not in obj.__dict__
+        ):
+            return False
+        access = obj._reactive_accessors[self.name]
+        if access is not _STORED_REACTIVE_ACCESS:
+            return False
+        get = access.get
+        declared_get = getattr(get, "_stored_input", None)
+        return declared_get is not None and declared_get is getattr(
+            get, "__func__", None
+        )
 
     def _set(
         self, obj: Reactable, value: ReactiveType, always: bool = False,
