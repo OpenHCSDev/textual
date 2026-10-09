@@ -35,6 +35,18 @@ print('native fence')
 ---
 
 Last paragraph.
+
+## Repeated heading
+
+First section.
+
+## Repeated heading
+
+Second section.
+
+> ## Nested heading
+>
+> Nested headings do not appear in the top-level contents.
 """
 
 
@@ -118,6 +130,16 @@ async def test_native_document_rows_currentness_and_interactions(monkeypatch):
         assert paint.size == size
         assert paint.gutter == markdown.styles.gutter
         assert paint.content_size == size.region.shrink(paint.gutter).size
+        assert [(level, title) for level, title, _ in paint.table_of_contents] == [
+            (level, title) for level, title, _ in markdown.table_of_contents
+        ]
+        assert all(heading.placement is not None for heading in paint.headings)
+        assert paint.anchor_region("repeated-heading") is not None
+        assert paint.anchor_region("repeated-heading-1") is not None
+        assert paint.anchor_region("repeated-heading") != paint.anchor_region(
+            "repeated-heading-1"
+        )
+        assert paint.anchor_region("nested-heading") is None
         assert tuple(line.text for line in paint.lines) == tuple(
             line.text for line in mounted
         )
@@ -126,6 +148,7 @@ async def test_native_document_rows_currentness_and_interactions(monkeypatch):
         # Returned worker data retain this original acquisition identity.
         delivered = pickle.loads(pickle.dumps(paint))
         assert delivered.matches(document, size.width)
+        assert delivered.table_of_contents == paint.table_of_contents
         assert not delivered.matches(
             markdown.acquire_document(SOURCE, markdown.acquired_tokens), size.width
         )
@@ -168,3 +191,4 @@ async def test_native_document_rows_currentness_and_interactions(monkeypatch):
             line.text for line in mounted
         )
         assert painted_characters(resized.lines) == painted_characters(mounted)
+        assert resized.table_of_contents == paint.table_of_contents
