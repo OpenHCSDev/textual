@@ -127,3 +127,6 @@ class VerticalLayout(Layout):
 
     def document_key(self, *, _arrange=arrange, _width=Layout.get_content_width, _height=Layout.get_content_height) -> tuple:
         return self._native_document_key(_arrange, _width, _height, ())
+
+    def acquire_document(self):
+        return self._acquire_native_document()

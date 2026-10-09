@@ -196,6 +196,11 @@ class Visual(ABC):
         """
 
     @classmethod
+    def selection_style(cls, widget: Widget) -> Style:
+        """Acquire the original Screen selection component for native paint."""
+        return Style.from_styles(widget.screen.get_component_styles("screen--selection"))
+
+    @classmethod
     def to_strips(
         cls,
         widget: Widget,
@@ -226,9 +231,7 @@ class Visual(ABC):
 
         selection = widget.text_selection
         if selection is not None:
-            selection_style = Style.from_styles(
-                widget.screen.get_component_styles("screen--selection")
-            )
+            selection_style = cls.selection_style(widget)
         else:
             selection_style = None
 

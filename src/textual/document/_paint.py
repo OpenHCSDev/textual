@@ -24,13 +24,16 @@ from textual.geometry import NULL_OFFSET, NULL_SPACING, Offset, Region, Size, Sp
 from textual.layout import WidgetPlacement
 from textual.map_geometry import MapGeometry
 from textual.layouts.vertical import VerticalLayout
+from textual.selection import SELECT_ALL, Selection
 from textual.strip import Strip, StripRenderable
+from textual.style import Style
 from textual.visual import RenderOptions, Visual
 
 if TYPE_CHECKING:
     from rich.terminal_theme import TerminalTheme
     from textual.filter import LineFilter
     from textual.layout import DockArrangeResult, Layout
+    from textual.document._markdown import MarkdownSourceBlock
 
 
 class StyleContext(DOMNode):
@@ -191,7 +194,9 @@ class DocumentNode(StyleContext):
             classes=classes,
         )
         if inline_rules:
-            self._inline_styles = Styles(_rules=deepcopy(inline_rules))
+            self._inline_styles = Styles(
+                _rules=Styles(_rules=inline_rules).acquire_document_rules()
+            )
             self.styles = RenderStyles(self, self._css_styles, self._inline_styles)
         for child in children:
             self.add(child)
@@ -446,13 +451,17 @@ class StyleInput:
         # Ancestors supply their actual effective rules. The constructed root's
         # base/component rules belong to the acquired stylesheet, evaluated
         # against its source children, rather than the preceding host tree.
-        base = {} if source_root else node.styles.base.get_rules()
-        inline = node.styles.inline.get_rules()
+        base = {} if source_root else node.styles.base.acquire_document_rules()
+        inline = node.styles.inline.acquire_document_rules()
         components = (
             ()
             if source_root
             else tuple(
-                (name, style.base.get_rules(), style.inline.get_rules())
+                (
+                    name,
+                    style.base.acquire_document_rules(),
+                    style.inline.acquire_document_rules(),
+                )
                 for name, style in sorted(node._component_styles.items())
             )
         )
@@ -476,9 +485,7 @@ class StyleInput:
             _input_value(inline),
             _input_value(components),
         )
-        return cls(
-            *values[:12], deepcopy(base), deepcopy(inline), deepcopy(components), values
-        )
+        return cls(*values[:12], base, inline, components, values)
 
     def make(self):
         node = StyleContext(
@@ -489,8 +496,12 @@ class StyleInput:
             pseudo_classes=self.pseudo_classes,
         )
         node.bind_declaration(self)
-        node._css_styles = Styles(_rules=deepcopy(self.base_rules))
-        node._inline_styles = Styles(_rules=deepcopy(self.inline_rules))
+        node._css_styles = Styles(
+            _rules=Styles(_rules=self.base_rules).acquire_document_rules()
+        )
+        node._inline_styles = Styles(
+            _rules=Styles(_rules=self.inline_rules).acquire_document_rules()
+        )
         node.styles = RenderStyles(node, node._css_styles, node._inline_styles)
         # Component styles retain their original attached virtual-node meaning.
         from textual.css.stylesheet import _ComponentStyles
@@ -498,8 +509,12 @@ class StyleInput:
         for name, base, inline in self.components:
             component = node._make_component_node(name)
             component._attach(node)
-            component._css_styles = Styles(_rules=deepcopy(base))
-            component._inline_styles = Styles(_rules=deepcopy(inline))
+            component._css_styles = Styles(
+                _rules=Styles(_rules=base).acquire_document_rules()
+            )
+            component._inline_styles = Styles(
+                _rules=Styles(_rules=inline).acquire_document_rules()
+            )
             component.styles = RenderStyles(
                 component, component._css_styles, component._inline_styles
             )
@@ -540,6 +555,11 @@ class DocumentPresentation:
                     type(node),
                     node._parent_revision,
                     node.styles._cache_key,
+                    (
+                        None
+                        if node.styles.layout is None
+                        else node.styles.layout.document_key()
+                    ),
                     node.id,
                     node.name,
                     node.classes,
@@ -630,11 +650,27 @@ class DocumentPresentation:
         width: int,
         *,
         document,
-        blocks,
+        roots,
         headings,
+        root_selection=None,
         selections=None,
         selection_style=None,
+        selecting=False,
     ) -> DocumentPaint:
+        # Whole-widget selection has no leaf coordinates before construction.
+        # A partial root range cannot be interpreted as each leaf's own offsets.
+        if root_selection is not None:
+            if root_selection != SELECT_ALL:
+                raise ValueError("A document root selection must cover the whole widget")
+            if selections is not None:
+                raise ValueError("Root-wide and leaf selections are distinct inputs")
+        selections = None if selections is None else dict(selections)
+        if (root_selection is not None or selections) and not isinstance(
+            selection_style, Style
+        ):
+            raise TypeError(
+                "Selected document paint requires the native Visual selection style"
+            )
         # Every preparation owns its mutable CSS/geometry workspace. The
         # retained result owns only strips, literal provenance and source boxes.
         stylesheet = self.stylesheet.copy()
@@ -658,9 +694,13 @@ class DocumentPresentation:
                     if isinstance(ancestor, DocumentNode)
                 )
             stylesheet.apply(node)
-            if node.styles.layout is not None:
-                node.styles.layout.document_key()
-                node.styles.layout = deepcopy(node.styles.layout)
+            node._css_styles = Styles(
+                _rules=node.styles.base.acquire_document_rules()
+            )
+            node._inline_styles = Styles(
+                _rules=node.styles.inline.acquire_document_rules()
+            )
+            node.styles = RenderStyles(node, node._css_styles, node._inline_styles)
         for node, inputs in empty_inputs.items():
             if any(ancestor.is_empty != was_empty for ancestor, was_empty in inputs):
                 raise TypeError(
@@ -761,9 +801,9 @@ class DocumentPresentation:
                 )
                 if not node.is_container:
                     node.paint_leaf_index = len(leaves)
-                    node.selecting = selections is not None
+                    node.selecting = selecting
                     node.text_selection = (
-                        None
+                        root_selection
                         if selections is None
                         else selections.get(node.paint_leaf_index)
                     )
@@ -829,6 +869,11 @@ class DocumentPresentation:
             for placement in placements
             if placement.id is not None
         }
+        placements_by_source = {
+            placement.source_index: placement for placement in placements
+        }
+        for member in roots:
+            member.placement = placements_by_source.get(member.source_index)
         return DocumentPaint(
             size,
             lines,
@@ -844,6 +889,11 @@ class DocumentPresentation:
                 for entry in headings
             ),
             root.is_empty,
+            root_selection,
+            None if selections is None else tuple(sorted(selections.items())),
+            selection_style,
+            selecting,
+            roots,
         )
 
 
@@ -910,6 +960,21 @@ class DocumentPaint:
     headings: tuple[DocumentHeading, ...]
     root_empty: bool
     """Native displayed-child membership of this acquired source/style cohort."""
+    root_selection: Selection | None
+    """Whole-widget selection acquired before native leaves need to exist."""
+    selections: tuple[tuple[int, Selection], ...] | None
+    """Actual partial leaf ranges, separate from root-wide selection."""
+    selection_style: Style | None
+    selecting: bool
+    """Original active pointer gesture, which controls native link adornment."""
+    roots: tuple[MarkdownSourceBlock, ...]
+    """Completed original grammar roots in source order, distinct from paint order.
+
+    Each member retains its declaration, source index/range, original document,
+    original optional fence code and actual optional placement. Consumers
+    borrow this completed source; placements and composed leaves remain
+    separate native geometry answers.
+    """
 
     @property
     def table_of_contents(self):
@@ -925,32 +990,73 @@ class DocumentPaint:
                 return heading.placement.region
         return None
 
-    def matches(self, document, width: int) -> bool:
+    def matches_selection(
+        self, *, root_selection=None, selections=None, selection_style=None,
+        selecting=False,
+    ) -> bool:
+        return (
+            root_selection == self.root_selection
+            and (
+                None if selections is None else tuple(sorted(selections.items()))
+            ) == self.selections
+            and selection_style == self.selection_style
+            and selecting == self.selecting
+        )
+
+    def matches(
+        self, document, width: int, *, root_selection=None, selections=None,
+        selection_style=None, selecting=False,
+    ) -> bool:
         return (
             width == self.width
             and document.same_source(self.document)
             and document.presentation.key == self.presentation_key
+            and self.matches_selection(
+                root_selection=root_selection, selections=selections,
+                selection_style=selection_style, selecting=selecting,
+            )
         )
 
-    def is_current(self, owner, width: int) -> bool:
+    def is_current(self, owner, width: int, *, selections=None) -> bool:
         """Compare current declared presentation without reading any descendants.
 
         The source owner must still hold this exact acquired document. A source
         replacement acquires a new MarkdownDocument; style refresh uses its
         with_presentation(). Scene eviction cannot certify different source.
+        Selection and active pointer state come from their original Screen;
+        a selection update never admits rows prepared for the previous input.
         """
-        return width == self.width and self.document.presentation.current_for(owner)
+        root_selection = owner.text_selection
+        return (
+            width == self.width
+            and self.document.presentation.current_for(owner)
+            and self.matches_selection(
+                root_selection=root_selection,
+                selections=selections,
+                selection_style=(
+                    Visual.selection_style(owner)
+                    if root_selection is not None or selections else None
+                ),
+                selecting=owner.screen._selecting,
+            )
+        )
 
-    def with_presentation(self, document) -> DocumentPaint:
+    def with_presentation(
+        self, document, *, root_selection=None, selections=None,
+        selection_style=None, selecting=False,
+    ) -> DocumentPaint:
         """Admit retained paint after actual source/presentation value equality.
 
         Call at publication, including after eviction. Rows are reused only if
-        their source, width and effective inputs agree. The resulting resource
+        their source, width, selection and effective inputs agree. The resulting resource
         owns the new participant's original invalidation witness.
         """
-        if not self.matches(document, self.width):
+        if not self.matches(
+            document, self.width, root_selection=root_selection, selections=selections,
+            selection_style=selection_style, selecting=selecting,
+        ):
             raise ValueError(
-                "Retained document paint has different source or presentation"
+                "Retained document paint has different source, presentation or selection"
             )
         return replace(self, document=document)
 
@@ -973,13 +1079,19 @@ class DocumentPaint:
             return None, None
         return index, line.get_content_offset(x, scope=("document_leaf", index))
 
-    def prepare_selection(self, selections, selection_style):
+    def prepare_selection(
+        self, selections=None, selection_style=None, *, root_selection=None,
+        selecting=False,
+    ):
         """Worker-side native selection styling, retaining original leaf offsets.
 
         Use the same source/content/CSS owners, including native tab expansion
         and wrapping. The interaction owner supplies leaf Selection values and
-        the Screen's original selection style; paint rows aren't source offsets.
+        the Screen's original Visual selection style; paint rows aren't source
+        offsets. root_selection=SELECT_ALL applies to original leaves without
+        requiring any controls or fake leaf identities to exist beforehand.
         """
         return self.document.prepare(
-            self.width, selections=selections, selection_style=selection_style
+            self.width, root_selection=root_selection, selections=selections,
+            selection_style=selection_style, selecting=selecting,
         )

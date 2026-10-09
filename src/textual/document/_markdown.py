@@ -43,6 +43,7 @@ class MarkdownSourceBlock:
         self.id = None
         self.source_index = source_index
         self.source_range = tuple(token.map) if token.map is not None else (0, 0)
+        self.placement = None
         self.bullet = args[0] if args else ""
         self._producer = document.producers[declaration]
         self.code = (
@@ -89,6 +90,10 @@ class MarkdownSourceBlock:
 
     def prepare(self):
         return self._producer(self)
+
+    def source_text(self) -> str:
+        """Read this original grammar member's bounded source contribution."""
+        return MarkdownBlock.source_text(self.document.source, self.source_range)
 
     def node(self, *, children=(), **kwargs):
         node = DocumentNode(
@@ -360,7 +365,10 @@ class MarkdownDocument:
             process_layout=self.process_layout,
         )
 
-    def prepare(self, width: int, *, selections=None, selection_style=None):
+    def prepare(
+        self, width: int, *, root_selection=None, selections=None,
+        selection_style=None, selecting=False,
+    ):
         # Mutable parsing/construction state is local to this preparation, not
         # retained alongside the source and not shared by width workers.
         blocks = []
@@ -395,8 +403,10 @@ class MarkdownDocument:
             root,
             width,
             document=self,
-            blocks=blocks,
+            roots=roots,
             headings=tuple(Markdown.heading_entries(roots)),
+            root_selection=root_selection,
             selections=selections,
             selection_style=selection_style,
+            selecting=selecting,
         )

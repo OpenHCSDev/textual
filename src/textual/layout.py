@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from inspect import getattr_static
 from typing import TYPE_CHECKING, ClassVar, Iterable, NamedTuple
 
 from textual._spatial_map import SpatialMap
@@ -266,11 +267,42 @@ class Layout(ABC):
         """Immutable inputs for detached use; custom layouts supply this contract."""
         raise TypeError(f"{type(self).__name__} has no detached layout contract")
 
-    def _native_document_key(self, arrange, width, height, inputs=()) -> tuple:
-        if (type(self).arrange is not arrange or type(self).get_content_width is not width
-                or type(self).get_content_height is not height):
+    def acquire_document(self) -> Layout:
+        """Acquire algorithm/configuration with independent derived geometry.
+
+        Custom layouts own this construction contract. A scene layout's cached
+        placements and child custody are not document inputs.
+        """
+        raise TypeError(f"{type(self).__name__} has no detached layout acquisition")
+
+    def _acquire_native_document(self, **inputs) -> Layout:
+        self.document_key()
+        return type(self)(**inputs)
+
+    def _native_document_key(
+        self,
+        arrange,
+        width,
+        height,
+        inputs=(),
+        *,
+        constructor=object.__init__,
+        cache=clear_cache,
+    ) -> tuple:
+        methods = (
+            arrange, width, height, constructor, cache, Layout.render_keyline,
+        )
+        actual = (
+            getattr_static(self, "arrange"),
+            getattr_static(self, "get_content_width"),
+            getattr_static(self, "get_content_height"),
+            type(self).__init__,
+            getattr_static(self, "clear_cache"),
+            getattr_static(self, "render_keyline"),
+        )
+        if actual != methods:
             raise TypeError(f"{type(self).__name__} must declare its detached layout inputs")
-        return (type(self), arrange, width, height, inputs)
+        return (type(self), *methods, inputs)
 
     def __repr__(self) -> str:
         return f"<{self.name}>"

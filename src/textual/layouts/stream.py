@@ -159,5 +159,13 @@ class StreamLayout(Layout):
             height = 0
         return height
 
-    def document_key(self, *, _arrange=arrange, _width=get_content_width, _height=get_content_height) -> tuple:
-        return self._native_document_key(_arrange, _width, _height, ())
+    def document_key(
+        self, *, _arrange=arrange, _width=get_content_width,
+        _height=get_content_height, _constructor=__init__, _cache=clear_cache,
+    ) -> tuple:
+        return self._native_document_key(
+            _arrange, _width, _height, (), constructor=_constructor, cache=_cache,
+        )
+
+    def acquire_document(self):
+        return self._acquire_native_document()

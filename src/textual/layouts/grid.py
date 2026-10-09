@@ -19,20 +19,30 @@ class GridLayout(Layout):
 
     name = "grid"
 
-    def __init__(self) -> None:
-        self.min_column_width: int | None = None
+    def __init__(
+        self,
+        *,
+        min_column_width: int | None = None,
+        max_column_width: int | None = None,
+        stretch_height: bool = False,
+        regular: bool = False,
+        expand: bool = False,
+        shrink: bool = False,
+        auto_minimum: bool = False,
+    ) -> None:
+        self.min_column_width: int | None = min_column_width
         """Maintain a minimum column width, or `None` for no minimum."""
-        self.max_column_width: int | None = None
+        self.max_column_width: int | None = max_column_width
         """Maintain a maximum column width, or `None` for no maximum."""
-        self.stretch_height: bool = False
+        self.stretch_height: bool = stretch_height
         """Stretch the height of cells to be equal in each row."""
-        self.regular: bool = False
+        self.regular: bool = regular
         """Grid should be regular (no remainder in last row)."""
-        self.expand: bool = False
+        self.expand: bool = expand
         """Expand the grid to fit the container if it is smaller."""
-        self.shrink: bool = False
+        self.shrink: bool = shrink
         """Shrink the grid to fit the container if it is larger."""
-        self.auto_minimum: bool = False
+        self.auto_minimum: bool = auto_minimum
         """If self.shrink is `True`, auto-detect and limit the width."""
         self._grid_size: tuple[int, int] | None = None
         """Grid size after last arrange call."""
@@ -377,6 +387,25 @@ class GridLayout(Layout):
 
         return placements
 
-    def document_key(self, *, _arrange=arrange, _width=Layout.get_content_width, _height=Layout.get_content_height) -> tuple:
-        return self._native_document_key(_arrange, _width, _height, (self.min_column_width, self.max_column_width, self.stretch_height,
-                  self.regular, self.expand, self.shrink, self.auto_minimum))
+    def _document_inputs(self) -> dict:
+        return {
+            "min_column_width": self.min_column_width,
+            "max_column_width": self.max_column_width,
+            "stretch_height": self.stretch_height,
+            "regular": self.regular,
+            "expand": self.expand,
+            "shrink": self.shrink,
+            "auto_minimum": self.auto_minimum,
+        }
+
+    def document_key(
+        self, *, _arrange=arrange, _width=Layout.get_content_width,
+        _height=Layout.get_content_height, _constructor=__init__,
+    ) -> tuple:
+        return self._native_document_key(
+            _arrange, _width, _height, tuple(self._document_inputs().items()),
+            constructor=_constructor,
+        )
+
+    def acquire_document(self):
+        return self._acquire_native_document(**self._document_inputs())

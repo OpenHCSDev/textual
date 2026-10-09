@@ -10,8 +10,10 @@ import pytest
 
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll
-from textual.geometry import Size, Spacing
-from textual.selection import Selection
+from textual.geometry import Offset, Size, Spacing
+from textual.layouts.stream import StreamLayout
+from textual.selection import SELECT_ALL, Selection
+from textual.visual import Visual
 from textual.widgets import Label, Markdown
 from textual.widgets._markdown import MarkdownFence
 
@@ -125,7 +127,10 @@ class BeforeMountMarkdown(Markdown):
         self.host_pseudos = frozenset(self.get_pseudo_classes())
         self.document = self.acquire_document(markdown, tokens)
         self.document_paint = await asyncio.to_thread(
-            self.document.prepare, self.region.width
+            self.document.prepare, self.region.width,
+            root_selection=self.text_selection,
+            selection_style=(Visual.selection_style(self) if self.text_selection is not None else None),
+            selecting=self.screen._selecting,
         )
         return tokens
 
@@ -190,30 +195,144 @@ class EmptyDisplayApp(BeforeMountApp):
     )
 
 
+class StreamBeforeMountApp(BeforeMountApp):
+    CSS = BeforeMountApp.CSS + "VerticalScroll { layout: stream; }"
+
+
 @pytest.mark.asyncio
-async def test_complete_document_request_and_paint_cross_spawn_process(monkeypatch):
+async def test_root_selection_before_leaves_matches_native_scene_and_readiness(monkeypatch):
     monkeypatch.delenv("NO_COLOR", raising=False)
     app = BeforeMountApp()
-    async with app.run_test(size=(54, 30)) as pilot:
+    async with app.run_test(size=(54, 100)) as pilot:
         await pilot.pause()
         markdown = app.query_one(BeforeMountMarkdown)
+        assert not markdown.children
+        app.screen._select_all_in_widget(markdown)
         await markdown.update(SOURCE)
         markdown.update_node_styles()
         await pilot.pause()
         document = markdown.document.with_presentation(markdown)
-        local = markdown.document_paint
+        style = Visual.selection_style(markdown)
+        assert markdown.document_paint.root_selection == SELECT_ALL
+        assert markdown.document_paint.selection_style == style
+        assert markdown.document_paint.document.same_source(document)
+        # Mount can add further native default CSS sources. Their actual
+        # ordered supply is a new acquired presentation, not counter equality.
+        paint = await asyncio.to_thread(
+            document.prepare, markdown.region.width,
+            root_selection=SELECT_ALL, selection_style=style,
+        )
+        assert paint.leaves
+        assert paint.root_selection == SELECT_ALL
+        assert paint.selections is None
+        assert paint.is_current(markdown, paint.width)
+        assert not paint.matches(document, paint.width)
+
+        # The native mounted oracle acquires its own actual descendants. The
+        # detached preparation above had only the root selection at ingress.
+        app.screen._select_all_in_widget(markdown)
+        await pilot.pause()
+        _, mounted = app.screen._compositor.render_subtree_strips(
+            markdown, app.screen._compositor.find_widget(markdown)
+        )
+        assert painted_characters(markdown.document_paint.lines) == painted_characters(mounted)
+        assert painted_characters(paint.lines) == painted_characters(mounted)
+        unselected = await asyncio.to_thread(document.prepare, paint.width)
+        assert not unselected.is_current(markdown, paint.width)
+        assert any(a != b for a, b in zip(painted_characters(paint.lines), painted_characters(unselected.lines)))
+        app.screen.clear_selection()
+        await pilot.pause()
+        assert not paint.is_current(markdown, paint.width)
+        assert unselected.is_current(markdown, paint.width)
+        with pytest.raises(ValueError, match="whole widget"):
+            await asyncio.to_thread(
+                document.prepare, paint.width,
+                root_selection=Selection(Offset(0, 0), Offset(3, 0)),
+                selection_style=style,
+            )
+
+
+@pytest.mark.asyncio
+async def test_partial_leaf_selection_uses_original_offsets_and_native_style(monkeypatch):
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    app = DocumentApp()
+    async with app.run_test(size=(54, 100)) as pilot:
+        await pilot.pause()
+        markdown = app.query_one(AcquiredMarkdown)
+        document = markdown.acquire_document(SOURCE, markdown.acquired_tokens)
+        paint = await asyncio.to_thread(document.prepare, markdown.region.width)
+        index = next(i for i, leaf in enumerate(paint.leaves) if leaf.declaration is DocumentCodeLabel)
+        selection = Selection.from_offsets(Offset(1, 0), Offset(6, 0))
+        selections = {index: selection}
+        app.screen.selections = {markdown.query_one(DocumentCodeLabel): selection}
+        await pilot.pause()
+        selected = await asyncio.to_thread(
+            paint.prepare_selection, selections, Visual.selection_style(markdown)
+        )
+        assert selected.root_selection is None
+        assert selected.is_current(markdown, paint.width, selections=selections)
+        assert not selected.is_current(markdown, paint.width)
+        selections.clear()
+        assert selected.selections == ((index, selection),)
+        _, mounted = app.screen._compositor.render_subtree_strips(
+            markdown, app.screen._compositor.find_widget(markdown)
+        )
+        assert painted_characters(selected.lines) == painted_characters(mounted)
+
+
+@pytest.mark.asyncio
+async def test_complete_document_request_and_paint_cross_spawn_process(monkeypatch):
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    app = StreamBeforeMountApp()
+    async with app.run_test(size=(54, 30)) as pilot:
+        await pilot.pause()
+        markdown = app.query_one(BeforeMountMarkdown)
+        scene_layout = markdown.parent.layout
+        assert isinstance(scene_layout, StreamLayout)
+        assert scene_layout._cached_placements
+        scene_placements = scene_layout._cached_placements
+        await markdown.update(SOURCE)
+        markdown.update_node_styles()
+        await pilot.pause()
+        document = markdown.document.with_presentation(markdown)
+        selection_style = Visual.selection_style(markdown)
+        local = await asyncio.to_thread(
+            document.prepare, markdown.region.width,
+            root_selection=SELECT_ALL, selection_style=selection_style,
+        )
+        # Semantic root membership is supplied by the same native grammar,
+        # not reconstructed from descendant placement or paint order.
+        assert [(root.declaration, root.source_range) for root in local.roots] == [
+            (type(root), root.source_range) for root in markdown.children
+        ]
+        assert [root.placement.region for root in local.roots] == [
+            root.region.translate(-markdown.region.offset) for root in markdown.children
+        ]
+        acquired_layout = document.presentation.ancestors[-1].base_rules["layout"]
+        assert isinstance(acquired_layout, StreamLayout)
+        assert acquired_layout is not scene_layout
+        assert acquired_layout._cached_placements is None
+        assert all(placement.widget.parent is markdown.parent
+                   for placement in scene_placements)
 
     # The request no longer borrows a running App or widget. Both complete
     # request and complete result traverse the original spawn/pickle boundary.
     with ProcessPoolExecutor(
         max_workers=1, mp_context=multiprocessing.get_context("spawn")
     ) as executor:
-        future = executor.submit(document.prepare, local.width)
+        future = executor.submit(
+            document.prepare, local.width,
+            root_selection=SELECT_ALL, selection_style=selection_style,
+        )
         remote = await asyncio.wrap_future(future)
         worker_pids = tuple(executor._processes)
 
     assert all(not os.path.exists(f"/proc/{pid}") for pid in worker_pids)
-    assert remote.matches(document, local.width)
+    assert remote.matches(
+        document, local.width,
+        root_selection=SELECT_ALL, selection_style=selection_style,
+    )
+    assert not remote.matches(document, local.width)
     assert type(remote.gutter) is Spacing
     assert type(remote.size) is Size
     assert remote.gutter == local.gutter
@@ -222,6 +341,15 @@ async def test_complete_document_request_and_paint_cross_spawn_process(monkeypat
     assert remote.root_empty == local.root_empty
     assert remote.blocks == local.blocks
     assert remote.table_of_contents == local.table_of_contents
+    assert all(root.document is remote.document for root in remote.roots)
+    assert [
+        (root.declaration, root.source_index, root.source_range, root.code, root.source_text(), root.placement)
+        for root in remote.roots
+    ] == [
+        (root.declaration, root.source_index, root.source_range, root.code, root.source_text(), root.placement)
+        for root in local.roots
+    ]
+    assert [root.code for root in remote.roots if root.code is not None] == ["print('native fence')"]
     assert painted_characters(remote.lines) == painted_characters(local.lines)
 
 
