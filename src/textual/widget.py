@@ -2397,7 +2397,7 @@ class Widget(DOMNode):
         position readers still request those paths through ``find_widget``.
         """
         try:
-            return self.screen._compositor._get_published_geometry(self) is not None
+            return self.screen._compositor._layout_map.get(self) is not None
         except NoScreen:
             return False
 

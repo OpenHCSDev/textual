@@ -26,15 +26,16 @@ def test_borrowed_geometry_routes_preserve_membership_ancestry_and_assignment_or
     key = SubtreeGeometryKey(0, 0, bounds, bounds, (), 0, bounds, True,
                             Spacing(), bounds.size, False, Offset(), ())
 
-    def placed(y):
+    def placed(owner, y, ancestors):
         region = Region(0, y, 5, 1)
-        return MapGeometry(region, (), bounds, region.size, region.size, region, Spacing())
+        return MapGeometry(region, (), bounds, region.size, region.size, region,
+                           Spacing(), ancestors, owner.gutter)
 
     def source(owner, y):
         return IntrinsicSubtreeGeometry(
             key, MappingProxyType({
-                owner: (0, SubtreeMapGeometry(placed(y), (), None)),
-                shared: (1, SubtreeMapGeometry(placed(y + 1), (), owner)),
+                owner: (0, SubtreeMapGeometry(placed(owner, y, (root,)), (), None)),
+                shared: (1, SubtreeMapGeometry(placed(shared, y + 1, (owner, root)), (), owner)),
             }), frozenset((owner, shared, logical)), frozenset((invisible,)),
         )
 
@@ -43,7 +44,7 @@ def test_borrowed_geometry_routes_preserve_membership_ancestry_and_assignment_or
         key, MappingProxyType({
             first: (0, SubtreeGeometryPlacement(first_source, key, clip, root)),
             second: (1, SubtreeGeometryPlacement(second_source, key, clip, root)),
-            root: (2, placed(9)),
+            root: (2, placed(root, 9, ())),
         }), frozenset((root,)), frozenset(),
     )
     assert resource.contains(shared)
@@ -55,8 +56,9 @@ def test_borrowed_geometry_routes_preserve_membership_ancestry_and_assignment_or
     assert resource.captured_parent(first) is root
     published, clips = {}, {}
     resource.project_into(published, key, clip, clips, root, visible_only=True,
-                          retained={shared, unrelated}, bounds=Region(30, 30, 1, 1))
-    assert published[shared] == placed(6)
+                          retained={shared, unrelated}, bounds=Region(30, 30, 1, 1),
+                          ancestry_root=root, ancestors=())
+    assert published[shared] == placed(shared, 6, (second, root))
     assert unrelated not in published
 
 

@@ -3905,6 +3905,7 @@ class App(Generic[ReturnType], DOMNode):
                             terminal_sequence = console._render_buffer(segments)
                     except Exception as error:
                         self._handle_exception(error)
+                        return
                     else:
                         if WINDOWS:
                             # Combat a problem with Python on Windows.
@@ -3926,6 +3927,13 @@ class App(Generic[ReturnType], DOMNode):
                     self._end_update()
 
                 self._driver.flush()
+
+                if isinstance(renderable, CompositorUpdate):
+                    renderable.admit()
+            elif (self._running and not self._closed and self.is_headless
+                  and self._driver is not None and isinstance(renderable, CompositorUpdate)):
+                # HeadlessDriver owns logical publication without terminal IO.
+                renderable.admit()
 
         finally:
             self.post_display_hook()
