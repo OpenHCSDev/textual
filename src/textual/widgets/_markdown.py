@@ -265,7 +265,12 @@ class MarkdownBlock(Static):
         return isinstance(self, declaration)
 
     def heading_id(self) -> str:
-        return f"heading-{slug_for_tcss_id(self._content.plain)}-{id(self)}"
+        return self.make_heading_id(self._content, id(self))
+
+    @staticmethod
+    def make_heading_id(content: Content, identity: object) -> str:
+        """Original slug plus the actual source/scene lifetime identity."""
+        return f"heading-{slug_for_tcss_id(content.plain)}-{identity}"
 
     @property
     def _markdown(self) -> Markdown:
@@ -470,6 +475,14 @@ class MarkdownHeader(MarkdownBlock):
     """Base class for a Markdown header."""
 
     LEVEL = 0
+
+    @classmethod
+    def make_heading_entry(cls, content: Content, block_id: str | None):
+        """Heading wording belongs to the block's actual acquired Content."""
+        return cls.LEVEL, content.plain, block_id
+
+    def table_of_contents_entry(self):
+        return self.make_heading_entry(self._content, self.id)
 
     DEFAULT_CSS = """
     MarkdownHeader {
@@ -1285,12 +1298,23 @@ class Markdown(Widget):
     def table_of_contents(self) -> TableOfContentsType:
         """The document's table of contents."""
         if self._table_of_contents is None:
-            self._table_of_contents = [
-                (header.LEVEL, header._content.plain, header.id)
-                for header in self.children
-                if isinstance(header, MarkdownHeader)
-            ]
+            self._table_of_contents = list(self.heading_entries(self.children))
         return self._table_of_contents
+
+    @staticmethod
+    def heading_entries(blocks):
+        """Only original top-level headings participate in native navigation."""
+        for block in blocks:
+            if block._is_block_type(MarkdownHeader):
+                yield block.table_of_contents_entry()
+
+    @staticmethod
+    def anchor_id_for(table_of_contents, anchor: str) -> str | None:
+        unique = TrackedSlugs()
+        for _, title, header_id in table_of_contents:
+            if unique.slug(title) == anchor:
+                return header_id
+        return None
 
     class TableOfContentsUpdated(Message):
         """The table of contents was updated."""
@@ -1479,11 +1503,10 @@ class Markdown(Widget):
         """
         if not self._table_of_contents or not isinstance(self.parent, Widget):
             return False
-        unique = TrackedSlugs()
-        for _, title, header_id in self._table_of_contents:
-            if unique.slug(title) == anchor:
-                self.query_one(f"#{header_id}").scroll_visible(top=True)
-                return True
+        header_id = self.anchor_id_for(self._table_of_contents, anchor)
+        if header_id is not None:
+            self.query_one(f"#{header_id}").scroll_visible(top=True)
+            return True
         return False
 
     async def load(self, path: Path | MarkdownLocation) -> None:

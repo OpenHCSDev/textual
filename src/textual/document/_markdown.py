@@ -11,7 +11,6 @@ from uuid import UUID, uuid4
 from markdown_it.token import Token
 
 from textual.content import Content
-from textual._slug import slug_for_tcss_id
 from textual.containers import Horizontal, Vertical
 from textual.document._paint import DocumentNode, DocumentPresentation
 from textual.widgets._label import Label
@@ -64,7 +63,12 @@ class MarkdownSourceBlock:
         return issubclass(self.declaration, declaration)
 
     def heading_id(self):
-        return f"heading-{slug_for_tcss_id(self._content.plain)}-{self.document.heading_namespace}-{self.source_index}"
+        return self.declaration.make_heading_id(
+            self._content, f"{self.document.heading_namespace}-{self.source_index}"
+        )
+
+    def table_of_contents_entry(self):
+        return self.declaration.make_heading_entry(self._content, self.id)
 
     def build_from_token(self, token):
         self._inline_token = token
@@ -394,6 +398,7 @@ class MarkdownDocument:
             width,
             document=self,
             blocks=blocks,
+            headings=tuple(Markdown.heading_entries(roots)),
             selections=selections,
             selection_style=selection_style,
         )

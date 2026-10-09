@@ -618,6 +618,7 @@ class DocumentPresentation:
         *,
         document,
         blocks,
+        headings,
         selections=None,
         selection_style=None,
     ) -> DocumentPaint:
@@ -791,10 +792,16 @@ class DocumentPresentation:
                 node.source_range,
                 entry.region,
                 entry.clip,
+                node.id,
             )
             for node, entry in compositor._ordered_geometry(geometry)
             if node.source_index is not None
         )
+        placements_by_id = {
+            placement.id: placement
+            for placement in placements
+            if placement.id is not None
+        }
         return DocumentPaint(
             size,
             lines,
@@ -805,6 +812,10 @@ class DocumentPresentation:
             width,
             gutter,
             root.content_region.size,
+            tuple(
+                DocumentHeading(entry, placements_by_id.get(entry[2]))
+                for entry in headings
+            ),
         )
 
 
@@ -815,11 +826,20 @@ class DocumentBlockPlacement:
     source_range: tuple[int, int]
     region: Region
     clip: Region
+    id: str | None
 
     def source_text(self, document) -> str:
         from textual.widgets._markdown import MarkdownBlock
 
         return MarkdownBlock.source_text(document.source, self.source_range)
+
+
+@dataclass(frozen=True)
+class DocumentHeading:
+    """One original heading entry and its actual optional native placement."""
+
+    entry: tuple[int, str, str | None]
+    placement: DocumentBlockPlacement | None
 
 
 @dataclass(frozen=True)
@@ -859,6 +879,21 @@ class DocumentPaint:
     """Actual worker-resolved native root padding and border."""
     content_size: Size
     """Intrinsic inner extent; scene allocation does not replace this answer."""
+    headings: tuple[DocumentHeading, ...]
+
+    @property
+    def table_of_contents(self):
+        return [heading.entry for heading in self.headings]
+
+    def anchor_region(self, anchor: str) -> Region | None:
+        """Use the original duplicate-aware heading slug decision."""
+        from textual.widgets._markdown import Markdown
+
+        block_id = Markdown.anchor_id_for(self.table_of_contents, anchor)
+        for heading in self.headings:
+            if heading.entry[2] == block_id and heading.placement is not None:
+                return heading.placement.region
+        return None
 
     def matches(self, document, width: int) -> bool:
         return (
