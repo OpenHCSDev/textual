@@ -1007,8 +1007,8 @@ class Widget(DOMNode):
             # Only native booleans certify a shared inherited answer.
             if share:
                 share = type(value) is bool
-                if share and (key := (Widget._inherited_disabled, node)) in _inputs:
-                    disabled = _inputs[key]
+                if share and (key := (Widget._inherited_disabled, id(node))) in _inputs:
+                    _, disabled = _inputs[key]
                     break
             if share:
                 path.append(node)
@@ -1020,7 +1020,9 @@ class Widget(DOMNode):
             disabled = False
         if share:
             for ancestor in path:
-                _inputs[Widget._inherited_disabled, ancestor] = disabled
+                # Retain the exact owner alongside the derived answer. Widget
+                # equality cannot merge independent ancestry or recycle an id.
+                _inputs[Widget._inherited_disabled, id(ancestor)] = (ancestor, disabled)
         return disabled
 
     @property
@@ -1048,9 +1050,10 @@ class Widget(DOMNode):
                     type(declaration) is Reactive
                     and declaration._has_stored_input(screen)
                 )
-                key = (type(self).has_focus_within.fget, screen)
+                key = (type(self).has_focus_within.fget, id(screen))
                 if share and key in _inputs:
-                    return _inputs[key].get(id(self)) is self
+                    _, path = _inputs[key]
+                    return path.get(id(self)) is self
             node = screen.focused
         except NoScreen:
             return False
@@ -1078,7 +1081,7 @@ class Widget(DOMNode):
                 path[id(node)] = node
             node = node._parent
         if share:
-            _inputs[key] = path
+            _inputs[key] = (screen, path)
             return path.get(id(self)) is self
         return False
 
