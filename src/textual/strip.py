@@ -23,6 +23,7 @@ from textual.cache import FIFOCache
 from textual.color import Color
 from textual.css.types import AlignHorizontal, AlignVertical
 from textual.filter import LineFilter
+from textual.geometry import Offset
 
 SGR_STYLES = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "21", "51", "52", "53"]
 
@@ -103,18 +104,82 @@ class Strip:
         self._crop_cache: FIFOCache[tuple[int, int], Strip] | None = None
         self._style_cache: FIFOCache[Style, Strip] | None = None
         self._filter_cache: FIFOCache[tuple[LineFilter, Color], Strip] | None = None
-        self._line_length_cache: FIFOCache[
-            tuple[int, Style | None],
-            Strip,
-        ] | None = None
-        self._crop_extend_cache: FIFOCache[
-            tuple[int, int, Style | None],
-            Strip,
-        ] | None = None
+        self._line_length_cache: (
+            FIFOCache[
+                tuple[int, Style | None],
+                Strip,
+            ]
+            | None
+        ) = None
+        self._crop_extend_cache: (
+            FIFOCache[
+                tuple[int, int, Style | None],
+                Strip,
+            ]
+            | None
+        ) = None
         self._offsets_cache: FIFOCache[tuple[int, int], Strip] | None = None
         self._render_cache: str | None = None
         self._link_ids: set[str] | None = None
         self._cell_count: int | None = None
+
+    def get_style_at(self, x: int) -> Style:
+        """Original rendered cell style, including action/selection metadata."""
+        end = 0
+        for segment in self:
+            end += segment.cell_length
+            if x < end:
+                return segment.style or Style.null()
+        return Style.null()
+
+    def get_content_offset(
+        self, x: int, *, scope: tuple[str, object] | None = None
+    ) -> Offset | None:
+        """Original character offset for a cell, optionally in one paint leaf.
+
+        Compositor and detached documents share the Unicode cell/character
+        conversion. Scope separates different original leaves in a composed row.
+        """
+        end = 0
+        start = 0
+        offset_y: int | None = None
+        offset_x = 0
+        offset_x2 = 0
+
+        from rich.cells import get_character_cell_size
+
+        offset: Offset | None = None
+        for segment in self:
+            end += segment.cell_length
+            style = segment.style
+            if style is not None and style._meta is not None:
+                meta = style.meta
+                if scope is not None and meta.get(scope[0]) != scope[1]:
+                    start = end
+                    continue
+                if "offset" in meta:
+                    offset_x, offset_y = meta["offset"]
+                    if offset_y is None:
+                        continue
+                    offset_x2 = offset_x + len(segment.text)
+
+                    if x < end and x >= start:
+                        segment_cell_length = 0
+                        cell_cut = x - start
+                        segment_offset = 0
+                        for character in segment.text:
+                            if segment_cell_length >= cell_cut:
+                                break
+                            segment_cell_length += get_character_cell_size(character)
+                            segment_offset += 1
+
+                        offset = Offset(offset_x + segment_offset, offset_y)
+                        break
+            start = end
+
+        if offset is None and offset_y is not None:
+            offset = Offset(offset_x2, offset_y)
+        return offset
 
     def __rich_repr__(self) -> rich.repr.Result:
         try:

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from typing import NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
 
 from textual.geometry import Size
+
+if TYPE_CHECKING:
+    from textual.css.styles import StylesBase
 
 
 class Extrema(NamedTuple):
@@ -62,3 +65,46 @@ class Extrema(NamedTuple):
             int(self.apply_width(Fraction(width))),
             int(self.apply_height(Fraction(height))),
         )
+
+    @classmethod
+    def resolve(
+        cls, styles: StylesBase, container: Size, viewport: Size,
+        width_fraction: Fraction, height_fraction: Fraction,
+    ) -> Extrema:
+        """Resolve native min/max rules independently of scene custody."""
+        min_width: Fraction | None = None
+        max_width: Fraction | None = None
+        min_height: Fraction | None = None
+        max_height: Fraction | None = None
+
+        container -= styles.margin.totals
+        if styles.box_sizing == "border-box":
+            gutter_width, gutter_height = styles.gutter.totals
+        else:
+            gutter_width = gutter_height = 0
+
+        if styles.min_width is not None:
+            min_width = (
+                styles.min_width.resolve(container, viewport, width_fraction)
+                - gutter_width
+            )
+
+        if styles.max_width is not None:
+            max_width = (
+                styles.max_width.resolve(container, viewport, width_fraction)
+                - gutter_width
+            )
+        if styles.min_height is not None:
+            min_height = (
+                styles.min_height.resolve(container, viewport, height_fraction)
+                - gutter_height
+            )
+
+        if styles.max_height is not None:
+            max_height = (
+                styles.max_height.resolve(container, viewport, height_fraction)
+                - gutter_height
+            )
+
+        extrema = cls(min_width, max_width, min_height, max_height)
+        return extrema

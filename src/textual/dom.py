@@ -10,6 +10,7 @@ import re
 import threading
 from weakref import ref
 from functools import lru_cache, partial
+from dataclasses import replace
 from inspect import getfile
 from typing import (
     TYPE_CHECKING,
@@ -48,11 +49,12 @@ from textual.css.match import match
 from textual.css.parse import is_id_selector, parse_declarations, parse_selectors
 from textual.css.query import InvalidQueryFormat, NoMatches, TooManyMatches, WrongType
 from textual.css.styles import RenderStyles, Styles
+from textual.geometry import Size
 from textual.css.tokenize import IDENTIFIER
 from textual.css.tokenizer import TokenError
 from textual.message_pump import MessagePump
 from textual.reactive import Reactive, ReactiveError, _Mutated, _watch
-from textual.style import Style as VisualStyle
+from textual.style import NULL_STYLE, Style as VisualStyle
 from textual.timer import Timer
 from textual.walk import walk_breadth_first, walk_breadth_search_id, walk_depth_first
 from textual.worker_manager import WorkerManager
@@ -65,6 +67,7 @@ if TYPE_CHECKING:
     from textual.app import App
     from textual.css.query import DOMQuery, QueryType
     from textual.css.types import CSSLocation
+    from textual.css.styles import StylesBase
     from textual.message import Message
     from textual.reactive import _StoredReactiveAccess
     from textual.screen import Screen
@@ -183,6 +186,12 @@ class DOMNode(MessagePump):
             node._subtree_style_revision = revision
             geometry = node._style_geometry_updated(geometry)
 
+    _component_style_scope: ClassVar[bool] = False
+
+    def _make_component_node(self, component: str) -> DOMNode:
+        return DOMNode(classes=component)
+
+
     DEFAULT_CSS: ClassVar[str] = ""
     """Default TCSS."""
 
@@ -234,6 +243,196 @@ class DOMNode(MessagePump):
     _PSEUDO_CLASSES: ClassVar[dict[str, Callable[[App[Any]], bool]]] = {}
     """Pseudo class checks."""
 
+    @property
+    def _has_relative_children_width(self) -> bool:
+        """Do any children (or progeny) have a relative width?"""
+        if not self.is_container:
+            return False
+        for child in self.children:
+            if child.styles.expand == "optimal":
+                continue
+            styles = child.styles
+            if not child.display:
+                continue
+            width = styles.width
+            if width is None:
+                continue
+            if styles.is_relative_width or (
+                width.is_auto and child._has_relative_children_width
+            ):
+                return True
+        return False
+
+    def _scan_relative_children_height(self, native: bool) -> tuple[bool, bool]:
+        """Read auto-child stretch through the original child measurement owner.
+
+        Widgets retain their epoch-qualified answers. Detached document nodes
+        share the exact scan without borrowing those scene lifetime epochs.
+        """
+        from textual.widget import Widget
+        from textual.css.scalar import Scalar
+
+        if not self.is_container:
+            result = False
+        else:
+            result = False
+            for child in self.children:
+                styles = child.styles
+                native = native and (
+                    type(child).display is DOMNode.display
+                    and type(styles) is RenderStyles
+                )
+                if not child.display:
+                    continue
+                height = styles.height
+                if height is None:
+                    continue
+                native = native and type(height) is Scalar
+                if styles.is_relative_height:
+                    result = True
+                    break
+                if height.is_auto:
+                    if type(child)._has_relative_children_height is Widget._has_relative_children_height:
+                        relative, child_native = child._relative_children_height()
+                    else:
+                        relative, child_native = child._has_relative_children_height, False
+                    native = native and child_native
+                    if relative:
+                        result = True
+                        break
+        return result, native
+
+    def _measure_content_width(self, container: Size, viewport: Size) -> int:
+        """Intrinsic native layout/visual width, independent of scene custody."""
+        if self.is_container:
+            return self.layout.get_content_width(self, container, viewport)
+        width = self._render().get_optimal_width(self.styles, container.width)
+        if self.expand:
+            width = max(container.width, width)
+        if self.shrink:
+            width = min(width, container.width)
+        return width
+
+    def _render_container(self):
+        """Native container paint, shared independently of scene custody."""
+        from textual.renderables.blank import Blank
+
+        if self.styles.layout and self.styles.keyline[0] != "none":
+            return self.layout.render_keyline(self)
+        return Blank(self.background_colors[1])
+
+    def _measure_content_height(self, container: Size, viewport: Size, width: int) -> int:
+        """Intrinsic native height; the caller owns reuse and publication."""
+        if not width:
+            return 0
+        if self.is_container:
+            return self.layout.get_content_height(self, container, viewport, width)
+        return self._render().get_height(self.styles, width)
+
+    @property
+    def style_type(self) -> type[DOMNode]:
+        """The native declaration addressed by CSS and ordered selectors."""
+        return type(self)
+
+    @classmethod
+    def _require_document_methods(cls, methods) -> None:
+        """Different scene behavior must explicitly supply detached behavior."""
+        for name, implementation in methods.items():
+            if getattr(cls, name) is not implementation:
+                raise TypeError(f"{cls.__name__}.{name} requires a detached document producer")
+
+    def _is_style_type(self, declaration: type[DOMNode]) -> bool:
+        return isinstance(self, declaration)
+
+    @property
+    def css_type_names(self) -> frozenset[str]:
+        return self._css_type_names
+
+    @property
+    def css_type_name(self) -> str:
+        return self._css_type_name
+
+    @property
+    def first_of_type(self) -> bool:
+        """Is this the first widget of its type in its siblings?"""
+        parent = self.parent
+        if parent is None:
+            return True
+        # This pseudo classes only changes when the parent's nodes._updates changes
+        if parent._nodes._updates == self._first_of_type[0]:
+            return self._first_of_type[1]
+        widget_type = self.style_type
+        for node in parent._nodes.displayed:
+            if node._is_style_type(widget_type):
+                self._first_of_type = (parent._nodes._updates, node is self)
+                return self._first_of_type[1]
+        return False
+
+    @property
+    def last_of_type(self) -> bool:
+        """Is this the last widget of its type in its siblings?"""
+        parent = self.parent
+        if parent is None:
+            return True
+        # This pseudo classes only changes when the parent's nodes._updates changes
+        if parent._nodes._updates == self._last_of_type[0]:
+            return self._last_of_type[1]
+        widget_type = self.style_type
+        for node in parent._nodes.displayed_reverse:
+            if node._is_style_type(widget_type):
+                self._last_of_type = (parent._nodes._updates, node is self)
+                return self._last_of_type[1]
+        return False
+
+    @property
+    def first_child(self) -> bool:
+        """Is this the first widget in its siblings?"""
+        parent = self.parent
+        if parent is None:
+            return True
+        # This pseudo class only changes when the parent's nodes._updates changes
+        if parent._nodes._updates == self._first_child[0]:
+            return self._first_child[1]
+        for node in parent._nodes.displayed:
+            self._first_child = (parent._nodes._updates, node is self)
+            return self._first_child[1]
+        return False
+
+    @property
+    def last_child(self) -> bool:
+        """Is this the last widget in its siblings?"""
+        parent = self.parent
+        if parent is None:
+            return True
+        # This pseudo class only changes when the parent's nodes._updates changes
+        if parent._nodes._updates == self._last_child[0]:
+            return self._last_child[1]
+        for node in parent._nodes.displayed_reverse:
+            self._last_child = (parent._nodes._updates, node is self)
+            return self._last_child[1]
+        return False
+
+    @property
+    def is_odd(self) -> bool:
+        """Is this widget at an oddly numbered position within its siblings?"""
+        parent = self.parent
+        if parent is None:
+            return True
+        # This pseudo classes only changes when the parent's nodes._updates changes
+        if parent._nodes._updates == self._odd[0]:
+            return self._odd[1]
+        try:
+            is_odd = parent._nodes.displayed_and_visible.index(self) % 2 == 0
+            self._odd = (parent._nodes._updates, is_odd)
+            return is_odd
+        except ValueError:
+            return False
+
+    @property
+    def is_even(self) -> bool:
+        """Is this widget at an evenly numbered position within its siblings?"""
+        return not self.is_odd
+
     def __init__(
         self,
         *,
@@ -257,6 +456,14 @@ class DOMNode(MessagePump):
         self.styles: RenderStyles = RenderStyles(
             self, self._css_styles, self._inline_styles
         )
+        self._visual_style: VisualStyle | None = None
+        self._visual_paint_state = EMPTY_PAINT
+        self._visual_style_cache: dict[tuple, VisualStyle] = {}
+        self._first_of_type = (-1, False)
+        self._last_of_type = (-1, False)
+        self._first_child = (-1, False)
+        self._last_child = (-1, False)
+        self._odd = (-1, False)
         self._auto_refresh: float | None = None
         self._auto_refresh_timer: Timer | None = None
         self._css_types = self._selector_type_names()
@@ -1237,6 +1444,162 @@ class DOMNode(MessagePump):
             (background + color).rich_color if (background.a or color.a) else None,
             background.rich_color if background.a else None,
         )
+
+    def get_visual_style(
+        self, *component_classes: str, partial: bool = False
+    ) -> VisualStyle:
+        """Get the visual style for the widget, including any component styles.
+
+        Args:
+            component_classes: Optional component styles.
+            partial: Return a partial style (not combined with parent).
+
+        Returns:
+            A Visual style instance.
+
+        """
+        cache_key = (self._pseudo_classes_cache_key, component_classes, partial)
+        if (visual_style := self._visual_style_cache.get(cache_key, None)) is None:
+            background = Color(0, 0, 0, 0)
+            color = Color(255, 255, 255, 0)
+
+            style = Style()
+            opacity = 1.0
+
+            def iter_styles() -> Iterable[StylesBase]:
+                """Iterate over the styles from the DOM and additional components styles."""
+                if partial:
+                    node = self
+                else:
+                    for node in reversed(self.ancestors_with_self):
+                        yield node.styles
+                for name in component_classes:
+                    yield node.get_component_styles(name)
+
+            for styles in iter_styles():
+                has_rule = styles.has_rule
+                opacity *= styles.opacity
+                if has_rule("background"):
+                    text_background = background + styles.background.tint(
+                        styles.background_tint
+                    )
+                    if partial:
+                        background_tint = styles.background.tint(styles.background_tint)
+                        background = background.blend(
+                            background_tint, 1 - background_tint.a
+                        ).multiply_alpha(opacity)
+                    else:
+                        background += (
+                            styles.background.tint(styles.background_tint)
+                        ).multiply_alpha(opacity)
+                else:
+                    text_background = background
+                if has_rule("color"):
+                    color = styles.color.multiply_alpha(styles.text_opacity)
+                style += styles.text_style
+                if has_rule("auto_color") and styles.auto_color:
+                    color = text_background.get_contrast_text(color.a)
+
+            visual_style = replace(
+                VisualStyle.from_rich_style(style),
+                background=background,
+                foreground=color,
+            )
+            self._visual_style_cache[cache_key] = visual_style
+
+        return visual_style
+
+    def _get_style(self, style: VisualStyle | str) -> VisualStyle:
+        """A get_style method for use in Content.
+
+        Args:
+            style: A style prefixed with a dot.
+
+        Returns:
+            A visual style if one is fund, otherwise `None`.
+        """
+        if isinstance(style, VisualStyle):
+            return style
+
+        if style.startswith("."):
+            style_name = style[1:]
+            for node in self.walk_ancestors(with_self=True):
+                if not node._component_style_scope:
+                    break
+                try:
+                    return node.get_visual_style(style_name, partial=True)
+                except KeyError:
+                    continue
+            else:
+                raise KeyError(f"No matching component class found for '{style}'")
+            return NULL_STYLE
+        try:
+            return self._parse_visual_style(style)
+        except Exception:
+            return NULL_STYLE
+
+    def _parse_visual_style(self, style: str) -> VisualStyle:
+        """Parse inline styles through this node's presentation owner."""
+        return VisualStyle.parse(style)
+
+    @property
+    def link_style(self) -> Style:
+        """Style of links.
+
+        Returns:
+            Rich style.
+        """
+        styles = self.styles
+        _, background = self.background_colors
+        link_background = background + styles.link_background
+        link_color = link_background + (
+            link_background.get_contrast_text(styles.link_color.a)
+            if styles.auto_link_color
+            else styles.link_color
+        )
+        style = styles.link_style + Style.from_color(
+            link_color.rich_color,
+            link_background.rich_color if styles.link_background.a else None,
+        )
+        return style
+
+    @property
+    def link_style_hover(self) -> Style:
+        """Style of links underneath the mouse cursor.
+
+        Returns:
+            Rich Style.
+        """
+        styles = self.styles
+        _, background = self.background_colors
+        hover_background = background + styles.link_background_hover
+        hover_color = hover_background + (
+            hover_background.get_contrast_text(styles.link_color_hover.a)
+            if styles.auto_link_color_hover
+            else styles.link_color_hover
+        )
+        style = styles.link_style_hover + Style.from_color(
+            hover_color.rich_color,
+            hover_background.rich_color,
+        )
+        return style
+
+    @property
+    def visual_style(self) -> VisualStyle:
+        """The widget's current style."""
+        resolved = self._resolved_paint_state()
+        if (
+            self._visual_style is None
+            or not resolved.same_paint(self._visual_paint_state)
+        ):
+            background, color, style = resolved.background, resolved.foreground, resolved.text_style
+            self._visual_style = replace(
+                VisualStyle.from_rich_style(style),
+                background=background,
+                foreground=color,
+            )
+        self._visual_paint_state = resolved
+        return self._visual_style
 
     def check_consume_key(self, key: str, character: str | None) -> bool:
         """Check if the widget may consume the given key.

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from functools import partial
 from pathlib import Path, PurePath
 from types import MethodType
-from typing import AsyncIterator, Callable, Iterable, Optional
+from typing import TYPE_CHECKING, AsyncIterator, Callable, Iterable, Optional, Sequence
 from urllib.parse import unquote
 
 from markdown_it import MarkdownIt
@@ -32,6 +32,10 @@ from textual.style import Style
 from textual.widget import Widget
 from textual.widgets import Static, Tree
 from textual.widgets._label import Label
+
+if TYPE_CHECKING:
+    from textual.document._markdown import MarkdownDocument, MarkdownSourceBlock
+    from textual.document._paint import DocumentPaint
 
 TableOfContentsType: TypeAlias = "list[tuple[int, str, str | None]]"
 """Information about the table of contents of a markdown document.
@@ -129,8 +133,11 @@ class MarkdownLocation:
     anchor: str = ""
 
     def resolve(self, current: MarkdownLocation) -> MarkdownLocation:
-        path = (current.path if self.path == Path(".") and self.anchor
-                else current.path.parent / self.path)
+        path = (
+            current.path
+            if self.path == Path(".") and self.anchor
+            else current.path.parent / self.path
+        )
         return MarkdownLocation(path.absolute(), self.anchor)
 
     async def load(self, document: Markdown) -> None:
@@ -238,6 +245,7 @@ class MarkdownBlock(Static):
         token: Token,
         source_range: tuple[int, int] | None = None,
         *args,
+        source_block: MarkdownSourceBlock | None = None,
         **kwargs,
     ) -> None:
         self._markdown_ref = weakref.ref(markdown)
@@ -246,8 +254,12 @@ class MarkdownBlock(Static):
         self._token: Token = token
         self._blocks: list[MarkdownBlock] = []
         self._inline_token: Token | None = None
-        self.source_range: tuple[int, int] = source_range or (
-            (token.map[0], token.map[1]) if token.map is not None else (0, 0)
+        self._source_block = source_block
+        self.source_range: tuple[int, int] = (
+            source_block.source_range if source_block is not None else
+            source_range or (
+                (token.map[0], token.map[1]) if token.map is not None else (0, 0)
+            )
         )
 
         super().__init__(
@@ -257,6 +269,57 @@ class MarkdownBlock(Static):
             expand=True,
             **kwargs,
         )
+
+    def _is_block_type(self, declaration: type[MarkdownBlock]) -> bool:
+        return isinstance(self, declaration)
+
+    @property
+    def source_block(self) -> MarkdownSourceBlock | None:
+        """The actual acquired member, while this scene still owns its source.
+
+        A normal update or append revokes the detached-source relation even
+        when text or line ranges happen to agree. No descendant or placement
+        projection can recreate it.
+        """
+        source = self._source_block
+        return (
+            source if source is not None
+            and self._markdown.is_current_document(source.document) else None
+        )
+
+    @classmethod
+    async def from_source(
+        cls, markdown: Markdown, source: MarkdownSourceBlock
+    ) -> MarkdownBlock:
+        """Construct genuine controls from this original acquired grammar member.
+
+        Custom constructors receive their original grammar arguments and must
+        accept the source binding, or declare their own scene factory. Native
+        composition and callbacks still run on the real scene widgets.
+        """
+        if source.declaration is not cls:
+            raise TypeError("Scene declaration differs from its acquired grammar member")
+        await asyncio.sleep(0)
+        block = cls(
+            markdown, source._token, *source._arguments, source_block=source
+        )
+        if source._inline_token is not None:
+            block.build_from_token(source._inline_token)
+        block._blocks = [
+            await child.declaration.from_source(markdown, child)
+            for child in source._blocks
+        ]
+        if source.id is not None:
+            block.id = source.id
+        return block
+
+    def heading_id(self) -> str:
+        return self.make_heading_id(self._content, id(self))
+
+    @staticmethod
+    def make_heading_id(content: Content, identity: object) -> str:
+        """Original slug plus the actual source/scene lifetime identity."""
+        return f"heading-{slug_for_tcss_id(content.plain)}-{identity}"
 
     @property
     def _markdown(self) -> Markdown:
@@ -272,18 +335,48 @@ class MarkdownBlock(Static):
     @property
     def source(self) -> str | None:
         """The source of this block if known, otherwise `None`."""
+        source = self.source_block
+        if source is not None:
+            return source.source_text()
         if self.source_range is None:
             return None
-        start, end = self.source_range
-        return "".join(self._markdown.source.splitlines(keepends=True)[start:end])
+        return self.source_text(self._markdown.source, self.source_range)
+
+    @staticmethod
+    def source_text(source: str, source_range: tuple[int, int]) -> str:
+        start, end = source_range
+        return "".join(source.splitlines(keepends=True)[start:end])
 
     def _copy_context(self, block: MarkdownBlock) -> None:
         """Copy the context from another block."""
         self._token = block._token
+        self._source_block = block._source_block
 
     def compose(self) -> ComposeResult:
         yield from self._blocks
         self._blocks.clear()
+
+    @classmethod
+    def document_node(cls, block, *, compose=compose):
+        """Use native content/composition; custom behavior supplies this producer.
+
+        The acquired source node is a different lifetime from a scene widget.
+        Custom constructors, renderers, measurements and disclosure must declare
+        their own data-only preparation rather than run on a counterfeit widget.
+        """
+        cls._require_native_document()
+        cls._require_document_methods({"compose": compose})
+        return cls.native_document_node(block)
+
+    @classmethod
+    def native_document_node(cls, block):
+        """Shared native composition for explicit prepared-content declarations."""
+        return block.node(children=[child.prepare() for child in block._blocks])
+
+    @classmethod
+    def document_declarations(cls):
+        """Actual style declarations constructed by this document producer."""
+        return (cls,)
 
     def set_content(self, content: Content) -> None:
         self._content = content
@@ -295,7 +388,7 @@ class MarkdownBlock(Static):
 
     async def action_link(self, href: str) -> None:
         """Called on link click."""
-        self.post_message(Markdown.LinkClicked(self._markdown, href))
+        self._markdown.action_link(href)
 
     def build_from_token(self, token: Token) -> None:
         """Build inline block content from its source token.
@@ -304,7 +397,13 @@ class MarkdownBlock(Static):
             token: The token from which this block is built.
         """
         self._inline_token = token
-        content = self._markdown._get_token_content(token, block=self)
+        source = self._source_block
+        if source is not None and token is not source._inline_token:
+            self._source_block = source = None
+        content = (
+            self._markdown._get_token_content(token, block=self)
+            if source is None else source._content
+        )
         self.set_content(content)
 
     @staticmethod
@@ -392,11 +491,61 @@ class MarkdownBlock(Static):
         content = Content("".join(tokens), spans=spans)
         return content
 
+    @classmethod
+    def _require_native_document(
+        cls,
+        *,
+        constructor=__init__,
+        render=Static.render,
+        width=Widget.get_content_width,
+        height=Widget.get_content_height,
+        box=Widget._get_box_model,
+        pre_layout=Widget.pre_layout,
+        process_layout=Widget.process_layout,
+        selection=Widget.get_selection,
+        build_from_token=build_from_token,
+        set_content=set_content,
+        content=_token_to_content,
+        visual=Static.visual,
+        container=Widget.is_container,
+        rendering=Widget._render,
+        empty=Widget.is_empty,
+        pseudo_classes=Widget.get_pseudo_classes,
+    ):
+        cls._require_document_methods(
+            {
+                "__init__": constructor,
+                "render": render,
+                "get_content_width": width,
+                "get_content_height": height,
+                "_get_box_model": box,
+                "pre_layout": pre_layout,
+                "process_layout": process_layout,
+                "get_selection": selection,
+                "build_from_token": build_from_token,
+                "set_content": set_content,
+                "_token_to_content": content.__func__,
+                "visual": visual,
+                "is_container": container,
+                "_render": rendering,
+                "is_empty": empty,
+                "get_pseudo_classes": pseudo_classes,
+            }
+        )
+
 
 class MarkdownHeader(MarkdownBlock):
     """Base class for a Markdown header."""
 
     LEVEL = 0
+
+    @classmethod
+    def make_heading_entry(cls, content: Content, block_id: str | None):
+        """Heading wording belongs to the block's actual acquired Content."""
+        return cls.LEVEL, content.plain, block_id
+
+    def table_of_contents_entry(self):
+        return self.make_heading_entry(self._content, self.id)
 
     DEFAULT_CSS = """
     MarkdownHeader {
@@ -561,6 +710,15 @@ class MarkdownList(MarkdownBlock):
     }
     """
 
+    @staticmethod
+    def compose_rows(rows, make_bullet, make_column, make_row):
+        for symbol, blocks in rows:
+            yield make_row(make_bullet(symbol), make_column(blocks))
+
+    @classmethod
+    def document_declarations(cls):
+        return (cls, Horizontal, Vertical, MarkdownBullet)
+
 
 class MarkdownBulletList(MarkdownList):
     """A Bullet list Markdown block."""
@@ -582,13 +740,26 @@ class MarkdownBulletList(MarkdownList):
     }
     """
 
+    @staticmethod
+    def list_rows(blocks):
+        for block in blocks:
+            if block._is_block_type(MarkdownListItem):
+                yield block.bullet, block._blocks
+
     def compose(self) -> ComposeResult:
-        for block in self._blocks:
-            if isinstance(block, MarkdownListItem):
-                bullet = MarkdownBullet()
-                bullet.symbol = block.bullet
-                yield Horizontal(bullet, Vertical(*block._blocks))
+        yield from self.compose_rows(
+            self.list_rows(self._blocks),
+            MarkdownBullet.from_symbol,
+            lambda blocks: Vertical(*blocks),
+            Horizontal,
+        )
         self._blocks.clear()
+
+    @classmethod
+    def document_node(cls, block, *, _compose=compose):
+        cls._require_native_document()
+        cls._require_document_methods({"compose": _compose})
+        return block.list_node(cls.list_rows(block._blocks))
 
 
 class MarkdownOrderedList(MarkdownList):
@@ -611,26 +782,38 @@ class MarkdownOrderedList(MarkdownList):
     }
     """
 
-    def compose(self) -> ComposeResult:
+    @staticmethod
+    def list_rows(blocks):
         suffix = ". "
         start = 1
-        if self._blocks and isinstance(self._blocks[0], MarkdownOrderedListItem):
+        if blocks and blocks[0]._is_block_type(MarkdownOrderedListItem):
             try:
-                start = int(self._blocks[0].bullet)
+                start = int(blocks[0].bullet)
             except ValueError:
                 pass
         symbol_size = max(
             len(f"{number}{suffix}")
-            for number, block in enumerate(self._blocks, start)
-            if isinstance(block, MarkdownListItem)
+            for number, block in enumerate(blocks, start)
+            if block._is_block_type(MarkdownListItem)
         )
-        for number, block in enumerate(self._blocks, start):
-            if isinstance(block, MarkdownListItem):
-                bullet = MarkdownBullet()
-                bullet.symbol = f"{number}{suffix}".rjust(symbol_size + 1)
-                yield Horizontal(bullet, Vertical(*block._blocks))
+        for number, block in enumerate(blocks, start):
+            if block._is_block_type(MarkdownListItem):
+                yield f"{number}{suffix}".rjust(symbol_size + 1), block._blocks
 
+    def compose(self) -> ComposeResult:
+        yield from self.compose_rows(
+            self.list_rows(self._blocks),
+            MarkdownBullet.from_symbol,
+            lambda blocks: Vertical(*blocks),
+            Horizontal,
+        )
         self._blocks.clear()
+
+    @classmethod
+    def document_node(cls, block, *, _compose=compose):
+        cls._require_native_document()
+        cls._require_document_methods({"compose": _compose})
+        return block.list_node(cls.list_rows(block._blocks))
 
 
 class MarkdownTableCellContents(Static):
@@ -641,7 +824,7 @@ class MarkdownTableCellContents(Static):
 
     async def action_link(self, href: str) -> None:
         """Pass a link action on to the MarkdownTable parent."""
-        self.post_message(Markdown.LinkClicked(self.query_ancestor(Markdown), href))
+        self.query_ancestor(Markdown).action_link(href)
 
 
 class MarkdownTableContent(Widget):
@@ -689,25 +872,38 @@ class MarkdownTableContent(Widget):
         self.last_row = 0
 
     def pre_layout(self, layout: Layout) -> None:
+        self.prepare_grid(
+            layout, self.query_ancestor(MarkdownTable).styles.is_auto_width
+        )
+
+    @staticmethod
+    def cells(headers, rows):
+        for header in headers:
+            yield header, "header", None, header, 0
+        for row_index, row in enumerate(rows, 1):
+            for cell_index, cell in enumerate(row, 1):
+                yield (
+                    cell,
+                    f"row{row_index} cell",
+                    f"cell{row_index}.{cell_index}",
+                    cell.plain,
+                    row_index,
+                )
+
+    @staticmethod
+    def prepare_grid(layout: Layout, auto_width: bool) -> None:
         assert isinstance(layout, GridLayout)
         layout.auto_minimum = True
-        layout.expand = not self.query_ancestor(MarkdownTable).styles.is_auto_width
+        layout.expand = not auto_width
         layout.shrink = True
         layout.stretch_height = True
 
     def compose(self) -> ComposeResult:
-        for header in self.headers:
-            yield MarkdownTableCellContents(header, classes="header").with_tooltip(
-                header
-            )
-        for row_index, row in enumerate(self.rows, 1):
-            for cell_index, cell in enumerate(row, 1):
-                yield MarkdownTableCellContents(
-                    cell,
-                    classes=f"row{row_index} cell",
-                    name=f"cell{row_index}.{cell_index}",
-                ).with_tooltip(cell.plain)
-            self.last_row = row_index
+        for content, classes, name, tooltip, row in self.cells(self.headers, self.rows):
+            yield MarkdownTableCellContents(
+                content, classes=classes, name=name
+            ).with_tooltip(tooltip)
+            self.last_row = row
 
     def _update_content(self, headers: list[Content], rows: list[list[Content]]):
         """Update cell contents."""
@@ -770,6 +966,10 @@ class MarkdownTable(MarkdownBlock):
         yield MarkdownTableContent(headers, rows)
 
     def _get_headers_and_rows(self) -> tuple[list[Content], list[list[Content]]]:
+        return self.table_contents(self)
+
+    @staticmethod
+    def table_contents(source) -> tuple[list[Content], list[list[Content]]]:
         """Get list of headers, and list of rows.
 
         Returns:
@@ -784,16 +984,30 @@ class MarkdownTable(MarkdownBlock):
 
         headers: list[Content] = []
         rows: list[list[Content]] = []
-        for block in flatten(self):
-            if isinstance(block, MarkdownTH):
+        for block in flatten(source):
+            if block._is_block_type(MarkdownTH):
                 headers.append(block._content)
-            elif isinstance(block, MarkdownTR):
+            elif block._is_block_type(MarkdownTR):
                 rows.append([])
-            elif isinstance(block, MarkdownTD):
+            elif block._is_block_type(MarkdownTD):
                 rows[-1].append(block._content)
         if rows and not rows[-1]:
             rows.pop()
         return headers, rows
+
+    @classmethod
+    def document_node(
+        cls, block, *, _compose=compose, _contents=table_contents, constructor=__init__
+    ):
+        cls._require_native_document(constructor=constructor)
+        cls._require_document_methods(
+            {"compose": _compose, "table_contents": _contents.__func__}
+        )
+        return block.table_node(*cls.table_contents(block))
+
+    @classmethod
+    def document_declarations(cls):
+        return (cls, MarkdownTableContent, MarkdownTableCellContents)
 
     async def _update_from_block(self, block: MarkdownBlock) -> None:
         """Special case to update a Markdown table.
@@ -853,8 +1067,18 @@ class MarkdownBullet(Widget):
     symbol = reactive("\u25cf")
     """The symbol for the bullet."""
 
+    @classmethod
+    def from_symbol(cls, symbol: str):
+        bullet = cls()
+        bullet.symbol = symbol
+        return bullet
+
     def get_selection(self, _selection) -> tuple[str, str] | None:
-        return self.symbol, " "
+        return self.selection_text(self.symbol, _selection)
+
+    @staticmethod
+    def selection_text(symbol, selection):
+        return str(symbol), " "
 
     def render(self) -> Content:
         return Content(self.symbol)
@@ -876,9 +1100,20 @@ class MarkdownListItem(MarkdownBlock):
     }
     """
 
-    def __init__(self, markdown: Markdown, token: Token, bullet: str) -> None:
+    def __init__(
+        self, markdown: Markdown, token: Token, bullet: str, *,
+        source_block: MarkdownSourceBlock | None = None,
+    ) -> None:
         self.bullet = bullet
-        super().__init__(markdown, token)
+        super().__init__(markdown, token, source_block=source_block)
+
+    @classmethod
+    def document_node(
+        cls, block, *, constructor=__init__, compose=MarkdownBlock.compose
+    ):
+        cls._require_native_document(constructor=constructor)
+        cls._require_document_methods({"compose": compose})
+        return block.node(children=[child.prepare() for child in block._blocks])
 
 
 class MarkdownOrderedListItem(MarkdownListItem):
@@ -921,8 +1156,11 @@ class MarkdownFence(MarkdownBlock):
     }
     """
 
-    def __init__(self, markdown: Markdown, token: Token, code: str) -> None:
-        super().__init__(markdown, token)
+    def __init__(
+        self, markdown: Markdown, token: Token, code: str, *,
+        source_block: MarkdownSourceBlock | None = None,
+    ) -> None:
+        super().__init__(markdown, token, source_block=source_block)
         self.code = code
         self.lexer = token.info
         self._highlighted_key: tuple[str, str, bool, bool] | None = None
@@ -938,15 +1176,28 @@ class MarkdownFence(MarkdownBlock):
         return super().notify_style_update()
 
     def _refresh_highlight(self) -> None:
-        key = (self.code, self.lexer, self.app.native_ansi_color, self.app.current_theme.dark)
+        key = (
+            self.code,
+            self.lexer,
+            self.app.native_ansi_color,
+            self.app.current_theme.dark,
+        )
         highlighter = self.highlight
-        native = isinstance(highlighter, MethodType) and highlighter.__func__ is MarkdownFence.highlight.__func__
+        native = (
+            isinstance(highlighter, MethodType)
+            and highlighter.__func__ is MarkdownFence.highlight.__func__
+        )
         if native and self._highlighted_key == key:
             return
-        prepared = self._markdown._get_prepared_fence(*key) if native else None
+        source = self._source_block
+        prepared = (
+            source.highlight(key[2], key[3]) if source is not None else
+            self._markdown._get_prepared_fence(*key) if native else None
+        )
         self._highlighted_code = (
-            prepared if prepared is not None else
-            self.highlight(self.code, self.lexer, ansi=key[2], dark=key[3])
+            prepared
+            if prepared is not None
+            else self.highlight(self.code, self.lexer, ansi=key[2], dark=key[3])
         )
         self._highlighted_key = key
 
@@ -989,11 +1240,34 @@ class MarkdownFence(MarkdownBlock):
         with suppress(NoMatches):
             label = self.query_one("#code-content", Label)
             if label.content is not content:
-                layout = not (isinstance(label.content, Content) and label.content.plain == content.plain)
+                layout = not (
+                    isinstance(label.content, Content)
+                    and label.content.plain == content.plain
+                )
                 label.update(content, layout=layout)
 
     def compose(self) -> ComposeResult:
-        yield Label(self._highlighted_code, id="code-content", expand=True)
+        yield self.code_label(self._highlighted_code, Label)
+
+    @staticmethod
+    def code_label(content, create):
+        return create(content, id="code-content", expand=True)
+
+    @classmethod
+    def document_node(
+        cls, block, *, _compose=compose, constructor=__init__, content=set_content
+    ):
+        cls._require_native_document(constructor=constructor, set_content=content)
+        cls._require_document_methods({"compose": _compose})
+        return cls.native_document_node(block)
+
+    @classmethod
+    def native_document_node(cls, block):
+        return block.fence_node()
+
+    @classmethod
+    def document_declarations(cls):
+        return (cls, Label)
 
 
 NUMERALS = " ⅠⅡⅢⅣⅤⅥ"
@@ -1092,17 +1366,29 @@ class Markdown(Widget):
         self._open_links = open_links
         self._last_parsed_line = 0
         self._theme = ""
+        self._scene_document: MarkdownDocument | None = None
 
     @property
     def table_of_contents(self) -> TableOfContentsType:
         """The document's table of contents."""
         if self._table_of_contents is None:
-            self._table_of_contents = [
-                (header.LEVEL, header._content.plain, header.id)
-                for header in self.children
-                if isinstance(header, MarkdownHeader)
-            ]
+            self._table_of_contents = list(self.heading_entries(self.children))
         return self._table_of_contents
+
+    @staticmethod
+    def heading_entries(blocks):
+        """Only original top-level headings participate in native navigation."""
+        for block in blocks:
+            if block._is_block_type(MarkdownHeader):
+                yield block.table_of_contents_entry()
+
+    @staticmethod
+    def anchor_id_for(table_of_contents, anchor: str) -> str | None:
+        unique = TrackedSlugs()
+        for _, title, header_id in table_of_contents:
+            if unique.slug(title) == anchor:
+                return header_id
+        return None
 
     class TableOfContentsUpdated(Message):
         """The table of contents was updated."""
@@ -1253,7 +1539,9 @@ class Markdown(Widget):
             self.app.open_url(event.href)
 
     @staticmethod
-    def sanitize_location(location: str | PurePath | MarkdownLocation) -> MarkdownLocation:
+    def sanitize_location(
+        location: str | PurePath | MarkdownLocation,
+    ) -> MarkdownLocation:
         """Given a location, break out the path and any anchor.
 
         Args:
@@ -1289,11 +1577,10 @@ class Markdown(Widget):
         """
         if not self._table_of_contents or not isinstance(self.parent, Widget):
             return False
-        unique = TrackedSlugs()
-        for _, title, header_id in self._table_of_contents:
-            if unique.slug(title) == anchor:
-                self.query_one(f"#{header_id}").scroll_visible(top=True)
-                return True
+        header_id = self.anchor_id_for(self._table_of_contents, anchor)
+        if header_id is not None:
+            self.query_one(f"#{header_id}").scroll_visible(top=True)
+            return True
         return False
 
     async def load(self, path: Path | MarkdownLocation) -> None:
@@ -1319,6 +1606,88 @@ class Markdown(Widget):
         """
         return block._token_to_content(token)
 
+    def acquire_document_content(self):
+        """Acquire a data-only prepared inline supplier, not a live widget hook."""
+        if type(self)._get_token_content is not Markdown._get_token_content:
+            raise TypeError(
+                f"{type(self).__name__} must supply acquire_document_content"
+            )
+        return None
+
+    def acquire_document_fences(self):
+        """Acquire a data-only prepared fence supplier, or native highlighting."""
+        return None
+
+    def acquire_document_unhandled(self):
+        """Data-only source extension for a custom parsed token grammar."""
+        if type(self).unhandled_token is not Markdown.unhandled_token:
+            raise TypeError(
+                f"{type(self).__name__} must supply acquire_document_unhandled"
+            )
+        return None
+
+    def acquire_document_blocks(self):
+        """The original declaration catalog; dynamic factories supply their snapshot."""
+        if type(self).get_block_class is not Markdown.get_block_class:
+            raise TypeError(
+                f"{type(self).__name__} must supply acquire_document_blocks"
+            )
+        return self.BLOCKS.copy()
+
+    def get_document_process_layout(self):
+        """Data-only layout processing; custom scene hooks must supply it."""
+        if type(self).process_layout is not Widget.process_layout:
+            raise TypeError(
+                f"{type(self).__name__} must supply get_document_process_layout"
+            )
+        return None
+
+    @classmethod
+    def document_root(
+        cls,
+        document,
+        children,
+        *,
+        render=Widget.render,
+        width=Widget.get_content_width,
+        height=Widget.get_content_height,
+        pre_layout=Widget.pre_layout,
+        empty=Widget.is_empty,
+        pseudo_classes=Widget.get_pseudo_classes,
+    ):
+        """Native immutable root; custom scene semantics supply this producer."""
+        cls._require_document_methods(
+            {
+                "render": render,
+                "get_content_width": width,
+                "get_content_height": height,
+                "pre_layout": pre_layout,
+                "is_empty": empty,
+                "get_pseudo_classes": pseudo_classes,
+            }
+        )
+        return cls.native_document_root(document, children)
+
+    @classmethod
+    def native_document_root(cls, document, children):
+        """Shared intrinsic block layout, independent of scene BodyMeasurement."""
+        return document.root_node(children)
+
+    def acquire_document(self, source: str, tokens: Sequence[Token]):
+        """Freeze source, declarations and effective presentation for workers.
+
+        Tokens belong to the actual parser/link resolver. This method never
+        reparses the source or reads a current file to replace their wording.
+        The result prepares paint/extents without mounting any descendants.
+        """
+        from textual.document._markdown import MarkdownDocument
+
+        return MarkdownDocument.acquire(self, source, tokens)
+
+    def action_link(self, href: str) -> None:
+        """Dispatch a link from mounted blocks or original detached placements."""
+        self.post_message(Markdown.LinkClicked(self, href))
+
     def unhandled_token(self, token: Token) -> MarkdownBlock | None:
         """Process an unhandled token.
 
@@ -1330,104 +1699,111 @@ class Markdown(Widget):
         """
         return None
 
-    async def _parse_markdown(self, tokens: Iterable[Token]) -> AsyncIterator[MarkdownBlock]:
-        """Create a stream of MarkdownBlock widgets from markdown.
+    @staticmethod
+    def _build_blocks(tokens: Iterable[Token], create, unhandled, bullets):
+        """The one native token grammar for scene and detached resources.
 
-        Args:
-            tokens: List of tokens.
-
-        Yields:
-            Widgets for mounting.
+        Factory and unknown-token behavior are acquired by their actual owner.
+        None marks token progress; scene construction retains cooperative turns.
         """
-
         stack: list[MarkdownBlock] = []
         stack_append = stack.append
 
-        get_block_class = self.get_block_class
-
         for token in tokens:
-            # One root may own a whole nested list or table. Resume other pumps
-            # between token-owned construction, not after a fixed root count.
-            await asyncio.sleep(0)
+            emitted = None
             token_type = token.type
             if token_type == "heading_open":
-                stack_append(get_block_class(token.tag)(self, token))
+                stack_append(create(token.tag, token))
             elif token_type == "hr":
-                yield get_block_class("hr")(self, token)
+                emitted = create("hr", token)
             elif token_type == "paragraph_open":
-                stack_append(get_block_class("paragraph_open")(self, token))
+                stack_append(create("paragraph_open", token))
             elif token_type == "blockquote_open":
-                stack_append(get_block_class("blockquote_open")(self, token))
+                stack_append(create("blockquote_open", token))
             elif token_type == "bullet_list_open":
-                stack_append(get_block_class("bullet_list_open")(self, token))
+                stack_append(create("bullet_list_open", token))
             elif token_type == "ordered_list_open":
-                stack_append(get_block_class("ordered_list_open")(self, token))
+                stack_append(create("ordered_list_open", token))
             elif token_type == "list_item_open":
                 if token.info:
-                    stack_append(
-                        get_block_class("list_item_ordered_open")(
-                            self, token, token.info
-                        )
-                    )
+                    stack_append(create("list_item_ordered_open", token, token.info))
                 else:
                     item_count = sum(
                         1
                         for block in stack
-                        if isinstance(block, MarkdownUnorderedListItem)
+                        if block._is_block_type(MarkdownUnorderedListItem)
                     )
                     stack_append(
-                        get_block_class("list_item_unordered_open")(
-                            self,
+                        create(
+                            "list_item_unordered_open",
                             token,
-                            self.BULLETS[item_count % len(self.BULLETS)],
+                            bullets[item_count % len(bullets)],
                         )
                     )
             elif token_type == "table_open":
-                stack_append(get_block_class("table_open")(self, token))
+                stack_append(create("table_open", token))
             elif token_type == "tbody_open":
-                stack_append(get_block_class("tbody_open")(self, token))
+                stack_append(create("tbody_open", token))
             elif token_type == "thead_open":
-                stack_append(get_block_class("thead_open")(self, token))
+                stack_append(create("thead_open", token))
             elif token_type == "tr_open":
-                stack_append(get_block_class("tr_open")(self, token))
+                stack_append(create("tr_open", token))
             elif token_type == "th_open":
-                stack_append(get_block_class("th_open")(self, token))
+                stack_append(create("th_open", token))
             elif token_type == "td_open":
-                stack_append(get_block_class("td_open")(self, token))
+                stack_append(create("td_open", token))
             elif token_type.endswith("_close"):
                 block = stack.pop()
                 if token.type == "heading_close":
-                    block.id = (
-                        f"heading-{slug_for_tcss_id(block._content.plain)}-{id(block)}"
-                    )
+                    block.id = block.heading_id()
                 if stack:
                     stack[-1]._blocks.append(block)
                 else:
-                    yield block
+                    emitted = block
             elif token_type == "inline":
                 stack[-1].build_from_token(token)
             elif token_type in ("fence", "code_block"):
-                fence_class = get_block_class(token_type)
-                assert issubclass(fence_class, MarkdownFence)
-                fence = fence_class(self, token, token.content.rstrip())
+                fence = create(token_type, token, token.content.rstrip())
+                assert fence._is_block_type(MarkdownFence)
                 if stack:
                     stack[-1]._blocks.append(fence)
                 else:
-                    yield fence
+                    emitted = fence
             else:
-                external = self.unhandled_token(token)
+                external = unhandled(token)
                 if external is not None:
                     if stack:
                         stack[-1]._blocks.append(external)
                     else:
-                        yield external
+                        emitted = external
+            yield emitted
+
+    async def _parse_markdown(
+        self, tokens: Iterable[Token]
+    ) -> AsyncIterator[MarkdownBlock]:
+        def create(name, token, *args):
+            return self.get_block_class(name)(self, token, *args)
+
+        steps = iter(
+            self._build_blocks(tokens, create, self.unhandled_token, self.BULLETS)
+        )
+        while True:
+            await asyncio.sleep(0)
+            try:
+                block = next(steps)
+            except StopIteration:
+                break
+            if block is not None:
+                yield block
 
     async def _parse_tokens(
         self, parser: MarkdownIt, markdown: str, *, use_thread: bool
     ) -> list[Token] | None:
         """Parse before constructing widgets; None discards a superseded request."""
         if use_thread:
-            return await asyncio.get_running_loop().run_in_executor(None, parser.parse, markdown)
+            return await asyncio.get_running_loop().run_in_executor(
+                None, parser.parse, markdown
+            )
         return parser.parse(markdown)
 
     def _get_prepared_fence(
@@ -1435,6 +1811,100 @@ class Markdown(Widget):
     ) -> Content | None:
         """Optional data-only highlighting prepared by the document parser."""
         return None
+
+    async def _replace_blocks(self, blocks: AsyncIterator[MarkdownBlock]) -> None:
+        """Commit original completed roots through the one native mount owner."""
+        previous = self.query("MarkdownBlock")
+        removed = False
+        async for block in blocks:
+            if removed:
+                await self.mount(block)
+            else:
+                async with self.batch():
+                    await previous.remove()
+                    await self.mount(block)
+                removed = True
+        if not removed:
+            await previous.remove()
+
+    def _complete_update(self, tokens: Sequence[Token]) -> None:
+        # append() replaces the final root, not merely the final physical line.
+        self._table_of_contents = None
+        self._last_parsed_line = next(
+            (
+                token.map[0]
+                for token in reversed(tokens)
+                if token.map is not None and token.level == 0
+            ),
+            0,
+        )
+        self.post_message(
+            Markdown.TableOfContentsUpdated(self, self.table_of_contents).set_sender(self)
+        )
+
+    def materialize_document(self, paint: DocumentPaint) -> AwaitComplete:
+        """Rebuild interaction controls from the actual acquired grammar roots.
+
+        Paint is the original completed grammar cohort, not a request to parse
+        equal source again. Its members and resolved suppliers bind directly
+        to the real controls; current scene CSS still owns their placement.
+        Ordinary update/append retain their parser, extension and streaming
+        contracts and invalidate this binding when they accept a new source.
+        """
+        document = paint.document
+        if document.declaration is not type(self):
+            raise TypeError("Acquired Markdown belongs to a different scene declaration")
+        if any(not document.same_source(root.document) for root in paint.roots):
+            raise ValueError("Acquired roots belong to a different Markdown source")
+        previous = self._scene_document
+        self._scene_document = document
+        if not self.is_current_document(document):
+            self._scene_document = previous
+            raise ValueError("Acquired Markdown is no longer the owner's current source")
+        self._theme = self.app.theme
+        self._markdown = document.source
+        self._table_of_contents = None
+
+        async def blocks():
+            for source in paint.roots:
+                block = await source.declaration.from_source(self, source)
+                if not self.is_current_document(document):
+                    return
+                yield block
+
+        async def materialize():
+            async with self.lock:
+                if not self.is_current_document(document):
+                    return
+                await self._replace_blocks(blocks())
+                if not self.is_current_document(document):
+                    return
+                self._complete_update(document.tokens)
+
+        return AwaitComplete(materialize())
+
+    def is_current_document(self, document: MarkdownDocument) -> bool:
+        """Admit source lineage through the Markdown owner's current resource.
+
+        Native update/append revoke scene custody independently of a subclass
+        source publication. Both facts must agree; a current acquired document
+        cannot re-admit controls consumed by an older native source request.
+        """
+        scene = self._scene_document
+        current = self.get_current_document()
+        return (
+            scene is not None and scene.same_source(document)
+            and current is not None
+            and (current is scene or current.same_source(document))
+        )
+
+    def get_current_document(self) -> MarkdownDocument | None:
+        """The current source resource, independent of style/width inputs.
+
+        Acquired-source subclasses supply their original current document here
+        without duplicating native scene-admission or update/append decisions.
+        """
+        return self._scene_document
 
     def update(self, markdown: str) -> AwaitComplete:
         """Update the document with new Markdown.
@@ -1452,8 +1922,8 @@ class Markdown(Widget):
             else self._parser_factory()
         )
 
-        markdown_block = self.query("MarkdownBlock")
         self._markdown = markdown
+        self._scene_document = None
         self._table_of_contents = None
 
         async def await_update() -> None:
@@ -1465,33 +1935,9 @@ class Markdown(Widget):
                 if tokens is None:
                     return
 
-                # Replace existing blocks with the first completed root only.
-                removed: bool = False
+                await self._replace_blocks(self._parse_markdown(tokens))
 
-                async for block in self._parse_markdown(tokens):
-                    if removed:
-                        await self.mount(block)
-                    else:
-                        async with self.batch():
-                            await markdown_block.remove()
-                            await self.mount(block)
-                        removed = True
-                if not removed:
-                    await markdown_block.remove()
-
-            # append() replaces the final block, not merely the final physical
-            # line. Keep its opening token so partial fences/paragraphs survive
-            # an initial update followed by streamed chunks.
-            self._last_parsed_line = next(
-                (token.map[0] for token in reversed(tokens)
-                 if token.map is not None and token.level == 0),
-                0,
-            )
-            self.post_message(
-                Markdown.TableOfContentsUpdated(
-                    self, self.table_of_contents
-                ).set_sender(self)
-            )
+            self._complete_update(tokens)
 
         return AwaitComplete(await_update())
 
@@ -1511,6 +1957,7 @@ class Markdown(Widget):
         )
 
         self._markdown = self.source + markdown
+        self._scene_document = None
         updated_source = "".join(
             self._markdown.splitlines(keepends=True)[self._last_parsed_line :]
         )
@@ -1518,7 +1965,9 @@ class Markdown(Widget):
         async def await_append() -> None:
             """Append new markdown widgets."""
             async with self.lock:
-                tokens = await self._parse_tokens(parser, updated_source, use_thread=False)
+                tokens = await self._parse_tokens(
+                    parser, updated_source, use_thread=False
+                )
                 if tokens is None:
                     return
                 existing_blocks = [

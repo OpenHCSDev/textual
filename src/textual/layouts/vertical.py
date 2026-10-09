@@ -25,7 +25,7 @@ class VerticalLayout(Layout):
         parent.pre_layout(self)
         placements: list[WidgetPlacement] = []
         add_placement = placements.append
-        viewport = parent.app.viewport_size
+        viewport = parent.layout_viewport
 
         child_styles = [child.styles for child in children]
         box_margins: list[Spacing] = [
@@ -56,7 +56,7 @@ class VerticalLayout(Layout):
             [styles.height for styles in child_styles],
             children,
             size,
-            parent.app.size,
+            parent.layout_screen_size,
             resolve_margin,
             resolve_dimension="height",
             greedy=greedy,
@@ -124,3 +124,9 @@ class VerticalLayout(Layout):
                 y = next_y + margin
 
         return placements
+
+    _document_methods = (
+        arrange, Layout.get_content_width, Layout.get_content_height,
+        object.__init__, Layout.clear_cache, Layout.render_keyline,
+        Layout._document_inputs,
+    )

@@ -19,20 +19,30 @@ class GridLayout(Layout):
 
     name = "grid"
 
-    def __init__(self) -> None:
-        self.min_column_width: int | None = None
+    def __init__(
+        self,
+        *,
+        min_column_width: int | None = None,
+        max_column_width: int | None = None,
+        stretch_height: bool = False,
+        regular: bool = False,
+        expand: bool = False,
+        shrink: bool = False,
+        auto_minimum: bool = False,
+    ) -> None:
+        self.min_column_width: int | None = min_column_width
         """Maintain a minimum column width, or `None` for no minimum."""
-        self.max_column_width: int | None = None
+        self.max_column_width: int | None = max_column_width
         """Maintain a maximum column width, or `None` for no maximum."""
-        self.stretch_height: bool = False
+        self.stretch_height: bool = stretch_height
         """Stretch the height of cells to be equal in each row."""
-        self.regular: bool = False
+        self.regular: bool = regular
         """Grid should be regular (no remainder in last row)."""
-        self.expand: bool = False
+        self.expand: bool = expand
         """Expand the grid to fit the container if it is smaller."""
-        self.shrink: bool = False
+        self.shrink: bool = shrink
         """Shrink the grid to fit the container if it is larger."""
-        self.auto_minimum: bool = False
+        self.auto_minimum: bool = auto_minimum
         """If self.shrink is `True`, auto-detect and limit the width."""
         self._grid_size: tuple[int, int] | None = None
         """Grid size after last arrange call."""
@@ -87,7 +97,7 @@ class GridLayout(Layout):
 
         table_size_rows = styles.grid_size_rows
 
-        viewport = parent.app.viewport_size
+        viewport = parent.layout_viewport
         keyline_style, _keyline_color = styles.keyline
         offset = (0, 0)
         gutter_spacing: Spacing | None
@@ -376,3 +386,19 @@ class GridLayout(Layout):
             )
 
         return placements
+
+    def _document_inputs(self) -> dict:
+        return {
+            "min_column_width": self.min_column_width,
+            "max_column_width": self.max_column_width,
+            "stretch_height": self.stretch_height,
+            "regular": self.regular,
+            "expand": self.expand,
+            "shrink": self.shrink,
+            "auto_minimum": self.auto_minimum,
+        }
+
+    _document_methods = (
+        arrange, Layout.get_content_width, Layout.get_content_height,
+        __init__, Layout.clear_cache, Layout.render_keyline, _document_inputs,
+    )
