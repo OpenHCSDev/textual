@@ -268,6 +268,19 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
         """Membership in this complete source, including borrowed children."""
         return node in self._geometry_routes
 
+    def child_source(self, node: Widget) -> SubtreeGeometry | None:
+        """The child's original acquired source, independent of its placement.
+
+        Rebuilding a containing arrangement does not retire unchanged children.
+        Only a direct borrowed edge supplies this answer; membership through
+        another branch cannot authorize reuse at a new parent.
+        """
+        if (indexed := self.geometry.get(node)) is not None:
+            entry = indexed[1]
+            if isinstance(entry, SubtreeGeometryPlacement):
+                return entry.source
+        return None
+
     def captured_parent(self, node: Widget) -> Widget | None:
         """The original parent edge, independent of the live child tree."""
         if (indexed := self.geometry.get(node)) is not None:
@@ -1132,6 +1145,7 @@ class Compositor:
             dock_gutter: Spacing,
             complete: bool,
             inherited_layers: Mapping[str, int] | None,
+            source: SubtreeGeometry | None = None,
             _MapGeometry: type[MapGeometry] = MapGeometry,
         ) -> None:
             """Called recursively to place a widget and its children in the map.
@@ -1255,6 +1269,7 @@ class Compositor:
                                 arrange_result.scroll_spacing,
                                 complete,
                                 inherited_layers,
+                                source.child_source(sub_widget._render_widget) if source is not None else None,
                             )
                 else:
                     if widget._anchored and not widget._anchor_released:
@@ -1308,7 +1323,7 @@ class Compositor:
                 ), clip)
 
         def add_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter, complete,
-                       inherited_layers):
+                       inherited_layers, source=None):
             nonlocal map, widgets, invisible_widgets, capturing_source
             if inherited_layers is None and (order_names := widget._get_layer_order((widget,))) is not None:
                 inherited_layers = {name: index for index, name in enumerate(order_names)}
@@ -1367,19 +1382,24 @@ class Compositor:
                             store_geometry(node, geometry, RootSceneClip(geometry.clip))
                         widgets.update(held[widget])
                 return
+            retains_source = widget.CACHE_SUBTREE_GEOMETRY
             if (widget in mutation_paths or not self.max_subtree_geometry_entries
-                    or not widget.CACHE_SUBTREE_GEOMETRY or not widget._is_mounted):
+                    or not widget._is_mounted or not (retains_source or
+                        (capturing_source and widget.is_container))):
                 arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
-                               complete, inherited_layers)  # noqa: F821 -- closure cleared after traversal
+                               complete, inherited_layers, source)  # noqa: F821 -- closure cleared after traversal
                 return
             resource_type = widget.subtree_geometry_resource()
             enclosing_complete = complete
+            # The same original geometry declaration chooses complete versus
+            # placed acquisition. Child loans remain inside their containing
+            # resource, without becoming independent global cache entries.
             complete = resource_type.complete_arrangement(complete)
             key = SubtreeGeometryKey.from_widget(widget,
                    virtual_region, region, order, layer_order, clip.region, visible, dock_gutter,
                    size, visible_only and not complete,
                    tuple(inherited_layers.items()) if inherited_layers is not None else ())
-            resource = self._subtree_geometry.get(widget)
+            resource = self._subtree_geometry.get(widget, source) if retains_source else source
             require_complete = widget in retained_paths and not complete
             matches = resource is not None and resource.matches(key, require_complete=require_complete)
             # A complete captured source already owns every requested path.
@@ -1387,7 +1407,7 @@ class Compositor:
             # do not retain a partial capture whose key omits that request.
             if require_complete and not matches:
                 arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
-                               complete, inherited_layers)  # noqa: F821 -- closure cleared after traversal
+                               complete, inherited_layers, resource)  # noqa: F821 -- closure cleared after traversal
                 return
             if not matches:
                 # Capture complete source geometry before its viewport publication.
@@ -1400,18 +1420,19 @@ class Compositor:
                 capturing_source = True
                 try:
                     arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
-                                   complete, inherited_layers)  # noqa: F821 -- closure cleared after traversal
+                                   complete, inherited_layers, resource)  # noqa: F821 -- closure cleared after traversal
                     geometry = map
                     added_widgets, added_invisible = frozenset(widgets), frozenset(invisible_widgets)
                 finally:
                     map, widgets, invisible_widgets = parent_map, parent_widgets, parent_invisible
                     capturing_source = parent_capture
-                if (widget not in self._subtree_geometry
-                        and len(self._subtree_geometry) >= self.max_subtree_geometry_entries):
-                    self._subtree_geometry.pop(next(iter(self._subtree_geometry)))
                 resource = resource_type.capture(
                     key, geometry, added_widgets, added_invisible, clips, clip, screen_coordinates)
-                self._subtree_geometry[widget] = resource
+                if retains_source:
+                    if (widget not in self._subtree_geometry
+                            and len(self._subtree_geometry) >= self.max_subtree_geometry_entries):
+                        self._subtree_geometry.pop(next(iter(self._subtree_geometry)))
+                    self._subtree_geometry[widget] = resource
             if capturing_source:
                 # Retain the child source and its placement. A containing
                 # capture does not consume a second flat copy of descendants.
