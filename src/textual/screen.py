@@ -1214,10 +1214,22 @@ class Screen(Generic[ScreenResultType], Widget):
         )
 
     @property
+    def _layout_refresh_required(self) -> bool:
+        """Explicit layout and released source requests need the same refresh.
+
+        A held source retains its members after the timer consumes the layout
+        intent. Releasing that source makes those original requests actionable;
+        it doesn't need a second Layout message to recreate their intent.
+        """
+        return self._layout_required or self._has_actionable_layout_requests(
+            self._held_layout_requests()
+        )
+
+    @property
     def _refresh_requested(self) -> bool:
         """Whether pending screen work requires the timer regardless of damage."""
         return bool(
-            self._layout_required
+            self._layout_refresh_required
             or self._scroll_required
             or self._repaint_required
             or self._recompose_required
@@ -1373,7 +1385,7 @@ class Screen(Generic[ScreenResultType], Widget):
             # Consume the acquired intents before layout. Resize watchers and
             # immediate layout-signal subscribers may request another frame
             # synchronously; those requests belong to the next admission.
-            layout_required, scroll_required = self._layout_required, self._scroll_required
+            layout_required, scroll_required = self._layout_refresh_required, self._scroll_required
             self._layout_required = False
             self._scroll_required = False
             if layout_required or scroll_required:
@@ -1643,9 +1655,7 @@ class Screen(Generic[ScreenResultType], Widget):
             # A prior frame keeps held requests but consumes its timer intent.
             # Membership is not a new-source notification: after release the
             # SAME pending request becomes actionable under current roots.
-            if layout_required or self._has_actionable_layout_requests(
-                self._held_layout_requests()
-            ):
+            if layout_required or self._layout_refresh_required:
                 self._layout_required = True
                 self.check_idle()
 
