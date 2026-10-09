@@ -10,6 +10,7 @@ from weakref import ref
 
 from rich.style import Style as RichStyle
 from rich.palette import Palette
+from rich.terminal_theme import TerminalTheme
 
 from textual._arrange import arrange
 from textual._compositor import Compositor, RootSceneClip
@@ -21,7 +22,7 @@ from textual.css.styles import RenderStyles, Styles
 from textual.css.stylesheet import Stylesheet
 from textual.dom import DOMNode
 from textual.geometry import NULL_OFFSET, NULL_SPACING, Offset, Region, Size, Spacing
-from textual.layout import WidgetPlacement
+from textual.layout import Layout, WidgetPlacement
 from textual.map_geometry import MapGeometry
 from textual.layouts.vertical import VerticalLayout
 from textual.selection import SELECT_ALL, Selection
@@ -30,9 +31,8 @@ from textual.style import Style
 from textual.visual import RenderOptions, Visual
 
 if TYPE_CHECKING:
-    from rich.terminal_theme import TerminalTheme
     from textual.filter import LineFilter
-    from textual.layout import DockArrangeResult, Layout
+    from textual.layout import DockArrangeResult
     from textual.document._markdown import MarkdownSourceBlock
 
 
@@ -409,9 +409,10 @@ class DocumentNode(StyleContext):
 
 def _input_value(value):
     """Freeze actual native value inputs, never scene epochs or CSS guesses."""
-    from rich.terminal_theme import TerminalTheme
-    from textual.layout import Layout
-
+    # These exact native leaves already ARE their immutable acquisition.
+    # Keep subclass/custom copy semantics and mutable input validation below.
+    if value is None or type(value) in (bool, int, float, str, bytes):
+        return value
     if isinstance(value, Layout):
         return value.document_key()
     if isinstance(value, TerminalTheme):
@@ -994,27 +995,62 @@ class DocumentPaint:
         self, *, root_selection=None, selections=None, selection_style=None,
         selecting=False,
     ) -> bool:
+        return self.selection_inputs == self._selection_inputs(
+            root_selection=root_selection, selections=selections,
+            selection_style=selection_style, selecting=selecting,
+        )
+
+    @staticmethod
+    def _selection_inputs(
+        *, root_selection=None, selections=None, selection_style=None,
+        selecting=False,
+    ):
         return (
-            root_selection == self.root_selection
-            and (
-                None if selections is None else tuple(sorted(selections.items()))
-            ) == self.selections
-            and selection_style == self.selection_style
-            and selecting == self.selecting
+            root_selection,
+            None if selections is None else tuple(sorted(selections.items())),
+            selection_style,
+            selecting,
+        )
+
+    @property
+    def selection_inputs(self):
+        """Actual prepared selection, including absent versus empty ranges."""
+        return self.root_selection, self.selections, self.selection_style, self.selecting
+
+    @staticmethod
+    def preparation_inputs(
+        document, width: int, *, root_selection=None, selections=None,
+        selection_style=None, selecting=False,
+    ) -> tuple:
+        """Rendered answer inputs, separate from participant admission.
+
+        A rebind with equal effective presentation can use the same answer.
+        An independent source acquisition or changed supplier cannot, even
+        when its text is equal. Publication still requires current_for().
+        """
+        return (
+            width, document.source_key, document.presentation.key,
+            *DocumentPaint._selection_inputs(
+                root_selection=root_selection, selections=selections,
+                selection_style=selection_style, selecting=selecting,
+            ),
+        )
+
+    @property
+    def preparation_key(self) -> tuple:
+        """Inputs certified by this original worker result."""
+        return (
+            self.width, self.document.source_key, self.presentation_key,
+            *self.selection_inputs,
         )
 
     def matches(
         self, document, width: int, *, root_selection=None, selections=None,
         selection_style=None, selecting=False,
     ) -> bool:
-        return (
-            width == self.width
-            and document.same_source(self.document)
-            and document.presentation.key == self.presentation_key
-            and self.matches_selection(
-                root_selection=root_selection, selections=selections,
-                selection_style=selection_style, selecting=selecting,
-            )
+        return self.preparation_key == self.preparation_inputs(
+            document, width, root_selection=root_selection, selections=selections,
+            selection_style=selection_style, selecting=selecting,
         )
 
     def is_current(self, owner, width: int, *, selections=None) -> bool:

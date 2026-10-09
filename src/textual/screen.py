@@ -1340,9 +1340,8 @@ class Screen(Generic[ScreenResultType], Widget):
         if self.is_current and not self.app._batch_count:
             self._flush_pending_selection()
             if self._repaint_required:
-                # Layout already paints its committed scene. Include the full
-                # repaint intent in that same transaction instead of painting
-                # once for layout and then painting the whole screen again.
+                # Include the acquired repaint in this layout/publication,
+                # rather than painting the same scene again afterward.
                 self._dirty_widgets.clear()
                 self._dirty_widgets.add(self)
                 self._repaint_required = False
@@ -1352,14 +1351,20 @@ class Screen(Generic[ScreenResultType], Widget):
             layout_required, scroll_required = self._layout_required, self._scroll_required
             self._layout_required = False
             self._scroll_required = False
-            if layout_required:
-                self._refresh_layout(scroll=scroll_required)
-            elif scroll_required:
-                self._refresh_layout(scroll=True)
+            if layout_required or scroll_required:
+                # Layout may compensate positions or publish immediate signals
+                # before returning. The timer owns their final publication;
+                # direct layout callers retain their ordinary immediate paint.
+                with self.app.batch_update():
+                    self._refresh_layout(scroll=scroll_required)
 
             if self._dirty_widgets:
                 self._compositor.update_widgets(self._dirty_widgets)
-            if self._dirty_widgets or self._compositor._dirty_regions:
+            if (layout_required or scroll_required
+                    or self._dirty_widgets or self._compositor._dirty_regions):
+                # Preparation has source/follow effects even if layout left no
+                # damage. Acquire once, after all synchronous layout effects,
+                # rather than rendering held damage twice in the same timer.
                 self._compositor_refresh()
 
             if self._recompose_required:
