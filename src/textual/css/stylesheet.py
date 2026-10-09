@@ -271,7 +271,7 @@ class Stylesheet:
             return style_text
         if style_text in self._style_parse_cache:
             return self._style_parse_cache[style_text]
-        style = parse_style(style_text)
+        style = parse_style(style_text, self._variables)
         self._style_parse_cache[style_text] = style
         return style
 
@@ -550,7 +550,7 @@ class Stylesheet:
                 (
                     node._id if node._id in self._ids_in_rules else None,
                     node.classes & relevant_classes,
-                    node._css_type_name,
+                    node.css_type_name,
                     pseudo_key,
                     node.name,
                 )
@@ -651,7 +651,7 @@ class Stylesheet:
                     ),
                     node.classes,
                     node._pseudo_classes_cache_key,
-                    node._css_type_name,
+                    node.css_type_name,
                 )
                 cached_result: RulesMap | None = cache.get(cache_key)
                 if cached_result is not None:
@@ -809,7 +809,7 @@ class Stylesheet:
                     _ComponentStyles | None, node._component_styles.get(component)
                 )
                 if component_styles is None:
-                    virtual_node = DOMNode(classes=component)
+                    virtual_node = node._make_component_node(component)
                     virtual_node._attach(node)
                     component_styles = _ComponentStyles(virtual_node)
                     node._component_styles[component] = component_styles

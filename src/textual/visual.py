@@ -127,6 +127,14 @@ class Visual(ABC):
 
     """
 
+    @staticmethod
+    def selected_text(visual, selection):
+        """Extract native text coordinates from a scene or prepared visual."""
+        from textual.content import Content
+        if isinstance(visual, (Text, Content)):
+            return selection.extract(str(visual)), "\n"
+        return None
+
     @abstractmethod
     def render_strips(
         self, width: int, height: int | None, style: Style, options: RenderOptions
@@ -188,6 +196,11 @@ class Visual(ABC):
         """
 
     @classmethod
+    def selection_style(cls, widget: Widget) -> Style:
+        """Acquire the original Screen selection component for native paint."""
+        return Style.from_styles(widget.screen.get_component_styles("screen--selection"))
+
+    @classmethod
     def to_strips(
         cls,
         widget: Widget,
@@ -218,29 +231,47 @@ class Visual(ABC):
 
         selection = widget.text_selection
         if selection is not None:
-            selection_style = Style.from_styles(
-                widget.screen.get_component_styles("screen--selection")
-            )
+            selection_style = cls.selection_style(widget)
         else:
             selection_style = None
 
         strips = visual.render_strips(
-            width,
-            height,
-            style,
+            width, height, style,
             RenderOptions(
-                widget._get_style,
-                widget.styles,
-                selection if apply_selection else None,
-                selection_style,
+                widget._get_style, widget.styles,
+                selection if apply_selection else None, selection_style,
             ),
         )
-        if (
-            widget.auto_links
-            and not widget.is_container
-            and not widget.screen._selecting
-        ):
-            link_style = widget.link_style
+        link_style = (
+            widget.link_style
+            if widget.auto_links and not widget.is_container and not widget.screen._selecting
+            else None
+        )
+        return cls.format_strips(
+            strips, width, height, style,
+            link_style=link_style, pad=pad,
+            content_align=widget.styles.content_align,
+        )
+
+    @classmethod
+    def format_strips(
+        cls,
+        strips: list[Strip],
+        width: int,
+        height: int | None,
+        style: Style,
+        *,
+        link_style: RichStyle | None = None,
+        pad: bool = False,
+        content_align: tuple[str, str] = ("left", "top"),
+    ) -> list[Strip]:
+        """Format rendered native content without borrowing a live widget.
+
+        Both scene paint and detached document preparation use this alignment,
+        link styling and padding implementation. Interaction acquisition stays
+        with the scene owner; the worker receives its actual values.
+        """
+        if link_style is not None:
             strips = [strip._apply_link_style(link_style) for strip in strips]
 
         if height is None:
@@ -248,7 +279,6 @@ class Visual(ABC):
         rich_style = (style + Style(reverse=False)).rich_style
         if pad:
             strips = [strip.extend_cell_length(width, rich_style) for strip in strips]
-        content_align = widget.styles.content_align
         if content_align != ("left", "top"):
             align_horizontal, align_vertical = content_align
             strips = list(

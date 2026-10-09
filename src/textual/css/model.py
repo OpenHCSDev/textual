@@ -69,7 +69,7 @@ def _check_type(name: str, node: DOMNode) -> bool:
     Returns:
         `True` if the selector matches.
     """
-    return name in node._css_type_names
+    return name in node.css_type_names
 
 
 def _check_class(name: str, node: DOMNode) -> bool:

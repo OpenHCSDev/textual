@@ -49,13 +49,13 @@ class StreamLayout(Layout):
         if not children:
             self.clear_cache()
             return []
-        viewport = parent.app.viewport_size
+        viewport = parent.layout_viewport
 
         if size.width != self._cached_width:
             self._cached_placements = None
         previous_results = self._cached_placements or []
 
-        layout_widgets = parent.screen._layout_widgets.get(parent, [])
+        layout_widgets = parent.layout_invalidated_widgets
 
         _Region = Region
         _WidgetPlacement = WidgetPlacement
@@ -158,3 +158,8 @@ class StreamLayout(Layout):
         else:
             height = 0
         return height
+
+    _document_methods = (
+        arrange, get_content_width, get_content_height, __init__, clear_cache,
+        Layout.render_keyline, Layout._document_inputs,
+    )

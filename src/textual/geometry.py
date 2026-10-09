@@ -97,6 +97,10 @@ class Offset(NamedTuple):
     y: int = 0
     """Offset in the y-axis (vertical)"""
 
+    @staticmethod
+    def _from_pickle(x: int, y: int) -> Offset:
+        return Offset(x, y)
+
     @property
     def is_origin(self) -> bool:
         """Is the offset at (0, 0)?"""
@@ -210,6 +214,10 @@ class Size(NamedTuple):
 
     height: int = 0
     """The height in cells."""
+
+    @staticmethod
+    def _from_pickle(width: int, height: int) -> Size:
+        return Size(width, height)
 
     def __bool__(self) -> bool:
         """A Size is Falsy if it has area 0."""
@@ -361,6 +369,10 @@ class Region(NamedTuple):
     """The width of the region."""
     height: int = 0
     """The height of the region."""
+
+    @staticmethod
+    def _from_pickle(x: int, y: int, width: int, height: int) -> Region:
+        return Region(x, y, width, height)
 
     @classmethod
     def from_union(cls, regions: Collection[Region]) -> Region:
@@ -1159,6 +1171,10 @@ class Spacing(NamedTuple):
     left: int = 0
     """Space from the left of a region."""
 
+    @staticmethod
+    def _from_pickle(top: int, right: int, bottom: int, left: int) -> Spacing:
+        return Spacing(top, right, bottom, left)
+
     def __bool__(self) -> bool:
         return self != (0, 0, 0, 0)
 
@@ -1480,11 +1496,34 @@ class Shape:
         return any(region.contains_point(offset) for region in self._regions)
 
 
+def _reduce_geometry(value):
+    """Preserve the declared geometry identity and its constructor fields."""
+    return value._from_pickle, tuple(value)
+
+
+def _with_geometry_pickle(declaration: type, accelerated: type) -> type:
+    """Supply native value transport on the selected accelerated implementation.
+
+    The extension's classes have no reduction and report a builtins module
+    which cannot resolve their constructors. The original geometry declaration
+    supplies an importable constructor; no class metadata or backend selection
+    is changed, and no consumer has to encode these values itself.
+    """
+    accelerated._from_pickle = staticmethod(declaration._from_pickle)
+    accelerated.__reduce__ = _reduce_geometry
+    return accelerated
+
+
 if not TYPE_CHECKING and os.environ.get("TEXTUAL_SPEEDUPS", "1") == "1":
     try:
-        from textual_speedups import Offset, Region, Size, Spacing
+        import textual_speedups
     except ImportError:
         pass
+    else:
+        Offset = _with_geometry_pickle(Offset, textual_speedups.Offset)
+        Region = _with_geometry_pickle(Region, textual_speedups.Region)
+        Size = _with_geometry_pickle(Size, textual_speedups.Size)
+        Spacing = _with_geometry_pickle(Spacing, textual_speedups.Spacing)
 
 
 NULL_OFFSET: Final = Offset(0, 0)

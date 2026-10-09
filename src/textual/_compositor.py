@@ -46,6 +46,7 @@ from textual._loop import loop_last
 from textual._spatial_map import SpatialMap
 from textual.geometry import NULL_OFFSET, NULL_SPACING, Offset, Region, Size, Spacing
 from textual.map_geometry import MapGeometry
+from textual.layout import WidgetPlacement
 from textual.strip import Strip, StripRenderable
 from textual.widget import Widget
 
@@ -1179,7 +1180,6 @@ class Compositor:
 
                     # Original arrangement ordinals survive spatial admission.
                     # Do not rebuild ranks for every offscreen child on scroll.
-                    first_layer_order = layer_order - len(arrange_result.placements) + 1
 
                     arranged_widgets = arrange_result.widgets
                     widgets.update(arranged_widgets)
@@ -1208,16 +1208,13 @@ class Compositor:
                         placements = arrange_result.placements
                     total_region = total_region.union(arrange_result.total_region)
 
-                    # An offset added to all placements
-                    placement_offset = container_region.offset
-                    placement_scroll_offset = placement_offset - widget.scroll_offset
+                    placement_scroll_offset = container_region.offset - widget.scroll_offset
 
                     screen_coordinates.update(placement.widget for _, placement in placements
                                               if placement.widget.uses_screen_coordinates)
-                    placements = [
-                        (ordinal, placement.process_offset(size.region, placement_scroll_offset))
-                        for ordinal, placement in placements
-                    ]
+                    placements = WidgetPlacement.process_offsets(
+                        placements, size.region, placement_scroll_offset,
+                    )
 
                     if type(widget).layers is Widget.layers:
                         layers_to_index = default_layers if inherited_layers is None else inherited_layers
@@ -1227,8 +1224,6 @@ class Compositor:
                             layer_name: index
                             for index, layer_name in enumerate(widget.layers)
                         }
-
-                    get_layer_index = layers_to_index.get
 
                     if widget._cover_widget is not None:
                         store_geometry(widget._cover_widget, _MapGeometry(
@@ -1242,38 +1237,20 @@ class Compositor:
                         ), clip)
 
                     # Add all the widgets
-                    for ordinal, (
-                        sub_region,
-                        sub_region_offset,
-                        _,
-                        sub_widget,
-                        z,
-                        fixed,
-                        overlay,
-                        absolute,
-                    ) in reversed(placements):
-                        layer_index = get_layer_index(sub_widget.layer, 0)
-                        # Combine regions with children to calculate the "virtual size"
-                        if fixed:
-                            widget_region = (
-                                sub_region + sub_region_offset + placement_offset
-                            )
-                        else:
-                            widget_region = (
-                                sub_region + sub_region_offset + placement_scroll_offset
-                            )
-
-                        child_layer_order = first_layer_order + ordinal
-                        widget_order = order + ((layer_index, z, child_layer_order),)
-
+                    for (sub_widget, sub_region, widget_region, widget_order,
+                         child_layer_order, child_clip) in self._place_children(
+                            placements, len(arrange_result.placements),
+                            container_region, widget.scroll_offset,
+                            order, layer_order, sub_clip, no_clip, layers_to_index,
+                    ):
                         if widget._cover_widget is None:
                             add_widget(  # noqa: F821 -- closure cleared only after traversal
                                 sub_widget,
                                 sub_region,
                                 widget_region,
-                                ((1, 0, 0),) if overlay else widget_order,
+                                widget_order,
                                 child_layer_order,
-                                no_clip if overlay else sub_clip,
+                                child_clip,
                                 visible,
                                 arrange_result.scroll_spacing,
                                 complete,
@@ -1478,6 +1455,28 @@ class Compositor:
         widgets -= invisible_widgets
         return cast(CompositorMap, map), widgets
 
+    @staticmethod
+    def _place_children(placements, placement_count, container_region, scroll_offset,
+                        order, layer_order, sub_clip, no_clip, layers):
+        """Native placement projection, shared by scenes and detached paint.
+
+        Arrangement owns ordinals and local boxes. This projection owns fixed,
+        absolute, overlay, layer and clip meaning; detached documents don't
+        reconstruct those answers with a second placement algorithm.
+        """
+        first_layer_order = layer_order - placement_count + 1
+        placement_offset = container_region.offset
+        placement_scroll_offset = placement_offset - scroll_offset
+        for ordinal, (region, offset, _, child, z, fixed, overlay, _) in reversed(placements):
+            child_region = region + offset + (
+                placement_offset if fixed else placement_scroll_offset
+            )
+            child_layer_order = first_layer_order + ordinal
+            child_order = order + ((layers.get(child.layer, 0), z, child_layer_order),)
+            yield (child, region, child_region,
+                   ((1, 0, 0),) if overlay else child_order, child_layer_order,
+                   no_clip if overlay else sub_clip)
+
     @property
     def layers(self) -> list[tuple[Widget, MapGeometry]]:
         """Get widgets and geometry in layer order."""
@@ -1590,14 +1589,7 @@ class Compositor:
 
         if not lines:
             return Style.null()
-        end = 0
-
-        for segment in lines[0]:
-            end += segment.cell_length
-            if x < end:
-                return segment.style or Style.null()
-
-        return Style.null()
+        return lines[0].get_style_at(x)
 
     def get_widget_and_offset_at(
         self, x: int, y: int
@@ -1631,43 +1623,7 @@ class Compositor:
         visible_screen_stack.set(widget.app._background_screens)
         line = widget.render_line(y)
 
-        end = 0
-        start = 0
-        offset_y: int | None = None
-        offset_x = 0
-        offset_x2 = 0
-
-        from rich.cells import get_character_cell_size
-
-        offset: Offset | None = None
-        for segment in line:
-            end += segment.cell_length
-            style = segment.style
-            if style is not None and style._meta is not None:
-                meta = style.meta
-                if "offset" in meta:
-                    offset_x, offset_y = meta["offset"]
-                    if offset_y is None:
-                        continue
-                    offset_x2 = offset_x + len(segment.text)
-
-                    if x < end and x >= start:
-                        segment_cell_length = 0
-                        cell_cut = x - start
-                        segment_offset = 0
-                        for character in segment.text:
-                            if segment_cell_length >= cell_cut:
-                                break
-                            segment_cell_length += get_character_cell_size(character)
-                            segment_offset += 1
-
-                        offset = Offset(offset_x + segment_offset, offset_y)
-                        break
-            start = end
-
-        if offset is None and offset_y is not None:
-            offset = Offset(offset_x2, offset_y)
-        return widget, offset
+        return widget, line.get_content_offset(x)
 
     def find_widget(self, widget: Widget) -> MapGeometry:
         """Get information regarding the relative position of a widget in the Compositor.

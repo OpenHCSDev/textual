@@ -293,6 +293,20 @@ class Widget(DOMNode):
     See also [static][textual.widgets._static.Static] for starting point for your own widgets.
     """
 
+    _component_style_scope = True
+
+    @property
+    def layout_viewport(self) -> Size:
+        return self.app.viewport_size
+
+    @property
+    def layout_screen_size(self) -> Size:
+        return self.app.size
+
+    @property
+    def layout_invalidated_widgets(self):
+        return self.screen._layout_widgets.get(self, [])
+
     CACHE_SUBTREE_GEOMETRY: ClassVar[bool] = False
     """Reuse an unchanged contained scene during unrelated sibling reflows."""
 
@@ -505,11 +519,6 @@ class Widget(DOMNode):
         self._layout_cache: dict[str, object] = {}
         """A dict that is refreshed when the widget is resized / refreshed."""
 
-        self._visual_style: VisualStyle | None = None
-        """Cached style of visual."""
-        self._visual_paint_state = None
-        """Resolved paint backing the cached visual style."""
-
         self._render_cache = _RenderCache(_null_size, [])
         # Regions which need to be updated (in Widget)
         self._dirty_regions: set[Region] = set()
@@ -529,7 +538,6 @@ class Widget(DOMNode):
 
         self._styles_cache = StylesCache()
         self._rich_style_cache: dict[tuple[str, ...], tuple[Style, Style]] = {}
-        self._visual_style_cache: dict[tuple[str, ...], VisualStyle] = {}
 
         self._tooltip: VisualType | None = None
         """The tooltip content."""
@@ -575,16 +583,6 @@ class Widget(DOMNode):
         self._cover_widget: Widget | None = None
         """Widget to render over this widget (used by loading indicator)."""
 
-        self._first_of_type: tuple[int, bool] = (-1, False)
-        """Used to cache :first-of-type pseudoclass state."""
-        self._last_of_type: tuple[int, bool] = (-1, False)
-        """Used to cache :last-of-type pseudoclass state."""
-        self._first_child: tuple[int, bool] = (-1, False)
-        """Used to cache :first-child pseudoclass state."""
-        self._last_child: tuple[int, bool] = (-1, False)
-        """Used to cache :last-child pseudoclass state."""
-        self._odd: tuple[int, bool] = (-1, False)
-        """Used to cache :odd pseudoclass state."""
         self._last_scroll_time = monotonic()
         """Time of last scroll."""
         self._extrema = Extrema()
@@ -985,87 +983,6 @@ class Widget(DOMNode):
             node = node._parent
         return False
 
-    @property
-    def first_of_type(self) -> bool:
-        """Is this the first widget of its type in its siblings?"""
-        parent = self.parent
-        if parent is None:
-            return True
-        # This pseudo classes only changes when the parent's nodes._updates changes
-        if parent._nodes._updates == self._first_of_type[0]:
-            return self._first_of_type[1]
-        widget_type = type(self)
-        for node in parent._nodes.displayed:
-            if isinstance(node, widget_type):
-                self._first_of_type = (parent._nodes._updates, node is self)
-                return self._first_of_type[1]
-        return False
-
-    @property
-    def last_of_type(self) -> bool:
-        """Is this the last widget of its type in its siblings?"""
-        parent = self.parent
-        if parent is None:
-            return True
-        # This pseudo classes only changes when the parent's nodes._updates changes
-        if parent._nodes._updates == self._last_of_type[0]:
-            return self._last_of_type[1]
-        widget_type = type(self)
-        for node in parent._nodes.displayed_reverse:
-            if isinstance(node, widget_type):
-                self._last_of_type = (parent._nodes._updates, node is self)
-                return self._last_of_type[1]
-        return False
-
-    @property
-    def first_child(self) -> bool:
-        """Is this the first widget in its siblings?"""
-        parent = self.parent
-        if parent is None:
-            return True
-        # This pseudo class only changes when the parent's nodes._updates changes
-        if parent._nodes._updates == self._first_child[0]:
-            return self._first_child[1]
-        for node in parent._nodes.displayed:
-            self._first_child = (parent._nodes._updates, node is self)
-            return self._first_child[1]
-        return False
-
-    @property
-    def last_child(self) -> bool:
-        """Is this the last widget in its siblings?"""
-        parent = self.parent
-        if parent is None:
-            return True
-        # This pseudo class only changes when the parent's nodes._updates changes
-        if parent._nodes._updates == self._last_child[0]:
-            return self._last_child[1]
-        for node in parent._nodes.displayed_reverse:
-            self._last_child = (parent._nodes._updates, node is self)
-            return self._last_child[1]
-        return False
-
-    @property
-    def is_odd(self) -> bool:
-        """Is this widget at an oddly numbered position within its siblings?"""
-        parent = self.parent
-        if parent is None:
-            return True
-        # This pseudo classes only changes when the parent's nodes._updates changes
-        if parent._nodes._updates == self._odd[0]:
-            return self._odd[1]
-        try:
-            is_odd = parent._nodes.displayed_and_visible.index(self) % 2 == 0
-            self._odd = (parent._nodes._updates, is_odd)
-            return is_odd
-        except ValueError:
-            return False
-
-    @property
-    def is_even(self) -> bool:
-        """Is this widget at an evenly numbered position within its siblings?"""
-        return not self.is_odd
-
     def __enter__(self) -> Self:
         """Use as context manager when composing."""
         self.app._compose_stacks[-1].append(self)
@@ -1270,99 +1187,6 @@ class Widget(DOMNode):
         style, partial_style = self._rich_style_cache[names]
 
         return partial_style if partial else style
-
-    def get_visual_style(
-        self, *component_classes: str, partial: bool = False
-    ) -> VisualStyle:
-        """Get the visual style for the widget, including any component styles.
-
-        Args:
-            component_classes: Optional component styles.
-            partial: Return a partial style (not combined with parent).
-
-        Returns:
-            A Visual style instance.
-
-        """
-        cache_key = (self._pseudo_classes_cache_key, component_classes, partial)
-        if (visual_style := self._visual_style_cache.get(cache_key, None)) is None:
-            background = Color(0, 0, 0, 0)
-            color = Color(255, 255, 255, 0)
-
-            style = Style()
-            opacity = 1.0
-
-            def iter_styles() -> Iterable[StylesBase]:
-                """Iterate over the styles from the DOM and additional components styles."""
-                if partial:
-                    node = self
-                else:
-                    for node in reversed(self.ancestors_with_self):
-                        yield node.styles
-                for name in component_classes:
-                    yield node.get_component_styles(name)
-
-            for styles in iter_styles():
-                has_rule = styles.has_rule
-                opacity *= styles.opacity
-                if has_rule("background"):
-                    text_background = background + styles.background.tint(
-                        styles.background_tint
-                    )
-                    if partial:
-                        background_tint = styles.background.tint(styles.background_tint)
-                        background = background.blend(
-                            background_tint, 1 - background_tint.a
-                        ).multiply_alpha(opacity)
-                    else:
-                        background += (
-                            styles.background.tint(styles.background_tint)
-                        ).multiply_alpha(opacity)
-                else:
-                    text_background = background
-                if has_rule("color"):
-                    color = styles.color.multiply_alpha(styles.text_opacity)
-                style += styles.text_style
-                if has_rule("auto_color") and styles.auto_color:
-                    color = text_background.get_contrast_text(color.a)
-
-            visual_style = replace(
-                VisualStyle.from_rich_style(style),
-                background=background,
-                foreground=color,
-            )
-            self._visual_style_cache[cache_key] = visual_style
-
-        return visual_style
-
-    def _get_style(self, style: VisualStyle | str) -> VisualStyle:
-        """A get_style method for use in Content.
-
-        Args:
-            style: A style prefixed with a dot.
-
-        Returns:
-            A visual style if one is fund, otherwise `None`.
-        """
-        if isinstance(style, VisualStyle):
-            return style
-
-        if style.startswith("."):
-            style_name = style[1:]
-            for node in self.walk_ancestors(with_self=True):
-                if not isinstance(node, Widget):
-                    break
-                try:
-                    return node.get_visual_style(style_name, partial=True)
-                except KeyError:
-                    continue
-            else:
-                raise KeyError(f"No matching component class found for '{style}'")
-            return NULL_STYLE
-        try:
-            return VisualStyle.parse(style)
-        except Exception:
-            return NULL_STYLE
 
     @overload
     def render_str(self, text_content: str) -> Content: ...
@@ -2000,113 +1824,9 @@ class Widget(DOMNode):
             model, self._extrema = cached_measurement
             return model
 
-        styles = self.styles
-        is_border_box = styles.box_sizing == "border-box"
-        gutter = styles.gutter  # Padding plus border
-        margin = styles.margin
-
-        styles_width = styles.width
-        if not greedy and styles_width is not None and styles_width.is_fraction:
-            styles_width = Scalar.parse("auto")
-        is_auto_width = styles_width and styles_width.is_auto
-        is_auto_height = styles.height and styles.height.is_auto
-
-        # Container minus padding and border
-        content_container = container - gutter.totals
-
-        extrema = self._extrema = self._resolve_extrema(
-            container, viewport, width_fraction, height_fraction
-        )
-        min_width, max_width, min_height, max_height = extrema
-
-        if styles_width is None:
-            # No width specified, fill available space
-            content_width = Fraction(content_container.width - margin.width)
-        elif is_auto_width:
-            # When width is auto, we want enough space to always fit the content
-            content_width = Fraction(
-                self.get_content_width(content_container - margin.totals, viewport)
-            )
-            if (
-                styles.overflow_x == "auto" and styles.scrollbar_gutter == "stable"
-            ) or self.show_vertical_scrollbar:
-                content_width += styles.scrollbar_size_vertical
-            if (
-                content_width < content_container.width
-                and self._has_relative_children_width
-            ):
-                content_width = Fraction(content_container.width)
-        else:
-            # An explicit width
-            content_width = styles_width.resolve(
-                container - margin.totals, viewport, width_fraction
-            )
-            if is_border_box:
-                content_width -= gutter.width
-
-        if min_width is not None:
-            # Restrict to minimum width, if set
-            content_width = max(content_width, min_width, Fraction(0))
-
-        if max_width is not None and not (
-            container.width == 0
-            and not styles.max_width.is_cells
-            and self._parent is not None
-            and self._parent.styles.is_auto_width
-        ):
-            # Restrict to maximum width, if set
-            content_width = min(content_width, max_width)
-
-        content_width = max(Fraction(0), content_width)
-
-        if constrain_width:
-            content_width = min(Fraction(container.width - gutter.width), content_width)
-
-        if styles.height is None:
-            # No height specified, fill the available space
-            content_height = Fraction(content_container.height - margin.height)
-        elif is_auto_height:
-            # Calculate dimensions based on content
-            content_height = Fraction(
-                self.get_content_height(
-                    content_container - margin.totals,
-                    viewport,
-                    int(content_width),
-                )
-            )
-            if (
-                styles.overflow_y == "auto" and styles.scrollbar_gutter == "stable"
-            ) or self.show_horizontal_scrollbar:
-                content_height += styles.scrollbar_size_horizontal
-            if (
-                content_height < content_container.height
-                and self._has_relative_children_height
-            ):
-                content_height = Fraction(content_container.height)
-        else:
-            styles_height = styles.height
-            # Explicit height set
-            content_height = styles_height.resolve(
-                container - margin.totals, viewport, height_fraction
-            )
-            if is_border_box:
-                content_height -= gutter.height
-
-        if min_height is not None:
-            # Restrict to minimum height, if set
-            content_height = max(content_height, min_height, Fraction(0))
-
-        if max_height is not None and not (
-            container.height == 0
-            and not styles.max_height.is_cells
-            and self._parent is not None
-            and self._parent.styles.is_auto_height
-        ):
-            content_height = min(content_height, max_height)
-
-        content_height = max(Fraction(0), content_height)
-        model = BoxModel(
-            content_width + gutter.width, content_height + gutter.height, margin
+        model, extrema = BoxModel.resolve(
+            self, container, viewport, width_fraction, height_fraction,
+            constrain_width, greedy,
         )
         self._box_model_cache[cache_key] = model, extrema
         return model
@@ -2124,20 +1844,14 @@ class Widget(DOMNode):
         """
 
         if self.is_container:
-            width = self.layout.get_content_width(self, container, viewport)
+            width = self._measure_content_width(container, viewport)
             return width
 
         cache_key = container.width
         if self._content_width_cache[0] == cache_key:
             return self._content_width_cache[1]
 
-        visual = self._render()
-        width = visual.get_optimal_width(self.styles, container.width)
-
-        if self.expand:
-            width = max(container.width, width)
-        if self.shrink:
-            width = min(width, container.width)
+        width = self._measure_content_width(container, viewport)
 
         self._content_width_cache = (cache_key, width)
 
@@ -2159,20 +1873,14 @@ class Widget(DOMNode):
             return 0
         if self.is_container:
             assert self.layout is not None
-            height = self.layout.get_content_height(
-                self,
-                container,
-                viewport,
-                width,
-            )
+            height = self._measure_content_height(container, viewport, width)
         else:
             cache_key = width
 
             if self._content_height_cache[0] == cache_key:
                 return self._content_height_cache[1]
 
-            visual = self._render()
-            height = visual.get_height(self.styles, width)
+            height = self._measure_content_height(container, viewport, width)
             self._content_height_cache = (cache_key, height)
 
         return height
@@ -2643,26 +2351,6 @@ class Widget(DOMNode):
         return self.app.console
 
     @property
-    def _has_relative_children_width(self) -> bool:
-        """Do any children (or progeny) have a relative width?"""
-        if not self.is_container:
-            return False
-        for child in self.children:
-            if child.styles.expand == "optimal":
-                continue
-            styles = child.styles
-            if not child.display:
-                continue
-            width = styles.width
-            if width is None:
-                continue
-            if styles.is_relative_width or (
-                width.is_auto and child._has_relative_children_width
-            ):
-                return True
-        return False
-
-    @property
     def _has_relative_children_height(self) -> bool:
         """Do any children (or progeny) have a relative height?"""
         return self._relative_children_height()[0]
@@ -2683,34 +2371,7 @@ class Widget(DOMNode):
         if native and "relative_children" in answers:
             return answers["relative_children"], True
 
-        if not self.is_container:
-            result = False
-        else:
-            result = False
-            for child in self.children:
-                styles = child.styles
-                native = native and (
-                    type(child).display is DOMNode.display
-                    and type(styles) is RenderStyles
-                )
-                if not child.display:
-                    continue
-                height = styles.height
-                if height is None:
-                    continue
-                native = native and type(height) is Scalar
-                if styles.is_relative_height:
-                    result = True
-                    break
-                if height.is_auto:
-                    if type(child)._has_relative_children_height is Widget._has_relative_children_height:
-                        relative, child_native = child._relative_children_height()
-                    else:
-                        relative, child_native = child._has_relative_children_height, False
-                    native = native and child_native
-                    if relative:
-                        result = True
-                        break
+        result, native = self._scan_relative_children_height(native)
         if native:
             answers["relative_children"] = result
         return result, native
@@ -2746,43 +2407,9 @@ class Widget(DOMNode):
             Extrema object.
         """
 
-        min_width: Fraction | None = None
-        max_width: Fraction | None = None
-        min_height: Fraction | None = None
-        max_height: Fraction | None = None
-
-        styles = self.styles
-        container -= styles.margin.totals
-        if styles.box_sizing == "border-box":
-            gutter_width, gutter_height = styles.gutter.totals
-        else:
-            gutter_width = gutter_height = 0
-
-        if styles.min_width is not None:
-            min_width = (
-                styles.min_width.resolve(container, viewport, width_fraction)
-                - gutter_width
-            )
-
-        if styles.max_width is not None:
-            max_width = (
-                styles.max_width.resolve(container, viewport, width_fraction)
-                - gutter_width
-            )
-        if styles.min_height is not None:
-            min_height = (
-                styles.min_height.resolve(container, viewport, height_fraction)
-                - gutter_height
-            )
-
-        if styles.max_height is not None:
-            max_height = (
-                styles.max_height.resolve(container, viewport, height_fraction)
-                - gutter_height
-            )
-
-        extrema = Extrema(min_width, max_width, min_height, max_height)
-        return extrema
+        return Extrema.resolve(
+            self.styles, container, viewport, width_fraction, height_fraction,
+        )
 
     def animate(
         self,
@@ -2897,48 +2524,6 @@ class Widget(DOMNode):
             if node.styles.has_rule("layers"):
                 order = node.styles.layers
         return order
-
-    @property
-    def link_style(self) -> Style:
-        """Style of links.
-
-        Returns:
-            Rich style.
-        """
-        styles = self.styles
-        _, background = self.background_colors
-        link_background = background + styles.link_background
-        link_color = link_background + (
-            link_background.get_contrast_text(styles.link_color.a)
-            if styles.auto_link_color
-            else styles.link_color
-        )
-        style = styles.link_style + Style.from_color(
-            link_color.rich_color,
-            link_background.rich_color if styles.link_background.a else None,
-        )
-        return style
-
-    @property
-    def link_style_hover(self) -> Style:
-        """Style of links underneath the mouse cursor.
-
-        Returns:
-            Rich Style.
-        """
-        styles = self.styles
-        _, background = self.background_colors
-        hover_background = background + styles.link_background_hover
-        hover_color = hover_background + (
-            hover_background.get_contrast_text(styles.link_color_hover.a)
-            if styles.auto_link_color_hover
-            else styles.link_color_hover
-        )
-        style = styles.link_style_hover + Style.from_color(
-            hover_color.rich_color,
-            hover_background.rich_color,
-        )
-        return style
 
     @property
     def select_container(self) -> Widget:
@@ -4489,23 +4074,6 @@ class Widget(DOMNode):
         self.scroll_x = self.validate_scroll_x(self.scroll_x)
         self.scroll_y = self.validate_scroll_y(self.scroll_y)
 
-    @property
-    def visual_style(self) -> VisualStyle:
-        """The widget's current style."""
-        resolved = self._resolved_paint_state()
-        if (
-            self._visual_style is None
-            or not resolved.same_paint(self._visual_paint_state)
-        ):
-            background, color, style = resolved.background, resolved.foreground, resolved.text_style
-            self._visual_style = replace(
-                VisualStyle.from_rich_style(style),
-                background=background,
-                foreground=color,
-            )
-        self._visual_paint_state = resolved
-        return self._visual_style
-
     def get_selection(self, selection: Selection) -> tuple[str, str] | None:
         """Get the text under the selection.
 
@@ -4520,12 +4088,7 @@ class Widget(DOMNode):
         Returns:
             Tuple of extracted text and ending (typically "\n" or " "), or `None` if no text could be extracted.
         """
-        visual = self._render()
-        if isinstance(visual, (Text, Content)):
-            text = str(visual)
-        else:
-            return None
-        return selection.extract(text), "\n"
+        return Visual.selected_text(self._render(), selection)
 
     def selection_updated(self, selection: Selection | None) -> None:
         """Called when the selection is updated.
@@ -4752,10 +4315,7 @@ class Widget(DOMNode):
         """
 
         if self.is_container:
-            if self.styles.layout and self.styles.keyline[0] != "none":
-                return self.layout.render_keyline(self)
-            else:
-                return Blank(self.background_colors[1])
+            return self._render_container()
         return self.css_identifier_styled
 
     def _render(self) -> Visual:

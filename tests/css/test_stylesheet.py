@@ -18,6 +18,22 @@ from textual.widget import Widget
 from textual.widgets import Static
 
 
+async def test_inline_style_uses_own_stylesheet_variables():
+    class DifferentVariablesApp(App):
+        def get_css_variables(self):
+            return {**super().get_css_variables(), "document-color": "red"}
+
+    stylesheet = Stylesheet(variables={"document-color": "blue"})
+    async with DifferentVariablesApp().run_test():
+        assert stylesheet.parse_style("$document-color").foreground == Color.parse(
+            "blue"
+        )
+        stylesheet.set_variables({"document-color": "green"})
+        assert stylesheet.parse_style("$document-color").foreground == Color.parse(
+            "green"
+        )
+
+
 def test_target_rule_publication_acquires_only_declared_css_path():
     class PathReads(DOMNode):
         path_reads = 0
