@@ -347,13 +347,15 @@ class MarkdownDocument:
             return id(supplier.__self__), supplier.__func__
         return id(supplier)
 
+    @property
+    def source_key(self):
+        """Original acquisition identity and complete grammar/supplier inputs."""
+        return self._source_identity, self._source_key
+
     def same_source(self, other):
         # Acquisition owns this identity; it survives worker serialization.
         # Equal text or a new resolved cohort cannot replace this source.
-        return (
-            self._source_identity == other._source_identity
-            and self._source_key == other._source_key
-        )
+        return self.source_key == other.source_key
 
     def with_presentation(self, owner: Markdown) -> MarkdownDocument:
         """Reacquire only current declarations/style, retaining this exact source.
