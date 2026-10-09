@@ -27,7 +27,7 @@ class HorizontalLayout(Layout):
         parent.pre_layout(self)
         placements: list[WidgetPlacement] = []
         add_placement = placements.append
-        viewport = parent.app.viewport_size
+        viewport = parent.layout_viewport
 
         child_styles = [child.styles for child in children]
         box_margins: list[Spacing] = [
@@ -120,3 +120,6 @@ class HorizontalLayout(Layout):
                 x = next_x + margin
 
         return placements
+
+    def document_key(self, *, _arrange=arrange, _width=Layout.get_content_width, _height=Layout.get_content_height) -> tuple:
+        return self._native_document_key(_arrange, _width, _height, ())

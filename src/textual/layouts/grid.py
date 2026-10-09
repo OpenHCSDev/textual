@@ -87,7 +87,7 @@ class GridLayout(Layout):
 
         table_size_rows = styles.grid_size_rows
 
-        viewport = parent.app.viewport_size
+        viewport = parent.layout_viewport
         keyline_style, _keyline_color = styles.keyline
         offset = (0, 0)
         gutter_spacing: Spacing | None
@@ -376,3 +376,7 @@ class GridLayout(Layout):
             )
 
         return placements
+
+    def document_key(self, *, _arrange=arrange, _width=Layout.get_content_width, _height=Layout.get_content_height) -> tuple:
+        return self._native_document_key(_arrange, _width, _height, (self.min_column_width, self.max_column_width, self.stretch_height,
+                  self.regular, self.expand, self.shrink, self.auto_minimum))

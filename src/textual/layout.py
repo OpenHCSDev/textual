@@ -126,6 +126,12 @@ class WidgetPlacement(NamedTuple):
     overlay: bool = False
     absolute: bool = False
 
+    @classmethod
+    def process_offsets(cls, placements, bounds: Region, offset: Offset):
+        """Acquire each original constraint before descendant placement begins."""
+        return [(ordinal, placement.process_offset(bounds, offset))
+                for ordinal, placement in placements]
+
     @property
     def reset_origin(self) -> WidgetPlacement:
         """Reset the origin in the placement (moves it to (0, 0))."""
@@ -255,6 +261,16 @@ class Layout(ABC):
 
     def clear_cache(self) -> None:
         """Release layout-owned derived state after structural child removal."""
+
+    def document_key(self) -> tuple:
+        """Immutable inputs for detached use; custom layouts supply this contract."""
+        raise TypeError(f"{type(self).__name__} has no detached layout contract")
+
+    def _native_document_key(self, arrange, width, height, inputs=()) -> tuple:
+        if (type(self).arrange is not arrange or type(self).get_content_width is not width
+                or type(self).get_content_height is not height):
+            raise TypeError(f"{type(self).__name__} must declare its detached layout inputs")
+        return (type(self), arrange, width, height, inputs)
 
     def __repr__(self) -> str:
         return f"<{self.name}>"

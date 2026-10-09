@@ -49,13 +49,13 @@ class StreamLayout(Layout):
         if not children:
             self.clear_cache()
             return []
-        viewport = parent.app.viewport_size
+        viewport = parent.layout_viewport
 
         if size.width != self._cached_width:
             self._cached_placements = None
         previous_results = self._cached_placements or []
 
-        layout_widgets = parent.screen._layout_widgets.get(parent, [])
+        layout_widgets = parent.layout_invalidated_widgets
 
         _Region = Region
         _WidgetPlacement = WidgetPlacement
@@ -158,3 +158,6 @@ class StreamLayout(Layout):
         else:
             height = 0
         return height
+
+    def document_key(self, *, _arrange=arrange, _width=get_content_width, _height=get_content_height) -> tuple:
+        return self._native_document_key(_arrange, _width, _height, ())
