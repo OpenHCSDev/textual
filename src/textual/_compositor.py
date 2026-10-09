@@ -2078,7 +2078,7 @@ class Compositor:
 
     def render_subtree_strips(
         self, root: Widget, root_geometry: MapGeometry,
-    ) -> tuple[Size, list[Strip]]:
+    ) -> tuple[Size, list[Strip], CompositorMap]:
         """Paint a body using its borrowed original published placement.
 
         The caller acquires the placement from published_geometry and consumes
@@ -2086,6 +2086,12 @@ class Compositor:
         or manufactures a scene to decide whether a body can be retired. The
         same original arrangement/line/chop algorithm supplies complete rows
         without replacing any published map or constructing another compositor.
+
+        Returns:
+            Outer size, complete rows, and the same geometry map used to paint
+            them. Regions and clips keep their original screen coordinates.
+            Project any retained source placements synchronously, then discard
+            this Widget-keyed map before awaiting or pruning the scene.
         """
         bounds = root_geometry.region
         geometry, _ = self._arrange_root(
@@ -2096,7 +2102,7 @@ class Compositor:
         with self._using_geometry(root, geometry):
             chops = self._render_chops(bounds, self._regions_to_spans((bounds,)),
                                       widgets=widgets, cuts=cuts, bounds=bounds)
-        return bounds.size, [Strip.join(chop.values()) for chop in chops]
+        return bounds.size, [Strip.join(chop.values()) for chop in chops], geometry
 
     def _render_chops(
         self,

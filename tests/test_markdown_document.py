@@ -503,7 +503,7 @@ async def test_source_empty_membership_before_native_mount(
         assert "last-child" in markdown.document.presentation.root.pseudo_classes
         assert paint.root_empty == markdown.is_empty
         assert paint.root_empty is expected_empty
-        size, mounted = app.screen._compositor.render_subtree_strips(
+        size, mounted, _ = app.screen._compositor.render_subtree_strips(
             markdown, app.screen._compositor.find_widget(markdown)
         )
         assert paint.size == size
@@ -558,7 +558,7 @@ async def test_root_selection_before_leaves_matches_native_scene_and_readiness(m
         # detached preparation above had only the root selection at ingress.
         app.screen._select_all_in_widget(markdown)
         await pilot.pause()
-        _, mounted = app.screen._compositor.render_subtree_strips(
+        _, mounted, _ = app.screen._compositor.render_subtree_strips(
             markdown, app.screen._compositor.find_widget(markdown)
         )
         assert painted_characters(markdown.document_paint.lines) == painted_characters(mounted)
@@ -600,7 +600,7 @@ async def test_partial_leaf_selection_uses_original_offsets_and_native_style(mon
         assert not selected.is_current(markdown, paint.width)
         selections.clear()
         assert selected.selections == ((index, selection),)
-        _, mounted = app.screen._compositor.render_subtree_strips(
+        _, mounted, _ = app.screen._compositor.render_subtree_strips(
             markdown, app.screen._compositor.find_widget(markdown)
         )
         assert painted_characters(selected.lines) == painted_characters(mounted)
@@ -698,7 +698,7 @@ async def test_native_document_rows_currentness_and_interactions(monkeypatch):
         markdown = app.query_one(AcquiredMarkdown)
         document = markdown.acquire_document(SOURCE, markdown.acquired_tokens)
         paint = await asyncio.to_thread(document.prepare, markdown.region.width)
-        size, mounted = app.screen._compositor.render_subtree_strips(
+        size, mounted, _ = app.screen._compositor.render_subtree_strips(
             markdown,
             app.screen._compositor.find_widget(markdown),
         )
@@ -757,7 +757,7 @@ async def test_native_document_rows_currentness_and_interactions(monkeypatch):
         current = document.with_presentation(markdown)
         assert not paint.matches(current, markdown.region.width)
         resized = await asyncio.to_thread(current.prepare, markdown.region.width)
-        size, mounted = app.screen._compositor.render_subtree_strips(
+        size, mounted, _ = app.screen._compositor.render_subtree_strips(
             markdown,
             app.screen._compositor.find_widget(markdown),
         )
