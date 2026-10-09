@@ -256,6 +256,7 @@ class MarkdownDocument:
         )
         dark = owner.app.current_theme.dark
         process_layout = owner.get_document_process_layout()
+        ancestor_pseudo_classes = owner.get_document_ancestor_pseudo_classes()
         block_classes = owner.acquire_document_blocks()
         producers = {
             block_type: block_type.document_node
@@ -292,7 +293,9 @@ class MarkdownDocument:
                 for support in block_type.document_declarations()
             ),
         }
-        presentation = DocumentPresentation.acquire(owner, declarations)
+        presentation = DocumentPresentation.acquire(
+            owner, declarations, ancestor_pseudo_classes=ancestor_pseudo_classes
+        )
         root_producer = declaration.document_root
         source_key = (
             source,
@@ -309,6 +312,7 @@ class MarkdownDocument:
             ),
             bullets,
             process_layout,
+            ancestor_pseudo_classes,
             cls._supplier_identity(inline_content),
             cls._supplier_identity(fence_content),
             cls._supplier_identity(unhandled),

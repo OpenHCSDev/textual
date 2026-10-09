@@ -1642,6 +1642,17 @@ class Markdown(Widget):
             )
         return None
 
+    def get_document_ancestor_pseudo_classes(self) -> frozenset[str] | None:
+        """Declare non-CSS ancestor observations used by detached source hooks.
+
+        None retains the full observation for arbitrary factories, converters
+        and layout hooks. An explicit set adds those observations to the actual
+        prepared stylesheet's dependencies; an empty set declares CSS-only
+        ancestor input. This includes required predicate side effects, not just
+        returned booleans. The root's native source observation remains full.
+        """
+        return None
+
     @classmethod
     def document_root(
         cls,
