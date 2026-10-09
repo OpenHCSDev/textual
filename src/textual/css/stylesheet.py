@@ -568,19 +568,6 @@ class Stylesheet:
             for component in sorted(component_classes)
         ]
 
-    def pseudo_class_dependencies(self, node: DOMNode) -> frozenset[str]:
-        """Potential selector observations for this declaration and its components.
-
-        Include rules that don't currently match: a false pseudo can become
-        true without changing a declaration. The original parsed candidate
-        plans supply ancestry/combinator dependencies as well as target state.
-        """
-        return self._get_candidate_rules(node._selector_names)[1].union(
-            *(candidate[1] for _, candidate in self._get_component_candidate_rules(
-                node._get_component_classes()
-            ))
-        )
-
     def apply(
         self,
         node: DOMNode,

@@ -54,7 +54,6 @@ if TYPE_CHECKING:
     from textual.css.model import SelectorSet
     from textual.dom import DOMNode
     from textual.screen import Screen
-    from textual.widget import Widget
 
 
 Callback: TypeAlias = "Callable[..., Any] | Callable[..., Awaitable[Any]]"
@@ -489,11 +488,11 @@ class MessagePump(metaclass=_MessagePumpMeta):
         return timer
 
     def _after_refresh_pending(
-        self, screen: Screen, roots: tuple[Widget, ...], *,
+        self, screen: Screen, *,
         refresh_requested: dict[Screen, bool], refresh_pending: bool,
     ) -> bool:
         """Non-spatial owners await the complete admitted screen publication."""
-        return refresh_pending or bool(roots)
+        return refresh_pending
 
     def call_after_refresh(self, callback: Callback, *args: Any, **kwargs: Any) -> bool:
         """Schedule a callback after this owner's messages and publication complete.

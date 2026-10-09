@@ -1218,12 +1218,12 @@ class Widget(DOMNode):
         return Content.from_markup(text_content)
 
     def _after_refresh_pending(
-        self, screen, roots: tuple[Widget, ...], *,
+        self, screen, *,
         refresh_requested: dict[Screen, bool], refresh_pending: bool,
     ) -> bool:
         """A spatial sender borrows its original screen's geometry and damage."""
         return self.is_attached and screen._sender_refresh_pending(
-            self, roots, refresh_requested=refresh_requested,
+            self, refresh_requested=refresh_requested,
         )
 
     def arrange(self, size: Size, optimal: bool = False) -> DockArrangeResult:
@@ -1767,18 +1767,6 @@ class Widget(DOMNode):
         Returns:
             The size and margin for this widget.
         """
-        try:
-            box = self.screen._compositor.mutation_box(self)
-        except NoScreen:
-            # Unmounted widgets still have ordinary native measurements.
-            # An attached source with no screen retains the original refusal.
-            if self.is_attached:
-                raise
-            box = None
-        if box is not None:
-            # Parent layouts measure the same committed box as Compositor;
-            # never descend through an actively changing child to size siblings.
-            return box
         nodes = self.__dict__.get("_nodes")
         revision: tuple[object, ...] = (self._layout_updates,
                     nodes._updates if nodes is not None else 0)
@@ -4590,14 +4578,6 @@ class Widget(DOMNode):
 
     async def broker_event(self, event_name: str, event: events.Event) -> bool:
         return await self.app._broker_event(event_name, event, default_namespace=self)
-
-    async def prepare_input(self, event: events.InputEvent) -> None:
-        """Prepare native resources before the app commits an input target.
-
-        Lazy presentation owners may materialize their existing children and
-        await layout here. The app then resolves the original event against
-        that geometry; widget mouse handlers run after target selection.
-        """
 
     def _request_layout(self, required: bool = True) -> None:
         self._layout_required |= required
