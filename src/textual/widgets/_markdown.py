@@ -450,6 +450,8 @@ class MarkdownBlock(Static):
         visual=Static.visual,
         container=Widget.is_container,
         rendering=Widget._render,
+        empty=Widget.is_empty,
+        pseudo_classes=Widget.get_pseudo_classes,
     ):
         cls._require_document_methods(
             {
@@ -467,6 +469,8 @@ class MarkdownBlock(Static):
                 "visual": visual,
                 "is_container": container,
                 "_render": rendering,
+                "is_empty": empty,
+                "get_pseudo_classes": pseudo_classes,
             }
         )
 
@@ -1578,6 +1582,8 @@ class Markdown(Widget):
         width=Widget.get_content_width,
         height=Widget.get_content_height,
         pre_layout=Widget.pre_layout,
+        empty=Widget.is_empty,
+        pseudo_classes=Widget.get_pseudo_classes,
     ):
         """Native immutable root; custom scene semantics supply this producer."""
         cls._require_document_methods(
@@ -1586,6 +1592,8 @@ class Markdown(Widget):
                 "get_content_width": width,
                 "get_content_height": height,
                 "pre_layout": pre_layout,
+                "is_empty": empty,
+                "get_pseudo_classes": pseudo_classes,
             }
         )
         return cls.native_document_root(document, children)

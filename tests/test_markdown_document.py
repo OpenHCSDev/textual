@@ -114,6 +114,88 @@ class DocumentApp(App):
             yield AcquiredMarkdown(SOURCE)
 
 
+class BeforeMountMarkdown(Markdown):
+    async def _parse_tokens(self, parser, markdown, *, use_thread):
+        tokens = await super()._parse_tokens(parser, markdown, use_thread=use_thread)
+        assert not self.children
+        self.host_pseudos = frozenset(self.get_pseudo_classes())
+        self.document = self.acquire_document(markdown, tokens)
+        self.document_paint = await asyncio.to_thread(
+            self.document.prepare, self.region.width
+        )
+        return tokens
+
+
+class BeforeMountApp(App):
+    CSS = """
+    VerticalScroll { scrollbar-size-vertical: 0; }
+    BeforeMountMarkdown { margin: 0; background: cyan; padding: 0 2; }
+    BeforeMountMarkdown:empty { background: red; padding: 1 3; }
+    BeforeMountMarkdown:last-child { border-left: solid yellow; }
+    """
+
+    def compose(self) -> ComposeResult:
+        with VerticalScroll():
+            yield Label("Actual host sibling")
+            yield BeforeMountMarkdown()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "source, expected_empty",
+    (
+        pytest.param("A direct native document.", False, id="paragraph"),
+        pytest.param("", True, id="empty-source"),
+        pytest.param("<!-- no native roots -->", True, id="unhandled-comment"),
+    ),
+)
+async def test_source_empty_membership_before_native_mount(
+    source, expected_empty, monkeypatch
+):
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    app = BeforeMountApp()
+    async with app.run_test(size=(54, 30)) as pilot:
+        await pilot.pause()
+        markdown = app.query_one(BeforeMountMarkdown)
+        await markdown.update(source)
+        # Membership publication changes the parent's :empty answer. Mount's
+        # sibling-order callback does not own that parent style publication.
+        markdown.update_node_styles()
+        await pilot.pause()
+        paint = markdown.document_paint
+        assert "empty" in markdown.host_pseudos
+        assert "empty" not in markdown.document.presentation.root.pseudo_classes
+        assert "last-child" in markdown.document.presentation.root.pseudo_classes
+        assert paint.root_empty == markdown.is_empty
+        assert paint.root_empty is expected_empty
+        size, mounted = app.screen._compositor.render_subtree_strips(
+            markdown, app.screen._compositor.find_widget(markdown)
+        )
+        assert paint.size == size
+        assert paint.gutter == markdown.styles.gutter
+        assert painted_characters(paint.lines) == painted_characters(mounted)
+        refreshed = markdown.document.with_presentation(markdown)
+        assert (
+            refreshed.presentation.root.key == markdown.document.presentation.root.key
+        )
+
+
+class EmptyDisplayApp(BeforeMountApp):
+    CSS = (
+        BeforeMountApp.CSS + "BeforeMountMarkdown MarkdownParagraph { display: none; }"
+    )
+
+
+@pytest.mark.asyncio
+async def test_display_changing_empty_selector_requires_explicit_source(monkeypatch):
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    app = EmptyDisplayApp()
+    async with app.run_test(size=(54, 30)) as pilot:
+        await pilot.pause()
+        with pytest.raises(TypeError, match="display changes an :empty selector input"):
+            await app.query_one(BeforeMountMarkdown).update("A hidden source child.")
+
+
 @pytest.mark.asyncio
 async def test_native_document_rows_currentness_and_interactions(monkeypatch):
     monkeypatch.delenv("NO_COLOR", raising=False)

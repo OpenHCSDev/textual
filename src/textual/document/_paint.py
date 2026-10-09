@@ -216,7 +216,6 @@ class DocumentNode(StyleContext):
             "last-child": self.last_child,
             "odd": self.is_odd,
             "even": self.is_even,
-            "empty": self.is_empty,
         }
         result.difference_update(positions)
         result.update(name for name, present in positions.items() if present)
@@ -440,12 +439,23 @@ class StyleInput:
     key: tuple
 
     @classmethod
-    def acquire(cls, node: DOMNode):
-        base, inline = node.styles.base.get_rules(), node.styles.inline.get_rules()
-        components = tuple(
-            (name, style.base.get_rules(), style.inline.get_rules())
-            for name, style in sorted(node._component_styles.items())
+    def acquire(cls, node: DOMNode, *, source_root: bool = False):
+        # Ancestors supply their actual effective rules. The constructed root's
+        # base/component rules belong to the acquired stylesheet, evaluated
+        # against its source children, rather than the preceding host tree.
+        base = {} if source_root else node.styles.base.get_rules()
+        inline = node.styles.inline.get_rules()
+        components = (
+            ()
+            if source_root
+            else tuple(
+                (name, style.base.get_rules(), style.inline.get_rules())
+                for name, style in sorted(node._component_styles.items())
+            )
         )
+        pseudo_classes = frozenset(node.get_pseudo_classes())
+        if source_root:
+            pseudo_classes -= {"empty"}
         values = (
             node.style_type,
             node.css_type_names,
@@ -458,7 +468,7 @@ class StyleInput:
             node.name,
             node.id,
             " ".join(sorted(node.classes)),
-            frozenset(node.get_pseudo_classes()),
+            pseudo_classes,
             _input_value(base),
             _input_value(inline),
             _input_value(components),
@@ -560,7 +570,7 @@ class DocumentPresentation:
                 "Custom CSS and paint ancestry require an acquired document presentation"
             )
         ancestors = tuple(StyleInput.acquire(node) for node in css_path[:-1])
-        root = StyleInput.acquire(owner)
+        root = StyleInput.acquire(owner, source_root=True)
         declarations = tuple(
             StyleInput.acquire(StyleContext(declaration))
             for declaration in sorted(
@@ -633,13 +643,26 @@ class DocumentPresentation:
             root._attach(ancestors[-1])
         declarations = {item.declaration: item for item in self.declarations}
         nodes = list(root.walk_children(with_self=True))
+        empty_inputs = {}
         for node in nodes:
             node.presentation = self
             node.bind_declaration(declarations[node.declaration])
+            if "empty" in stylesheet._get_candidate_rules(node._selector_names)[1]:
+                empty_inputs[node] = tuple(
+                    (ancestor, ancestor.is_empty)
+                    for ancestor in node.css_path_nodes
+                    if isinstance(ancestor, DocumentNode)
+                )
             stylesheet.apply(node)
             if node.styles.layout is not None:
                 node.styles.layout.document_key()
                 node.styles.layout = deepcopy(node.styles.layout)
+        for node, inputs in empty_inputs.items():
+            if any(ancestor.is_empty != was_empty for ancestor, was_empty in inputs):
+                raise TypeError(
+                    "Detached CSS display changes an :empty selector input; "
+                    "this dependency requires an explicit document producer"
+                )
         gutter = root.styles.gutter
         content_width = max(0, width - gutter.width)
         height = root.get_content_height(
@@ -816,6 +839,7 @@ class DocumentPresentation:
                 DocumentHeading(entry, placements_by_id.get(entry[2]))
                 for entry in headings
             ),
+            root.is_empty,
         )
 
 
@@ -880,6 +904,8 @@ class DocumentPaint:
     content_size: Size
     """Intrinsic inner extent; scene allocation does not replace this answer."""
     headings: tuple[DocumentHeading, ...]
+    root_empty: bool
+    """Native displayed-child membership of this acquired source/style cohort."""
 
     @property
     def table_of_contents(self):

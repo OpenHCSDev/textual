@@ -194,7 +194,6 @@ class MarkdownDocument:
     source: str
     tokens: Sequence[Token]
     declaration: type[Markdown]
-    root_pseudo_classes: frozenset[str]
     child_pseudo_classes: frozenset[str]
     dark: bool
     process_layout: object
@@ -301,7 +300,6 @@ class MarkdownDocument:
             source,
             tokens,
             declaration,
-            root_pseudo_classes,
             child_pseudo_classes,
             dark,
             process_layout,
@@ -357,7 +355,7 @@ class MarkdownDocument:
             name=self.presentation.root.name,
             id=self.presentation.root.id,
             classes=self.presentation.root.classes,
-            pseudo_classes=self.root_pseudo_classes,
+            pseudo_classes=self.presentation.root.pseudo_classes,
             inline_rules=self.presentation.root.inline_rules,
             process_layout=self.process_layout,
         )
