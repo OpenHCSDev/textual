@@ -14,7 +14,6 @@ In the future, this system will be used to implement accessibility features.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from copy import deepcopy
 from functools import lru_cache
 
 from rich.color import Color as RichColor
@@ -36,15 +35,6 @@ class LineFilter(ABC):
             enabled: If `enabled` is `False` then the filter will not be applied.
         """
         self.enabled = enabled
-
-    def acquire_document(self):
-        """Custom filters explicitly supply their detached, data-only state."""
-        raise TypeError(f"{type(self).__name__} has no detached filter contract")
-
-    def _acquire_native_document(self, apply):
-        if type(self).apply is not apply:
-            raise TypeError(f"{type(self).__name__} must supply acquire_document")
-        return deepcopy(self)
 
     @abstractmethod
     def apply(self, segments: list[Segment], background: Color) -> list[Segment]:
@@ -104,9 +94,6 @@ class Monochrome(LineFilter):
             for text, style, _ in segments
         ]
 
-    def acquire_document(self, *, _apply=apply):
-        return self._acquire_native_document(_apply)
-
 
 class NoColor(LineFilter):
     """Remove all color information from segments."""
@@ -132,9 +119,6 @@ class NoColor(LineFilter):
             _Segment(text, None if style is None else (style + default_colors), control)
             for text, style, control in segments
         ]
-
-    def acquire_document(self, *, _apply=apply):
-        return self._acquire_native_document(_apply)
 
 
 NO_DIM = Style(dim=False)
@@ -231,9 +215,6 @@ class DimFilter(LineFilter):
             for segment in segments
         ]
 
-    def acquire_document(self, *, _apply=apply):
-        return self._acquire_native_document(_apply)
-
 
 class ANSIToTruecolor(LineFilter):
     """Convert ANSI colors to their truecolor equivalents."""
@@ -305,6 +286,3 @@ class ANSIToTruecolor(LineFilter):
             )
             for text, style, _ in segments
         ]
-
-    def acquire_document(self, *, _apply=apply):
-        return self._acquire_native_document(_apply)

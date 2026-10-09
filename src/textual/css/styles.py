@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import weakref
-from copy import deepcopy
 from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass, field
 from functools import partial
@@ -1009,13 +1008,6 @@ class Styles(StylesBase):
 
     def get_rules(self) -> RulesMap:
         return self._rules.copy()
-
-    def acquire_document_rules(self) -> RulesMap:
-        """Acquire style values without borrowing scene layout placements."""
-        rules = self.get_rules()
-        layout = rules.get("layout")
-        memo = {} if layout is None else {id(layout): layout.acquire_document()}
-        return deepcopy(rules, memo)
 
     def set_rule(self, rule: str, value: object | None) -> bool:
         """Set a rule.

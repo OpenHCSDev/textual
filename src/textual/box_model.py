@@ -8,7 +8,6 @@ from textual.css.scalar import Scalar
 
 if TYPE_CHECKING:
     from textual.widget import Widget
-    from textual.document._paint import DocumentNode
     from textual._extrema import Extrema
 
 
@@ -23,7 +22,7 @@ class BoxModel(NamedTuple):
     @classmethod
     def resolve(
         cls,
-        node: Widget | DocumentNode,
+        node: Widget,
         container: Size,
         viewport: Size,
         width_fraction: Fraction,
@@ -33,9 +32,7 @@ class BoxModel(NamedTuple):
     ) -> tuple[BoxModel, Extrema]:
         """Resolve native CSS dimensions from intrinsic measurements.
 
-        Scene custody and measurement reuse belong to the caller. The actual
-        border-box, auto dimensions, fraction and extrema algorithm is shared
-        by mounted widgets and detached native document nodes.
+        Scene custody and measurement reuse belong to the caller.
         """
         styles = node.styles
         is_border_box = styles.box_sizing == "border-box"

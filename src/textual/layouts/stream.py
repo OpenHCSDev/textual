@@ -158,8 +158,3 @@ class StreamLayout(Layout):
         else:
             height = 0
         return height
-
-    _document_methods = (
-        arrange, get_content_width, get_content_height, __init__, clear_cache,
-        Layout.render_keyline, Layout._document_inputs,
-    )

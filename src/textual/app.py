@@ -4142,8 +4142,6 @@ class App(Generic[ReturnType], DOMNode):
                 self.mouse_position_high_resolution = (event.screen_x, event.screen_y)
                 if isinstance(event, events.MouseDown):
                     try:
-                        input_owner, _ = self.get_widget_at(event.x, event.y)
-                        await input_owner.prepare_input(event)
                         self._mouse_down_widget, _ = self.get_widget_at(
                             event.x, event.y
                         )

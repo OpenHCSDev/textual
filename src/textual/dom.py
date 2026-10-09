@@ -334,13 +334,6 @@ class DOMNode(MessagePump):
         """The native declaration addressed by CSS and ordered selectors."""
         return type(self)
 
-    @classmethod
-    def _require_document_methods(cls, methods) -> None:
-        """Different scene behavior must explicitly supply detached behavior."""
-        for name, implementation in methods.items():
-            if getattr(cls, name) is not implementation:
-                raise TypeError(f"{cls.__name__}.{name} requires a detached document producer")
-
     def _is_style_type(self, declaration: type[DOMNode]) -> bool:
         return isinstance(self, declaration)
 
@@ -1758,15 +1751,8 @@ class DOMNode(MessagePump):
         """
         _watch(self, obj, attribute_name, callback, init=init)
 
-    def get_pseudo_classes(
-        self, *, restrict: frozenset[str] | None = None
-    ) -> set[str]:
+    def get_pseudo_classes(self) -> set[str]:
         """Pseudo classes for a widget.
-
-        Args:
-            restrict: Observe only these declared predicates. Omit for the full
-                observation, including custom predicates. Like CSS matching,
-                a restricted observation doesn't invoke unrelated predicates.
 
         Returns:
             Names of the pseudo classes.
@@ -1775,13 +1761,8 @@ class DOMNode(MessagePump):
         return {
             name
             for name, check_class in self._PSEUDO_CLASSES.items()
-            if (restrict is None or name in restrict) and check_class(self)
+            if check_class(self)
         }
-
-    # This declaration supplies the restricted-call signature. A runtime
-    # replacement or override must retain its own full call; class identity
-    # alone doesn't grant this implementation capability.
-    get_pseudo_classes._document_restrict = get_pseudo_classes
 
     def reset_styles(self) -> None:
         """Reset styles back to their initial state."""

@@ -18,7 +18,6 @@ from bisect import bisect_left, bisect_right
 from collections import Counter
 from contextlib import contextmanager
 from functools import cached_property
-from fractions import Fraction
 from types import MappingProxyType
 from typing import (
     TYPE_CHECKING,
@@ -40,7 +39,6 @@ from rich.segment import Segment
 from rich.style import Style
 
 from textual import errors
-from textual.box_model import BoxModel
 from textual._context import visible_screen_stack
 from textual._loop import loop_last
 from textual._spatial_map import SpatialMap
@@ -173,8 +171,6 @@ class SubtreeMapGeometry(NamedTuple):
 
     geometry: MapGeometry
     clip_bounds: tuple[Region, ...]
-    parent: Widget | None
-    """Original rendered parent within this capture, not the mutating DOM."""
 
     @property
     def region(self) -> Region:
@@ -211,10 +207,7 @@ class SubtreeGeometryPlacement:
     source: SubtreeGeometry
     key: SubtreeGeometryKey
     clip: SceneClip
-    parent: Widget | None = None
     clip_bounds: tuple[Region, ...] = ()
-    source_held: bool = False
-    """This edge borrows mutation-owned participation for one publication."""
 
     @property
     def region(self) -> Region:
@@ -282,36 +275,12 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
                 return entry.source
         return None
 
-    def captured_parent(self, node: Widget) -> Widget | None:
-        """The original parent edge, independent of the live child tree."""
-        if (indexed := self.geometry.get(node)) is not None:
-            entry = indexed[1]
-            return (entry.parent if isinstance(entry, (SubtreeMapGeometry, SubtreeGeometryPlacement))
-                    else None)
-        if children := self._geometry_routes.get(node):
-            entry = self.geometry[children[0]][1]
-            return entry.source.captured_parent(node)
-        raise errors.NoWidget("Widget is not in captured subtree")
-
     def members(self, *, invisible: bool = False) -> Iterator[Widget]:
         """Logical membership stays with each original source."""
         yield from self.invisible_widgets if invisible else self.widgets
         for _, entry in self.geometry.values():
             if isinstance(entry, SubtreeGeometryPlacement):
                 yield from entry.source.members(invisible=invisible)
-
-    @cached_property
-    def reusable(self) -> bool:
-        """Whether this immutable source can supply ordinary reuse.
-
-        A captured loan needs fresh acquisition unless the containing mutation
-        owner explicitly lends that original whole-source snapshot.
-        """
-        return all(
-            not entry.source_held and entry.source.reusable
-            for _, entry in self.geometry.values()
-            if isinstance(entry, SubtreeGeometryPlacement)
-        )
 
     @cached_property
     def complete(self) -> bool:
@@ -332,19 +301,17 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
         return spatial_map
 
     @abstractmethod
-    def matches(self, key: SubtreeGeometryKey, *, require_complete: bool = False,
-                source_held: bool = False) -> bool:
+    def matches(self, key: SubtreeGeometryKey, *, require_complete: bool = False) -> bool:
         ...
 
     def restore_into(
         self, geometry: CompositorMap, widgets: set[Widget], invisible_widgets: set[Widget],
         key: SubtreeGeometryKey, clip: SceneClip, clips: dict[Widget, SceneClip],
         root: Widget, *, visible_only: bool, retained: set[Widget], bounds: Region,
-        source_held: bool = False,
     ) -> None:
         self.project_into(geometry, key, clip, clips, root,
                           visible_only=visible_only, retained=retained, bounds=bounds,
-                          source_held=source_held, ancestry_root=root,
+                          ancestry_root=root,
                           ancestors=tuple(root.walk_ancestors()))
         widgets.update(self.members())
         invisible_widgets.update(self.members(invisible=True))
@@ -353,7 +320,7 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
                      clip: SceneClip, clips: dict[Widget, SceneClip], root: Widget,
                      *, visible_only: bool, retained: set[Widget], bounds: Region,
                      ancestry_root: Widget, ancestors: tuple[DOMNode, ...],
-                     source_held: bool = False, require_root: bool = True,
+                     require_root: bool = True,
                      ) -> None:
         """Publish the requested scene without retiring complete source geometry.
 
@@ -386,14 +353,14 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
         else:
             entries = ((node, entry) for node, (_, entry) in self.geometry.items())
         no_demand: set[Widget] = set()
-        for node, entry in self._paint_entries(entries, source_held=source_held):
+        for node, entry in entries:
             required = not visible_only or (node is root and require_root) or node in retained
             if isinstance(entry, SubtreeGeometryPlacement):
                 child_key, child_clip = self._project_child(entry, key, clip)
                 entry.source.project_into(
                     geometry, child_key, child_clip, clips, node,
                     visible_only=visible_only, retained=child_demands.get(node, no_demand), bounds=bounds,
-                    source_held=source_held or entry.source_held, require_root=required,
+                    require_root=required,
                     ancestry_root=ancestry_root, ancestors=ancestors,
                 )
                 continue
@@ -406,10 +373,6 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
             if required or placement.visible_region.overlaps(bounds):
                 geometry[node] = placement.with_ancestors(node, ancestry_root, ancestors)
                 clips[node] = node_clip
-
-    def _paint_entries(self, entries, *, source_held: bool):
-        """Placed sources retain their original native participation."""
-        return entries
 
     def _project_child(self, entry: SubtreeGeometryPlacement, key: SubtreeGeometryKey,
                        clip: SceneClip) -> tuple[SubtreeGeometryKey, SceneClip]:
@@ -434,10 +397,7 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
 class PlacedSubtreeGeometry(SubtreeGeometry[MapGeometry]):
     """A culled or screen-dependent arrangement keeps its exact placement."""
 
-    def matches(self, key: SubtreeGeometryKey, *, require_complete: bool = False,
-                source_held: bool = False) -> bool:
-        if not self.reusable and not source_held:
-            return False
+    def matches(self, key: SubtreeGeometryKey, *, require_complete: bool = False) -> bool:
         if require_complete and not self.complete:
             return False
         return self.key == key or (
@@ -464,7 +424,6 @@ class IntrinsicSubtreeGeometry(SubtreeGeometry[SubtreeMapGeometry]):
                 key, geometry, widgets, invisible_widgets, clips, clip, screen_coordinates)
         intrinsic = {}
         origin = key.region.offset
-        geometry_routes = cls._route_geometry(geometry)
         for node, entry in geometry.items():
             child = isinstance(entry, SubtreeGeometryPlacement)
             scope, bounds = (entry.clip if child else clips[node]).relative_bounds(clip, origin)
@@ -476,30 +435,16 @@ class IntrinsicSubtreeGeometry(SubtreeGeometry[SubtreeMapGeometry]):
             if scope is not clip:
                 return PlacedSubtreeGeometry.capture(
                     key, geometry, widgets, invisible_widgets, clips, clip, screen_coordinates)
-            parent = (entry.parent if child else
-                      entry.ancestors[0] if entry.ancestors else None)
-            parent = parent._render_widget if isinstance(parent, Widget) else None
-            parent = (parent if parent is not node and parent in geometry_routes
-                      else None)
             intrinsic[node] = (
-                replace(entry, parent=parent, clip_bounds=bounds) if child
-                else SubtreeMapGeometry(entry, bounds, parent)
+                replace(entry, clip_bounds=bounds) if child
+                else SubtreeMapGeometry(entry, bounds)
             )
         return super().capture(key, intrinsic, widgets, invisible_widgets,
                                clips, clip, screen_coordinates)
 
-    def matches(self, key: SubtreeGeometryKey, *, require_complete: bool = False,
-                source_held: bool = False) -> bool:
-        if not self.reusable and not source_held:
-            return False
+    def matches(self, key: SubtreeGeometryKey, *, require_complete: bool = False) -> bool:
         if require_complete and not self.complete:
             return False
-        if source_held:
-            # The mutation owner lends the original source, not the changing
-            # DOM. Internal scroll and all arrangement inputs still agree;
-            # only source revisions belong to the ongoing mutation.
-            key = key._replace(geometry_revision=self.key.geometry_revision,
-                               nodes_revision=self.key.nodes_revision)
         return self.key.intrinsic() == key.intrinsic()
 
     def _project_entry(self, entry: SubtreeMapGeometry, key: SubtreeGeometryKey,
@@ -517,31 +462,13 @@ class IntrinsicSubtreeGeometry(SubtreeGeometry[SubtreeMapGeometry]):
             clip=clip.region,
         ), clip
 
-    def _paint_entries(self, entries, *, source_held: bool):
-        if not source_held:
-            return entries
-        participation: dict[Widget, bool] = {}
-
-        def participates(node: Widget) -> bool:
-            if node not in participation:
-                parent = self.captured_parent(node)
-                participation[node] = node._render_widget is node and (
-                    parent is None or (parent.is_container and participates(parent))
-                )
-            return participation[node]
-
-        # A retained-paint owner can now render itself rather than its old
-        # native children. Consult that declaration along captured ancestry,
-        # never walk or arrange the changing child tree. Each parent answers
-        # once within this projection; the resource remains immutable.
-        return ((node, entry) for node, entry in entries if participates(node))
 
 
 class CompositorUpdate:
     """An update generated by the compositor, which also doubles as console renderables."""
 
     def __init__(self) -> None:
-        self._publications: list[tuple[Compositor, CompositorMap, set[Region], tuple[Region, ...]]] = []
+        self._publications: list[tuple[Compositor, CompositorMap, set[Region]]] = []
         self._admitted = False
 
     @property
@@ -549,11 +476,11 @@ class CompositorUpdate:
         """Whether the original output owner accepted these actual cells."""
         return self._admitted
 
-    def bind_publication(self, compositor: Compositor, arranged: CompositorMap, regions: set[Region],
-                         exclusions: tuple[Region, ...], roots: tuple[Widget, ...]) -> None:
+    def bind_publication(self, compositor: Compositor, arranged: CompositorMap,
+                         regions: set[Region]) -> None:
         """Carry the exact geometry and damage represented by these output cells."""
-        self._publications.append((compositor, compositor._publication_geometry(arranged, regions, roots),
-                                   regions, exclusions))
+        self._publications.append(
+            (compositor, compositor._publication_geometry(arranged, regions), regions))
 
     def admit(self) -> None:
         """Commit only after the original output owner has accepted this update.
@@ -561,11 +488,10 @@ class CompositorUpdate:
         This is writer admission, not a new flush receipt. Driver and scene
         callbacks retain their original FIFO flush completion ownership.
         """
-        for compositor, geometry, regions, exclusions in self._publications:
+        for compositor, geometry, regions in self._publications:
             if geometry is not compositor._published_map:
                 compositor._published_map = geometry
                 compositor._published_widgets = None
-            compositor._published_exclusions = exclusions
             compositor._dirty_regions = compositor._exclude_regions(
                 compositor._dirty_regions, regions)
         self._publications.clear()
@@ -638,20 +564,6 @@ class InlineUpdate(CompositorUpdate):
         super().__init__()
         self.strips = strips
         self.clear = clear
-
-    @classmethod
-    def from_chops(cls, update: ChopsUpdate, height: int) -> InlineUpdate:
-        """Use inline-relative cursor movement for the original admitted cells."""
-        rows: list[list[Segment]] = [[] for _ in range(height)]
-        cursors = [0] * height
-        for y, x1, x2 in update.spans:
-            for x, strip in update._get_line_chops(y, x1, x2):
-                rows[y].append(Control.move(x - cursors[y]).segment)
-                rows[y].extend(strip)
-                cursors[y] = x + strip.cell_length
-        inline = cls([Strip(row) for row in rows])
-        inline._publications = update._publications
-        return inline
 
     def __rich_console__(
         self, console: Console, options: ConsoleOptions
@@ -799,17 +711,11 @@ class Compositor:
         self._full_map_invalidated = True
         self._arranging = False
         """Geometry reads during measurement observe the last committed map."""
-        self._layout_geometry: Mapping[Widget, MapGeometry | None] = {}
-        """Borrowed mutation placements, only during synchronous arrangement."""
-        self._render_exclusions: tuple[Region, ...] = ()
-        """The acquired frame bounds, borrowed by translucent backdrop rendering."""
         self._render_geometry: tuple[Widget, CompositorMap] | None = None
-        """The original arrangement selected by a synchronous body capture."""
+        """The original arrangement selected for a synchronous render."""
         self._visible_map: CompositorMap | None = None
         self._published_map: CompositorMap = {}
         """Geometry accepted with the last actual writer update, never lazy layout."""
-        self._published_exclusions: tuple[Region, ...] = ()
-        """Cells retained by that output; metadata cannot render newer source there."""
         self._published_widgets: dict[Widget, tuple[Region, Region]] | None = None
         self._layers: list[tuple[Widget, MapGeometry]] | None = None
 
@@ -860,7 +766,6 @@ class Compositor:
         self._full_map_invalidated = True
         self._visible_map = None
         self._published_map = {}
-        self._published_exclusions = ()
         self._published_widgets = None
         self._invalidate_render_projection()
         self.widgets.clear()
@@ -997,7 +902,7 @@ class Compositor:
         return ReflowResult(hidden=hidden_widgets, shown=shown_widgets)
 
     def reflow_visible(
-        self, parent: Widget, size: Size, *, retain_geometry: Iterable[Widget],
+        self, parent: Widget, size: Size, *, retain_geometry: Iterable[Widget] = (),
     ) -> set[Widget]:
         """Reflow only the visible children.
 
@@ -1006,7 +911,7 @@ class Compositor:
         Args:
             parent: The root widget.
             size: Size of the area to be filled.
-            retain_geometry: Original transaction's required geometry targets.
+            retain_geometry: Also calculate these widgets' ancestry paths.
 
         Returns:
             Set of widgets that were exposed by the scroll.
@@ -1137,18 +1042,6 @@ class Compositor:
             Compositor map and set of widgets.
         """
 
-        mutation_roots = set(root.screen._layout_mutation_roots())
-        previous = self._layout_map
-        held: dict[Widget, CompositorMap] = {owner: {} for owner in mutation_roots}
-        mutation_paths: set[Widget] = set()
-        for owner in mutation_roots:
-            mutation_paths.update(owner.walk_ancestors(with_self=True))
-        if mutation_roots:
-            for node, geometry, owners in self._geometry_for_roots(mutation_roots):
-                for owner in owners:
-                    held[owner][node] = geometry
-        for owner in mutation_paths - mutation_roots:
-            self._subtree_geometry.pop(owner, None)
         map: dict[Widget, MapGeometry | SubtreeGeometryPlacement] = {}
         capturing_source = False
         # Transient declaration paths manufacture the one retained resource.
@@ -1180,10 +1073,9 @@ class Compositor:
         default_layers = {"default": 0}
         retained_paths: set[Widget] = set()
         if visible_only:
-            # A held root still needs its new outer placement when scrolling
-            # takes it offscreen. Its resource owns descendants; this acquires
-            # only the ancestor path, not the mutating subtree's arrangement.
-            for target in (*retain_geometry, *mutation_roots):
+            # Requested targets need their outer placement even when offscreen.
+            # This acquires only the ancestor path, not unrelated descendants.
+            for target in retain_geometry:
                 path: list[Widget] = []
                 node = target
                 # Existing members already own a path to this same root.
@@ -1395,63 +1287,8 @@ class Compositor:
             nonlocal map, widgets, invisible_widgets, capturing_source
             if inherited_layers is None and (order_names := widget._get_layer_order((widget,))) is not None:
                 inherited_layers = {name: index for index, name in enumerate(order_names)}
-            if widget in held:
-                resource = self._subtree_geometry.get(widget)
-                key = SubtreeGeometryKey.from_widget(
-                    widget, virtual_region, region, order, layer_order, clip.region,
-                    visible, dock_gutter, size, False,
-                    tuple(inherited_layers.items()) if inherited_layers is not None else (),
-                )
-                if resource is not None and resource.contains(widget._render_widget) and resource.matches(
-                    key, require_complete=True, source_held=True,
-                ):
-                    # Complete intrinsic geometry retains original descendants
-                    # and clip declarations. Ancestor scrolling changes only
-                    # their placement; no mutating DOM arrangement is read.
-                    if capturing_source:
-                        map[widget._render_widget] = SubtreeGeometryPlacement(
-                            resource, key, clip, source_held=True
-                        )
-                    else:
-                        resource.restore_into(
-                            map, widgets, invisible_widgets, key, clip, clips,
-                            widget._render_widget, visible_only=visible_only and not complete,
-                            retained=retained_paths, bounds=root_geometry.region,
-                            source_held=True,
-                        )
-                    # The complete resource has replaced these old viewport
-                    # entries, including nested holds. Do not merge them back
-                    # after projection and resurrect stale absolute placement.
-                    for owner in held:
-                        if resource.contains(owner):
-                            held[owner].clear()
-                else:
-                    # Placed, resized or missing sources cannot authorize a
-                    # projection. Keep their exact committed hit/paint bounds.
-                    if capturing_source:
-                        # The published fallback is a partial placed source,
-                        # not an invented complete or translatable subtree.
-                        # Keep that lending scope on the same child edge.
-                        snapshot = held[widget]
-                        partial_key = SubtreeGeometryKey.from_widget(
-                            widget, virtual_region, region, order, layer_order,
-                            clip.region, visible, dock_gutter, size, True,
-                            tuple(inherited_layers.items()) if inherited_layers is not None else (),
-                        )
-                        source = PlacedSubtreeGeometry.capture(
-                            partial_key, snapshot, frozenset(snapshot), frozenset(),
-                            clips, clip, screen_coordinates,
-                        )
-                        map[widget._render_widget] = SubtreeGeometryPlacement(
-                            source, partial_key, clip, source_held=True
-                        )
-                    else:
-                        for node, geometry in held[widget].items():
-                            store_geometry(node, geometry, RootSceneClip(geometry.clip))
-                        widgets.update(held[widget])
-                return
             retains_source = widget.CACHE_SUBTREE_GEOMETRY
-            if (widget in mutation_paths or not self.max_subtree_geometry_entries
+            if (not self.max_subtree_geometry_entries
                     or not widget._is_mounted or not (retains_source or
                         (capturing_source and widget.is_container))):
                 arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
@@ -1511,10 +1348,6 @@ class Compositor:
                                       retained=retained_paths, bounds=root_geometry.region)
 
         # Add top level (root) widget
-        previous_layout_geometry = self._layout_geometry
-        self._layout_geometry = {
-            owner: previous.get(owner._render_widget) for owner in mutation_roots
-        }
         previous_arranging = self._arranging
         self._arranging = True
         try:
@@ -1532,26 +1365,21 @@ class Compositor:
             )
         finally:
             self._arranging = previous_arranging
-            self._layout_geometry = previous_layout_geometry
             # Both recursive closures otherwise retain themselves through
             # their closure cells, keeping old maps and entire widget trees
             # alive until cyclic GC. Reflow is finished, so break those local
             # recursion links before returning the authoritative scene map.
             del add_widget, arrange_widget
-        for geometry in held.values():
-            map.update(geometry)
-            widgets.update(geometry)
         widgets -= invisible_widgets
         return cast(CompositorMap, map), widgets
 
     @staticmethod
     def _place_children(placements, placement_count, container_region, scroll_offset,
                         order, layer_order, sub_clip, no_clip, layers):
-        """Native placement projection, shared by scenes and detached paint.
+        """Native placement projection.
 
         Arrangement owns ordinals and local boxes. This projection owns fixed,
-        absolute, overlay, layer and clip meaning; detached documents don't
-        reconstruct those answers with a second placement algorithm.
+        absolute, overlay, layer and clip meaning.
         """
         first_layer_order = layer_order - placement_count + 1
         placement_offset = container_region.offset
@@ -1630,28 +1458,10 @@ class Compositor:
             Sequence of (WIDGET, REGION) tuples.
         """
         contains = Region.contains
-        held = () if self.root is None else tuple(
-            root for root in self.root.screen._layout_mutation_roots()
-            if any(region.contains(x, y) for region in self.deferred_regions((root,)))
-        )
         if self.size.height > y >= 0:
             for widget, (region, clip) in self.published_widgets.items():
                 if contains(region, x, y) and contains(clip, x, y) and widget.visible:
-                    if held and not (
-                        set((widget, *self._published_map[widget].ancestors)).intersection(held)
-                        or any(widget in placement.ancestors
-                               for root in held
-                               if (placement := self._published_map.get(root)) is not None)
-                    ):
-                        continue
                     yield widget, region
-
-    def _interaction_deferred(self, x: int, y: int) -> bool:
-        """A geometry query cannot render held source to acquire metadata."""
-        regions = self._render_exclusions + self._published_exclusions
-        if self.root is not None:
-            regions += self.deferred_regions(self.root.screen._layout_mutation_roots())
-        return any(region.contains(x, y) for region in regions)
 
     def get_style_at(self, x: int, y: int) -> Style:
         """Get the Style at the given cell or Style.null()
@@ -1663,8 +1473,6 @@ class Compositor:
         Returns:
             The Style at the cell (x, y) within the Layout.
         """
-        if self._interaction_deferred(x, y):
-            return Style.null()
         try:
             widget, region = self.get_widget_at(x, y)
         except errors.NoWidget:
@@ -1699,7 +1507,7 @@ class Compositor:
             widget, region = self.get_widget_at(x, y)
         except errors.NoWidget:
             return None, None
-        if widget not in self.published_widgets or self._interaction_deferred(x, y):
+        if widget not in self.published_widgets:
             return widget, None
 
         content = self._published_map[widget].content_region
@@ -1934,67 +1742,7 @@ class Compositor:
                 regions.add(self.size.region)
         return tuple(regions)
 
-    def _deferred_ancestors(self, roots: tuple[Widget, ...],
-                            arranged: Mapping[Widget, MapGeometry]) -> set[DOMNode]:
-        """Acquire the structural ancestors of the actual deferred owners.
-
-        A first partial frame may place their backgrounds without claiming
-        that the pending child has published. This is declared parentage,
-        never a category such as nearest scrollable or container.
-        """
-        ancestors = {ancestor for root in roots
-                for ancestor in (arranged[root].ancestors if root in arranged
-                                 else root.walk_ancestors())}
-        # The compositor's declared root is the structural frame owner even
-        # when the held source belongs to a borrowed background screen.
-        if self.root is not None:
-            ancestors.add(self.root._render_widget)
-        return ancestors
-
-    def publication_exclusions(self, regions: Iterable[Region],
-                               roots: tuple[Widget, ...]) -> set[Region]:
-        """Close held cells over actual displaced placements.
-
-        A moved widget cannot publish its destination while another part of
-        its old footprint is retained, nor overwrite a held old destination.
-        Use both original placements; no scrollable-ancestor classification
-        or reconstruction of old parents is involved. Stationary parent
-        backgrounds do not turn a local hold into a whole-screen veto.
-        """
-        held = set(regions)
-        if not held:
-            return held
-        ancestors = self._deferred_ancestors(roots, self._layout_map)
-        movements = []
-        for widget in self._published_map.keys() | self._layout_map.keys():
-            old = self._published_map.get(widget)
-            new = self._layout_map.get(widget)
-            if old is None and widget in ancestors:
-                continue
-            if old is not None and new is not None and (
-                old.region, old.clip, old.order, old.ancestors, old.gutter
-            ) == (new.region, new.clip, new.order, new.ancestors, new.gutter):
-                continue
-            bounds = {region for placement in (old, new) if placement is not None
-                      if (region := placement.visible_region.intersection(self.size.region))}
-            if bounds:
-                movements.append(bounds)
-        while movements:
-            remaining = []
-            changed = False
-            for bounds in movements:
-                if any(bound.overlaps(region) for bound in bounds for region in held):
-                    changed |= not bounds.issubset(held)
-                    held.update(bounds)
-                else:
-                    remaining.append(bounds)
-            if not changed:
-                break
-            movements = remaining
-        return held
-
-    def _publication_geometry(self, arranged: CompositorMap, regions: set[Region],
-                              roots: tuple[Widget, ...]) -> CompositorMap:
+    def _publication_geometry(self, arranged: CompositorMap, regions: set[Region]) -> CompositorMap:
         """Join only complete placement changes represented by these cells.
 
         A partial repaint of unchanged geometry may publish immediately. A
@@ -2003,7 +1751,9 @@ class Compositor:
         """
         if self._published_map is arranged or self.size.region in regions:
             return arranged
-        ancestors = self._deferred_ancestors(roots, arranged)
+        # The compositor's declared root is the structural frame owner. A first
+        # partial frame may place its background before its children publish.
+        frame_root = None if self.root is None else self.root._render_widget
         geometry = {}
         for widget in dict.fromkeys((*arranged, *self._published_map)):
             old = self._published_map.get(widget)
@@ -2015,7 +1765,7 @@ class Compositor:
             bounds = {region for placement in (old, new) if placement is not None
                       if (region := placement.visible_region.intersection(self.size.region))}
             if (not self._exclude_regions(bounds, regions)
-                    or (old is None and widget in ancestors
+                    or (old is None and widget is frame_root
                         and any(bound.overlaps(region) for bound in bounds for region in regions))):
                 if new is not None:
                     geometry[widget] = new
@@ -2045,33 +1795,6 @@ class Compositor:
             result = remaining
         return result
 
-    @contextmanager
-    def _using_exclusions(self, regions: tuple[Region, ...]) -> Iterator[None]:
-        """Borrow the same frame admission for nested BackgroundScreen renders."""
-        previous = self._render_exclusions
-        self._render_exclusions = regions
-        try:
-            yield
-        finally:
-            self._render_exclusions = previous
-
-    def _publication_cuts(self, exclusions: Iterable[Region]) -> list[list[int]]:
-        """Held boundaries split cut cells before damage expands to native strips."""
-        cuts = [line.copy() for line in self.cuts]
-        for region in exclusions:
-            region = region.intersection(self.size.region)
-            for row in range(region.y, region.bottom):
-                cuts[row] = sorted(set((*cuts[row], region.x, region.right)))
-        return cuts
-
-    def mutation_box(self, widget: Widget) -> BoxModel | None:
-        """Borrow the committed root box; an unplaced mutation has no size yet."""
-        if widget not in self._layout_geometry or not widget.is_attached:
-            return None
-        geometry = self._layout_geometry[widget]
-        size = Size() if geometry is None else geometry.region.size
-        return BoxModel(Fraction(size.width), Fraction(size.height), widget.styles.margin)
-
     def pending_for(self, widget: Widget) -> bool:
         """Whether this sender still owns damage in the original committed scene."""
         if not self._dirty_regions:
@@ -2084,8 +1807,6 @@ class Compositor:
         full: bool = False,
         screen_stack: list[Screen] | None = None,
         simplify: bool = False,
-        excluded_regions: tuple[Region, ...] = (),
-        deferred_roots: tuple[Widget, ...] = (),
     ) -> RenderableType | None:
         """Render an update renderable.
 
@@ -2102,8 +1823,6 @@ class Compositor:
         screen_region = self.size.region
         if full:
             self._dirty_regions.add(screen_region)
-        if excluded_regions:
-            return self.render_partial_update(excluded_regions=excluded_regions, deferred_roots=deferred_roots)
         if full or screen_region in self._dirty_regions:
             return self.render_full_update(simplify=simplify)
         return self.render_partial_update()
@@ -2113,8 +1832,6 @@ class Compositor:
         size: Size,
         screen_stack: list[Screen] | None = None,
         clear: bool = False,
-        excluded_regions: tuple[Region, ...] = (),
-        deferred_roots: tuple[Widget, ...] = (),
     ) -> RenderableType | None:
         """Render an inline update.
 
@@ -2127,14 +1844,10 @@ class Compositor:
             A renderable.
         """
         visible_screen_stack.set([] if screen_stack is None else screen_stack)
-        if excluded_regions:
-            self._dirty_regions.add(self.size.region)
-            update = self.render_partial_update(excluded_regions=excluded_regions, deferred_roots=deferred_roots)
-            return None if update is None else InlineUpdate.from_chops(update, size.height)
         arranged = self._layout_map
         strips = self.render_strips(size)
         update = InlineUpdate(strips, clear=clear)
-        update.bind_publication(self, arranged, {self.size.region}, (), ())
+        update.bind_publication(self, arranged, {self.size.region})
         return update
 
     def render_full_update(self, simplify: bool = False) -> LayoutUpdate:
@@ -2163,11 +1876,10 @@ class Compositor:
             render_strips = [chop.values() for chop in chops]
 
         update = LayoutUpdate(render_strips, screen_region)
-        update.bind_publication(self, arranged, {screen_region}, (), ())
+        update.bind_publication(self, arranged, {screen_region})
         return update
 
-    def render_partial_update(self, *, excluded_regions: tuple[Region, ...] = (),
-                              deferred_roots: tuple[Widget, ...] = ()) -> ChopsUpdate | None:
+    def render_partial_update(self) -> ChopsUpdate | None:
         """Render a partial update.
 
         Returns:
@@ -2175,20 +1887,19 @@ class Compositor:
         """
         screen_region = self.size.region
         arranged = self._layout_map
-        update_regions = {
+        ready_regions = {
             damage for region in self._dirty_regions if (damage := region.intersection(screen_region))
         }
-        ready_regions = self._exclude_regions(update_regions, excluded_regions)
         if not ready_regions:
             return None
         crop = Region.from_union(ready_regions)
         spans = list(self._regions_to_spans(ready_regions))
-        cuts = self._publication_cuts(excluded_regions) if excluded_regions else self.cuts
+        cuts = self.cuts
         chops = self._render_chops(crop, spans,
                                   widgets=self.visible_widgets, cuts=cuts,
                                   bounds=screen_region)
         update = ChopsUpdate(chops, spans, cuts)
-        update.bind_publication(self, arranged, ready_regions, excluded_regions, deferred_roots)
+        update.bind_publication(self, arranged, ready_regions)
         return update
 
     def render_strips(self, size: Size | None = None) -> list[Strip]:
@@ -2203,9 +1914,8 @@ class Compositor:
         if size is None:
             size = self.size
         rows = Region(0, 0, self.size.width, min(size.height, self.size.height))
-        admitted = self._exclude_regions((rows,), self._render_exclusions)
-        cuts = self._publication_cuts(self._render_exclusions) if self._render_exclusions else self.cuts
-        chops = self._render_chops(size.region, self._regions_to_spans(admitted),
+        cuts = self.cuts
+        chops = self._render_chops(size.region, self._regions_to_spans((rows,)),
                                   widgets=self.visible_widgets, cuts=cuts,
                                   bounds=self.size.region)
         render_strips = [Strip.join(
@@ -2229,47 +1939,6 @@ class Compositor:
             geometry = self._get_published_geometry(root)
             if geometry is not None:
                 yield root, geometry
-
-    def arranged_geometry(
-        self, roots: Iterable[Widget],
-    ) -> Iterator[tuple[Widget, MapGeometry]]:
-        """Borrow current layout for preparation or offscreen retirement.
-
-        This deliberately does not claim terminal publication. Acquiring a
-        measured source and reading displayed rows have distinct histories.
-        Neither getter performs lazy layout on behalf of the caller.
-        """
-        for root in roots:
-            if root.is_mounted and (geometry := self._layout_map.get(root)) is not None:
-                yield root, geometry
-
-    def render_subtree_strips(
-        self, root: Widget, root_geometry: MapGeometry,
-    ) -> tuple[Size, list[Strip], CompositorMap]:
-        """Paint a body using its borrowed original arranged placement.
-
-        The caller acquires the placement from arranged_geometry and consumes
-        it before any await or DOM mutation. Capture never reacquires eligibility
-        or manufactures a scene to decide whether a body can be retired. The
-        same original arrangement/line/chop algorithm supplies complete rows
-        without replacing any published map or constructing another compositor.
-
-        Returns:
-            Outer size, complete rows, and the same geometry map used to paint
-            them. Regions and clips keep their original screen coordinates.
-            Project any retained source placements synchronously, then discard
-            this Widget-keyed map before awaiting or pruning the scene.
-        """
-        bounds = root_geometry.region
-        geometry, _ = self._arrange_root(
-            root, self.size, visible_only=False, root_geometry=root_geometry,
-        )
-        widgets = self._paint_regions(self._ordered_geometry(geometry), bounds)
-        cuts = self._cuts_for_regions(bounds, widgets)
-        with self._using_geometry(root, geometry):
-            chops = self._render_chops(bounds, self._regions_to_spans((bounds,)),
-                                      widgets=widgets, cuts=cuts, bounds=bounds)
-        return bounds.size, [Strip.join(chop.values()) for chop in chops], geometry
 
     def _render_chops(
         self,

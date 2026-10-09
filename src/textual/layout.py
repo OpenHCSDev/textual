@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from abc import ABC, ABCMeta, abstractmethod
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from inspect import getattr_static
 from typing import TYPE_CHECKING, ClassVar, Iterable, NamedTuple
 
 from textual._spatial_map import SpatialMap
@@ -238,56 +237,13 @@ class WidgetPlacement(NamedTuple):
         return self
 
 
-class _LayoutMeta(ABCMeta):
-    """Keep Layout's declaration supply current when its namespace changes."""
-
-    def __new__(mcls, name, bases, namespace, **kwargs):
-        declaration = super().__new__(mcls, name, bases, namespace, **kwargs)
-        if any(isinstance(base, _LayoutMeta) for base in bases):
-            Layout._publish_document_implementation.__func__(declaration)
-        return declaration
-
-    def __setattr__(cls, name, value):
-        super().__setattr__(name, value)
-        _LayoutMeta._document_declaration_changed(cls, name)
-
-    def __delattr__(cls, name):
-        super().__delattr__(name)
-        _LayoutMeta._document_declaration_changed(cls, name)
-
-    def _document_declaration_changed(cls, name):
-        if name not in cls._document_method_names and name not in (
-            "_document_methods", "__bases__",
-        ):
-            return
-        # Use Python's actual descendant declarations, not a second catalog.
-        pending = [cls]
-        visited = set()
-        while pending:
-            declaration = pending.pop()
-            if declaration in visited:
-                continue
-            visited.add(declaration)
-            Layout._publish_document_implementation.__func__(declaration)
-            pending.extend(type.__subclasses__(declaration))
-
-
-class Layout(ABC, metaclass=_LayoutMeta):
+class Layout(ABC):
     """Base class of the object responsible for arranging Widgets within a container."""
 
     name: ClassVar[str] = ""
     _content_width_dependency: ClassVar[HeightDependency]
     _content_height_dependency: ClassVar[HeightDependency]
     _arrangement_height_dependency: ClassVar[HeightDependency]
-    _document_method_names = (
-        "arrange", "get_content_width", "get_content_height", "__init__",
-        "clear_cache", "render_keyline", "_document_inputs",
-    )
-    _document_instance_method_names = frozenset(
-        name for name in _document_method_names if name != "__init__"
-    )
-    _document_methods: ClassVar[tuple | None] = None
-    _document_implementation: ClassVar[tuple | None] = None
 
     def __init_subclass__(cls, **kwargs) -> None:
         from textual._measurement import CONTEXT_HEIGHT
@@ -303,56 +259,8 @@ class Layout(ABC, metaclass=_LayoutMeta):
                 and cls._arrangement_height_dependency is CONTEXT_HEIGHT):
             cls._content_width_dependency = CONTEXT_HEIGHT
 
-    @classmethod
-    def _publish_document_implementation(cls):
-        """Admit actual C3 supply at declaration or namespace publication.
-
-        Foreign mixins can mutate without entering this class owner. They need
-        an explicit detached contract; inherited native admission cannot
-        certify those independently changing declarations.
-        """
-        expected = cls._document_methods
-        unmanaged = (
-            type(cls).__setattr__ is not _LayoutMeta.__setattr__
-            or type(cls).__delattr__ is not _LayoutMeta.__delattr__
-            or type(cls).__getattribute__ is not type.__getattribute__
-            or any(
-                base not in Layout.__mro__ and not issubclass(base, Layout)
-                for base in cls.__mro__[1:]
-            )
-        )
-        actual = (
-            None if expected is None or unmanaged else
-            tuple(getattr_static(cls, name) for name in cls._document_method_names)
-        )
-        supply = (cls, *actual) if actual is not None and actual == expected else None
-        type.__setattr__(cls, "_document_implementation", supply)
-
     def clear_cache(self) -> None:
         """Release layout-owned derived state after structural child removal."""
-
-    def document_key(self) -> tuple:
-        """Immutable inputs for detached use; custom layouts supply this contract."""
-        implementation = type(self)._document_implementation
-        if implementation is None or implementation[0] is not type(self):
-            raise TypeError(f"{type(self).__name__} must declare its detached layout inputs")
-        # Instance dispatch changes binding even when the assigned object is
-        # the same unbound function. Constructor dispatch belongs to the type.
-        if not self.__dict__.keys().isdisjoint(type(self)._document_instance_method_names):
-            raise TypeError(f"{type(self).__name__} has instance-specific layout dispatch")
-        return (*implementation, tuple(self._document_inputs().items()))
-
-    def _document_inputs(self) -> dict:
-        return {}
-
-    def acquire_document(self) -> Layout:
-        """Acquire algorithm/configuration with independent derived geometry.
-
-        Custom layouts own this construction contract. A scene layout's cached
-        placements and child custody are not document inputs.
-        """
-        self.document_key()
-        return type(self)(**self._document_inputs())
 
     def __repr__(self) -> str:
         return f"<{self.name}>"
