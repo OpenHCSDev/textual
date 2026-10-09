@@ -940,6 +940,8 @@ class DocumentPresentation:
                     content_region.size,
                     virtual_region,
                     dock_gutter,
+                    ancestors=tuple(node.walk_ancestors()),
+                    gutter=node.styles.gutter,
                 )
                 if not node.is_container:
                     node.paint_leaf_index = len(leaves)

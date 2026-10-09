@@ -1321,11 +1321,24 @@ class Screen(Generic[ScreenResultType], Widget):
                     inputs.enter_context(screen._using_presentation_inputs())
                 cohort = self._prepare_visible_screens(screens)
                 deferred_roots = tuple(root for _, roots in cohort for root in roots)
-                excluded_regions = tuple(
+                exclusions = set(
                     region for screen, roots in cohort
                     for region in screen._compositor.deferred_regions(roots)
                 )
+                # A backdrop and foreground share the same output cells.
+                # Resolve displacement dependencies across that exact acquired
+                # stack before any renderer can consume one screen's damage.
+                while True:
+                    previous = exclusions.copy()
+                    for screen, _ in cohort:
+                        exclusions.update(screen._compositor.publication_exclusions(exclusions, deferred_roots))
+                    if exclusions == previous:
+                        break
+                excluded_regions = tuple(exclusions)
                 if foreground:
+                    background_geometry = {
+                        screen: screen._compositor._layout_map for screen in background_screens
+                    }
                     # BackgroundScreen can render inside the foreground's
                     # renderer. Both borrow this exact acquired admission.
                     for screen, _ in cohort:
@@ -1340,6 +1353,7 @@ class Screen(Generic[ScreenResultType], Widget):
                                                  if deferred_roots else inline_height),
                             screen_stack=background_screens, clear=clear,
                             excluded_regions=excluded_regions,
+                            deferred_roots=deferred_roots,
                         )
                         if update is not None and not deferred_roots:
                             app._previous_inline_height = inline_height
@@ -1347,7 +1361,14 @@ class Screen(Generic[ScreenResultType], Widget):
                         update = self._compositor.render_update(
                             screen_stack=background_screens,
                             excluded_regions=excluded_regions,
+                            deferred_roots=deferred_roots,
                         )
+                    if update is not None:
+                        ready = self._compositor._exclude_regions(
+                            self._compositor._dirty_regions, excluded_regions)
+                        for screen in background_screens:
+                            update.bind_publication(screen._compositor, background_geometry[screen],
+                                                    ready, excluded_regions, deferred_roots)
                 elif self in background_screens and self._compositor._dirty_regions:
                     damage = self._compositor._exclude_regions(
                         self._compositor._dirty_regions, excluded_regions,
@@ -1356,7 +1377,8 @@ class Screen(Generic[ScreenResultType], Widget):
             if foreground:
                 if update is not None:
                     app._display(self, update)
-                    self._on_frame_published(deferred_roots)
+                    if update.admitted:
+                        self._on_frame_published(deferred_roots)
                 if not self._compositor._interaction_deferred(*app.mouse_position):
                     app._update_mouse_over(self)
             elif damage is not None:
@@ -1365,9 +1387,8 @@ class Screen(Generic[ScreenResultType], Widget):
                 if damage:
                     self._set_dirty(*damage)
                     app.screen.refresh(*damage)
-                    self._compositor._dirty_regions = self._compositor._exclude_regions(
-                        self._compositor._dirty_regions, damage,
-                    )
+                    # The foreground's actual output update owns consumption;
+                    # forwarding damage is not a display acknowledgment.
                 self._dirty_widgets.clear()
                 if not self._compositor._interaction_deferred(*app.mouse_position):
                     app._update_mouse_over(self)
@@ -1575,18 +1596,11 @@ class Screen(Generic[ScreenResultType], Widget):
                 )
                 if exposed_widgets:
                     layers = self._compositor.layers
-                    for widget, (
-                        region,
-                        _order,
-                        _clip,
-                        virtual_size,
-                        container_size,
-                        _,
-                        _,
-                    ) in layers:
+                    for widget, geometry in layers:
                         if widget in exposed_widgets:
                             if widget._size_updated(
-                                region.size, virtual_size, container_size, layout=False
+                                geometry.region.size, geometry.virtual_size,
+                                geometry.container_size, layout=False
                             ):
                                 widget.post_message(
                                     ResizeEvent(
@@ -1610,16 +1624,9 @@ class Screen(Generic[ScreenResultType], Widget):
                     widget.post_message(Hide())
 
                 layers = self._compositor.layers
-                for widget, (
-                    region,
-                    _order,
-                    _clip,
-                    virtual_size,
-                    container_size,
-                    _,
-                    _,
-                ) in layers:
-                    size_changed = widget._size_updated(region.size, virtual_size, container_size)
+                for widget, geometry in layers:
+                    size_changed = widget._size_updated(
+                        geometry.region.size, geometry.virtual_size, geometry.container_size)
                     if widget in shown or size_changed:
                         widget.post_message(
                             ResizeEvent(widget.outer_size, widget.virtual_size, widget.container_size)
