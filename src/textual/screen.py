@@ -1338,6 +1338,10 @@ class Screen(Generic[ScreenResultType], Widget):
         """Opt in to viewport-local geometry/lifecycle with lazy full-map lookup."""
         return False
 
+    def _layout_geometry_targets(self) -> tuple[Widget, ...]:
+        """Additional native geometry required by a viewport-layout transaction."""
+        return ()
+
     def _refresh_layout(self, size: Size | None = None, scroll: bool = False) -> None:
         """Refresh the layout (can change size and positions of widgets)."""
         size = self.outer_size if size is None else size
@@ -1376,7 +1380,9 @@ class Screen(Generic[ScreenResultType], Widget):
             else:
                 viewport_layout = self._use_viewport_layout()
                 if viewport_layout:
-                    hidden, shown, resized = self._compositor.reflow(self, size, visible_only=True)
+                    hidden, shown, resized = self._compositor.reflow(
+                        self, size, visible_only=True, retain_geometry=self._layout_geometry_targets(),
+                    )
                 else:
                     hidden, shown, resized = self._compositor.reflow(self, size)
                 self._layout_widgets.clear()

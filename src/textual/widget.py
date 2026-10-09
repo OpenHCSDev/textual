@@ -483,6 +483,7 @@ class Widget(DOMNode):
         self._repaint_regions: set[Region] = set()
 
         self._box_model_cache: LRUCache[object, BoxModel] = LRUCache(16)
+        self._box_model_revision: tuple[int, int] | None = None
 
         # Cache the auto content dimensions
         self._content_width_cache: tuple[object, int] = (None, 0)
@@ -1770,6 +1771,13 @@ class Widget(DOMNode):
         Returns:
             The size and margin for this widget.
         """
+        revision = (self._layout_updates, self.styles._cache_key)
+        if revision != self._box_model_revision:
+            # Measurements from previous revisions can never be hit again.
+            # Keep width/viewport variants within this revision, rather than
+            # retaining dead generation graphs until ordinary LRU eviction.
+            self._box_model_cache.clear()
+            self._box_model_revision = revision
         cache_key = (
             container,
             viewport,
@@ -1777,8 +1785,7 @@ class Widget(DOMNode):
             height_fraction,
             constrain_width,
             greedy,
-            self._layout_updates,
-            self.styles._cache_key,
+            *revision,
         )
         if cached_box_model := self._box_model_cache.get(cache_key):
             return cached_box_model
@@ -4155,13 +4162,20 @@ class Widget(DOMNode):
                 self._set_dirty()
             self._size = size
             if layout:
-                if self.is_scrollable:
-                    # Containers/virtual views retain extent-driven feedback.
+                measured_group = (
+                    self.is_container
+                    and self.styles.overflow_x == "hidden"
+                    and self.styles.overflow_y == "hidden"
+                )
+                if self.is_scrollable and not measured_group:
+                    # Scrolling/virtual views retain extent-driven feedback.
                     self.virtual_size = virtual_size
                 else:
-                    # Notify watches without remeasuring parents for a leaf's
-                    # just-committed measurement. Real watcher changes still
-                    # request their own layout.
+                    # A layout group's measured extent is output of this pass,
+                    # just like a leaf's extent. Refeeding it into ancestor
+                    # measurement invalidates caches without changing inputs.
+                    # Watches, scroll clamping and actual watcher mutations
+                    # remain normal; authored virtual_size retains its flags.
                     self._reactives["virtual_size"]._set(self, virtual_size, layout=False)
             else:
                 self.set_reactive(Widget.virtual_size, virtual_size)
