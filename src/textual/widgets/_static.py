@@ -122,9 +122,15 @@ class Static(Widget, inherit_bindings=False):
         self.__content = content
         self.__visual = visualize(self, content, markup=self._render_markup)
         if layout is None:
-            layout = not (
+            unchanged = (
                 self._has_native_content_measurement()
                 and type(previous_visual) is Content
                 and previous_visual == self.__visual
+            )
+            # New content changes this widget's size only through an auto (or
+            # unset) dimension; a fixed-size Static repaints without a layout.
+            layout = not unchanged and any(
+                scalar is None or scalar.is_auto
+                for scalar in (self.styles.width, self.styles.height)
             )
         self.refresh(layout=layout)
