@@ -518,44 +518,19 @@ class Stylesheet:
         nodes: list[DOMNode],
         relevant_classes: frozenset[str],
     ) -> tuple:
-        """Build an ancestry key without repeatedly walking disabled ancestors.
-
-        The ordinary widget key inherits disabled state along the same path.
-        Fold that state once from root to leaf rather than re-walking each
-        prefix. Custom pseudo-class/disabled implementations keep their own
-        behavior; no values are retained beyond this key construction.
-        """
+        """Build an ancestry key from the nodes' actual declared acquisition."""
         result = []
-        previous: DOMNode | None = None
-        inherited_disabled = False
+        inputs: dict = {}
         for node in nodes:
-            node_type = type(node)
-            if isinstance(node, Widget):
-                if node._parent is previous:
-                    inherited_disabled = bool(node.disabled) or inherited_disabled
-                else:
-                    # A custom CSS path can differ from the physical ancestry.
-                    inherited_disabled = Widget.is_disabled.fget(node)
-                if (
-                    node_type._pseudo_classes_cache_key is Widget._pseudo_classes_cache_key
-                    and node_type.is_disabled is Widget.is_disabled
-                ):
-                    pseudo_key = (node.mouse_hover, node.has_focus, inherited_disabled)
-                else:
-                    pseudo_key = node._pseudo_classes_cache_key
-            else:
-                inherited_disabled = False
-                pseudo_key = node._pseudo_classes_cache_key
             result.append(
                 (
                     node._id if node._id in self._ids_in_rules else None,
                     node.classes & relevant_classes,
                     node.css_type_name,
-                    pseudo_key,
+                    node._acquire_pseudo_property("_pseudo_classes_cache_key", inputs),
                     node.name,
                 )
             )
-            previous = node
         return tuple(result)
 
     def _get_candidate_rules(
