@@ -1433,6 +1433,14 @@ class Screen(Generic[ScreenResultType], Widget):
         """Opt in to viewport geometry with lazy acquisition of reader paths."""
         return False
 
+    def _layout_geometry_targets(self) -> Iterable[Widget]:
+        """Widgets a viewport layout must place even when they are off screen.
+
+        A screen declares what its scroll compensation reads, so that geometry
+        comes from the same arrangement instead of a later on-demand reflow.
+        """
+        return ()
+
     def _refresh_layout(self, size: Size | None = None, scroll: bool = False) -> None:
         """Refresh the layout (can change size and positions of widgets)."""
         size = self.outer_size if size is None else size
@@ -1448,7 +1456,8 @@ class Screen(Generic[ScreenResultType], Widget):
             # Pending layout requests require layout beyond the visible-scroll
             # traversal.
             if scroll and not any(self._layout_widgets.values()):
-                exposed_widgets = self._compositor.reflow_visible(self, size)
+                exposed_widgets = self._compositor.reflow_visible(
+                    self, size, retain_geometry=self._layout_geometry_targets())
                 if exposed_widgets:
                     layers = self._compositor.layers
                     for widget, geometry in layers:
@@ -1467,6 +1476,7 @@ class Screen(Generic[ScreenResultType], Widget):
                 viewport_layout = self._use_viewport_layout()
                 hidden, shown = self._compositor.reflow(
                     self, size, visible_only=viewport_layout,
+                    retain_geometry=self._layout_geometry_targets() if viewport_layout else (),
                 )
                 self._layout_widgets.clear()
                 Hide = events.Hide
