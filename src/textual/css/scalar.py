@@ -266,7 +266,7 @@ class Scalar(NamedTuple):
     @lru_cache(maxsize=4096)
     def resolve(
         self, size: Size, viewport: Size, fraction_unit: Fraction | None = None
-    ) -> Fraction:
+    ) -> Fraction | int:
         """Resolve scalar with units into a dimensions.
 
         Args:
@@ -277,7 +277,8 @@ class Scalar(NamedTuple):
             ScalarResolveError: If the unit is unknown.
 
         Returns:
-            A size (in cells)
+            A size (in cells): an int when it is a whole number of cells, so
+                layout arithmetic on it stays in integers.
         """
         value, unit, percent_unit = self
 
@@ -289,7 +290,7 @@ class Scalar(NamedTuple):
             )
         except KeyError:
             raise ScalarResolveError(f"expected dimensions; found {str(self)!r}")
-        return dimension
+        return dimension.numerator if dimension.denominator == 1 else dimension
 
     def copy_with(
         self,
