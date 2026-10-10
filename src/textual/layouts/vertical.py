@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from fractions import Fraction
 from typing import TYPE_CHECKING
 
 from textual._resolve import resolve_box_models
@@ -76,11 +75,11 @@ class VerticalLayout(Layout):
 
         y = next(
             (
-                Fraction(box_model.margin.top)
+                box_model.margin.top
                 for box_model, child in zip(box_models, children)
                 if child.styles.overlay != "screen"
             ),
-            Fraction(0),
+            0,
         )
 
         _Region = Region

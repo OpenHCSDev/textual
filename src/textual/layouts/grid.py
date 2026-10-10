@@ -334,14 +334,14 @@ class GridLayout(Layout):
             box_width, box_height, margin = widget._get_box_model(
                 cell_size,
                 viewport,
-                Fraction(cell_size.width),
-                Fraction(cell_size.height),
+                cell_size.width,
+                cell_size.height,
                 constrain_width=True,
                 greedy=greedy,
             )
 
             if stretch_height and box_height <= cell_size.height:
-                box_height = Fraction(cell_size.height)
+                box_height = cell_size.height
 
             region = (
                 Region(

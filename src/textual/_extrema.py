@@ -62,8 +62,8 @@ class Extrema(NamedTuple):
             Size with extrema applied.
         """
         return Size(
-            int(self.apply_width(Fraction(width))),
-            int(self.apply_height(Fraction(height))),
+            int(self.apply_width(width)),
+            int(self.apply_height(height)),
         )
 
     @classmethod

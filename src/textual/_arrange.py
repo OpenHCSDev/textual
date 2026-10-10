@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from fractions import Fraction
 from operator import attrgetter
 from typing import TYPE_CHECKING, Iterable, Mapping, Sequence
 
@@ -153,7 +152,7 @@ def _arrange_dock_widgets(
         edge = dock_widget.styles.dock
 
         box_model = dock_widget._get_box_model(
-            size, viewport, Fraction(size.width), Fraction(size.height), greedy=greedy
+            size, viewport, size.width, size.height, greedy=greedy
         )
         widget_width_fraction, widget_height_fraction, margin = box_model
         widget_width = int(widget_width_fraction) + margin.width
@@ -226,7 +225,7 @@ def _arrange_split_widgets(
     for split_widget in split_widgets:
         split = split_widget.styles.split
         box_model = split_widget._get_box_model(
-            size, viewport, Fraction(size.width), Fraction(size.height)
+            size, viewport, size.width, size.height
         )
         widget_width_fraction, widget_height_fraction, margin = box_model
         if split == "bottom":
