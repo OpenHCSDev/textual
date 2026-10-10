@@ -349,6 +349,10 @@ class MouseEvent(InputEvent, bubble=True):
         style: The Rich Style under the mouse cursor.
     """
 
+    sets_capture = False
+    """Handlers may capture or release the mouse: the app targets the next
+    pointer event only after this one's delivery completes."""
+
     __slots__ = [
         "widget",
         "_x",
@@ -588,6 +592,8 @@ class MouseDown(MouseEvent, bubble=True, verbose=True):
     - [X] Verbose
     """
 
+    sets_capture = True
+
 
 @rich.repr.auto
 class MouseUp(MouseEvent, bubble=True, verbose=True):
@@ -596,6 +602,8 @@ class MouseUp(MouseEvent, bubble=True, verbose=True):
     - [X] Bubbles
     - [X] Verbose
     """
+
+    sets_capture = True
 
 
 @rich.repr.auto
