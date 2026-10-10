@@ -4460,10 +4460,8 @@ class Widget(DOMNode):
                     if self.styles.keyline[0] != "none":
                         # A keyline's background follows its content scroll.
                         self._set_dirty()
-                    # Layout sources may be held at the screen. Preserve the
-                    # independent scroll intent; Screen owns whether actionable
-                    # sources require full layout or only visible reflow.
-                    # The message coalesces; the screen keeps which containers scrolled.
+                    # The screen decides between a scoped and a full reflow.
+                    # The message coalesces, so it keeps which containers scrolled.
                     screen._scrolled_widgets.add(self)
                     screen.post_message(messages.UpdateScroll())
                 if self._repaint_required:
