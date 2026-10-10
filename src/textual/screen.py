@@ -9,6 +9,7 @@ The `Screen` class is a special widget which represents the content in the termi
 from __future__ import annotations
 
 import asyncio
+from contextlib import contextmanager
 from functools import partial
 from operator import attrgetter
 from typing import (
@@ -1251,10 +1252,28 @@ class Screen(Generic[ScreenResultType], Widget):
             refresh_pending=refresh_pending,
         )
 
+    _frame_holds = 0
+    """Callers holding this screen's frames (see `hold_frames`)."""
+
+    @contextmanager
+    def hold_frames(self) -> Iterator[None]:
+        """Withhold writing frames while this screen changes over several loop turns.
+
+        Layout keeps running, so steps that measure still can; the loop stays
+        free for input between steps. The finished scene is written once.
+        """
+        self._frame_holds += 1
+        try:
+            yield
+        finally:
+            self._frame_holds -= 1
+            if not self._frame_holds:
+                self.refresh()
+
     def _compositor_refresh(self) -> None:
         """Publish the compositor's damage through the foreground screen."""
         app = self.app
-        if app._batch_count:
+        if app._batch_count or self._frame_holds:
             return
         background_screens = app._background_screens
         if self is app.screen and app.is_inline:
