@@ -4463,6 +4463,8 @@ class Widget(DOMNode):
                     # Layout sources may be held at the screen. Preserve the
                     # independent scroll intent; Screen owns whether actionable
                     # sources require full layout or only visible reflow.
+                    # The message coalesces; the screen keeps which containers scrolled.
+                    screen._scrolled_widgets.add(self)
                     screen.post_message(messages.UpdateScroll())
                 if self._repaint_required:
                     self._repaint_required = False

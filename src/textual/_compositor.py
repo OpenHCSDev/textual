@@ -939,6 +939,66 @@ class Compositor:
 
         return exposed_widgets
 
+    def reflow_scrolled(
+        self, parent: Widget, size: Size, scrolled: Iterable[Widget], *,
+        retain_geometry: Iterable[Widget] = (),
+    ) -> set[Widget] | None:
+        """Re-arrange only the subtrees of containers whose scroll changed.
+
+        A scroll moves a container's descendants and nothing outside it: its
+        own placement and every other widget keep their geometry. Each
+        container is arranged from its current placement and its entries
+        replace its previous descendants' in the viewport map.
+
+        Returns:
+            Widgets the scroll exposed, or None when this scroll cannot be
+            scoped (the caller reflows the whole viewport).
+        """
+        previous = self._visible_map
+        if previous is None or self.root is not parent or self.size != size:
+            return None
+        scrolled = set(scrolled)
+        containers = [
+            widget for widget in scrolled
+            if not any(ancestor in scrolled for ancestor in widget.ancestors)
+        ]
+        if not containers or any(container not in previous for container in containers):
+            return None
+        retain = tuple(retain_geometry)
+        scene = dict(previous)
+        widgets = set(self.widgets)
+        exposed: set[Widget] = set()
+        for container in containers:
+            old = [widget for widget, geometry in previous.items()
+                   if container in geometry.ancestors]
+            # Screen-positioned descendants do not move with their container.
+            if container.uses_screen_coordinates or any(
+                widget.uses_screen_coordinates for widget in old
+            ):
+                return None
+            arranged, members = self._arrange_root(
+                container, size, visible_only=True, root_geometry=previous[container],
+                retain_geometry=tuple(
+                    target for target in retain if container in target.ancestors
+                ),
+            )
+            for widget in old:
+                del scene[widget]
+            widgets.difference_update([
+                widget for widget in widgets
+                if widget is not container and container in widget.ancestors
+            ])
+            scene.update(arranged)
+            widgets.update(members)
+            exposed.update(arranged.keys() - previous.keys())
+        self._invalidate_render_projection()
+        self._full_map_invalidated = True
+        self._visible_map = scene
+        self._invalidate_render_projection()
+        self.widgets = widgets
+        self._damage_geometry(previous, scene, parent)
+        return exposed
+
     def _damage_geometry(
         self, before: Mapping[Widget, MapGeometry], after: Mapping[Widget, MapGeometry],
         owner: Widget,
@@ -1062,7 +1122,9 @@ class Compositor:
                 size, size, size.region, NULL_SPACING,
             )
         layer_order = root_geometry.order[-1][2]
-        no_clip = RootSceneClip(root_geometry.region)
+        # The root's own clip: the screen's equals its region; a scrolled
+        # container's is what its ancestors leave visible.
+        no_clip = RootSceneClip(root_geometry.clip)
         # Widget owns layer inheritance. Acquire external ancestry only at the
         # root, then carry that original declaration through this traversal.
         root_layers = root._get_layer_order(root.walk_ancestors(with_self=True))
