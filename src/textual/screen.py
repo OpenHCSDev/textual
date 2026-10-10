@@ -326,6 +326,9 @@ class Screen(Generic[ScreenResultType], Widget):
         self._layout_widgets: dict[DOMNode, set[Widget]] = {}
         """Widgets whose layout may have changed."""
 
+        self._scrolled_widgets: set[Widget] = set()
+        """Containers whose scroll changed since the last layout."""
+
         self._auto_select_scroll_timer: Timer | None = None
         """A timer to auto scroll a container."""
 
@@ -1475,8 +1478,15 @@ class Screen(Generic[ScreenResultType], Widget):
             # Pending layout requests require layout beyond the visible-scroll
             # traversal.
             if scroll and not any(self._layout_widgets.values()):
-                exposed_widgets = self._compositor.reflow_visible(
-                    self, size, retain_geometry=self._layout_geometry_targets())
+                # Only scrolls changed: re-arrange just the scrolled
+                # containers when they can be scoped, else the viewport.
+                exposed_widgets = self._compositor.reflow_scrolled(
+                    self, size, self._scrolled_widgets,
+                    retain_geometry=self._layout_geometry_targets())
+                if exposed_widgets is None:
+                    exposed_widgets = self._compositor.reflow_visible(
+                        self, size, retain_geometry=self._layout_geometry_targets())
+                self._scrolled_widgets.clear()
                 if exposed_widgets:
                     layers = self._compositor.layers
                     for widget, geometry in layers:
@@ -1498,6 +1508,7 @@ class Screen(Generic[ScreenResultType], Widget):
                     retain_geometry=self._layout_geometry_targets() if viewport_layout else (),
                 )
                 self._layout_widgets.clear()
+                self._scrolled_widgets.clear()
                 Hide = events.Hide
                 Show = events.Show
 
