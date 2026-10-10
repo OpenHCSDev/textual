@@ -2214,12 +2214,14 @@ class Widget(DOMNode):
 
     @property
     def content_size(self) -> Size:
-        """The size of the content area.
+        """The size of the content area (the same fact as `size`).
 
         Returns:
             Content area size.
         """
-        return self.region.shrink(self.styles.gutter).size
+        # The widget's own laid-out size: reading it never asks the compositor
+        # to reflow a stale map, as the screen-placed region would.
+        return self.size
 
     @property
     def _selection_order(self) -> tuple[int, int]:
