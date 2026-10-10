@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from functools import lru_cache
 from typing import TYPE_CHECKING, Callable, Iterable, Sequence
 
@@ -33,6 +34,30 @@ RenderLineCallback: TypeAlias = Callable[[int], Strip]
 
 
 @rich.repr.auto(angular=True)
+
+@dataclass(frozen=True, slots=True)
+class PaintStyles:
+    """One render's reads of a widget's styles, shared by all of its lines.
+
+    Every line of a render paints with the same styles; reading the CSS
+    properties once per render rather than once per line.
+    """
+
+    gutter: Spacing
+    border: tuple
+    outline: tuple
+    hatch: tuple | None
+    tint: Color
+    text_opacity: float
+    border_title_align: str
+    border_subtitle_align: str
+
+    @classmethod
+    def of(cls, styles: StylesBase) -> PaintStyles:
+        hatch = styles.hatch if styles.has_rule("hatch") and styles.hatch != "none" else None
+        return cls(styles.gutter, styles.border, styles.outline, hatch, styles.tint,
+                   styles.text_opacity, styles.border_title_align, styles.border_subtitle_align)
+
 class StylesCache:
     """Responsible for rendering CSS Styles and keeping a cache of rendered lines.
 
@@ -215,11 +240,12 @@ class StylesCache:
 
         is_dirty = self._dirty_lines.__contains__
         render_line = self.render_line
+        painted = PaintStyles.of(styles)
 
         for y in crop.line_range:
             if is_dirty(y) or y not in self._cache:
                 strip = render_line(
-                    styles,
+                    painted,
                     y,
                     size,
                     content_size,
@@ -267,7 +293,7 @@ class StylesCache:
 
     def render_line(
         self,
-        styles: StylesBase,
+        styles: PaintStyles,
         y: int,
         size: Size,
         content_size: Size,
@@ -284,7 +310,7 @@ class StylesCache:
         """Render a styled line.
 
         Args:
-            styles: Styles object.
+            styles: This render's reads of the widget's styles.
             y: The y coordinate of the line (relative to widget screen offset).
             size: Size of the widget.
             content_size: Size of the content area.
@@ -328,7 +354,7 @@ class StylesCache:
 
         def line_post(segments: Iterable[Segment]) -> Iterable[Segment]:
             """Apply effects to segments inside the border."""
-            if styles.has_rule("hatch") and styles.hatch != "none":
+            if styles.hatch is not None:
                 character, color = styles.hatch
                 if character != " " and color.a > 0:
                     hatch_style = from_color(
