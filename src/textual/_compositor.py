@@ -1237,7 +1237,7 @@ class Compositor:
 
                     if widget._anchored and not widget._anchor_released:
                         new_scroll_y = (
-                            arrange_result.spatial_map.total_region.bottom
+                            arrange_result.placed_region.bottom
                             - (
                                 widget.container_size.height
                                 - widget.scrollbar_size_horizontal
