@@ -100,6 +100,14 @@ class StyleProperty(Generic[PropertyGetType]):
         """
         return True
 
+    def reaches_descendants(self) -> bool:
+        """Whether descendants' retained measurements may have read this rule.
+
+        Opaque descendant rendering may read any ancestor rule, so undeclared
+        descriptors remain conservative.
+        """
+        return True
+
 
 class GenericProperty(StyleProperty[PropertyGetType], Generic[PropertyGetType, PropertySetType]):
     """Descriptor that abstracts away common machinery for other style descriptors.
@@ -900,6 +908,15 @@ class StringEnumProperty(StyleProperty[EnumType], Generic[EnumType]):
                 children=self._refresh_children,
                 parent=self._refresh_parent,
             )
+
+
+class DisplayProperty(StringEnumProperty):
+    """The `display` rule: whether the node and its subtree take part in layout."""
+
+    def reaches_descendants(self) -> bool:
+        # Descendants are measured only while this node is displayed, so every
+        # retained descendant measurement was taken under the value it returns to.
+        return False
 
 
 class OverflowProperty(StringEnumProperty):

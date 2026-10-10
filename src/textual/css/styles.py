@@ -21,6 +21,7 @@ from textual.css._style_properties import (
     BorderProperty,
     BoxProperty,
     ColorProperty,
+    DisplayProperty,
     DockProperty,
     FractionalProperty,
     HatchProperty,
@@ -261,7 +262,7 @@ class StylesBase:
         "line_pad",
     }
 
-    display = StringEnumProperty(VALID_DISPLAY, "block", layout=True, display=True)
+    display = DisplayProperty(VALID_DISPLAY, "block", layout=True, display=True)
     """Set the display of the widget, defining how it's rendered.
 
     Valid values are "block" or "none".
@@ -990,7 +991,10 @@ class Styles(StylesBase):
         self._updates += 1
         if (node := self.node) is not None:
             Styles._revision += 1
-            node._style_rules_updated(Styles._revision, geometry)
+            node._style_rules_updated(
+                Styles._revision, geometry,
+                any(descriptor.reaches_descendants() for descriptor, _key, _previous, _value in changes),
+            )
             for descriptor, key, previous, value in changes:
                 descriptor.publish(self, value)
         return True
