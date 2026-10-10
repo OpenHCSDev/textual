@@ -239,9 +239,8 @@ def resolve_box_models(
     """
 
     margin_width, margin_height = margin
-    fraction_width = Fraction(size.width)
-    fraction_height = Fraction(size.height)
-    fraction_zero = Fraction(0)
+    fraction_width = size.width
+    fraction_height = size.height
     margin_size = size - margin
 
     margins = [widget.styles.margin.totals for widget in widgets]
@@ -254,16 +253,8 @@ def resolve_box_models(
             else widget._get_box_model(
                 size,
                 viewport_size,
-                (
-                    fraction_zero
-                    if (_width := fraction_width - margin_width) < 0
-                    else _width
-                ),
-                (
-                    fraction_zero
-                    if (_height := fraction_height - margin_height) < 0
-                    else _height
-                ),
+                max(0, fraction_width - margin_width),
+                max(0, fraction_height - margin_height),
                 greedy=greedy,
             )
         )
@@ -304,7 +295,7 @@ def resolve_box_models(
             resolve_dimension,
         )
         width_fraction = fraction_unit
-        height_fraction = Fraction(margin_size.height)
+        height_fraction = margin_size.height
     else:
         total_remaining = int(
             sum(
@@ -333,7 +324,7 @@ def resolve_box_models(
             Fraction(remaining_space),
             resolve_dimension,
         )
-        width_fraction = Fraction(margin_size.width)
+        width_fraction = margin_size.width
         height_fraction = fraction_unit
 
     box_models = [

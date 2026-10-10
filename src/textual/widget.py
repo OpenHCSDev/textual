@@ -1796,12 +1796,12 @@ class Widget(DOMNode):
             )
         if independent_height:
             cache_container = container.with_height(0)
-            cache_height_fraction = Fraction(0)
+            cache_height_fraction = 0
         if independent_width and not constrain_width:
             # The native local resolver cannot read these inputs. Keep the
             # viewport and actual height inputs; only parent width is unused.
             cache_container = cache_container.with_width(0)
-            cache_width_fraction = Fraction(0)
+            cache_width_fraction = 0
         if revision != self._box_model_revision:
             # Measurements from previous revisions can never be hit again.
             # Keep width/viewport variants within this revision, rather than

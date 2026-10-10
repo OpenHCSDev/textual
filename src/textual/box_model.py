@@ -14,9 +14,10 @@ if TYPE_CHECKING:
 class BoxModel(NamedTuple):
     """The result of `get_box_model`."""
 
-    # Content + padding + border
-    width: Fraction
-    height: Fraction
+    # Content + padding + border. Integral sizes are ints; a Fraction comes
+    # only from a scalar or fraction unit that resolved to one.
+    width: Fraction | int
+    height: Fraction | int
     margin: Spacing  # Additional margin
 
     @classmethod
@@ -55,11 +56,11 @@ class BoxModel(NamedTuple):
 
         if styles_width is None:
             # No width specified, fill available space
-            content_width = Fraction(content_container.width - margin.width)
+            content_width = content_container.width - margin.width
         elif is_auto_width:
             # When width is auto, we want enough space to always fit the content
-            content_width = Fraction(
-                node.get_content_width(content_container - margin.totals, viewport)
+            content_width = node.get_content_width(
+                content_container - margin.totals, viewport
             )
             if (
                 styles.overflow_x == "auto" and styles.scrollbar_gutter == "stable"
@@ -69,7 +70,7 @@ class BoxModel(NamedTuple):
                 content_width < content_container.width
                 and node._has_relative_children_width
             ):
-                content_width = Fraction(content_container.width)
+                content_width = content_container.width
         else:
             # An explicit width
             content_width = styles_width.resolve(
@@ -80,7 +81,7 @@ class BoxModel(NamedTuple):
 
         if min_width is not None:
             # Restrict to minimum width, if set
-            content_width = max(content_width, min_width, Fraction(0))
+            content_width = max(content_width, min_width, 0)
 
         if max_width is not None and not (
             container.width == 0
@@ -91,22 +92,20 @@ class BoxModel(NamedTuple):
             # Restrict to maximum width, if set
             content_width = min(content_width, max_width)
 
-        content_width = max(Fraction(0), content_width)
+        content_width = max(0, content_width)
 
         if constrain_width:
-            content_width = min(Fraction(container.width - gutter.width), content_width)
+            content_width = min(container.width - gutter.width, content_width)
 
         if styles.height is None:
             # No height specified, fill the available space
-            content_height = Fraction(content_container.height - margin.height)
+            content_height = content_container.height - margin.height
         elif is_auto_height:
             # Calculate dimensions based on content
-            content_height = Fraction(
-                node.get_content_height(
-                    content_container - margin.totals,
-                    viewport,
-                    int(content_width),
-                )
+            content_height = node.get_content_height(
+                content_container - margin.totals,
+                viewport,
+                int(content_width),
             )
             if (
                 styles.overflow_y == "auto" and styles.scrollbar_gutter == "stable"
@@ -116,7 +115,7 @@ class BoxModel(NamedTuple):
                 content_height < content_container.height
                 and node._has_relative_children_height
             ):
-                content_height = Fraction(content_container.height)
+                content_height = content_container.height
         else:
             styles_height = styles.height
             # Explicit height set
@@ -128,7 +127,7 @@ class BoxModel(NamedTuple):
 
         if min_height is not None:
             # Restrict to minimum height, if set
-            content_height = max(content_height, min_height, Fraction(0))
+            content_height = max(content_height, min_height, 0)
 
         if max_height is not None and not (
             container.height == 0
@@ -138,7 +137,7 @@ class BoxModel(NamedTuple):
         ):
             content_height = min(content_height, max_height)
 
-        content_height = max(Fraction(0), content_height)
+        content_height = max(0, content_height)
         model = cls(
             content_width + gutter.width, content_height + gutter.height, margin
         )
