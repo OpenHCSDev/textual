@@ -816,6 +816,10 @@ TextArea {
     def notify_style_update(self) -> None:
         self._line_cache.clear()
         super().notify_style_update()
+        # The theme's fallback styles derive from CSS: recompute them when
+        # CSS changes, not on every render.
+        if self._theme:
+            self._theme.apply_css(self)
 
     def update_suggestion(self) -> None:
         """A hook to update the [`suggestion`][textual.widgets.TextArea.suggestion] attribute."""
@@ -1038,6 +1042,8 @@ TextArea {
                 ) from None
 
         self._theme = dataclasses.replace(theme_object)
+        if self.is_attached:
+            self._theme.apply_css(self)
         if theme_object:
             base_style = theme_object.base_style
             if base_style:
@@ -1384,11 +1390,6 @@ TextArea {
         line_string = self.document.get_line(line_index)
         return Text(line_string, end="", no_wrap=True)
 
-    def render_lines(self, crop: Region) -> list[Strip]:
-        theme = self._theme
-        if theme:
-            theme.apply_css(self)
-        return super().render_lines(crop)
 
     def render_line(self, y: int) -> Strip:
         """Render a single line of the TextArea. Called by Textual.
