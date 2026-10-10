@@ -1850,9 +1850,12 @@ class Compositor:
                         and any(bound.overlaps(region) for bound in bounds for region in regions))):
                 if new is not None:
                     geometry[widget] = new
-            elif old is not None:
-                geometry[widget] = old
+            else:
+                # Held back until painted: the previous placement, or none
+                # for a widget the screen has not shown yet.
                 as_arranged = False
+                if old is not None:
+                    geometry[widget] = old
         return arranged if as_arranged else geometry
 
     @staticmethod
