@@ -440,3 +440,51 @@ async def test_height_independent_custom_layout_hook_remains_style_sensitive():
         assert parent.arrange(size).placements[0][1].region.y == 2
         parent.styles.inline.set_rule("color", Color.parse("blue"))
         assert parent.arrange(size).placements[0][1].region.y == 0
+
+
+async def test_display_change_keeps_descendant_measurements():
+    class InheritedStyleContent(Static):
+        def render(self):
+            return "one\ntwo" if self.rich_style.color.get_truecolor() == (255, 0, 0) else "one"
+
+    app = App()
+    async with app.run_test() as pilot:
+        child = InheritedStyleContent()
+        parent = VerticalGroup(child)
+        await app.mount(parent)
+        await pilot.pause()
+        measured = child._layout_updates
+        # Descendants are measured only while displayed: hiding and showing
+        # their ancestor leaves what they measured valid.
+        parent.display = False
+        parent.display = True
+        assert child._layout_updates == measured
+        # An inherited rule still reaches them.
+        parent.styles.color = "red"
+        assert child._layout_updates > measured
+        await pilot.pause()
+        assert child.size.height == 2
+
+
+async def test_hidden_descendant_retires_without_remeasuring_its_ancestors():
+    class InheritedStyleContent(Static):
+        def render(self):
+            return "one\ntwo" if self.rich_style.color.get_truecolor() == (255, 0, 0) else "one"
+
+    app = App()
+    async with app.run_test() as pilot:
+        hidden = InheritedStyleContent()
+        hidden.display = False
+        parent = VerticalGroup(hidden, Static("shown"))
+        outer = VerticalGroup(parent)
+        await app.mount(outer)
+        await pilot.pause()
+        retired, measured = hidden._layout_updates, (parent._layout_updates, outer._layout_updates)
+        # The hidden child's own measurement follows the inherited rule, but
+        # no ancestor measures it, so their measurements stay valid.
+        parent.styles.color = "red"
+        assert hidden._layout_updates > retired
+        assert (parent._layout_updates, outer._layout_updates) == measured
+        hidden.display = True
+        await pilot.pause()
+        assert hidden.size.height == 2

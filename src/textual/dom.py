@@ -167,19 +167,27 @@ class DOMNode(MessagePump):
         A paint rule can change an opaque descendant's rendered dimensions.
         Visit the source subtree before native ancestor publication; do not
         merely discover sensitivity while leaving those resources current.
+        A child that is not displayed retires its own measurements, but this
+        node's layout does not measure it, so its change stops there.
         """
         for child in (*self.children, *self._get_virtual_dom()):
-            geometry = child._update_inherited_geometry(False) or geometry
+            if child._update_inherited_geometry(False) and child.display:
+                geometry = True
         return self._style_geometry_updated(geometry)
 
-    def _style_rules_updated(self, revision: int, geometry: bool) -> None:
+    def _style_rules_updated(self, revision: int, geometry: bool, descendants: bool) -> None:
         """Publish the rule owner's mutation to dependent ancestor subtrees.
 
         This is a projection of Styles' mutation epoch, including raw writes
         which do not schedule refresh. Unrelated sibling branches are untouched.
+        Descendants are visited only when a changed rule may reach their
+        retained measurements (StyleProperty.reaches_descendants).
         """
         self._subtree_style_revision = revision
-        geometry = self._update_inherited_geometry(geometry)
+        if descendants:
+            geometry = self._update_inherited_geometry(geometry)
+        else:
+            geometry = self._style_geometry_updated(geometry)
         for node in self.walk_ancestors():
             if not isinstance(node, DOMNode):
                 break
