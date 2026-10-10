@@ -1622,9 +1622,10 @@ class RenderStyles(StylesBase):
         return self._inline_styles.set_rule(rule_name, value)
 
     def get_rule(self, rule_name: str, default: object = None) -> object:
-        if self._inline_styles.has_rule(rule_name):
-            return self._inline_styles.get_rule(rule_name, default)
-        return self._base_styles.get_rule(rule_name, default)
+        inline = self._inline_styles._rules
+        if rule_name in inline:
+            return inline[rule_name]  # type: ignore[literal-required]
+        return self._base_styles._rules.get(rule_name, default)
 
     def clear_rule(self, rule_name: str) -> bool:
         """Clear a rule (from inline)."""
