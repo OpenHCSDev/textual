@@ -304,8 +304,10 @@ async def test_cursor_screen_offset_and_terminal_cursor_position_update():
             yield TextArea.code_editor("abc\ndef")
 
     app = TextAreaCursorScreenOffset()
-    async with app.run_test():
+    async with app.run_test() as pilot:
         text_area = app.query_one(TextArea)
+        text_area.focus()
+        await pilot.pause()
 
         assert app.cursor_position == (5, 1)
 
@@ -326,6 +328,8 @@ async def test_cursor_screen_offset_and_terminal_cursor_position_scrolling():
     app = TextAreaCursorScreenOffset()
     async with app.run_test(size=(80, 2)) as pilot:
         text_area = app.query_one(TextArea)
+        text_area.focus()
+        await pilot.pause()
 
         assert app.cursor_position == (5, 1)
 

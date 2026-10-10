@@ -2180,6 +2180,15 @@ class Widget(DOMNode):
         """
         return self._container_size
 
+    def cursor_offset_in(self, content_region: Region) -> Offset | None:
+        """Where this widget's text cursor is on screen, given its placed content region.
+
+        While this widget has focus, the app moves the terminal cursor there
+        when it writes a frame (OS IME and emoji popups follow it). None when
+        the widget has no text cursor.
+        """
+        return None
+
     @property
     def content_region(self) -> Region:
         """Gets an absolute region containing the content (minus padding and border).

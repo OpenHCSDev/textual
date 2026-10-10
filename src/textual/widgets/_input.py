@@ -516,7 +516,6 @@ class Input(ScrollView):
 
     def _watch_selection(self, selection: Selection) -> None:
         self.app.clear_selection()
-        self.app.cursor_position = self.cursor_screen_offset
         if not self._initial_value:
             self.scroll_to_region(
                 Region(self._cursor_offset, 0, width=1, height=1),
@@ -536,7 +535,10 @@ class Input(ScrollView):
     @property
     def cursor_screen_offset(self) -> Offset:
         """The offset of the cursor of this input in screen-space. (x, y)/(column, row)."""
-        x, y, _width, _height = self.content_region
+        return self.cursor_offset_in(self.content_region)
+
+    def cursor_offset_in(self, content_region: Region) -> Offset:
+        x, y, _width, _height = content_region
         scroll_x, _ = self.scroll_offset
         return Offset(x + self._cursor_offset - scroll_x, y)
 
@@ -737,7 +739,6 @@ class Input(ScrollView):
         self._restart_blink()
         if self.select_on_focus and not event.from_app_focus:
             self.selection = Selection(0, len(self.value))
-        self.app.cursor_position = self.cursor_screen_offset
         self._suggestion = ""
 
     async def _on_key(self, event: events.Key) -> None:

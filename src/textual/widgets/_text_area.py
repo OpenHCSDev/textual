@@ -881,7 +881,6 @@ TextArea {
         self._cursor_visible = focus
         if focus:
             self._restart_blink()
-            self.app.cursor_position = self.cursor_screen_offset
             self.history.checkpoint()
         else:
             self._pause_blink(visible=False)
@@ -915,7 +914,6 @@ TextArea {
             _, offset_y = self._cursor_offset
             self.refresh_lines(offset_y)
 
-        self.app.cursor_position = self.cursor_screen_offset
         if previous_selection != selection:
             self.post_message(self.SelectionChanged(selection, self))
 
@@ -1224,12 +1222,6 @@ TextArea {
         """
         _, scroll_offset_y = self.scroll_offset
         return scroll_offset_y, scroll_offset_y + self.size.height
-
-    def _watch_scroll_x(self) -> None:
-        self.app.cursor_position = self.cursor_screen_offset
-
-    def _watch_scroll_y(self) -> None:
-        self.app.cursor_position = self.cursor_screen_offset
 
     def load_text(self, text: str) -> None:
         """Load text into the TextArea.
@@ -2220,9 +2212,12 @@ TextArea {
     @property
     def cursor_screen_offset(self) -> Offset:
         """The offset of the cursor relative to the screen."""
+        return self.cursor_offset_in(self.content_region)
+
+    def cursor_offset_in(self, content_region: Region) -> Offset:
         cursor_x, cursor_y = self._cursor_offset
         scroll_x, scroll_y = self.scroll_offset
-        region_x, region_y, _width, _height = self.content_region
+        region_x, region_y, _width, _height = content_region
 
         offset_x = region_x + cursor_x - scroll_x + self.gutter_width
         offset_y = region_y + cursor_y - scroll_y

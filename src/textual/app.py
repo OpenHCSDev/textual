@@ -680,13 +680,7 @@ class App(Generic[ReturnType], DOMNode):
         """Counter which tracks the number of clicks received in a row."""
 
         self._previous_cursor_position = Offset(0, 0)
-        """The previous cursor position"""
-
-        self.cursor_position = Offset(0, 0)
-        """The position of the terminal cursor in screen-space.
-
-        This can be set by widgets and is useful for controlling the
-        positioning of OS IME and emoji popup menus."""
+        """Where the last frame left the terminal cursor."""
 
         self._exception: Exception | None = None
         """The unhandled exception which is leading to the app shutting down,
@@ -1018,6 +1012,24 @@ class App(Generic[ReturnType], DOMNode):
             )
         except StopIteration:
             return ()
+
+    @property
+    def cursor_position(self) -> Offset:
+        """Where the terminal cursor goes, in screen space (OS IME and emoji popups follow it).
+
+        The focused widget's text cursor in the placement on screen; where the
+        last frame left it while that widget has no cursor or is not shown.
+        Read from published geometry: it never arranges.
+        """
+        screen = self.screen
+        focused = screen.focused
+        if focused is not None:
+            geometry = screen._compositor._published_map.get(focused)
+            if geometry is not None and geometry.visible_region:
+                offset = focused.cursor_offset_in(geometry.content_region)
+                if offset is not None:
+                    return offset
+        return self._previous_cursor_position
 
     @property
     def clipboard(self) -> str:
