@@ -520,13 +520,15 @@ class Stylesheet:
     ) -> tuple:
         """Build an ancestry key from each node's actual pseudo-class owner."""
         result = []
+        disabled = False
         for node in nodes:
+            pseudo_classes, disabled = node._path_pseudo_key(disabled)
             result.append(
                 (
                     node._id if node._id in self._ids_in_rules else None,
                     node.classes & relevant_classes,
                     node.css_type_name,
-                    node._pseudo_classes_cache_key,
+                    pseudo_classes,
                     node.name,
                 )
             )

@@ -2371,6 +2371,13 @@ class DOMNode(MessagePump):
         """A cache key used when updating a number of nodes from the stylesheet."""
         return ()
 
+    def _path_pseudo_key(self, ancestors_disabled: bool) -> tuple[tuple, bool]:
+        """This node's pseudo-class key on a CSS path, and the disabled state its children inherit.
+
+        Disabled inheritance runs through physical Widgets only, so it restarts here.
+        """
+        return self._pseudo_classes_cache_key, False
+
     def refresh(
         self, *, repaint: bool = True, layout: bool = False, recompose: bool = False
     ) -> Self:

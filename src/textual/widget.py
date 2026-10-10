@@ -3918,11 +3918,13 @@ class Widget(DOMNode):
     @property
     def _pseudo_classes_cache_key(self) -> tuple[int, ...]:
         """A cache key that changes when the pseudo-classes change."""
-        return (
-            self.mouse_hover,
-            self.has_focus,
-            self.is_disabled,
-        )
+        return self._path_pseudo_key(Widget._inherited_disabled(self._parent))[0]
+
+    def _path_pseudo_key(self, ancestors_disabled: bool) -> tuple[tuple, bool]:
+        # A CSS path carries its ancestors' disabled state down: one pass
+        # rather than an ancestor walk per node on the path.
+        disabled = ancestors_disabled or self.disabled
+        return (self.mouse_hover, self.has_focus, disabled), disabled
 
     def _get_justify_method(self) -> JustifyMethod | None:
         """Get the justify method that may be passed to a Rich renderable."""
