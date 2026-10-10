@@ -346,3 +346,33 @@ async def test_capture_geometry_and_offsets_share_original_scene_custody():
         assert compositor.find_widget(far).region == capture[far].region
         assert far in compositor._visible_map
         assert compositor._full_map_invalidated
+
+
+async def test_unpainted_new_placement_stays_out_of_published_scene():
+    """A placement outside the written damage is not published until painted.
+
+    Readers of the published scene (hit testing, history anchors) must not see
+    a widget the terminal has not shown yet.
+    """
+    from textual.geometry import Region
+
+    class SceneApp(App):
+        CSS = "Static { height: 1; }"
+
+        def compose(self):
+            yield Static("top", id="top")
+            yield Static("bottom", id="bottom")
+
+    app = SceneApp()
+    async with app.run_test(size=(20, 6)) as pilot:
+        await pilot.pause()
+        compositor = app.screen._compositor
+        bottom = app.query_one("#bottom")
+        arranged = dict(compositor._published_map)
+        published = {widget: geometry for widget, geometry in arranged.items() if widget is not bottom}
+        compositor._published_map = published
+        top_row = Region(0, 0, 20, 1)
+        held = compositor._publication_geometry(arranged, {top_row})
+        assert bottom not in held and held is not arranged
+        whole = compositor._publication_geometry(arranged, {compositor.size.region})
+        assert whole is arranged
