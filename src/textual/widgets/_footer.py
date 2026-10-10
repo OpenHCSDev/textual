@@ -87,20 +87,8 @@ class FooterKey(Widget):
         &.-disabled {
             text-style: dim;
         }
-
-        &.-compact {
-            .footer-key--key {
-                padding: 0;
-            }
-            .footer-key--description {
-                padding: 0 0 0 1;
-            }
-        }
     }
     """
-
-    compact = reactive(True)
-    """Display compact style."""
 
     def __init__(
         self,
@@ -159,9 +147,6 @@ class FooterKey(Widget):
         else:
             self.app.simulate_key(self.key)
 
-    def _watch_compact(self, compact: bool) -> None:
-        self.set_class(compact, "-compact")
-
 
 class FooterLabel(Label):
     """Text displayed in the footer (used by binding groups)."""
@@ -178,7 +163,16 @@ class Footer(ScrollableContainer, can_focus=False, can_focus_children=False):
         dock: bottom;
         height: 1;
         scrollbar-size: 0 0;
+        /* Compact is the footer's: one class change restyles its keys. */
         &.-compact {
+            FooterKey {
+                .footer-key--key {
+                    padding: 0;
+                }
+                .footer-key--description {
+                    padding: 0 0 0 1;
+                }
+            }
             FooterLabel {
                 margin: 0;
             }
@@ -196,6 +190,12 @@ class Footer(ScrollableContainer, can_focus=False, can_focus_children=False):
             dock: right;
             padding-right: 1;
             border-left: vkey $foreground 20%;
+            .footer-key--key {
+                padding: 0;
+            }
+            .footer-key--description {
+                padding: 0 0 0 1;
+            }
         }
         HorizontalGroup.binding-group {            
             width: auto;
@@ -300,7 +300,7 @@ class Footer(ScrollableContainer, can_focus=False, can_focus_children=False):
             ),
             classes="-command-palette" if palette else "-grouped" if grouped else "",
         )
-        return key if palette else key.data_bind(compact=Footer.compact)
+        return key
 
     def bindings_changed(self, screen: Screen) -> None:
         self._bindings_ready = True
