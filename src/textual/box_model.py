@@ -44,7 +44,8 @@ class BoxModel(NamedTuple):
         if not greedy and styles_width is not None and styles_width.is_fraction:
             styles_width = Scalar.parse("auto")
         is_auto_width = styles_width and styles_width.is_auto
-        is_auto_height = styles.height and styles.height.is_auto
+        styles_height = styles.height
+        is_auto_height = styles_height and styles_height.is_auto
 
         # Container minus padding and border
         content_container = container - gutter.totals
@@ -97,7 +98,7 @@ class BoxModel(NamedTuple):
         if constrain_width:
             content_width = min(container.width - gutter.width, content_width)
 
-        if styles.height is None:
+        if styles_height is None:
             # No height specified, fill the available space
             content_height = content_container.height - margin.height
         elif is_auto_height:
@@ -117,7 +118,6 @@ class BoxModel(NamedTuple):
             ):
                 content_height = content_container.height
         else:
-            styles_height = styles.height
             # Explicit height set
             content_height = styles_height.resolve(
                 container - margin.totals, viewport, height_fraction

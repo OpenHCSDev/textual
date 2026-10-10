@@ -72,10 +72,18 @@ class Extrema(NamedTuple):
         width_fraction: Fraction, height_fraction: Fraction,
     ) -> Extrema:
         """Resolve native min/max rules independently of scene custody."""
-        min_width: Fraction | None = None
-        max_width: Fraction | None = None
-        min_height: Fraction | None = None
-        max_height: Fraction | None = None
+        min_width_rule = styles.min_width
+        max_width_rule = styles.max_width
+        min_height_rule = styles.min_height
+        max_height_rule = styles.max_height
+        if (min_width_rule is None and max_width_rule is None
+                and min_height_rule is None and max_height_rule is None):
+            return NO_EXTREMA
+
+        min_width: Fraction | int | None = None
+        max_width: Fraction | int | None = None
+        min_height: Fraction | int | None = None
+        max_height: Fraction | int | None = None
 
         container -= styles.margin.totals
         if styles.box_sizing == "border-box":
@@ -83,28 +91,31 @@ class Extrema(NamedTuple):
         else:
             gutter_width = gutter_height = 0
 
-        if styles.min_width is not None:
+        if min_width_rule is not None:
             min_width = (
-                styles.min_width.resolve(container, viewport, width_fraction)
+                min_width_rule.resolve(container, viewport, width_fraction)
                 - gutter_width
             )
 
-        if styles.max_width is not None:
+        if max_width_rule is not None:
             max_width = (
-                styles.max_width.resolve(container, viewport, width_fraction)
+                max_width_rule.resolve(container, viewport, width_fraction)
                 - gutter_width
             )
-        if styles.min_height is not None:
+        if min_height_rule is not None:
             min_height = (
-                styles.min_height.resolve(container, viewport, height_fraction)
+                min_height_rule.resolve(container, viewport, height_fraction)
                 - gutter_height
             )
 
-        if styles.max_height is not None:
+        if max_height_rule is not None:
             max_height = (
-                styles.max_height.resolve(container, viewport, height_fraction)
+                max_height_rule.resolve(container, viewport, height_fraction)
                 - gutter_height
             )
 
-        extrema = cls(min_width, max_width, min_height, max_height)
-        return extrema
+        return cls(min_width, max_width, min_height, max_height)
+
+
+NO_EXTREMA = Extrema()
+"""Extrema of a node with no min or max rules."""
