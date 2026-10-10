@@ -1079,6 +1079,9 @@ class Compositor:
         Layout discovery deliberately uses visible_widgets. Display readers
         and hit testing cannot substitute a newer, unpainted arrangement.
         """
+        if self._published_map is self._layout_map:
+            # The published scene is the arranged one: same order and regions.
+            return self.visible_widgets
         if self._published_widgets is None:
             self._published_widgets = self._paint_regions(
                 self._ordered_geometry(self._published_map), self.size.region)
@@ -1830,6 +1833,9 @@ class Compositor:
         # partial frame may place its background before its children publish.
         frame_root = None if self.root is None else self.root._render_widget
         geometry = {}
+        # Whether every placement publishes as arranged: then the published
+        # scene is the arranged map itself, and readers share its ordering.
+        as_arranged = True
         for widget in dict.fromkeys((*arranged, *self._published_map)):
             old = self._published_map.get(widget)
             new = arranged.get(widget)
@@ -1846,7 +1852,8 @@ class Compositor:
                     geometry[widget] = new
             elif old is not None:
                 geometry[widget] = old
-        return geometry
+                as_arranged = False
+        return arranged if as_arranged else geometry
 
     @staticmethod
     def _exclude_regions(regions: Iterable[Region], exclusions: Iterable[Region]) -> set[Region]:
