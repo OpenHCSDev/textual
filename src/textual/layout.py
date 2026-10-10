@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from functools import cached_property
 from typing import TYPE_CHECKING, ClassVar, Iterable, NamedTuple
 
 from textual._spatial_map import SpatialMap
@@ -70,6 +71,20 @@ class DockArrangeResult:
 
         return self._spatial_map
 
+    @cached_property
+    def placed_region(self) -> Region:
+        """The area covered by the flowing placements and their margins.
+
+        Fixed and overlay placements do not extend it. Measuring an
+        arrangement reads this; the spatial map is built only to query a
+        partly visible area.
+        """
+        region = Region()
+        for _ordinal, placement in self.placements:
+            if not placement.fixed and not placement.overlay:
+                region = region.union(placement.region.grow(placement.margin))
+        return region
+
     @property
     def total_region(self) -> Region:
         """The total area occupied by the arrangement.
@@ -78,7 +93,7 @@ class DockArrangeResult:
             A Region.
         """
         _top, right, bottom, _left = self.scroll_spacing
-        return self.spatial_map.total_region.grow((0, right, bottom, 0))
+        return self.placed_region.grow((0, right, bottom, 0))
 
     def get_visible_placements(
         self, region: Region, *, retain: Iterable[Widget] = (),
