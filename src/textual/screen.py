@@ -1480,12 +1480,14 @@ class Screen(Generic[ScreenResultType], Widget):
             if scroll and not any(self._layout_widgets.values()):
                 # Only scrolls changed: re-arrange just the scrolled
                 # containers when they can be scoped, else the viewport.
-                exposed_widgets = self._compositor.reflow_scrolled(
+                scoped = self._compositor.reflow_subtrees(
                     self, size, self._scrolled_widgets,
                     retain_geometry=self._layout_geometry_targets())
-                if exposed_widgets is None:
-                    exposed_widgets = self._compositor.reflow_visible(
+                exposed_widgets = (
+                    scoped.shown if scoped is not None else
+                    self._compositor.reflow_visible(
                         self, size, retain_geometry=self._layout_geometry_targets())
+                )
                 self._scrolled_widgets.clear()
                 if exposed_widgets:
                     layers = self._compositor.layers
@@ -1503,10 +1505,22 @@ class Screen(Generic[ScreenResultType], Widget):
 
             else:
                 viewport_layout = self._use_viewport_layout()
-                hidden, shown = self._compositor.reflow(
-                    self, size, visible_only=viewport_layout,
-                    retain_geometry=self._layout_geometry_targets() if viewport_layout else (),
+                # Requests whose boundaries keep their boxes re-arrange only
+                # those subtrees (with any scrolled containers).
+                boundaries = self._layout_boundaries() if viewport_layout else None
+                scoped = None if boundaries is None else self._compositor.reflow_subtrees(
+                    self, size, boundaries | self._scrolled_widgets,
+                    retain_geometry=self._layout_geometry_targets(),
                 )
+                if scoped is not None:
+                    hidden, shown, placed = scoped
+                    layers = placed.items()
+                else:
+                    hidden, shown = self._compositor.reflow(
+                        self, size, visible_only=viewport_layout,
+                        retain_geometry=self._layout_geometry_targets() if viewport_layout else (),
+                    )
+                    layers = self._compositor.layers
                 self._layout_widgets.clear()
                 self._scrolled_widgets.clear()
                 Hide = events.Hide
@@ -1515,7 +1529,6 @@ class Screen(Generic[ScreenResultType], Widget):
                 for widget in hidden:
                     widget.post_message(Hide())
 
-                layers = self._compositor.layers
                 for widget, geometry in layers:
                     size_changed = widget._size_updated(
                         geometry.region.size, geometry.virtual_size, geometry.container_size)
@@ -1575,6 +1588,24 @@ class Screen(Generic[ScreenResultType], Widget):
         if layout_required and not self._layout_required:
             self._layout_required = True
             self.check_idle()
+
+    def _layout_boundaries(self) -> set[Widget] | None:
+        """The boundaries of the pending layout requests, below the screen.
+
+        `_on_layout` records each request's ancestors up to the first one not
+        sized by its content; such an ancestor keeps its box however its
+        content changes. None when a request reaches the screen itself.
+        """
+        # Every key was reached by a request this frame (the walk records
+        # the requester only on its first ancestor); the boundaries are the
+        # keys not sized by their content.
+        boundaries = {
+            ancestor for ancestor in self._layout_widgets
+            if not ancestor.styles.auto_dimensions
+        }
+        if not boundaries or self in boundaries:
+            return None
+        return boundaries
 
     async def _on_update_scroll(self, message: messages.UpdateScroll) -> None:
         message.stop()

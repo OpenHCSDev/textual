@@ -166,6 +166,14 @@ class NestedSceneClip(SceneClip):
         return scope, (bounds[0].intersection(bound) if bounds else bound,)
 
 
+class SubtreeReflow(NamedTuple):
+    """What re-arranging subtrees in place changed in the viewport."""
+
+    hidden: set[Widget]
+    shown: set[Widget]
+    placed: dict[Widget, MapGeometry]
+
+
 class SubtreeMapGeometry(NamedTuple):
     """Original native geometry with its untruncated intrinsic clip bounds."""
 
@@ -939,65 +947,70 @@ class Compositor:
 
         return exposed_widgets
 
-    def reflow_scrolled(
-        self, parent: Widget, size: Size, scrolled: Iterable[Widget], *,
+    def reflow_subtrees(
+        self, parent: Widget, size: Size, roots: Iterable[Widget], *,
         retain_geometry: Iterable[Widget] = (),
-    ) -> set[Widget] | None:
-        """Re-arrange only the subtrees of containers whose scroll changed.
+    ) -> SubtreeReflow | None:
+        """Re-arrange only the subtrees under widgets whose own boxes are unchanged.
 
-        A scroll moves a container's descendants and nothing outside it: its
-        own placement and every other widget keep their geometry. Each
-        container is arranged from its current placement and its entries
-        replace its previous descendants' in the viewport map.
+        A scroll moves only a container's descendants; a layout request whose
+        boundary (the first ancestor not sized by its content) keeps its box
+        changes nothing outside that boundary. Each root is arranged from its
+        current placement and its entries replace its previous descendants' in
+        the viewport map.
 
         Returns:
-            Widgets the scroll exposed, or None when this scroll cannot be
-            scoped (the caller reflows the whole viewport).
+            What the re-arrangement showed, hid and placed, or None when it
+            cannot be scoped (the caller reflows the whole viewport).
         """
         previous = self._visible_map
         if previous is None or self.root is not parent or self.size != size:
             return None
-        scrolled = set(scrolled)
-        containers = [
-            widget for widget in scrolled
-            if not any(ancestor in scrolled for ancestor in widget.ancestors)
+        roots = set(roots)
+        outermost = [
+            widget for widget in roots
+            if not any(ancestor in roots for ancestor in widget.ancestors)
         ]
-        if not containers or any(container not in previous for container in containers):
+        if not outermost or parent in roots or any(root not in previous for root in outermost):
             return None
         retain = tuple(retain_geometry)
         scene = dict(previous)
         widgets = set(self.widgets)
-        exposed: set[Widget] = set()
-        for container in containers:
+        shown: set[Widget] = set()
+        hidden: set[Widget] = set()
+        placed: dict[Widget, MapGeometry] = {}
+        for root in outermost:
             old = [widget for widget, geometry in previous.items()
-                   if container in geometry.ancestors]
-            # Screen-positioned descendants do not move with their container.
-            if container.uses_screen_coordinates or any(
+                   if root in geometry.ancestors]
+            # Screen-positioned descendants are not placed by their root alone.
+            if root.uses_screen_coordinates or any(
                 widget.uses_screen_coordinates for widget in old
             ):
                 return None
             arranged, members = self._arrange_root(
-                container, size, visible_only=True, root_geometry=previous[container],
+                root, size, visible_only=True, root_geometry=previous[root],
                 retain_geometry=tuple(
-                    target for target in retain if container in target.ancestors
+                    target for target in retain if root in target.ancestors
                 ),
             )
             for widget in old:
                 del scene[widget]
             widgets.difference_update([
                 widget for widget in widgets
-                if widget is not container and container in widget.ancestors
+                if widget is not root and root in widget.ancestors
             ])
             scene.update(arranged)
             widgets.update(members)
-            exposed.update(arranged.keys() - previous.keys())
+            placed.update(arranged)
+            shown.update(arranged.keys() - previous.keys())
+            hidden.update(set(old) - arranged.keys())
         self._invalidate_render_projection()
         self._full_map_invalidated = True
         self._visible_map = scene
         self._invalidate_render_projection()
         self.widgets = widgets
         self._damage_geometry(previous, scene, parent)
-        return exposed
+        return SubtreeReflow(hidden=hidden, shown=shown, placed=placed)
 
     def _damage_geometry(
         self, before: Mapping[Widget, MapGeometry], after: Mapping[Widget, MapGeometry],
@@ -1096,7 +1109,7 @@ class Compositor:
             root: Top level widget.
             size: Size of visible area (screen).
             visible_only: Only update visible widgets (used in scrolling).
-            root_geometry: Original placement when arranging a complete body.
+            root_geometry: Where the root already sits, when arranging one subtree in place.
 
         Returns:
             Compositor map and set of widgets.
@@ -1104,8 +1117,8 @@ class Compositor:
 
         map: dict[Widget, MapGeometry | SubtreeGeometryPlacement] = {}
         capturing_source = False
-        # Transient declaration paths manufacture the one retained resource.
-        # The published MapGeometry continues to own the actual clipped scene.
+        # Clips are working state for this arrangement; the map's MapGeometry
+        # entries hold the clipped result.
         clips: dict[Widget, SceneClip] = {}
         screen_coordinates: set[Widget] = set()
 
@@ -1125,8 +1138,8 @@ class Compositor:
         # The root's own clip: the screen's equals its region; a scrolled
         # container's is what its ancestors leave visible.
         no_clip = RootSceneClip(root_geometry.clip)
-        # Widget owns layer inheritance. Acquire external ancestry only at the
-        # root, then carry that original declaration through this traversal.
+        # Layers are inherited: read the root's ancestors' layers once, then
+        # pass them down through this traversal.
         root_layers = root._get_layer_order(root.walk_ancestors(with_self=True))
         root_layer_order = (
             None if root_layers is None
@@ -1136,12 +1149,12 @@ class Compositor:
         retained_paths: set[Widget] = set()
         if visible_only:
             # Requested targets need their outer placement even when offscreen.
-            # This acquires only the ancestor path, not unrelated descendants.
+            # This places only their ancestor path, not unrelated descendants.
             for target in retain_geometry:
                 path: list[Widget] = []
                 node = target
-                # Existing members already own a path to this same root.
-                # Shared ancestors need admission once, not per target.
+                # Paths already added lead to this same root: add each
+                # shared ancestor once, not once per target.
                 while (
                     isinstance(node, Widget)
                     and node is not root
@@ -1210,7 +1223,7 @@ class Compositor:
                     # Arrange the layout
                     arrange_result = widget.arrange(child_region.size)
 
-                    # Original arrangement ordinals survive spatial admission.
+                    # Children keep their arrangement order when filtered by area.
                     # Do not rebuild ranks for every offscreen child on scroll.
 
                     arranged_widgets = arrange_result.widgets
@@ -1358,9 +1371,9 @@ class Compositor:
                 return
             resource_type = widget.subtree_geometry_resource()
             enclosing_complete = complete
-            # The same original geometry declaration chooses complete versus
-            # placed acquisition. Child loans remain inside their containing
-            # resource, without becoming independent global cache entries.
+            # The widget's geometry type chooses a complete or a placed
+            # arrangement. Cached children stay inside their parent's cache
+            # entry rather than becoming separate cache entries.
             complete = resource_type.complete_arrangement(complete)
             key = SubtreeGeometryKey.from_widget(widget,
                    virtual_region, region, order, layer_order, clip.region, visible, dock_gutter,
@@ -1369,9 +1382,9 @@ class Compositor:
             resource = self._subtree_geometry.get(widget, source) if retains_source else source
             require_complete = widget in retained_paths and not complete
             matches = resource is not None and resource.matches(key, require_complete=require_complete)
-            # A complete captured source already owns every requested path.
-            # A partial or changed source still acquires the original path;
-            # do not retain a partial capture whose key omits that request.
+            # A complete cached arrangement already places every requested path.
+            # A partial or changed one must place the path again; do not cache
+            # a partial arrangement whose key leaves that request out.
             if require_complete and not matches:
                 arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
                                complete, inherited_layers, resource)  # noqa: F821 -- closure cleared after traversal
@@ -1430,7 +1443,7 @@ class Compositor:
             # Both recursive closures otherwise retain themselves through
             # their closure cells, keeping old maps and entire widget trees
             # alive until cyclic GC. Reflow is finished, so break those local
-            # recursion links before returning the authoritative scene map.
+            # recursion links before returning the map.
             del add_widget, arrange_widget
         widgets -= invisible_widgets
         return cast(CompositorMap, map), widgets
