@@ -4167,8 +4167,10 @@ class App(Generic[ReturnType], DOMNode):
                     # click. A second release cannot reuse that old press.
                     self._mouse_down_widget = None
 
-                # The next pointer packet must use capture and geometry decided
-                # by this delivery's original widget / ancestor queues.
+                # A press or release may capture or release the mouse: the next
+                # pointer event is targeted after its delivery completes. Moves
+                # and wheel events are only queued, so input never waits on a
+                # widget's queue (see MouseEvent.sets_capture).
                 await self.screen._forward_event(event)
 
                 # If a MouseUp occurs at the same widget as a MouseDown, then we should

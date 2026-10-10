@@ -1911,7 +1911,7 @@ class Screen(Generic[ScreenResultType], Widget):
             if widget is self:
                 routed_event = event._apply_offset(0, 0)
                 routed_event._set_forwarded()
-                completion = self._post_message_and_wait(routed_event)
+                self.post_message(routed_event)
             else:
                 mouse_event = self._translate_mouse_move_event(event, widget, region)
                 mouse_event._set_forwarded()
@@ -2217,7 +2217,10 @@ class Screen(Generic[ScreenResultType], Widget):
                     event._set_forwarded()
                     routed_event = event._apply_offset(0, 0)
                     routed_event._set_forwarded()
-                    completion = self._post_message_and_wait(routed_event)
+                    if event.sets_capture:
+                        completion = self._post_message_and_wait(routed_event)
+                    else:
+                        self.post_message(routed_event)
                 else:
                     completion = widget._forward_event(
                         event._apply_offset(-region.x, -region.y)
