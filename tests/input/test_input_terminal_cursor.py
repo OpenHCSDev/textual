@@ -15,15 +15,19 @@ class InputApp(App):
 
 async def test_initial_terminal_cursor_position():
     app = InputApp()
-    async with app.run_test():
+    async with app.run_test() as pilot:
+        app.query_one(Input).focus()
+        await pilot.pause()
         # The input is focused so the terminal cursor position should update.
         assert app.cursor_position == Offset(21, 5)
 
 
 async def test_terminal_cursor_position_update_on_cursor_move():
     app = InputApp()
-    async with app.run_test():
+    async with app.run_test() as pilot:
         input_widget = app.query_one(Input)
+        input_widget.focus()
+        await pilot.pause()
         input_widget.action_cursor_left()
         input_widget.action_cursor_left()
         # We went left over two double-width characters
