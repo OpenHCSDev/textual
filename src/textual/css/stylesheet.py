@@ -24,7 +24,7 @@ from textual.css.tokenize import Token, tokenize_values
 from textual.css.tokenizer import TokenError
 from textual.css.types import CSSLocation, Specificity6
 from textual.dom import DOMNode
-from textual.markup import parse_style
+from textual.markup import parse_style_tokens
 from textual.style import Style
 from textual.widget import Widget
 
@@ -271,7 +271,8 @@ class Stylesheet:
             return style_text
         if style_text in self._style_parse_cache:
             return self._style_parse_cache[style_text]
-        style = parse_style(style_text, self._variables)
+        # Variables are tokenized once per set of variables (`_variable_tokens`).
+        style = parse_style_tokens(style_text, self._variable_tokens)
         self._style_parse_cache[style_text] = style
         return style
 
