@@ -12,6 +12,7 @@ import asyncio
 from contextlib import contextmanager
 from functools import partial
 from operator import attrgetter
+from time import perf_counter_ns
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -1543,7 +1544,7 @@ class Screen(Generic[ScreenResultType], Widget):
         self, steps: Generator[None, None, None], deadline: StepDeadline, step_ns: int,
     ) -> bool:
         """Run one step of a stepped layout; True when it was the last."""
-        deadline.start(step_ns)
+        deadline.ns = perf_counter_ns() + step_ns
         try:
             next(steps)
         except StopIteration:
@@ -1671,11 +1672,9 @@ class Screen(Generic[ScreenResultType], Widget):
 
         if deadline is not None and self.is_current:
             # The damaged rows render within the steps too, so publishing
-            # them reads rendered rows. Publishing them gets a step of its
-            # own unless half of this one is left.
+            # them reads rendered rows. A layout and render that fit a step
+            # publish in it; a longer one publishes in a step of its own.
             yield from self._render_damage_steps(deadline)
-            if deadline.half_passed():
-                yield
         if self.is_current:
             self._compositor_refresh()
 

@@ -171,27 +171,16 @@ class NestedSceneClip(SceneClip):
 class StepDeadline:
     """When a resumable arrangement pauses: once `ns` (perf_counter_ns) has passed.
 
-    Whoever drives the arrangement starts each step with `start`.
+    Whoever drives the arrangement sets the deadline before each step.
     """
 
-    __slots__ = ("ns", "half")
+    __slots__ = ("ns",)
 
     def __init__(self) -> None:
         self.ns = 0
-        self.half = 0
-
-    def start(self, step_ns: int) -> None:
-        """Begin a step that may run for `step_ns`."""
-        now = perf_counter_ns()
-        self.ns = now + step_ns
-        self.half = now + step_ns // 2
 
     def passed(self) -> bool:
         return perf_counter_ns() >= self.ns
-
-    def half_passed(self) -> bool:
-        """Whether this step has used half its time."""
-        return perf_counter_ns() >= self.half
 
 
 StepResult = TypeVar("StepResult")
