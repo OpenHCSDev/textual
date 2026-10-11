@@ -332,7 +332,10 @@ class Screen(Generic[ScreenResultType], Widget):
         """Containers whose scroll changed since the last layout."""
 
         self._stepped_layout: Generator[None, None, None] | None = None
-        """A layout running in loop turns (`layout_in_steps`), until its last step."""
+        """A layout running in loop turns, until its last step."""
+
+        self._stepped_layout_task: asyncio.Task[None] | None = None
+        """Runs the stepped layout's remaining steps, one per loop turn."""
 
         self._auto_select_scroll_timer: Timer | None = None
         """A timer to auto scroll a container."""
@@ -1225,7 +1228,8 @@ class Screen(Generic[ScreenResultType], Widget):
     def _refresh_requested(self) -> bool:
         """Whether pending screen work requires the timer regardless of damage."""
         return bool(
-            self._layout_required
+            self._stepped_layout is not None
+            or self._layout_required
             or self._scroll_required
             or self._repaint_required
             or self._recompose_required
@@ -1262,6 +1266,14 @@ class Screen(Generic[ScreenResultType], Widget):
 
     _frame_holds = 0
     """Callers holding this screen's frames (see `hold_frames`)."""
+
+    LAYOUT_STEP_NS: ClassVar[int] = 4_000_000
+    """How long a step of a layout runs before the loop gets a turn.
+
+    A step pauses before the next widget once this has passed (the widget
+    being arranged finishes first), and the last step also publishes the
+    frame, so a step stays well inside a 16 ms frame.
+    """
 
     @contextmanager
     def hold_frames(self) -> Iterator[None]:
@@ -1343,18 +1355,20 @@ class Screen(Generic[ScreenResultType], Widget):
                 self._dirty_widgets.clear()
                 self._dirty_widgets.add(self)
                 self._repaint_required = False
-            # Consume the acquired intents before layout. Resize watchers and
-            # immediate layout-signal subscribers may request another frame
-            # synchronously; those requests belong to the next admission.
+            # The layout takes the acquired intents when it starts. Resize
+            # watchers and immediate layout-signal subscribers may request
+            # another frame synchronously; those requests belong to the next.
             layout_required, scroll_required = self._layout_required, self._scroll_required
-            self._layout_required = False
-            self._scroll_required = False
             if layout_required or scroll_required:
                 # Layout may compensate positions or publish immediate signals
                 # before returning. The timer owns their final publication;
                 # direct layout callers retain their ordinary immediate paint.
+                # A layout longer than a step continues in later loop turns,
+                # so input is handled between its steps; its last step
+                # publishes the frame, and until then this screen writes none.
                 with self.app.batch_update():
-                    self._refresh_layout(scroll=scroll_required)
+                    if self._start_stepped_layout(scroll=scroll_required) is not None:
+                        return
 
             if self._dirty_widgets:
                 self._compositor.update_widgets(self._dirty_widgets)
@@ -1485,34 +1499,82 @@ class Screen(Generic[ScreenResultType], Widget):
             steps.close()
 
     async def layout_in_steps(
-        self, size: Size | None = None, scroll: bool = False, *, step_ns: int,
+        self, size: Size | None = None, scroll: bool = False, *, step_ns: int | None = None,
     ) -> None:
-        """Refresh the layout over loop turns, a step at a time.
+        """Refresh the layout over loop turns, a step at a time, and wait for its end.
 
-        For a change made under `hold_frames`: input is handled between steps,
-        nothing is published until the last step (between steps every reader
-        sees the previous scene), and the result is `_refresh_layout`'s. A step
-        pauses before the next widget once it has run for `step_ns`. Layout
-        requested meanwhile follows this one; a direct `_refresh_layout` or
-        another `layout_in_steps` replaces it.
+        The screen's own layouts run this way (see `_start_stepped_layout`);
+        this starts one now, for a change made under `hold_frames`. A step
+        pauses before the next widget once it has run for `step_ns` (by
+        default `LAYOUT_STEP_NS`).
+        """
+        remaining = self._start_stepped_layout(size, scroll, step_ns)
+        if remaining is not None:
+            await remaining
+
+    def _start_stepped_layout(
+        self, size: Size | None = None, scroll: bool = False, step_ns: int | None = None,
+    ) -> asyncio.Task[None] | None:
+        """Run a layout's first step now and its other steps in later loop turns.
+
+        Input is handled between steps and the result is `_refresh_layout`'s.
+        Until the step that commits the arrangement every reader sees the
+        previous scene; the steps after it render the visible widgets, and
+        nothing is published until the last step. Layout requested meanwhile
+        follows this one; a direct `_refresh_layout` or another stepped layout
+        replaces it.
+
+        Returns:
+            The task running the remaining steps, or None when the first step finished.
         """
         self._stop_stepped_layout()
+        # This layout takes the pending requests; those made between its
+        # steps are left for the next one (see `_layout_step`).
+        self._layout_required = self._scroll_required = False
+        step_ns = self.LAYOUT_STEP_NS if step_ns is None else step_ns
         deadline = StepDeadline()
         steps = self._stepped_layout = self._layout_steps(size, scroll, deadline)
+        if self._layout_step(steps, deadline, step_ns):
+            return None
+        task = self._stepped_layout_task = asyncio.create_task(
+            self._finish_stepped_layout(steps, deadline, step_ns))
+        return task
+
+    def _layout_step(
+        self, steps: Generator[None, None, None], deadline: StepDeadline, step_ns: int,
+    ) -> bool:
+        """Run one step of a stepped layout; True when it was the last."""
+        deadline.ns = perf_counter_ns() + step_ns
+        try:
+            next(steps)
+        except StopIteration:
+            if self._stepped_layout is steps:
+                self._stepped_layout = None
+            # Requests made between the steps are laid out next.
+            self._layout_required |= bool(self._layout_widgets)
+            self._scroll_required |= bool(self._scrolled_widgets)
+            return True
+        except BaseException:
+            if self._stepped_layout is steps:
+                self._stepped_layout = None
+            raise
+        return False
+
+    async def _finish_stepped_layout(
+        self, steps: Generator[None, None, None], deadline: StepDeadline, step_ns: int,
+    ) -> None:
+        """The remaining steps of a stepped layout, one per loop turn."""
         try:
             while True:
-                deadline.ns = perf_counter_ns() + step_ns
-                try:
-                    next(steps)
-                except StopIteration:
-                    return
                 await asyncio.sleep(0)
-                if self._stepped_layout is not steps:
+                if self._stepped_layout is not steps or self._layout_step(steps, deadline, step_ns):
                     return
         finally:
             if self._stepped_layout is steps:
                 self._stepped_layout = None
                 steps.close()
+            if self._stepped_layout_task is asyncio.current_task():
+                self._stepped_layout_task = None
             self.check_idle()
 
     def _layout_steps(
@@ -1578,9 +1640,10 @@ class Screen(Generic[ScreenResultType], Widget):
                     hidden, shown, placed = scoped
                     layers = placed.items()
                 else:
-                    hidden, shown = self._compositor.reflow(
+                    hidden, shown = yield from self._compositor.reflow_steps(
                         self, size, visible_only=viewport_layout,
                         retain_geometry=self._layout_geometry_targets() if viewport_layout else (),
+                        deadline=deadline,
                     )
                     layers = self._compositor.layers
                 if self._layout_widgets == taken_layout:
@@ -1607,6 +1670,11 @@ class Screen(Generic[ScreenResultType], Widget):
             self.app._handle_exception(error)
             return
 
+        if deadline is not None and self.is_current:
+            # The damaged rows render within the steps too, so publishing
+            # them reads rendered rows. A layout and render that fit a step
+            # publish in it; a longer one publishes in a step of its own.
+            yield from self._render_damage_steps(deadline)
         if self.is_current:
             self._compositor_refresh()
 
@@ -1615,6 +1683,27 @@ class Screen(Generic[ScreenResultType], Widget):
         else:
             self.app.post_message(events.Ready())
             self.app._dom_ready = True
+
+    def _render_damage_steps(self, deadline: StepDeadline) -> Generator[None, None, None]:
+        """Render the damaged visible rows of each widget, pausing between widgets once `deadline` passes.
+
+        Each widget keeps its rendered rows (its styles cache), so the paint
+        that follows reads them instead of rendering. Nothing is published.
+        """
+        compositor = self._compositor
+        for widget, (region, visible) in tuple(compositor.visible_widgets.items()):
+            damaged = [overlap for damage in compositor._dirty_regions
+                       if (overlap := visible.intersection(damage))]
+            if not damaged:
+                continue
+            if deadline.passed():
+                yield
+                if not widget.is_attached:
+                    continue
+            # One render for the rows the damage spans (rows are cached whole).
+            top = min(overlap.y for overlap in damaged)
+            bottom = max(overlap.bottom for overlap in damaged)
+            widget.render_lines(Region(0, top - region.y, region.width, bottom - top))
 
     async def _on_update(self, message: messages.Update) -> None:
         message.stop()

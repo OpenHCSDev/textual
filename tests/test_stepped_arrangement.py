@@ -4,8 +4,10 @@ Each scenario builds the same app twice and makes the same change; one copy
 is laid out at once (`_refresh_layout`), the other a step at a time
 (`layout_in_steps` or a manual driver) with deadlines that pause it many
 times. The arrangement, the widget set, the retained subtree geometry and the
-Resize/Show/Hide events must be identical, and nothing may be published or
-posted before the last step.
+Resize/Show/Hide events must be identical. Until the step that commits the
+arrangement, readers see the previous scene and nothing is posted; the
+events are posted at the commit; the steps after it render the visible
+widgets, and nothing is published before the last step.
 """
 
 from __future__ import annotations
@@ -169,16 +171,20 @@ def refuse_full_reflow(monkeypatch) -> None:
     def refused(*args, **kwargs):
         raise AssertionError("expected a scoped reflow")
 
-    monkeypatch.setattr(Compositor, "reflow", refused)
+    monkeypatch.setattr(Compositor, "reflow_steps", refused)
 
 
 async def laid_out(monkeypatch, step_ns: int | None) -> tuple[dict, Posted]:
-    """The app after `change`, laid out at once (None) or in steps of `step_ns`."""
-    with monkeypatch.context() as patch:
-        async with Tree().run_test(size=(100, 30)) as pilot:
-            screen = pilot.app.screen
-            await pilot.pause()
-            await change(screen)
+    """The app after `change`, laid out at once (None) or in steps of `step_ns`.
+
+    Only the layout under test must be scoped: a later layout the app runs
+    for its own pending requests is not part of the comparison.
+    """
+    async with Tree().run_test(size=(100, 30)) as pilot:
+        screen = pilot.app.screen
+        await pilot.pause()
+        await change(screen)
+        with monkeypatch.context() as patch:
             refuse_full_reflow(patch)
             posted = Posted(patch)
             with screen.hold_frames():
@@ -186,7 +192,7 @@ async def laid_out(monkeypatch, step_ns: int | None) -> tuple[dict, Posted]:
                     screen._refresh_layout()
                 else:
                     await screen.layout_in_steps(step_ns=step_ns)
-            return outcome(screen), posted
+        return outcome(screen), posted
 
 
 @pytest.mark.parametrize("step_ns", [0, 20_000])
@@ -195,11 +201,11 @@ async def test_layout_in_steps_equals_refresh_layout(monkeypatch, step_ns) -> No
     stepped, stepped_posted = await laid_out(monkeypatch, step_ns)
     assert stepped_posted.pauses > (40 if step_ns == 0 else 3)
     assert stepped == one_shot
-    # Every event the one-shot layout posts, posted once, all in the last step.
+    # Every event the one-shot layout posts, posted once, all in the step that commits.
     assert stepped_posted.posted() == one_shot_posted.posted()
     assert max(stepped_posted.posted().values()) == 1
     assert {"Resize", "Hide"} <= {kind for _, kind, _ in stepped_posted.posted()}
-    assert {pauses for pauses, *_ in stepped_posted.events} == {stepped_posted.pauses}
+    assert len({pauses for pauses, *_ in stepped_posted.events}) == 1
 
 
 async def test_arrangement_steps_equal_one_shot() -> None:
@@ -269,8 +275,17 @@ async def test_readers_between_steps_see_the_previous_scene(monkeypatch) -> None
             with screen.hold_frames():
                 steps = drive(screen)
                 pauses = 0
+                rendering = 0
                 try:
                     while True:
+                        if compositor._visible_map is not maps[1]:
+                            # Committed: the remaining steps only render.
+                            committed = compositor._visible_map
+                            rendering += 1
+                            assert compositor._published_map is maps[2]
+                            next(steps)
+                            assert compositor._visible_map is committed
+                            continue
                         # Readers that could arrange lazily must not.
                         try:
                             screen.find_widget(offscreen)
@@ -296,6 +311,7 @@ async def test_readers_between_steps_see_the_previous_scene(monkeypatch) -> None
                 except StopIteration:
                     screen._stepped_layout = None
                 assert pauses > 40
+                assert rendering > 3, "the visible widgets render in steps after the commit"
                 assert not compositor._arranging
                 assert outcome(screen)["layout_map"] == one_shot["layout_map"]
                 assert compositor._visible_map is not maps[1]
@@ -415,3 +431,123 @@ async def test_a_second_stepped_layout_replaces_a_paused_one() -> None:
         assert screen._stepped_layout is None
         assert not compositor._arranging
         assert compositor._discarded_between_steps is None
+
+
+async def test_timer_layout_runs_in_steps(monkeypatch) -> None:
+    """A requested layout longer than a step (the screen's update timer) runs
+    over loop turns: input is handled between steps, no frame is written
+    until the last step, and the result is the one-shot layout's."""
+    one_shot, one_shot_posted = await laid_out(monkeypatch, None)
+    async with Tree().run_test(size=(100, 30)) as pilot:
+        app = pilot.app
+        screen = app.screen
+        await pilot.pause()
+        await change(screen)
+        with monkeypatch.context() as patch:
+            posted = Posted(patch)
+            patch.setattr(Workspace, "LAYOUT_STEP_NS", 0)
+            frames = []
+            display = type(app)._display
+
+            def counted(self, screen, renderable):
+                frames.append(posted.pauses)
+                return display(self, screen, renderable)
+
+            patch.setattr(type(app), "_display", counted)
+            with monkeypatch.context() as scoped:
+                refuse_full_reflow(scoped)
+                screen._on_timer_update()
+                remaining = screen._stepped_layout_task
+                assert screen._stepped_layout is not None and remaining is not None
+                assert not screen._layout_required, "the running layout took the request"
+                app.post_message(events.Key("x", "x"))
+                await remaining
+            paused = posted.pauses
+            await pilot.pause()
+        assert screen._stepped_layout is None and screen._stepped_layout_task is None
+        assert paused > 40
+        assert app.handled_during_layout == [True]
+        assert frames and min(frames) >= paused, "no frame before the last step"
+        assert outcome(screen)["layout_map"] == one_shot["layout_map"]
+        assert posted.posted() == one_shot_posted.posted()
+
+
+async def change_screen(screen: Screen) -> None:
+    """Change the docked top bar's height: the request reaches the screen,
+    which re-arranges everything (`reflow`), and the history rewraps."""
+    top = screen.query_one("#top")
+    top.styles.height = 2
+    screen.query_one("#side").styles.width = 34
+    await screen._on_layout(messages.Layout(top))
+    await screen._on_layout(messages.Layout(screen.query_one("#side")))
+    assert screen._layout_boundaries() is None, "the request reaches the screen"
+
+
+async def fully_laid_out(monkeypatch, step_ns: int | None) -> tuple[dict, Posted, list]:
+    """The app after `change_screen`, laid out at once (None) or in steps of `step_ns`."""
+    async with Tree().run_test(size=(100, 30)) as pilot:
+        screen = pilot.app.screen
+        await pilot.pause()
+        await change_screen(screen)
+        with monkeypatch.context() as patch:
+            full = []
+            reflow_steps = Compositor.reflow_steps
+
+            def recorded(self, *args, **kwargs):
+                full.append(kwargs.get("deadline") is not None)
+                return (yield from reflow_steps(self, *args, **kwargs))
+
+            patch.setattr(Compositor, "reflow_steps", recorded)
+            posted = Posted(patch)
+            with screen.hold_frames():
+                if step_ns is None:
+                    screen._refresh_layout()
+                else:
+                    await screen.layout_in_steps(step_ns=step_ns)
+        return outcome(screen), posted, full
+
+
+@pytest.mark.parametrize("step_ns", [0, 20_000])
+async def test_full_layout_in_steps_equals_refresh_layout(monkeypatch, step_ns) -> None:
+    one_shot, one_shot_posted, one_shot_full = await fully_laid_out(monkeypatch, None)
+    stepped, stepped_posted, stepped_full = await fully_laid_out(monkeypatch, step_ns)
+    assert one_shot_full == [False] and stepped_full == [True]
+    assert stepped_posted.pauses > (40 if step_ns == 0 else 3)
+    assert stepped == one_shot
+    assert stepped_posted.posted() == one_shot_posted.posted()
+    assert len({pauses for pauses, *_ in stepped_posted.events}) == 1
+
+
+async def test_readers_between_full_layout_steps_see_the_previous_scene() -> None:
+    async with Tree().run_test(size=(100, 30)) as pilot:
+        screen = pilot.app.screen
+        compositor = screen._compositor
+        await pilot.pause()
+        maps = (compositor._layout_map, compositor._visible_map, compositor._published_map)
+        copies = tuple(dict(scene) for scene in maps)
+        root, size = compositor.root, compositor.size
+        top = screen.query_one("#top")
+        await change_screen(screen)
+        with screen.hold_frames():
+            steps = drive(screen)
+            pauses = 0
+            try:
+                while True:
+                    if compositor._layout_map is not maps[0]:
+                        # Committed: the remaining steps only render.
+                        next(steps)
+                        continue
+                    compositor.full_map
+                    assert (compositor.root, compositor.size) == (root, size)
+                    assert tuple(dict(scene) for scene in (
+                        compositor._layout_map, compositor._visible_map,
+                        compositor._published_map)) == copies
+                    assert top.region.height == 1
+                    pauses += 1
+                    next(steps)
+            except StopIteration:
+                screen._stepped_layout = None
+        assert pauses > 40
+        assert not compositor._arranging
+        assert top.region.height == 2
+
