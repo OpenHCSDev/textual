@@ -1,214 +1,417 @@
-"""A layout run in steps places every widget exactly as the one-shot layout does."""
+"""A layout run in steps is the one-shot layout, published once at its end.
+
+Each scenario builds the same app twice and makes the same change; one copy
+is laid out at once (`_refresh_layout`), the other a step at a time
+(`layout_in_steps` or a manual driver) with deadlines that pause it many
+times. The arrangement, the widget set, the retained subtree geometry and the
+Resize/Show/Hide events must be identical, and nothing may be published or
+posted before the last step.
+"""
 
 from __future__ import annotations
 
-from textual import messages
+import asyncio
+from collections import Counter
+
+import pytest
+
+from textual import events, messages
+from textual._compositor import Compositor, StepDeadline
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual._compositor import StepDeadline
 from textual.screen import Screen
 from textual.widget import Widget
 from textual.widgets import Label, Static
 
 
-class ViewportScreen(Screen):
+class Cached(VerticalScroll):
+    """A container whose arrangement is retained, as Toad's history windows are."""
+
+    CACHE_SUBTREE_GEOMETRY = True
+
+
+class Workspace(Screen):
+    """A sidebar beside a long nested history, with docks and an overlay."""
+
     def _use_viewport_layout(self) -> bool:
         return True
 
     def compose(self) -> ComposeResult:
-        yield Static("side", id="side")
-        with VerticalScroll(id="body"):
-            for row in range(30):
-                with Horizontal(classes="row"):
-                    yield Label(f"row {row} " + "word " * (row % 7))
-                    yield Label("right")
-            with Vertical(id="grow"):
-                yield Static("x", id="growing")
+        yield Static("top", id="top")
+        with Horizontal(id="main"):
+            with VerticalScroll(id="side"):
+                for index in range(60):
+                    yield Label(f"thread {index}")
+            with Cached(id="body"):
+                for row in range(40):
+                    with Horizontal(classes="row", id=f"row{row}"):
+                        yield Label(("word " * (row % 9 + 1)).strip(), classes="text")
+                        with Vertical(classes="meta"):
+                            yield Static(f"meta {row}")
+                            yield Static("x" * (row % 5 + 1))
+                with Cached(id="inner"):
+                    for index in range(10):
+                        yield Label(f"inner {index} " + "w " * index, classes="text")
+        yield Static("overlay", id="overlay")
+        yield Static("bottom", id="bottom")
 
 
 class Tree(App[None]):
     CSS = """
-    #side { dock: left; width: 12; }
-    #body { height: 1fr; }
+    Screen { layers: base over; }
+    #top { dock: top; height: 1; }
+    #bottom { dock: bottom; height: 1; }
+    #main { height: 1fr; }
+    #side { width: 20; }
+    #body { width: 1fr; }
     .row { height: auto; }
-    .row Label { width: 1fr; }
-    #grow { height: auto; }
+    .text { width: 1fr; }
+    .meta { width: 12; height: auto; }
+    #inner { height: 8; }
+    #overlay { layer: over; offset: 10 5; width: 20; height: 3; }
     """
 
+    def __init__(self) -> None:
+        super().__init__()
+        self.handled_during_layout: list[bool] = []
+
     def get_default_screen(self) -> Screen:
-        return ViewportScreen()
+        return Workspace()
+
+    def on_key(self, event: events.Key) -> None:
+        if event.key == "x":
+            self.handled_during_layout.append(self.screen._stepped_layout is not None)
 
 
-async def request_growth(screen: Screen) -> None:
-    """Grow #growing and record its layout request at once (no frame between)."""
-    growing = screen.query_one("#growing", Static)
-    growing.update("line\n" * 5)
-    await screen._on_layout(messages.Layout(growing))
-    assert screen._layout_boundaries(), "a scoped layout is pending"
+def path(widget: Widget) -> tuple:
+    """A widget's place in the tree, the same in both copies of the app."""
+    steps = []
+    node = widget
+    while isinstance(node, Widget) and node.parent is not None:
+        parent = node.parent
+        index = parent._nodes.index(node) if node in parent._nodes else -1
+        steps.append((type(node).__name__, node.id, index))
+        node = parent
+    return tuple(reversed(steps))
 
 
 def canonical(scene) -> list[tuple]:
-    """A scene's geometry keyed by each widget's place in the tree."""
-
-    def path(widget: Widget) -> tuple:
-        steps = []
-        node = widget
-        while isinstance(node, Widget) and node.parent is not None:
-            parent = node.parent
-            index = parent.children.index(node) if node in parent.children else -1
-            steps.append((type(node).__name__, getattr(node, "vertical", None), index))
-            node = parent
-        return tuple(reversed(steps))
-
-    return sorted(
+    return sorted((
         (path(widget), geometry.region, geometry.order, geometry.clip,
          geometry.virtual_size, geometry.container_size, geometry.virtual_region,
          geometry.dock_gutter, geometry.gutter)
         for widget, geometry in scene.items()
-    )
+    ), key=repr)
+
+
+def outcome(screen: Screen) -> dict:
+    """Everything a layout leaves behind, keyed by tree position."""
+    compositor = screen._compositor
+    return {
+        "layout_map": canonical(compositor._layout_map),
+        "visible_map": None if compositor._visible_map is None
+        else canonical(compositor._visible_map),
+        "widgets": sorted((path(widget) for widget in compositor.widgets), key=repr),
+        "retained": sorted((path(widget) for widget in compositor._subtree_geometry), key=repr),
+        "sizes": sorted(((path(widget), widget.size, widget.virtual_size)
+                         for widget in screen.walk_children(Widget)), key=repr),
+    }
+
+
+async def change(screen: Screen) -> None:
+    """Widen the sidebar (every history row rewraps), hide one row, show another.
+
+    Layout requests are recorded at once, with no frame between the change
+    and the layout under test. Every request's boundary is below the screen,
+    so the screen re-arranges those subtrees (`reflow_subtrees`).
+    """
+    side = screen.query_one("#side")
+    side.styles.width = 34
+    hidden = screen.query_one("#row3")
+    hidden.display = False
+    await screen._on_layout(messages.Layout(side))
+    await screen._on_layout(messages.Layout(hidden))
+    assert screen._layout_boundaries(), "a scoped layout is pending"
+
+
+class Posted:
+    """Resize, Show and Hide posts, with how many pauses preceded each."""
+
+    def __init__(self, monkeypatch) -> None:
+        self.pauses = 0
+        self.events: list[tuple[int, tuple, str, tuple]] = []
+        passed = StepDeadline.passed
+
+        def counted(deadline: StepDeadline) -> bool:
+            result = passed(deadline)
+            self.pauses += result
+            return result
+
+        post_message = Widget.post_message
+
+        def recorded(widget: Widget, message) -> bool:
+            if isinstance(message, (events.Resize, events.Show, events.Hide)):
+                detail = ((message.size, message.virtual_size, message.container_size)
+                          if isinstance(message, events.Resize) else ())
+                self.events.append((self.pauses, path(widget), type(message).__name__, detail))
+            return post_message(widget, message)
+
+        monkeypatch.setattr(StepDeadline, "passed", counted)
+        monkeypatch.setattr(Widget, "post_message", recorded)
+
+    def posted(self) -> Counter:
+        return Counter(event[1:] for event in self.events)
+
+
+def refuse_full_reflow(monkeypatch) -> None:
+    """The scenario must take the scoped path that runs in steps."""
+
+    def refused(*args, **kwargs):
+        raise AssertionError("expected a scoped reflow")
+
+    monkeypatch.setattr(Compositor, "reflow", refused)
+
+
+async def laid_out(monkeypatch, step_ns: int | None) -> tuple[dict, Posted]:
+    """The app after `change`, laid out at once (None) or in steps of `step_ns`."""
+    with monkeypatch.context() as patch:
+        async with Tree().run_test(size=(100, 30)) as pilot:
+            screen = pilot.app.screen
+            await pilot.pause()
+            await change(screen)
+            refuse_full_reflow(patch)
+            posted = Posted(patch)
+            with screen.hold_frames():
+                if step_ns is None:
+                    screen._refresh_layout()
+                else:
+                    await screen.layout_in_steps(step_ns=step_ns)
+            return outcome(screen), posted
+
+
+@pytest.mark.parametrize("step_ns", [0, 20_000])
+async def test_layout_in_steps_equals_refresh_layout(monkeypatch, step_ns) -> None:
+    one_shot, one_shot_posted = await laid_out(monkeypatch, None)
+    stepped, stepped_posted = await laid_out(monkeypatch, step_ns)
+    assert stepped_posted.pauses > (40 if step_ns == 0 else 3)
+    assert stepped == one_shot
+    # Every event the one-shot layout posts, posted once, all in the last step.
+    assert stepped_posted.posted() == one_shot_posted.posted()
+    assert max(stepped_posted.posted().values()) == 1
+    assert {"Resize", "Hide"} <= {kind for _, kind, _ in stepped_posted.posted()}
+    assert {pauses for pauses, *_ in stepped_posted.events} == {stepped_posted.pauses}
 
 
 async def test_arrangement_steps_equal_one_shot() -> None:
-    async with Tree().run_test(size=(60, 20)) as pilot:
-        screen = pilot.app.screen
-        compositor = screen._compositor
-        one_shot, one_shot_widgets = compositor._arrange_root(screen, screen.size)
-
-        deadline = StepDeadline()  # always passed: pause before every widget
-        steps = compositor._arrange_steps(screen, screen.size, deadline=deadline)
-        pauses = 0
-        try:
-            while True:
-                next(steps)
-                pauses += 1
-                assert not compositor._arranging, "readers between steps see the committed scene"
-        except StopIteration as finished:
-            stepped, stepped_widgets = finished.value
-        assert pauses > 20
-        assert canonical(stepped) == canonical(one_shot)
-        assert stepped_widgets == one_shot_widgets
-
-
-async def layout_after_change(stepped: bool) -> tuple[list[tuple], int]:
-    """Grow a widget, then lay out the screen in steps or at once."""
-    async with Tree().run_test(size=(60, 20)) as pilot:
-        screen = pilot.app.screen
-        await pilot.pause()
-        published = screen._compositor._visible_map
-        await request_growth(screen)
-        with screen.hold_frames():
-            if stepped:
-                pauses = 0
-                original = StepDeadline.passed
-
-                def counted(deadline: StepDeadline) -> bool:
-                    nonlocal pauses
-                    passed = original(deadline)
-                    pauses += passed
-                    return passed
-
-                StepDeadline.passed = counted
-                try:
-                    await screen.layout_in_steps(step_ns=0)
-                finally:
-                    StepDeadline.passed = original
-            else:
-                pauses = 0
-                screen._refresh_layout()
-        assert screen._compositor._visible_map is not published
-        return canonical(screen._compositor._layout_map), pauses
-
-
-async def test_layout_in_steps_equals_refresh_layout() -> None:
-    one_shot, _ = await layout_after_change(stepped=False)
-    stepped, pauses = await layout_after_change(stepped=True)
-    assert pauses > 1
-    assert stepped == one_shot
-
-
-async def test_scene_unpublished_until_last_step() -> None:
-    async with Tree().run_test(size=(60, 20)) as pilot:
-        screen = pilot.app.screen
-        compositor = screen._compositor
-        await pilot.pause()
-        published = compositor._visible_map
-        await request_growth(screen)
-        seen = []
-        with screen.hold_frames():
-            deadline = StepDeadline()
-            steps = screen._layout_steps(deadline=deadline)
-            screen._stepped_layout = steps
+    """Pausing before every widget: the same map and widgets as one call."""
+    results = []
+    for stepped in (False, True):
+        async with Tree().run_test(size=(100, 30)) as pilot:
+            screen = pilot.app.screen
+            compositor = screen._compositor
+            compositor._subtree_geometry.clear()
+            if not stepped:
+                results.append(compositor._arrange_root(screen, screen.size))
+                continue
+            steps = compositor._arrange_steps(screen, screen.size, deadline=StepDeadline())
+            pauses = 0
             try:
                 while True:
                     next(steps)
-                    seen.append(compositor._visible_map is published)
-            except StopIteration:
-                pass
-            finally:
-                screen._stepped_layout = None
-        assert seen and all(seen)
-        assert compositor._visible_map is not published
+                    pauses += 1
+                    assert compositor._arranging, "a paused arrangement is still in progress"
+            except StopIteration as finished:
+                results.append(finished.value)
+            assert not compositor._arranging
+            assert pauses > 40
+    (one_shot, one_shot_widgets), (stepped_map, stepped_widgets) = results
+    assert canonical(stepped_map) == canonical(one_shot)
+    assert sorted(map(path, stepped_widgets), key=repr) == sorted(map(path, one_shot_widgets), key=repr)
+
+
+def drive(screen: Screen):
+    """Start a stepped layout that pauses before every widget."""
+    steps = screen._stepped_layout = screen._layout_steps(deadline=StepDeadline())
+    next(steps)
+    return steps
+
+
+def finish(screen: Screen, steps) -> int:
+    count = 0
+    try:
+        while True:
+            next(steps)
+            count += 1
+    except StopIteration:
+        screen._stepped_layout = None
+    return count
+
+
+async def test_readers_between_steps_see_the_previous_scene(monkeypatch) -> None:
+    one_shot, _ = await laid_out(monkeypatch, None)
+    async with Tree().run_test(size=(100, 30)) as pilot:
+        screen = pilot.app.screen
+        compositor = screen._compositor
+        await pilot.pause()
+        maps = (compositor._layout_map, compositor._visible_map, compositor._published_map)
+        copies = tuple(dict(scene) for scene in maps)
+        visible = dict(compositor.visible_widgets)
+        published = dict(compositor.published_widgets)
+        points = [(x, y) for x in range(0, 100, 7) for y in range(0, 30, 3)]
+        hits = [screen.get_widget_at(x, y) for x, y in points]
+        offsets = [screen.get_widget_and_offset_at(x, y) for x, y in points]
+        offscreen = next(widget for widget in screen.walk_children(Widget)
+                         if widget not in compositor._layout_map)
+        regions = {widget: widget.region for widget in compositor._layout_map}
+        await change(screen)
+        with monkeypatch.context() as patch:
+            refuse_full_reflow(patch)
+            with screen.hold_frames():
+                steps = drive(screen)
+                pauses = 0
+                try:
+                    while True:
+                        # Readers that could arrange lazily must not.
+                        try:
+                            screen.find_widget(offscreen)
+                        except Exception:
+                            pass
+                        compositor.full_map
+                        screen.focus_next()
+                        assert (compositor._layout_map, compositor._visible_map,
+                                compositor._published_map) == maps
+                        assert all(scene is kept for scene, kept in zip(
+                            (compositor._layout_map, compositor._visible_map,
+                             compositor._published_map), maps))
+                        assert tuple(dict(scene) for scene in maps) == copies
+                        assert compositor.visible_widgets == visible
+                        assert compositor.published_widgets == published
+                        if pauses % 25 == 0:
+                            assert [screen.get_widget_at(x, y) for x, y in points] == hits
+                            assert [screen.get_widget_and_offset_at(x, y)
+                                    for x, y in points] == offsets
+                            assert {widget: widget.region for widget in regions} == regions
+                        pauses += 1
+                        next(steps)
+                except StopIteration:
+                    screen._stepped_layout = None
+                assert pauses > 40
+                assert not compositor._arranging
+                assert outcome(screen)["layout_map"] == one_shot["layout_map"]
+                assert compositor._visible_map is not maps[1]
+
+
+async def test_input_between_steps_is_handled(monkeypatch) -> None:
+    one_shot, _ = await laid_out(monkeypatch, None)
+    async with Tree().run_test(size=(100, 30)) as pilot:
+        app = pilot.app
+        screen = app.screen
+        await pilot.pause()
+        await change(screen)
+        with screen.hold_frames():
+            layout = asyncio.create_task(screen.layout_in_steps(step_ns=0))
+            await asyncio.sleep(0)
+            assert screen._stepped_layout is not None
+            app.post_message(events.Key("x", "x"))
+            await layout
+        assert app.handled_during_layout == [True]
+        assert outcome(screen)["layout_map"] == one_shot["layout_map"]
 
 
 async def test_request_between_steps_waits_for_next_layout() -> None:
-    async with Tree().run_test(size=(60, 20)) as pilot:
+    async with Tree().run_test(size=(100, 30)) as pilot:
         screen = pilot.app.screen
         await pilot.pause()
-        await request_growth(screen)
-        side = screen.query_one("#side", Static)
+        await change(screen)
+        top = screen.query_one("#top")
         with screen.hold_frames():
-            deadline = StepDeadline()
-            steps = screen._stepped_layout = screen._layout_steps(deadline=deadline)
-            next(steps)  # paused mid-arrangement
-            side.styles.width = 20
-            await screen._on_layout(messages.Layout(side))
+            steps = drive(screen)
+            top.styles.height = 2
+            await screen._on_layout(messages.Layout(top))
             screen._on_timer_update()  # deferred: the stepped layout is running
-            assert screen._compositor._visible_map is not None
-            try:
-                while True:
-                    next(steps)
-            except StopIteration:
-                pass
-            screen._stepped_layout = None
-        assert side in {requester for requesters in screen._layout_widgets.values()
-                        for requester in requesters} or side in screen._layout_widgets
+            finish(screen, steps)
+        assert screen._layout_widgets, "the request made between steps is still pending"
+        assert top.region.height == 1
         await pilot.pause()
-        assert screen.query_one("#side").region.width == 20
+        assert top.region.height == 2
 
 
-async def test_widget_removed_between_steps_is_not_placed() -> None:
-    async with Tree().run_test(size=(60, 20)) as pilot:
+async def removed_between_steps(monkeypatch, fraction: float | None, selector: str) -> dict:
+    """Remove a widget after `fraction` of the layout's steps (None: before it)."""
+    async with Tree().run_test(size=(100, 30)) as pilot:
         screen = pilot.app.screen
         await pilot.pause()
-
-        def stepped_layout():
-            deadline = StepDeadline()  # pause before every widget
-            steps = screen._stepped_layout = screen._layout_steps(deadline=deadline)
-            return steps
-
-        def finish(steps) -> int:
-            count = 0
-            try:
-                while True:
+        removed = screen.query_one(selector)
+        if fraction is None:
+            await removed.remove()
+            await change(screen)
+            with screen.hold_frames():
+                screen._refresh_layout()
+        else:
+            await change(screen)
+            with screen.hold_frames():
+                total = finish(screen, drive(screen))
+            # The same change again, removing the widget part way through.
+            screen.query_one("#side").styles.width = 20
+            screen.query_one("#row3").display = True
+            await pilot.pause()
+            await change(screen)
+            with screen.hold_frames():
+                steps = drive(screen)
+                for _ in range(int(total * fraction)):
                     next(steps)
-                    count += 1
-            except StopIteration:
-                screen._stepped_layout = None
-            return count
+                await removed.remove()
+                finish(screen, steps)
+            assert removed not in screen._compositor._layout_map
+            assert removed not in screen._compositor.widgets
+            assert not any(removed in geometry.ancestors
+                           for geometry in screen._compositor._layout_map.values()
+                           if hasattr(geometry, "ancestors"))
+        await pilot.pause()
+        return outcome(screen)
 
-        # Count the steps of this layout, then remove a widget near its end,
-        # after it was placed (children are placed last row first).
-        await request_growth(screen)
+
+@pytest.mark.parametrize("selector", ["#row1", "#row38", "#inner"])
+@pytest.mark.parametrize("fraction", [0.02, 0.5, 0.95])
+async def test_widget_removed_between_steps(monkeypatch, selector, fraction) -> None:
+    """Removed before or after its placement, in or out of a retained subtree:
+    the scene leaves it out, and the next layout is the one-shot result."""
+    expected = await removed_between_steps(monkeypatch, None, selector)
+    assert await removed_between_steps(monkeypatch, fraction, selector) == expected
+
+
+async def test_direct_layout_replaces_a_paused_one() -> None:
+    async with Tree().run_test(size=(100, 30)) as pilot:
+        screen = pilot.app.screen
+        compositor = screen._compositor
+        await pilot.pause()
+        await change(screen)
         with screen.hold_frames():
-            total = finish(stepped_layout())
-        removed = screen.query(".row")[12].query_one(Label)
-        assert removed in screen._compositor._layout_map
-        await request_growth(screen)
-        with screen.hold_frames():
-            steps = stepped_layout()
-            for _ in range(total - 2):
+            steps = drive(screen)
+            assert compositor._arranging
+            screen._refresh_layout()
+            assert screen._stepped_layout is None
+            assert not compositor._arranging
+            assert compositor._discarded_between_steps is None
+            with pytest.raises(StopIteration):
                 next(steps)
-            await removed.parent.remove()
-            finish(steps)
-        assert removed not in screen._compositor._layout_map
-        assert removed not in screen._compositor.widgets
+
+
+async def test_a_second_stepped_layout_replaces_a_paused_one() -> None:
+    async with Tree().run_test(size=(100, 30)) as pilot:
+        screen = pilot.app.screen
+        compositor = screen._compositor
+        await pilot.pause()
+        await change(screen)
+        with screen.hold_frames():
+            first = asyncio.create_task(screen.layout_in_steps(step_ns=0))
+            await asyncio.sleep(0)
+            paused = screen._stepped_layout
+            assert paused is not None
+            await screen.layout_in_steps(step_ns=0)
+            await first
+            with pytest.raises(StopIteration):
+                next(paused)
+        assert screen._stepped_layout is None
+        assert not compositor._arranging
+        assert compositor._discarded_between_steps is None
