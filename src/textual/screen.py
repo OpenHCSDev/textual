@@ -1676,6 +1676,9 @@ class Screen(Generic[ScreenResultType], Widget):
             # publish in it; a longer one publishes in a step of its own.
             yield from self._render_damage_steps(deadline)
         if self.is_current:
+            # Repaints requested between the steps publish with this frame
+            # (publishing clears the requests).
+            self._compositor.update_widgets(self._dirty_widgets)
             self._compositor_refresh()
 
         if self.app._dom_ready:

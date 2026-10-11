@@ -577,3 +577,35 @@ async def test_retained_subtree_projection_pauses_between_entries() -> None:
         assert pauses > outside + 10, "the retained subtree's entries are projected in steps"
         assert canonical(stepped[0]) == canonical(one_shot[0])
         assert sorted(map(path, stepped[1]), key=repr) == sorted(map(path, one_shot[1]), key=repr)
+
+
+async def test_a_repaint_between_steps_publishes_with_the_layout() -> None:
+    async with Tree().run_test(size=(100, 30)) as pilot:
+        screen = pilot.app.screen
+        await pilot.pause()
+        await change(screen)
+        top = screen.query_one("#top", Static)
+        compositor = screen._compositor
+        published = []
+        refresh = screen._compositor_refresh
+
+        def publish():
+            published.append(set(compositor._dirty_regions))
+            refresh()
+
+        screen._compositor_refresh = publish
+        try:
+            steps = drive(screen)
+            # The widget's refresh, delivered to the screen between steps.
+            top.refresh()
+            top._check_refresh()
+            await screen._on_update(messages.Update(top))
+            assert top in screen._dirty_widgets
+            finish(screen, steps)
+        finally:
+            del screen._compositor_refresh
+        # The publication covers the widget repainted between the steps;
+        # publishing cleared its request, so it is not left for later.
+        [damage] = published
+        assert any(region.contains_region(top.region) for region in damage)
+        assert top not in screen._dirty_widgets

@@ -1082,7 +1082,10 @@ class Compositor:
                     ),
                     deadline=deadline,
                 )
-                for widget in old:
+                # The root goes too: re-added with its subtree, it keeps the
+                # arranged order, where its scrollbars (same order key) come
+                # first and so in front, as in a full arrangement.
+                for widget in (*old, root):
                     del scene[widget]
                 widgets.difference_update([
                     widget for widget in widgets
