@@ -51,12 +51,18 @@ class PaintStyles:
     text_opacity: float
     border_title_align: str
     border_subtitle_align: str
+    plain: bool
+    """No border, outline, padding, hatch, tint or text opacity: a line is its content line."""
 
     @classmethod
     def of(cls, styles: StylesBase) -> PaintStyles:
         hatch = styles.hatch if styles.has_rule("hatch") and styles.hatch != "none" else None
-        return cls(styles.gutter, styles.border, styles.outline, hatch, styles.tint,
-                   styles.text_opacity, styles.border_title_align, styles.border_subtitle_align)
+        gutter, border, outline = styles.gutter, styles.border, styles.outline
+        tint, text_opacity = styles.tint, styles.text_opacity
+        plain = (not any(gutter) and not any(edge for edge, _ in outline) and hatch is None
+                 and not tint.a and text_opacity == 1.0)
+        return cls(gutter, border, outline, hatch, tint, text_opacity,
+                   styles.border_title_align, styles.border_subtitle_align, plain)
 
 class StylesCache:
     """Responsible for rendering CSS Styles and keeping a cache of rendered lines.
@@ -241,24 +247,38 @@ class StylesCache:
         is_dirty = self._dirty_lines.__contains__
         render_line = self.render_line
         painted = PaintStyles.of(styles)
+        # A plain widget's line is its content line at the widget's width.
+        # Returning that strip itself (rather than a copy of its segments)
+        # keeps what it has already computed, such as its terminal sequence.
+        plain = (painted.plain and opacity == 1.0 and not any(padding)
+                 and content_size == size)
+        if plain:
+            inner_style = self.get_inner_outer(base_background, background)[0].rich_style
+            content_height = content_size.height
 
         for y in crop.line_range:
             if is_dirty(y) or y not in self._cache:
-                strip = render_line(
-                    painted,
-                    y,
-                    size,
-                    content_size,
-                    padding,
-                    base_background,
-                    background,
-                    render_content_line,
-                    border_title,
-                    border_subtitle,
-                    opacity,
-                    ansi_theme,
-                    native_ansi,
-                )
+                if plain:
+                    strip = (
+                        render_content_line(y) if y < content_height
+                        else Strip.blank(width, inner_style)
+                    ).adjust_cell_length(width, inner_style)
+                else:
+                    strip = render_line(
+                        painted,
+                        y,
+                        size,
+                        content_size,
+                        padding,
+                        base_background,
+                        background,
+                        render_content_line,
+                        border_title,
+                        border_subtitle,
+                        opacity,
+                        ansi_theme,
+                        native_ansi,
+                    )
                 self._cache[y] = strip
             else:
                 strip = self._cache[y]
