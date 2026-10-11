@@ -345,11 +345,13 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
         self, geometry: CompositorMap, widgets: set[Widget], invisible_widgets: set[Widget],
         key: SubtreeGeometryKey, clip: SceneClip, clips: dict[Widget, SceneClip],
         root: Widget, *, visible_only: bool, retained: set[Widget], bounds: Region,
-    ) -> None:
-        self.project_into(geometry, key, clip, clips, root,
-                          visible_only=visible_only, retained=retained, bounds=bounds,
-                          ancestry_root=root,
-                          ancestors=tuple(root.walk_ancestors()))
+        deadline: StepDeadline | None,
+    ) -> Generator[None, None, None]:
+        """Project this arrangement into `geometry`, pausing between entries once `deadline` passes."""
+        yield from self.project_into(geometry, key, clip, clips, root,
+                                     visible_only=visible_only, retained=retained, bounds=bounds,
+                                     ancestry_root=root,
+                                     ancestors=tuple(root.walk_ancestors()), deadline=deadline)
         widgets.update(self.members())
         invisible_widgets.update(self.members(invisible=True))
 
@@ -357,13 +359,15 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
                      clip: SceneClip, clips: dict[Widget, SceneClip], root: Widget,
                      *, visible_only: bool, retained: set[Widget], bounds: Region,
                      ancestry_root: Widget, ancestors: tuple[DOMNode, ...],
-                     require_root: bool = True,
-                     ) -> None:
+                     require_root: bool = True, deadline: StepDeadline | None,
+                     ) -> Generator[None, None, None]:
         """Publish the requested scene without retiring complete source geometry.
 
         A viewport needs exposed descendants and its explicit geometry targets.
         Complete capture and ordinary full-map acquisition still consume every
         entry. Both newly captured and reused resources publish through here.
+        It pauses between entries once `deadline` passes: `geometry` is the
+        arrangement's working map, which no reader sees until the commit.
         """
         source_bounds = bounds - (key.region.offset - self.key.region.offset)
         child_demands: dict[Widget, set[Widget]] = {}
@@ -391,14 +395,16 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
             entries = ((node, entry) for node, (_, entry) in self.geometry.items())
         no_demand: set[Widget] = set()
         for node, entry in entries:
+            if deadline is not None and deadline.passed():
+                yield
             required = not visible_only or (node is root and require_root) or node in retained
             if isinstance(entry, SubtreeGeometryPlacement):
                 child_key, child_clip = self._project_child(entry, key, clip)
-                entry.source.project_into(
+                yield from entry.source.project_into(
                     geometry, child_key, child_clip, clips, node,
                     visible_only=visible_only, retained=child_demands.get(node, no_demand), bounds=bounds,
                     require_root=required,
-                    ancestry_root=ancestry_root, ancestors=ancestors,
+                    ancestry_root=ancestry_root, ancestors=ancestors, deadline=deadline,
                 )
                 continue
             # Clip intersection can only reduce these original rectangle bounds.
@@ -1547,9 +1553,10 @@ class Compositor:
                 # capture does not consume a second flat copy of descendants.
                 map[widget._render_widget] = SubtreeGeometryPlacement(resource, key, clip)
             else:
-                resource.restore_into(map, widgets, invisible_widgets, key, clip, clips, widget._render_widget,
-                                      visible_only=visible_only and not enclosing_complete,
-                                      retained=retained_paths, bounds=root_geometry.region)
+                yield from resource.restore_into(
+                    map, widgets, invisible_widgets, key, clip, clips, widget._render_widget,
+                    visible_only=visible_only and not enclosing_complete,
+                    retained=retained_paths, bounds=root_geometry.region, deadline=deadline)
 
         # Add top level (root) widget
         discarded = self._discarded_between_steps
