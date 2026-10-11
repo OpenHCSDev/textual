@@ -1474,12 +1474,15 @@ class Screen(Generic[ScreenResultType], Widget):
 
     def _refresh_layout(self, size: Size | None = None, scroll: bool = False) -> None:
         """Refresh the layout (can change size and positions of widgets)."""
+        self._stop_stepped_layout()
+        run_steps(self._layout_steps(size, scroll))
+
+    def _stop_stepped_layout(self) -> None:
+        """Stop a paused stepped layout: the layout starting now includes its
+        requests, which it has not consumed. Closing it ends its arrangement."""
         if self._stepped_layout is not None:
-            # This layout includes the stepped one's requests, which it has
-            # not yet consumed: the stepped one stops.
             steps, self._stepped_layout = self._stepped_layout, None
             steps.close()
-        run_steps(self._layout_steps(size, scroll))
 
     async def layout_in_steps(
         self, size: Size | None = None, scroll: bool = False, *, step_ns: int,
@@ -1490,9 +1493,10 @@ class Screen(Generic[ScreenResultType], Widget):
         nothing is published until the last step (between steps every reader
         sees the previous scene), and the result is `_refresh_layout`'s. A step
         pauses before the next widget once it has run for `step_ns`. Layout
-        requested meanwhile follows this one; a direct `_refresh_layout`
-        replaces it.
+        requested meanwhile follows this one; a direct `_refresh_layout` or
+        another `layout_in_steps` replaces it.
         """
+        self._stop_stepped_layout()
         deadline = StepDeadline()
         steps = self._stepped_layout = self._layout_steps(size, scroll, deadline)
         try:

@@ -1436,10 +1436,10 @@ class Compositor:
                        inherited_layers, source=None):
             nonlocal map, widgets, invisible_widgets, capturing_source
             if deadline is not None and deadline.passed():
-                # Between steps geometry reads see the committed scene.
-                self._arranging = previous_arranging
+                # The arrangement stays in progress while it is paused, so a
+                # reader between steps cannot arrange (full_map,
+                # acquire_geometry) and sees the committed scene.
                 yield
-                self._arranging = True
             if discarded is not None and widget in discarded:
                 # Removed while the arrangement was paused.
                 return
