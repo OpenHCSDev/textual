@@ -917,19 +917,41 @@ class Compositor:
         Returns:
             Hidden and shown widgets.
         """
+        return run_steps(self.reflow_steps(
+            parent, size, visible_only=visible_only, retain_geometry=retain_geometry))
+
+    def reflow_steps(
+        self, parent: Widget, size: Size, *, visible_only: bool = False,
+        retain_geometry: Iterable[Widget] = (), deadline: StepDeadline | None = None,
+    ) -> Generator[None, None, ReflowResult]:
+        """`reflow`, pausing whenever `deadline` passes between widgets.
+
+        Nothing is committed until the last step: between steps the maps,
+        root and size are the previous scene's, for every reader.
+        """
         previous_scene = self._layout_map
         previous_map = previous_scene if visible_only else self._full_map
         self._invalidate_render_projection()
-        self.root = parent
-        self.size = size
 
         # Keep a copy of the old map because we're going to compare it with the update
         old_map = previous_map
         old_widgets = old_map.keys()
 
-        map, widgets = self._arrange_root(
-            parent, size, visible_only=visible_only, retain_geometry=retain_geometry,
-        )
+        discarded = self._discarded_between_steps = set()
+        try:
+            map, widgets = yield from self._arrange_steps(
+                parent, size, visible_only=visible_only, retain_geometry=retain_geometry,
+                deadline=deadline,
+            )
+            yield from self._pause_before_commit(deadline)
+        finally:
+            self._discarded_between_steps = None
+        # Widgets removed while this reflow was paused are not in its scene.
+        for widget in discarded:
+            map.pop(widget, None)
+        widgets.difference_update(discarded)
+        self.root = parent
+        self.size = size
 
         new_widgets = map.keys()
 
@@ -1064,6 +1086,7 @@ class Compositor:
                 placed.update(arranged)
                 shown.update(arranged.keys() - previous.keys())
                 hidden.update(set(old) - arranged.keys())
+            yield from self._pause_before_commit(deadline)
         finally:
             self._discarded_between_steps = None
         # Widgets removed while this reflow was paused are not in its scene.
@@ -1080,6 +1103,17 @@ class Compositor:
         self.widgets = widgets
         self._damage_geometry(previous, scene, parent)
         return SubtreeReflow(hidden=hidden, shown=shown, placed=placed)
+
+    def _pause_before_commit(self, deadline: StepDeadline | None) -> Generator[None, None, None]:
+        """Give committing an arrangement (and what follows it) a step of its own
+        once `deadline` has passed. Until the commit, readers see the previous
+        scene, and lazy readers do not arrange."""
+        if deadline is not None and deadline.passed():
+            previous_arranging, self._arranging = self._arranging, True
+            try:
+                yield
+            finally:
+                self._arranging = previous_arranging
 
     def _damage_geometry(
         self, before: Mapping[Widget, MapGeometry], after: Mapping[Widget, MapGeometry],
@@ -1919,7 +1953,9 @@ class Compositor:
         changed origin, clip, source membership or extent waits until both
         previous and new visible footprints are covered by the update.
         """
-        if self._published_map is arranged or self.size.region in regions:
+        if self._published_map is arranged or not self._exclude_regions((self.size.region,), regions):
+            # Same scene, or the update covers the whole screen (a layout
+            # that moved everything): every placement publishes as arranged.
             return arranged
         # The compositor's declared root is the structural frame owner. A first
         # partial frame may place its background before its children publish.

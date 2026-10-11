@@ -191,7 +191,8 @@ async def test_layout_geometry_reads_do_not_recursively_rebuild_scene():
             app.screen, app.screen.size, retain_geometry=app.screen._layout_geometry_targets(),
         )
         assert compositor._full_map_invalidated
-        with patch.object(compositor, "_arrange_root", wraps=compositor._arrange_root) as arrange:
+        # Every arrangement, one-shot or lazy, runs `_arrange_steps`.
+        with patch.object(compositor, "_arrange_steps", wraps=compositor._arrange_steps) as arrange:
             compositor.reflow(app.screen, Size(45, 20))
             assert arrange.call_count == 1
         actual = compositor.full_map.copy()
