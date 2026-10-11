@@ -23,7 +23,10 @@ from textual.widget import Widget
 from textual.widgets import Static
 
 # sha256 of the joined updates and their count, recorded on Textual 266d53c94.
-EXPECTED_DIGEST = "8df04d4a0a8a0ea0f4bf24c838a9ddb054aee82e741c19105ab5e8e9c6af0666"
+# Re-recorded when a scoped scroll reflow stopped putting the history in front
+# of its own scrollbar: the only change is that the scrollbar's cells (column
+# 99) show the bar again instead of the container's background.
+EXPECTED_DIGEST = "43fb71c47b758efd8d4e9300096d7a9638d5f78e2f29072d136e06f76d815826"
 EXPECTED_UPDATES = 22
 
 WORDS = ("history", "│", "─┼─", "漢字", "scroll", "ü", "paint", "🙂", "line", "cells", "┌─┐", "compositor")

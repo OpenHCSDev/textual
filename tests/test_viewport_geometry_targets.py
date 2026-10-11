@@ -1,3 +1,4 @@
+import pytest
 import asyncio
 from unittest.mock import patch
 
@@ -348,7 +349,8 @@ async def test_held_original_ancestry_honors_a_nested_self_painting_owner():
         assert not app._exception
 
 
-async def test_cached_overlay_and_fixed_children_match_the_original_scene():
+@pytest.mark.parametrize("scoped", [False, True])
+async def test_cached_overlay_and_fixed_children_match_the_original_scene(scoped):
     from textual._compositor import Compositor, PlacedSubtreeGeometry
 
     class CachedBody(VerticalGroup):
@@ -381,6 +383,11 @@ async def test_cached_overlay_and_fixed_children_match_the_original_scene():
         compositor = screen._compositor
         for position in (0, 30, 0):
             history.scroll_to(y=position, immediate=True, animate=False)
+            if scoped:
+                # As when the scroll reaches the screen before the frame: the
+                # scoped reflow of the scrolled container. It keeps the
+                # container behind its scrollbars, as the full arrangement does.
+                screen._scrolled_widgets.add(history)
             screen._refresh_layout(app.size, scroll=True)
             # The overlay's clip reaches the outer screen, so this resource
             # keeps placed geometry rather than manufacturing an intrinsic clip.
