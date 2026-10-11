@@ -26,7 +26,7 @@ jobs:
           python-version: '3.14'
       - name: Install the packaged ratchet pinned by Toad main
         # Same Core source as Toad's tool.uv.sources.agent-comms.rev.
-        run: python -m pip install --disable-pip-version-check 'agent-comms @ git+https://github.com/OpenHCSDev/agent-comms.git@1a520528dfa8d5e5e1ebb13913fed3ccb3514376'
+        run: python -m pip install --disable-pip-version-check 'agent-comms @ git+https://github.com/OpenHCSDev/agent-comms.git@88f4e6ee115ba817118ffcc0b52e5579eb7763e5'
       - name: Reject increases in production debt
         env:
           PR_BASE: ${{ github.event.pull_request.base.sha }}
