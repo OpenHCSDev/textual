@@ -31,6 +31,7 @@ from textual.style import Style
 
 if TYPE_CHECKING:
     from textual.content import Content
+    from textual.css.tokenizer import Token
 
 
 class MarkupError(Exception):
@@ -188,16 +189,6 @@ def parse_style(style: str, variables: dict[str, str] | None = None) -> Style:
     Returns:
         A Style object.
     """
-
-    styles: dict[str, bool | None] = {}
-    color: Color | None = None
-    background: Color | None = None
-    is_background: bool = False
-    style_state: bool = True
-
-    tokenizer = StyleTokenizer()
-    meta = {}
-
     if variables is None:
         try:
             app = active_app.get()
@@ -207,6 +198,28 @@ def parse_style(style: str, variables: dict[str, str] | None = None) -> Style:
             reference_tokens = app.stylesheet._variable_tokens
     else:
         reference_tokens = tokenize_values(variables)
+    return parse_style_tokens(style, reference_tokens)
+
+
+def parse_style_tokens(style: str, reference_tokens: dict[str, list[Token]]) -> Style:
+    """Parse a style whose variables are already tokenized (a stylesheet holds them so).
+
+    Args:
+        style: Style encoded in a string.
+        reference_tokens: Tokens of each variable, by name.
+
+    Returns:
+        A Style object.
+    """
+
+    styles: dict[str, bool | None] = {}
+    color: Color | None = None
+    background: Color | None = None
+    is_background: bool = False
+    style_state: bool = True
+
+    tokenizer = StyleTokenizer()
+    meta = {}
 
     iter_tokens = iter(
         substitute_references(
