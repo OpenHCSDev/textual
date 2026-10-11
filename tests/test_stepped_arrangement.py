@@ -552,3 +552,28 @@ async def test_readers_between_full_layout_steps_see_the_previous_scene() -> Non
         assert not compositor._arranging
         assert top.region.height == 2
 
+
+
+async def test_retained_subtree_projection_pauses_between_entries() -> None:
+    """Re-arranging from retained subtree geometry projects it in steps too,
+    and the result is the one-shot arrangement's."""
+    async with Tree().run_test(size=(100, 30)) as pilot:
+        screen = pilot.app.screen
+        compositor = screen._compositor
+        await pilot.pause()
+        compositor._arrange_root(screen, screen.size)  # Retains #body and #inner.
+        assert compositor._subtree_geometry
+        one_shot = compositor._arrange_root(screen, screen.size)
+        outside = sum(1 for widget in screen.walk_children(Widget)
+                      if not any(isinstance(node, Cached) for node in widget.ancestors_with_self))
+        steps = compositor._arrange_steps(screen, screen.size, deadline=StepDeadline())
+        pauses = 0
+        try:
+            while True:
+                next(steps)
+                pauses += 1
+        except StopIteration as finished:
+            stepped = finished.value
+        assert pauses > outside + 10, "the retained subtree's entries are projected in steps"
+        assert canonical(stepped[0]) == canonical(one_shot[0])
+        assert sorted(map(path, stepped[1]), key=repr) == sorted(map(path, one_shot[1]), key=repr)

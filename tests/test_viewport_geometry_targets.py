@@ -13,7 +13,7 @@ def test_borrowed_geometry_routes_preserve_membership_ancestry_and_assignment_or
 
     from textual._compositor import (
         IntrinsicSubtreeGeometry, PlacedSubtreeGeometry, RootSceneClip,
-        SubtreeGeometryKey, SubtreeGeometryPlacement, SubtreeMapGeometry,
+        SubtreeGeometryKey, SubtreeGeometryPlacement, SubtreeMapGeometry, run_steps,
     )
     from textual.geometry import Offset, Region, Size, Spacing
     from textual.map_geometry import MapGeometry
@@ -55,9 +55,9 @@ def test_borrowed_geometry_routes_preserve_membership_ancestry_and_assignment_or
     assert resource.captured_parent(shared) is first
     assert resource.captured_parent(first) is root
     published, clips = {}, {}
-    resource.project_into(published, key, clip, clips, root, visible_only=True,
-                          retained={shared, unrelated}, bounds=Region(30, 30, 1, 1),
-                          ancestry_root=root, ancestors=())
+    run_steps(resource.project_into(published, key, clip, clips, root, visible_only=True,
+                                    retained={shared, unrelated}, bounds=Region(30, 30, 1, 1),
+                                    ancestry_root=root, ancestors=(), deadline=None))
     assert published[shared] == placed(shared, 6, (second, root))
     assert unrelated not in published
 
