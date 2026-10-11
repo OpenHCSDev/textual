@@ -629,7 +629,7 @@ class App(Generic[ReturnType], DOMNode):
                 self._filters.append(DimFilter())
 
         self.console = Console(
-            color_system=constants.COLOR_SYSTEM,
+            color_system=self.get_color_system(),
             file=_NullFile(),
             markup=True,
             highlight=False,
@@ -1591,6 +1591,18 @@ class App(Generic[ReturnType], DOMNode):
             if isinstance(filter, ANSIToTruecolor):
                 filters[index] = ANSIToTruecolor(theme, enabled=not ansi_color)
                 return
+
+    def get_color_system(self) -> str:
+        """The colour system the console writes in, decided once when the app is built.
+
+        Painted strips keep their terminal sequences, so it cannot change while
+        the app runs. The default reads `TEXTUAL_COLOR_SYSTEM` ("auto" detects
+        it from the environment); an app that decides it itself overrides this.
+
+        Returns:
+            "auto", "standard", "256", "truecolor" or "windows".
+        """
+        return constants.COLOR_SYSTEM
 
     def get_driver_class(self) -> Type[Driver]:
         """Get a driver class for this platform.
