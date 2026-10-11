@@ -534,8 +534,9 @@ class CompositorUpdate:
             if geometry is not compositor._published_map:
                 compositor._published_map = geometry
                 compositor._published_widgets = None
+            # Damage published as it stands needs no partition.
             compositor._dirty_regions = compositor._exclude_regions(
-                compositor._dirty_regions, regions)
+                compositor._dirty_regions - regions, regions)
         self._publications.clear()
         self._admitted = True
 
@@ -1953,9 +1954,22 @@ class Compositor:
         changed origin, clip, source membership or extent waits until both
         previous and new visible footprints are covered by the update.
         """
-        if self._published_map is arranged or not self._exclude_regions((self.size.region,), regions):
-            # Same scene, or the update covers the whole screen (a layout
-            # that moved everything): every placement publishes as arranged.
+        if self._published_map is arranged:
+            return arranged
+        # The update's rows, as merged spans: a rectangle is covered when
+        # each of its rows lies inside one span.
+        spans: dict[int, list[tuple[int, int]]] = {}
+        for y, x1, x2 in self._regions_to_spans(regions):
+            spans.setdefault(y, []).append((x1, x2))
+
+        def covered(bound: Region) -> bool:
+            left, right = bound.x, bound.right
+            return all(any(start <= left and right <= end for start, end in spans.get(y, ()))
+                       for y in bound.line_range)
+
+        if covered(self.size.region):
+            # The update covers the whole screen (a layout that moved
+            # everything): every placement publishes as arranged.
             return arranged
         # The compositor's declared root is the structural frame owner. A first
         # partial frame may place its background before its children publish.
@@ -1973,7 +1987,7 @@ class Compositor:
                 continue
             bounds = {region for placement in (old, new) if placement is not None
                       if (region := placement.visible_region.intersection(self.size.region))}
-            if (not self._exclude_regions(bounds, regions)
+            if (all(covered(bound) for bound in bounds)
                     or (old is None and widget is frame_root
                         and any(bound.overlaps(region) for bound in bounds for region in regions))):
                 if new is not None:

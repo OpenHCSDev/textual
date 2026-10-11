@@ -511,7 +511,8 @@ async def fully_laid_out(monkeypatch, step_ns: int | None) -> tuple[dict, Posted
 async def test_full_layout_in_steps_equals_refresh_layout(monkeypatch, step_ns) -> None:
     one_shot, one_shot_posted, one_shot_full = await fully_laid_out(monkeypatch, None)
     stepped, stepped_posted, stepped_full = await fully_laid_out(monkeypatch, step_ns)
-    assert one_shot_full == [False] and stepped_full == [True]
+    # The layout under test (later layouts follow requests its events made).
+    assert one_shot_full[0] is False and stepped_full[0] is True
     assert stepped_posted.pauses > (40 if step_ns == 0 else 3)
     assert stepped == one_shot
     assert stepped_posted.posted() == one_shot_posted.posted()
