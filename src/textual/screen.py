@@ -12,12 +12,14 @@ import asyncio
 from contextlib import contextmanager
 from functools import partial
 from operator import attrgetter
+from time import perf_counter_ns
 from typing import (
     TYPE_CHECKING,
     Any,
     Awaitable,
     Callable,
     ClassVar,
+    Generator,
     Generic,
     Iterable,
     Iterator,
@@ -36,7 +38,7 @@ from textual import constants, errors, events, messages
 from textual._arrange import arrange
 from textual._auto_scroll import get_auto_scroll_regions
 from textual._callback import invoke
-from textual._compositor import Compositor, MapGeometry
+from textual._compositor import Compositor, MapGeometry, StepDeadline, run_steps
 from textual._context import active_message_pump, visible_screen_stack
 from textual._path import (
     CSSPathType,
@@ -328,6 +330,9 @@ class Screen(Generic[ScreenResultType], Widget):
 
         self._scrolled_widgets: set[Widget] = set()
         """Containers whose scroll changed since the last layout."""
+
+        self._stepped_layout: Generator[None, None, None] | None = None
+        """A layout running in loop turns (`layout_in_steps`), until its last step."""
 
         self._auto_select_scroll_timer: Timer | None = None
         """A timer to auto scroll a container."""
@@ -1326,6 +1331,10 @@ class Screen(Generic[ScreenResultType], Widget):
     def _on_timer_update(self) -> None:
         """Called by the _update_timer."""
         self._update_timer.pause()
+        if self._stepped_layout is not None:
+            # The stepped layout publishes with its last step. What was
+            # requested meanwhile is laid out after it (it checks idle).
+            return
         if self.is_current and not self.app._batch_count:
             self._flush_pending_selection()
             if self._repaint_required:
@@ -1465,6 +1474,48 @@ class Screen(Generic[ScreenResultType], Widget):
 
     def _refresh_layout(self, size: Size | None = None, scroll: bool = False) -> None:
         """Refresh the layout (can change size and positions of widgets)."""
+        if self._stepped_layout is not None:
+            # This layout includes the stepped one's requests, which it has
+            # not yet consumed: the stepped one stops.
+            steps, self._stepped_layout = self._stepped_layout, None
+            steps.close()
+        run_steps(self._layout_steps(size, scroll))
+
+    async def layout_in_steps(
+        self, size: Size | None = None, scroll: bool = False, *, step_ns: int,
+    ) -> None:
+        """Refresh the layout over loop turns, a step at a time.
+
+        For a change made under `hold_frames`: input is handled between steps,
+        nothing is published until the last step (between steps every reader
+        sees the previous scene), and the result is `_refresh_layout`'s. A step
+        pauses before the next widget once it has run for `step_ns`. Layout
+        requested meanwhile follows this one; a direct `_refresh_layout`
+        replaces it.
+        """
+        deadline = StepDeadline()
+        steps = self._stepped_layout = self._layout_steps(size, scroll, deadline)
+        try:
+            while True:
+                deadline.ns = perf_counter_ns() + step_ns
+                try:
+                    next(steps)
+                except StopIteration:
+                    return
+                await asyncio.sleep(0)
+                if self._stepped_layout is not steps:
+                    return
+        finally:
+            if self._stepped_layout is steps:
+                self._stepped_layout = None
+                steps.close()
+            self.check_idle()
+
+    def _layout_steps(
+        self, size: Size | None = None, scroll: bool = False,
+        deadline: StepDeadline | None = None,
+    ) -> Generator[None, None, None]:
+        """`_refresh_layout` as steps; it pauses only when `deadline` is given and passes."""
         size = self.outer_size if size is None else size
         if self.app.is_inline:
             size = size.with_height(self.app._get_inline_height())
@@ -1480,15 +1531,16 @@ class Screen(Generic[ScreenResultType], Widget):
             if scroll and not any(self._layout_widgets.values()):
                 # Only scrolls changed: re-arrange just the scrolled
                 # containers when they can be scoped, else the viewport.
-                scoped = self._compositor.reflow_subtrees(
-                    self, size, self._scrolled_widgets,
-                    retain_geometry=self._layout_geometry_targets())
+                taken_scrolled = set(self._scrolled_widgets)
+                scoped = yield from self._compositor.reflow_subtrees_steps(
+                    self, size, taken_scrolled,
+                    retain_geometry=self._layout_geometry_targets(), deadline=deadline)
                 exposed_widgets = (
                     scoped.shown if scoped is not None else
                     self._compositor.reflow_visible(
                         self, size, retain_geometry=self._layout_geometry_targets())
                 )
-                self._scrolled_widgets.clear()
+                self._scrolled_widgets.difference_update(taken_scrolled)
                 if exposed_widgets:
                     layers = self._compositor.layers
                     for widget, geometry in layers:
@@ -1507,11 +1559,17 @@ class Screen(Generic[ScreenResultType], Widget):
                 viewport_layout = self._use_viewport_layout()
                 # Requests whose boundaries keep their boxes re-arrange only
                 # those subtrees (with any scrolled containers).
+                # What this layout consumes; requests made between its steps
+                # stay for the next one.
+                taken_layout = {ancestor: set(requesters)
+                                for ancestor, requesters in self._layout_widgets.items()}
+                taken_scrolled = set(self._scrolled_widgets)
                 boundaries = self._layout_boundaries() if viewport_layout else None
-                scoped = None if boundaries is None else self._compositor.reflow_subtrees(
-                    self, size, boundaries | self._scrolled_widgets,
-                    retain_geometry=self._layout_geometry_targets(),
-                )
+                scoped = None if boundaries is None else (
+                    yield from self._compositor.reflow_subtrees_steps(
+                        self, size, boundaries | taken_scrolled,
+                        retain_geometry=self._layout_geometry_targets(), deadline=deadline,
+                    ))
                 if scoped is not None:
                     hidden, shown, placed = scoped
                     layers = placed.items()
@@ -1521,8 +1579,9 @@ class Screen(Generic[ScreenResultType], Widget):
                         retain_geometry=self._layout_geometry_targets() if viewport_layout else (),
                     )
                     layers = self._compositor.layers
-                self._layout_widgets.clear()
-                self._scrolled_widgets.clear()
+                if self._layout_widgets == taken_layout:
+                    self._layout_widgets.clear()
+                self._scrolled_widgets.difference_update(taken_scrolled)
                 Hide = events.Hide
                 Show = events.Show
 

@@ -18,10 +18,12 @@ from bisect import bisect_left, bisect_right
 from collections import Counter
 from contextlib import contextmanager
 from functools import cached_property
+from time import perf_counter_ns
 from types import MappingProxyType
 from typing import (
     TYPE_CHECKING,
     Callable,
+    Generator,
     Generic,
     Iterable,
     Iterator,
@@ -164,6 +166,33 @@ class NestedSceneClip(SceneClip):
         scope, bounds = self.source.relative_bounds(root, origin)
         bound = self.bound - origin
         return scope, (bounds[0].intersection(bound) if bounds else bound,)
+
+
+class StepDeadline:
+    """When a resumable arrangement pauses: once `ns` (perf_counter_ns) has passed.
+
+    Whoever drives the arrangement sets the deadline before each step.
+    """
+
+    __slots__ = ("ns",)
+
+    def __init__(self) -> None:
+        self.ns = 0
+
+    def passed(self) -> bool:
+        return perf_counter_ns() >= self.ns
+
+
+StepResult = TypeVar("StepResult")
+
+
+def run_steps(steps: Generator[None, None, StepResult]) -> StepResult:
+    """Run an arrangement given no deadline: it finishes without pausing."""
+    try:
+        next(steps)
+    except StopIteration as finished:
+        return finished.value
+    raise RuntimeError("An arrangement without a deadline paused")
 
 
 class SubtreeReflow(NamedTuple):
@@ -749,6 +778,9 @@ class Compositor:
         self._subtree_geometry: dict[Widget, SubtreeGeometry] = {}
         self.max_subtree_geometry_entries = max_subtree_geometry_entries
 
+        self._discarded_between_steps: set[Widget] | None = None
+        """Widgets removed while a stepped reflow is paused, left out of its scene."""
+
     @property
     def max_subtree_geometry_entries(self) -> int:
         return self._max_subtree_geometry_entries
@@ -790,6 +822,8 @@ class Compositor:
             for owner in widgets
             for member in (owner, owner._render_widget, *owner._get_virtual_dom())
         }
+        if self._discarded_between_steps is not None:
+            self._discarded_between_steps.update(widgets)
         for owner, resource in tuple(self._subtree_geometry.items()):
             if resource.references_retired(owner, widgets):
                 del self._subtree_geometry[owner]
@@ -963,6 +997,18 @@ class Compositor:
             What the re-arrangement showed, hid and placed, or None when it
             cannot be scoped (the caller reflows the whole viewport).
         """
+        return run_steps(self.reflow_subtrees_steps(
+            parent, size, roots, retain_geometry=retain_geometry))
+
+    def reflow_subtrees_steps(
+        self, parent: Widget, size: Size, roots: Iterable[Widget], *,
+        retain_geometry: Iterable[Widget] = (), deadline: StepDeadline | None = None,
+    ) -> Generator[None, None, SubtreeReflow | None]:
+        """`reflow_subtrees`, pausing whenever `deadline` passes between widgets.
+
+        Nothing is published until the last step: between steps the maps are
+        the previous scene's, for every reader.
+        """
         previous = self._visible_map
         if previous is None or self.root is not parent or self.size != size:
             return None
@@ -979,31 +1025,43 @@ class Compositor:
         shown: set[Widget] = set()
         hidden: set[Widget] = set()
         placed: dict[Widget, MapGeometry] = {}
-        for root in outermost:
-            old = [widget for widget, geometry in previous.items()
-                   if root in geometry.ancestors]
-            # Screen-positioned descendants are not placed by their root alone.
-            if root.uses_screen_coordinates or any(
-                widget.uses_screen_coordinates for widget in old
-            ):
-                return None
-            arranged, members = self._arrange_root(
-                root, size, visible_only=True, root_geometry=previous[root],
-                retain_geometry=tuple(
-                    target for target in retain if root in target.ancestors
-                ),
-            )
-            for widget in old:
-                del scene[widget]
-            widgets.difference_update([
-                widget for widget in widgets
-                if widget is not root and root in widget.ancestors
-            ])
-            scene.update(arranged)
-            widgets.update(members)
-            placed.update(arranged)
-            shown.update(arranged.keys() - previous.keys())
-            hidden.update(set(old) - arranged.keys())
+        discarded = self._discarded_between_steps = set()
+        try:
+            for root in outermost:
+                old = [widget for widget, geometry in previous.items()
+                       if root in geometry.ancestors]
+                # Screen-positioned descendants are not placed by their root alone.
+                if root.uses_screen_coordinates or any(
+                    widget.uses_screen_coordinates for widget in old
+                ):
+                    return None
+                arranged, members = yield from self._arrange_steps(
+                    root, size, visible_only=True, root_geometry=previous[root],
+                    retain_geometry=tuple(
+                        target for target in retain if root in target.ancestors
+                    ),
+                    deadline=deadline,
+                )
+                for widget in old:
+                    del scene[widget]
+                widgets.difference_update([
+                    widget for widget in widgets
+                    if widget is not root and root in widget.ancestors
+                ])
+                scene.update(arranged)
+                widgets.update(members)
+                placed.update(arranged)
+                shown.update(arranged.keys() - previous.keys())
+                hidden.update(set(old) - arranged.keys())
+        finally:
+            self._discarded_between_steps = None
+        # Widgets removed while this reflow was paused are not in its scene.
+        for widget in discarded:
+            scene.pop(widget, None)
+            placed.pop(widget, None)
+        widgets.difference_update(discarded)
+        shown.difference_update(discarded)
+        hidden.difference_update(discarded)
         self._invalidate_render_projection()
         self._full_map_invalidated = True
         self._visible_map = scene
@@ -1116,6 +1174,20 @@ class Compositor:
 
         Returns:
             Compositor map and set of widgets.
+        """
+        return run_steps(self._arrange_steps(
+            root, size, visible_only, retain_geometry, root_geometry=root_geometry))
+
+    def _arrange_steps(
+        self, root: Widget, size: Size, visible_only: bool = True,
+        retain_geometry: Iterable[Widget] = (),
+        *, root_geometry: MapGeometry | None = None, deadline: StepDeadline | None = None,
+    ) -> Generator[None, None, tuple[CompositorMap, set[Widget]]]:
+        """`_arrange_root` as steps: it pauses before a widget once `deadline` has passed.
+
+        A pause keeps the arrangement's working state and resumes where it
+        stopped, so the result is the one-shot arrangement's. Between steps
+        geometry readers see the committed maps, not this arrangement.
         """
 
         map: dict[Widget, MapGeometry | SubtreeGeometryPlacement] = {}
@@ -1293,7 +1365,7 @@ class Compositor:
                             order, layer_order, sub_clip, no_clip, layers_to_index,
                     ):
                         if widget._cover_widget is None:
-                            add_widget(  # noqa: F821 -- closure cleared only after traversal
+                            yield from add_widget(  # noqa: F821 -- closure cleared only after traversal
                                 sub_widget,
                                 sub_region,
                                 widget_region,
@@ -1363,13 +1435,21 @@ class Compositor:
         def add_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter, complete,
                        inherited_layers, source=None):
             nonlocal map, widgets, invisible_widgets, capturing_source
+            if deadline is not None and deadline.passed():
+                # Between steps geometry reads see the committed scene.
+                self._arranging = previous_arranging
+                yield
+                self._arranging = True
+            if discarded is not None and widget in discarded:
+                # Removed while the arrangement was paused.
+                return
             if inherited_layers is None and (order_names := widget._get_layer_order((widget,))) is not None:
                 inherited_layers = {name: index for index, name in enumerate(order_names)}
             retains_source = widget.CACHE_SUBTREE_GEOMETRY
             if (not self.max_subtree_geometry_entries
                     or not widget._is_mounted or not (retains_source or
                         (capturing_source and widget.is_container))):
-                arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
+                yield from arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
                                complete, inherited_layers, source)  # noqa: F821 -- closure cleared after traversal
                 return
             resource_type = widget.subtree_geometry_resource()
@@ -1389,7 +1469,7 @@ class Compositor:
             # A partial or changed one must place the path again; do not cache
             # a partial arrangement whose key leaves that request out.
             if require_complete and not matches:
-                arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
+                yield from arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
                                complete, inherited_layers, resource)  # noqa: F821 -- closure cleared after traversal
                 return
             if not matches:
@@ -1402,7 +1482,7 @@ class Compositor:
                 map, widgets, invisible_widgets = {}, set(), set()
                 capturing_source = True
                 try:
-                    arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
+                    yield from arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
                                    complete, inherited_layers, resource)  # noqa: F821 -- closure cleared after traversal
                     geometry = map
                     added_widgets, added_invisible = frozenset(widgets), frozenset(invisible_widgets)
@@ -1426,10 +1506,11 @@ class Compositor:
                                       retained=retained_paths, bounds=root_geometry.region)
 
         # Add top level (root) widget
+        discarded = self._discarded_between_steps
         previous_arranging = self._arranging
         self._arranging = True
         try:
-            add_widget(
+            yield from add_widget(
                 root,
                 root_geometry.virtual_region,
                 root_geometry.region,
