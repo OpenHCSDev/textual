@@ -830,6 +830,22 @@ class Compositor:
         self._dirty_regions.clear()
         self._subtree_geometry.clear()
 
+    def _damage(self, region: Region) -> None:
+        """Mark the part of `region` on the screen as needing paint.
+
+        Cells outside the screen cannot be painted, so marking them would
+        leave the screen waiting for a frame that never comes.
+        """
+        if on_screen := region.intersection(self.size.region):
+            self._dirty_regions.add(on_screen)
+
+    def _resize(self, size: Size) -> None:
+        """Change the screen size, dropping marks for cells that no longer exist."""
+        self.size = size
+        marked, self._dirty_regions = self._dirty_regions, set()
+        for region in marked:
+            self._damage(region)
+
     def discard_widgets(self, widgets: set[Widget]) -> set[Widget]:
         """Retire original widgets, their covers and chrome, retaining damage.
 
@@ -852,8 +868,7 @@ class Compositor:
             for widget in widgets:
                 if (geometry := mapping.pop(widget, None)) is not None:
                     changed = True
-                    if region := geometry.visible_region:
-                        self._dirty_regions.add(region)
+                    self._damage(geometry.visible_region)
         self.widgets.difference_update(widgets)
         if changed:
             self._full_map_invalidated = True
@@ -958,7 +973,7 @@ class Compositor:
             map.pop(widget, None)
         widgets.difference_update(discarded)
         self.root = parent
-        self.size = size
+        self._resize(size)
 
         new_widgets = map.keys()
 
@@ -1002,7 +1017,7 @@ class Compositor:
         previous_scene = self._layout_map
         self._full_map_invalidated = True
         self.root = parent
-        self.size = size
+        self._resize(size)
 
         # Keep a copy of the old map because we're going to compare it with the update
         old_map = self._visible_map or {}
@@ -1143,13 +1158,11 @@ class Compositor:
             if previous == geometry:
                 continue
             if previous is not None:
-                if region := previous.visible_region:
-                    self._dirty_regions.add(region)
-            if region := geometry.visible_region:
-                self._dirty_regions.add(region)
+                self._damage(previous.visible_region)
+            self._damage(geometry.visible_region)
         for widget, geometry in before.items():
-            if widget not in after and (region := geometry.visible_region):
-                self._dirty_regions.add(region)
+            if widget not in after:
+                self._damage(geometry.visible_region)
         if self._dirty_regions:
             owner.check_idle()
 
@@ -2297,4 +2310,5 @@ class Compositor:
                 if update_region := intersection(dirty_region.translate(offset)):
                     add_region(update_region)
 
-        self._dirty_regions.update(regions)
+        for region in regions:
+            self._damage(region)

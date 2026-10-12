@@ -1,6 +1,7 @@
 """Old-scene damage must be projected into the admitted render frame."""
 import pytest
-from textual.app import App
+from textual.app import App, ComposeResult
+from textual.containers import Horizontal
 from textual.geometry import Size
 from textual.widgets import Static
 
@@ -376,3 +377,22 @@ async def test_unpainted_new_placement_stays_out_of_published_scene():
         assert bottom not in held and held is not arranged
         whole = compositor._publication_geometry(arranged, {compositor.size.region})
         assert whole is arranged
+
+
+async def test_narrower_screen_leaves_no_damage_outside_it() -> None:
+    """After the terminal shrinks, one frame paints everything that is marked."""
+
+    class WideApp(App[None]):
+        def compose(self) -> ComposeResult:
+            with Horizontal():
+                yield Static("left", id="left")
+                yield Static("right", id="right")
+
+    app = WideApp()
+    async with app.run_test(size=(80, 10)) as pilot:
+        await pilot.pause()
+        await pilot.resize_terminal(30, 10)
+        await pilot.pause()
+        screen = app.screen
+        assert screen._compositor._dirty_regions == set()
+        assert not screen._refresh_pending
