@@ -493,7 +493,7 @@ class Screen(Generic[ScreenResultType], Widget):
         for namespace, bindings in self._modal_binding_chain:
             for key, binding in bindings:
                 # This will call the nodes `check_action` method.
-                action_state = app._check_action_state(binding.action, namespace)
+                action_state = binding.state(app, namespace)
                 if action_state is False:
                     # An action_state of False indicates the action is disabled and not shown
                     # Note that None has a different meaning, which is why there is an `is False`

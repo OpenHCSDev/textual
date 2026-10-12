@@ -56,6 +56,7 @@ if TYPE_CHECKING:
     from textual.screen import Screen
 
 
+MessageType = TypeVar("MessageType", bound="Message")
 Callback: TypeAlias = "Callable[..., Any] | Callable[..., Awaitable[Any]]"
 
 
@@ -143,6 +144,26 @@ class MessagePump(metaclass=_MessagePumpMeta):
         self._thread_id: int = threading.get_ident()
         self._prevented_messages_on_mount = self._prevent_message_types_stack[-1]
         self._subscribed_signals: WeakSet[Signal[Any]] | None = None
+        self._listeners: dict[type[Message], list[Callable[[Any], Any]]] = {}
+
+    def listen(
+        self,
+        message_type: type[MessageType],
+        callback: Callable[[MessageType], Awaitable[None] | None],
+    ) -> None:
+        """Call `callback` with each message of a type that reaches this node.
+
+        The message class and the callback are given as objects; nothing is
+        matched by name. A message that bubbles reaches the nodes above its
+        sender too, so a parent hears its children. Listeners run in the order
+        they were added, before handlers found by method name, and one that
+        stops the message keeps it from bubbling further.
+
+        Args:
+            message_type: The message class; its subclasses are heard too.
+            callback: Called with the message. May be a coroutine function.
+        """
+        self._listeners.setdefault(message_type, []).append(callback)
 
     @cached_property
     def _disabled_messages(self) -> set[type[Message]]:
@@ -967,6 +988,11 @@ class MessagePump(metaclass=_MessagePumpMeta):
         """
         _rich_traceback_guard = True
         handler_name = message.handler_name
+
+        if self._listeners:
+            for message_type in type(message).__mro__:
+                for callback in self._listeners.get(message_type, ()):
+                    await invoke(callback, message)
 
         # Look through the MRO to find a handler
         dispatched = False

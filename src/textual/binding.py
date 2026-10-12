@@ -9,15 +9,26 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Iterable, Iterator, Mapping, NamedTuple
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Awaitable,
+    Callable,
+    Iterable,
+    Iterator,
+    Mapping,
+    NamedTuple,
+)
 
 import rich.repr
 
+from textual._callback import invoke
 from textual.keys import _character_to_key
 
 if TYPE_CHECKING:
     from typing_extensions import TypeAlias
 
+    from textual.app import App
     from textual.dom import DOMNode
 
 BindingType: TypeAlias = "Binding | tuple[str, str] | tuple[str, str, str]"
@@ -118,6 +129,23 @@ class Binding:
         """
         return dataclasses.replace(self, key=key, key_display=key_display)
 
+    def state(self, app: App[Any], node: DOMNode) -> bool | None:
+        """Whether the key works now for the node that declares this binding.
+
+        Returns:
+            `True` if it works, `None` if it is shown but disabled, `False` if it
+            is neither shown nor run.
+        """
+        return app._check_action_state(self.action, node)
+
+    async def run(self, app: App[Any], node: DOMNode) -> bool:
+        """Do what the key is bound to, for the node that declares this binding.
+
+        Returns:
+            `True` if the key was handled.
+        """
+        return await app.run_action(self.action, node)
+
     @classmethod
     def make_bindings(cls, bindings: Iterable[BindingType]) -> Iterable[Binding]:
         """Convert a list of BindingType (the types that can be specified in BINDINGS)
@@ -154,18 +182,43 @@ class Binding:
                 if len(key) == 1:
                     key = _character_to_key(key)
 
-                yield Binding(
+                yield dataclasses.replace(
+                    binding,
                     key=key,
-                    action=binding.action,
-                    description=binding.description,
                     show=bool(binding.description and binding.show),
-                    key_display=binding.key_display,
-                    priority=binding.priority,
-                    tooltip=binding.tooltip,
-                    id=binding.id,
-                    system=binding.system,
-                    group=binding.group,
                 )
+
+
+def _always(node: Any) -> bool:
+    return True
+
+
+@dataclass(frozen=True)
+class CallBinding(Binding):
+    """A key bound to a function of the node that declares it.
+
+    The function is given the node, so a class binds its own method by
+    referring to it in the class body:
+
+        class Editor(Screen):
+            def save(self) -> None: ...
+            BINDINGS = [CallBinding("ctrl+s", save, "Save")]
+    """
+
+    action: Callable[[Any], Awaitable[None] | None]  # type: ignore[assignment]
+    """Called with the declaring node when the key is pressed."""
+    available: Callable[[Any], bool | None] = _always
+    """Called with the declaring node: `True` if the key works now, `None` to
+    show it disabled, `False` to neither show nor run it."""
+
+    def state(self, app: App[Any], node: DOMNode) -> bool | None:
+        return self.available(node)
+
+    async def run(self, app: App[Any], node: DOMNode) -> bool:
+        if not self.available(node):
+            return False
+        await invoke(self.action, node)
+        return True
 
 
 class ActiveBinding(NamedTuple):

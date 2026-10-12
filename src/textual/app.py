@@ -4056,7 +4056,7 @@ class App(Generic[ReturnType], DOMNode):
             key_bindings = bindings.key_to_bindings.get(key, ())
             for binding in key_bindings:
                 if binding.priority == priority:
-                    if await self.run_action(binding.action, namespace):
+                    if await binding.run(self, namespace):
                         return True
         return False
 
