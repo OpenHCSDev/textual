@@ -37,7 +37,7 @@ from textual._context import message_hook as message_hook_context_var
 from textual._context import prevent_message_types_stack
 from textual._on import OnNoWidget
 from textual._queue import Queue
-from textual._time import time
+from textual._time import next_slice, time
 from textual.constants import SLOW_THRESHOLD
 from textual.css.match import match
 from textual.events import Event
@@ -726,7 +726,11 @@ class MessagePump(metaclass=_MessagePumpMeta):
             # task owns Compose / Mount. Keep the existing scheduling boundary
             # inside preprocessing's completion lifetime, even on cancellation.
             await asyncio.sleep(0)
+            # Composing and mounting are a unit of work each; the nodes of a
+            # new subtree start together, so they share the loop's slices.
+            await next_slice()
             await self._dispatch_message(events.Compose())
+            await next_slice()
             if self._prevented_messages_on_mount:
                 with self.prevent(*self._prevented_messages_on_mount):
                     await self._dispatch_message(events.Mount())

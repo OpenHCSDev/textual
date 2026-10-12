@@ -2,6 +2,7 @@ import asyncio
 import sys
 from asyncio import sleep as asyncio_sleep
 from time import monotonic, perf_counter
+from weakref import WeakKeyDictionary
 
 WINDOWS = sys.platform == "win32"
 
@@ -74,3 +75,32 @@ async def after_input() -> None:
 def _resume(resumed: "asyncio.Future[None]") -> None:
     if not resumed.done():
         resumed.set_result(None)
+
+
+WORK_SLICE = 0.004
+"""Seconds of sliced work the loop runs before its due input and timers get a turn."""
+
+# Per loop: when the slice of work its input and timers have not followed yet began.
+_slice_began: "WeakKeyDictionary[asyncio.AbstractEventLoop, float]" = WeakKeyDictionary()
+
+
+async def next_slice() -> None:
+    """Begin a unit of work that many tasks do at once (a widget starting up).
+
+    The loop runs every task that is ready before the input and timers that
+    became due meanwhile, so a hundred widgets starting together are one wait
+    however short each is. A unit that begins here runs at once while the
+    units since the loop last ran its due input and timers have taken under
+    `WORK_SLICE`; otherwise it runs after they have, in the next slice.
+    """
+    loop = asyncio.get_running_loop()
+    while True:
+        began = _slice_began.get(loop)
+        if began is None:
+            _slice_began[loop] = loop.time()
+            # A timer callback runs after the input and timers due in its turn.
+            loop.call_later(0, _slice_began.pop, loop, None)
+            return
+        if loop.time() - began < WORK_SLICE:
+            return
+        await after_input()
