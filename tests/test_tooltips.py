@@ -116,3 +116,25 @@ async def test_making_tipper_shuffle_away_should_remove_tooltip() -> None:
         await pilot.app.mount(Static(id="mr-brown"), before="#mr-blue")
         await pilot.pause()
         assert pilot.app.query_one("#textual-tooltip").display is False
+
+
+class ScreenTip(Static):
+    """A widget whose tooltip is only answerable while it is on a screen."""
+
+    @property
+    def tooltip(self) -> str:
+        return type(self.screen).__name__
+
+
+async def test_removing_tipper_before_the_delay_cancels_the_tooltip() -> None:
+    """A widget removed while its tooltip is still waiting is never asked for it."""
+
+    class WaitingApp(TooltipApp):
+        def compose(self) -> ComposeResult:
+            yield ScreenTip(id="mr-blue")
+
+    async with WaitingApp().run_test(tooltips=True) as pilot:
+        await pilot.hover("#mr-blue")
+        await pilot.app.query_one("#mr-blue").remove()
+        await pilot.pause(TOOLTIP_TIMEOUT)
+        assert pilot.app.query_one("#textual-tooltip").display is False

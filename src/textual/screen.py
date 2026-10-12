@@ -2026,15 +2026,14 @@ class Screen(Generic[ScreenResultType], Widget):
                 self._handle_tooltip_timer(widget)
 
     def _clear_tooltip(self) -> None:
-        """Unconditionally clear any existing tooltip."""
+        """Hide the tooltip and cancel one that is waiting to show."""
+        if self._tooltip_timer is not None:
+            self._tooltip_timer.stop()
+        self._tooltip_widget = None
         try:
-            tooltip = self.get_child_by_type(Tooltip)
+            self.get_child_by_type(Tooltip).display = False
         except NoMatches:
-            return
-        if tooltip.display:
-            if self._tooltip_timer is not None:
-                self._tooltip_timer.stop()
-            tooltip.display = False
+            pass
 
     def _clear_tooltip_unless_over(self, under_mouse: Widget | None) -> None:
         """Clear the tooltip when its widget is no longer the one under the mouse."""
@@ -2082,13 +2081,7 @@ class Screen(Generic[ScreenResultType], Widget):
                     hover_widget = hover[0]
         except errors.NoWidget:
             self.app._set_mouse_over(None, None)
-            if self._tooltip_timer is not None:
-                self._tooltip_timer.stop()
-            if not self.app._disable_tooltips:
-                try:
-                    self.get_child_by_type(Tooltip).display = False
-                except NoMatches:
-                    pass
+            self._clear_tooltip()
         else:
             event.widget = widget
             self.app._set_mouse_over(widget, hover_widget)
