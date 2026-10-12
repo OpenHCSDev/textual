@@ -369,6 +369,20 @@ class Screen(Generic[ScreenResultType], Widget):
         return None
 
     @property
+    def _screens_seen_through(self) -> list[Screen]:
+        """The screens this one draws behind itself, nearest first.
+
+        Each screen below shows while every background above it is
+        translucent. A screen under an opaque one is on the stack but not on
+        the terminal, so a frame of this screen draws none of it.
+        """
+        screens: list[Screen] = []
+        screen = self
+        while screen.styles.background.a < 1 and (screen := screen._screen_below) is not None:
+            screens.append(screen)
+        return screens
+
+    @property
     def _update_timer(self) -> Timer:
         """Timer used to perform updates."""
         if self.__update_timer is None:
@@ -644,9 +658,9 @@ class Screen(Generic[ScreenResultType], Widget):
             Background renderable.
         """
         background = self.styles.background
-        if background.a < 1 and (screen_below := self._screen_below) is not None:
+        if seen_through := self._screens_seen_through:
             # If background is translucent, render the screen below
-            return BackgroundScreen(screen_below, background)
+            return BackgroundScreen(seen_through[0], background)
 
         if background.is_transparent:
             # If the background is transparent, defer to App.render
@@ -1297,13 +1311,15 @@ class Screen(Generic[ScreenResultType], Widget):
         app = self.app
         if app._batch_count or self._frame_holds:
             return
-        background_screens = app._background_screens
         if self is app.screen and app.is_inline:
             inline_height = app._get_inline_height()
         foreground = self is app.screen
         if foreground:
+            # Only the screens this frame draws take part in it: a screen
+            # under an opaque one keeps its damage until it is shown.
+            drawn_behind = self._screens_seen_through
             background_geometry = {
-                screen: screen._compositor._layout_map for screen in background_screens
+                screen: screen._compositor._layout_map for screen in drawn_behind
             }
             if app.is_inline:
                 clear = (
@@ -1321,21 +1337,21 @@ class Screen(Generic[ScreenResultType], Widget):
                 # BackgroundScreen can render inside the foreground's renderer;
                 # the same output update publishes the foreground's damage.
                 ready = set(self._compositor._dirty_regions)
-                for screen in background_screens:
+                for screen in drawn_behind:
                     update.bind_publication(screen._compositor, background_geometry[screen], ready)
                 app._display(self, update)
                 if update.admitted:
                     self._on_frame_published()
             app._update_mouse_over(self)
-            for screen in background_screens:
+            for screen in drawn_behind:
                 screen._release_paint()
-            if background_screens:
+            if drawn_behind:
                 self._release_paint()
             self._dirty_widgets.clear()
-        elif self in background_screens and self._compositor._dirty_regions:
+        elif self._compositor._dirty_regions and self in app.screen._screens_seen_through:
             damage = set(self._compositor._dirty_regions)
-            # The foreground owns terminal publication of the same
-            # backdrop damage. Transfer intent without consuming it.
+            # The top screen draws this one behind itself, so it writes this
+            # damage. Hand it the regions without consuming them.
             self._set_dirty(*damage)
             app.screen.refresh(*damage)
             self._dirty_widgets.clear()

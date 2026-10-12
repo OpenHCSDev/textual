@@ -163,3 +163,30 @@ async def test_menu_opening_over_a_screen_keeps_that_screen_drawn():
             assert shown[row].startswith(f"row {row:02d} xxxx"), shown
         # Beside the menu the screen below is still there.
         assert shown[6].startswith("row 06 xxx") and shown[6].rstrip().endswith("xxxx"), shown
+
+
+async def test_widget_added_under_an_opaque_screen_is_displayed_only_once_uncovered():
+    """A widget mounted on a screen that an opaque screen covers has not been
+    drawn, so the covered screen does not report it as displayed; uncovering
+    the screen draws it."""
+    from textual.screen import Screen
+    from textual.widgets import Static
+
+    class CoveredApp(App):
+        def compose(self) -> ComposeResult:
+            yield Static("below")
+
+    app = CoveredApp()
+    async with app.run_test(size=(40, 10)) as pilot:
+        await pilot.pause()
+        below = app.screen
+        await app.push_screen(Screen())
+        await pilot.pause()
+        added = Static("added while covered")
+        await below.mount(added)
+        await pilot.pause()
+        await pilot.pause()
+        assert added not in below._compositor.published_widgets
+        await app.pop_screen()
+        await pilot.pause()
+        assert added in below._compositor.published_widgets
