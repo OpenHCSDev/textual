@@ -97,3 +97,69 @@ async def test_modal_pop_screen():
         # Check activating the quit button exits the app
         await pilot.press("enter")
         assert pilot.app._exit
+
+
+async def test_menu_opening_over_a_screen_keeps_that_screen_drawn():
+    """A see-through menu that moves to the pointer as it opens leaves the
+    screen behind it on the terminal: every update written while it opens
+    draws the rows of the screen below, never blank rows in their place."""
+    from textual._compositor import ChopsUpdate, CompositorUpdate, LayoutUpdate
+    from textual.containers import Container
+    from textual.geometry import Offset
+    from textual.widgets import Static
+
+    width, height = 60, 20
+
+    class Menu(ModalScreen[str]):
+        CSS = """
+        Menu { align: left top; background: transparent; }
+        Menu #menu { width: auto; height: auto; border: solid red; }
+        Menu .item { height: 1; padding: 0 1; }
+        """
+
+        def compose(self) -> ComposeResult:
+            with Container(id="menu"):
+                for index in range(4):
+                    yield Static(f"item {index}", classes="item")
+
+        def on_mount(self) -> None:
+            menu = self.query_one("#menu")
+            menu.styles.width = 20
+            menu.offset = Offset(10, 5)
+
+    class MenuApp(App):
+        def __init__(self) -> None:
+            super().__init__()
+            self.terminal = [[" "] * width for _ in range(height)]
+
+        def compose(self) -> ComposeResult:
+            for row in range(height):
+                yield Static(f"row {row:02d} " + "x" * 40)
+
+        def write(self, x: int, y: int, text: str) -> None:
+            self.terminal[y][x : x + len(text)] = text
+
+        def _display(self, screen, renderable) -> None:
+            # Keep the cells each update writes, as a terminal would.
+            if isinstance(renderable, CompositorUpdate) and not self._batch_count:
+                if isinstance(renderable, LayoutUpdate):
+                    for y, line in enumerate(renderable.strips, renderable.region.y):
+                        self.write(renderable.region.x, y, "".join(strip.text for strip in line))
+                elif isinstance(renderable, ChopsUpdate):
+                    for y, x1, x2 in renderable.spans:
+                        for x, strip in renderable._get_line_chops(y, x1, x2):
+                            self.write(x, y, strip.text)
+            super()._display(screen, renderable)
+
+    app = MenuApp()
+    async with app.run_test(size=(width, height)) as pilot:
+        await pilot.pause()
+        app.push_screen(Menu())
+        await pilot.pause()
+        await pilot.pause()
+        shown = ["".join(line) for line in app.terminal]
+        assert "item 0" in shown[6]
+        for row in (0, 4, 12, height - 1):
+            assert shown[row].startswith(f"row {row:02d} xxxx"), shown
+        # Beside the menu the screen below is still there.
+        assert shown[6].startswith("row 06 xxx") and shown[6].rstrip().endswith("xxxx"), shown

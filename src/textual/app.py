@@ -1914,9 +1914,7 @@ class App(Generic[ReturnType], DOMNode):
             legacy_windows=False,
             safe_box=False,
         )
-        screen_render = self.screen._compositor.render_update(
-            full=True, screen_stack=self.app._background_screens, simplify=simplify
-        )
+        screen_render = self.screen._compositor.render_update(full=True, simplify=simplify)
         console.print(screen_render)
         return console.export_svg(title=title or self.title, theme=self.ansi_theme)
 

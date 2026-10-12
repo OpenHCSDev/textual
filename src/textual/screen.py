@@ -39,7 +39,7 @@ from textual._arrange import arrange
 from textual._auto_scroll import get_auto_scroll_regions
 from textual._callback import invoke
 from textual._compositor import Compositor, MapGeometry, StepDeadline, run_steps
-from textual._context import active_message_pump, visible_screen_stack
+from textual._context import active_message_pump
 from textual._path import (
     CSSPathType,
     _css_path_type_as_list,
@@ -356,6 +356,19 @@ class Screen(Generic[ScreenResultType], Widget):
             return False
 
     @property
+    def _screen_below(self) -> Screen | None:
+        """The screen under this one on its stack, seen through a translucent background.
+
+        The app's screen stacks own this, so every render of this screen
+        draws the same backdrop, whoever asks for the lines.
+        """
+        for stack in self.app._screen_stacks.values():
+            if self in stack:
+                index = stack.index(self)
+                return stack[index - 1] if index else None
+        return None
+
+    @property
     def _update_timer(self) -> Timer:
         """Timer used to perform updates."""
         if self.__update_timer is None:
@@ -631,14 +644,9 @@ class Screen(Generic[ScreenResultType], Widget):
             Background renderable.
         """
         background = self.styles.background
-        try:
-            base_screen = visible_screen_stack.get().pop()
-        except LookupError:
-            base_screen = None
-
-        if base_screen is not None and base_screen is not self and background.a < 1:
-            # If background is translucent, render a background screen
-            return BackgroundScreen(base_screen, background)
+        if background.a < 1 and (screen_below := self._screen_below) is not None:
+            # If background is translucent, render the screen below
+            return BackgroundScreen(screen_below, background)
 
         if background.is_transparent:
             # If the background is transparent, defer to App.render
@@ -1303,13 +1311,12 @@ class Screen(Generic[ScreenResultType], Widget):
                     and inline_height < app._previous_inline_height
                 )
                 update = self._compositor.render_inline(
-                    app.size.with_height(inline_height),
-                    screen_stack=background_screens, clear=clear,
+                    app.size.with_height(inline_height), clear=clear,
                 )
                 if update is not None:
                     app._previous_inline_height = inline_height
             else:
-                update = self._compositor.render_update(screen_stack=background_screens)
+                update = self._compositor.render_update()
             if update is not None:
                 # BackgroundScreen can render inside the foreground's renderer;
                 # the same output update publishes the foreground's damage.

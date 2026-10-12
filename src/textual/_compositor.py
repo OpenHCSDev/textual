@@ -42,7 +42,6 @@ from rich.segment import Segment
 from rich.style import Style
 
 from textual import errors, events
-from textual._context import visible_screen_stack
 from textual._loop import loop_last
 from textual._spatial_map import SpatialMap
 from textual.geometry import NULL_OFFSET, NULL_SPACING, Offset, Region, Size, Spacing
@@ -54,7 +53,6 @@ from textual.widget import Widget
 if TYPE_CHECKING:
     from typing_extensions import TypeAlias
 
-    from textual.screen import Screen
     from textual.dom import DOMNode
 
 
@@ -1712,7 +1710,6 @@ class Compositor:
         x -= region.x
         y -= region.y
 
-        visible_screen_stack.set(widget.app._background_screens)
         with self._using_geometry(widget, self._published_map):
             lines = widget.render_lines(Region(0, y, region.width, 1))
 
@@ -1749,7 +1746,6 @@ class Compositor:
         if x < 0 or y < 0:
             return widget, Offset(max(0, x), max(0, y))
 
-        visible_screen_stack.set(widget.app._background_screens)
         with self._using_geometry(widget, self._published_map):
             line = widget.render_line(y)
 
@@ -2072,21 +2068,18 @@ class Compositor:
     def render_update(
         self,
         full: bool = False,
-        screen_stack: list[Screen] | None = None,
         simplify: bool = False,
     ) -> RenderableType | None:
         """Render an update renderable.
 
         Args:
             full: Perform a full update if `True`, otherwise a partial update.
-            screen_stack: Screen stack list. Defaults to None.
             simplify: Simplify segments.
 
         Returns:
             A renderable for the update, or `None` if no update was required.
         """
 
-        visible_screen_stack.set([] if screen_stack is None else screen_stack)
         screen_region = self.size.region
         if full:
             self._dirty_regions.add(screen_region)
@@ -2097,20 +2090,17 @@ class Compositor:
     def render_inline(
         self,
         size: Size,
-        screen_stack: list[Screen] | None = None,
         clear: bool = False,
     ) -> RenderableType | None:
         """Render an inline update.
 
         Args:
             size: Inline size.
-            screen_stack: Screen stack list. Defaults to None.
             clear: Also clear below the inline update (set when size decreases).
 
         Returns:
             A renderable.
         """
-        visible_screen_stack.set([] if screen_stack is None else screen_stack)
         arranged = self._layout_map
         strips = self.render_strips(size)
         update = InlineUpdate(strips, clear=clear)

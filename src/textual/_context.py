@@ -7,7 +7,6 @@ if TYPE_CHECKING:
     from textual.app import App
     from textual.message import Message
     from textual.message_pump import MessagePump
-    from textual.screen import Screen
 
 
 class NoActiveAppError(RuntimeError):
@@ -20,9 +19,5 @@ active_message_pump: ContextVar["MessagePump"] = ContextVar("active_message_pump
 prevent_message_types_stack: ContextVar[list[set[type[Message]]]] = ContextVar(
     "prevent_message_types_stack"
 )
-visible_screen_stack: ContextVar[list[Screen[object]]] = ContextVar(
-    "visible_screen_stack"
-)
-"""A stack of visible screens (with background alpha < 1), used in the screen render process."""
 message_hook: ContextVar[Callable[[Message], None]] = ContextVar("message_hook")
 """A callable that accepts a message. Used by App.run_test."""
