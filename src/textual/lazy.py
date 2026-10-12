@@ -102,26 +102,22 @@ class Reveal(Widget):
         super().__init__()
 
     @classmethod
-    def _reveal(cls, parent: Widget, widgets: list[Widget]) -> None:
-        """Reveal children lazily.
+    def reveal(cls, parent: Widget, widgets: list[Widget]) -> None:
+        """Mount widgets into a parent one at a time, over several frames.
+
+        A widget that builds many children calls this from its mount instead
+        of composing them all in the frame it opens in.
 
         Args:
             parent: The parent widget.
-            widgets: Child widgets.
+            widgets: Child widgets, mounted in this order.
         """
 
         async def check_children() -> None:
-            """Check for pending children"""
-            if not widgets:
+            """Mount the next pending child, unless the parent has gone."""
+            if not widgets or not parent.is_attached:
                 return
-            widget = widgets.pop(0)
-            try:
-                await parent.mount(widget)
-            except Exception:
-                # I think this can occur if the parent is removed before all children are added
-                # Only noticed this on shutdown
-                return
-
+            await parent.mount(widgets.pop(0))
             if widgets:
                 parent.set_timer(0.02, check_children)
 
@@ -137,5 +133,5 @@ class Reveal(Widget):
         assert isinstance(parent, Widget)
         await parent.mount(self._replace_widget, after=self)
         await self.remove()
-        self._reveal(self._replace_widget, self._widgets.copy())
+        self.reveal(self._replace_widget, self._widgets.copy())
         self._widgets.clear()
