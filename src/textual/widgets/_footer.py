@@ -471,6 +471,9 @@ class Footer(ScrollableContainer, can_focus=False, can_focus_children=False):
 
     def on_mount(self) -> None:
         self.screen.bindings_updated_signal.subscribe(self, self.bindings_changed)
+        # The screen may have announced its bindings before this footer
+        # existed, so show the current ones without waiting for a change.
+        self.bindings_changed(self.screen)
 
     def on_unmount(self) -> None:
         self.screen.bindings_updated_signal.unsubscribe(self)
