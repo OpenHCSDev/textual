@@ -50,3 +50,27 @@ Returns:
     The value (in fractional seconds) of a monotonic clock,
     i.e. a clock that cannot go backwards.
 """
+
+
+async def after_input() -> None:
+    """Resume after the loop has run the input and timers that are due.
+
+    Work split into steps so that input is not held behind it needs this
+    between the steps. `asyncio.sleep(0)` does not do it: the loop runs what
+    was scheduled during a turn before the input and timers it finds in the
+    next, so the following step would run ahead of everything that arrived
+    during this one and the two would be one wait. A timer that is already
+    due runs after them.
+    """
+    loop = asyncio.get_running_loop()
+    resumed = loop.create_future()
+    timer = loop.call_later(0, _resume, resumed)
+    try:
+        await resumed
+    finally:
+        timer.cancel()
+
+
+def _resume(resumed: "asyncio.Future[None]") -> None:
+    if not resumed.done():
+        resumed.set_result(None)

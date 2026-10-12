@@ -17,6 +17,7 @@ from collections import Counter
 
 import pytest
 
+from textual._time import after_input
 from textual import events, messages
 from textual._compositor import Compositor, StepDeadline
 from textual.app import App, ComposeResult
@@ -611,39 +612,68 @@ async def test_a_repaint_between_steps_publishes_with_the_layout() -> None:
         assert top not in screen._dirty_widgets
 
 
-async def test_timer_update_after_a_layout_step_waits_for_the_next_loop_turn() -> None:
-    """A loop turn runs one unit of layout work.
+async def test_timer_update_after_a_layout_step_waits_for_the_loop_to_read_input() -> None:
+    """Two units of layout work do not run back to back.
 
-    The update timer is often due in the turn in which a layout's last step
-    runs; the layout it would start belongs to the next turn, or the two add
-    up to one wait.
+    The update timer is often due right behind a layout's last step. The
+    loop runs what was scheduled during a turn before the input it reads in
+    the next, so a layout started then would run ahead of input that arrived
+    during the step: the two would be one wait.
     """
     async with Tree().run_test(size=(100, 30)) as pilot:
         await pilot.pause()
         screen = pilot.app.screen
         screen._refresh_layout()
-        started = []
+        order = []
         start = screen._start_stepped_layout
 
         def record(*args, **kwargs):
-            started.append(True)
+            order.append("layout")
             return start(*args, **kwargs)
 
         screen._start_stepped_layout = record
         try:
-            # This turn's layout step (here a layout with nothing left to do).
+            # A layout step (here of a layout with nothing left to do).
             assert screen._layout_step(iter(()), StepDeadline(), screen.LAYOUT_STEP_NS)
+            # Input and timers the loop finds in its next turn run as this does.
+            asyncio.get_running_loop().call_later(0, order.append, "input")
             screen._layout_required = True
             screen._on_timer_update()
-            assert not started and screen._layout_required
+            assert not order and screen._layout_required
+            # Scheduled during this turn, so it runs before that input.
             await asyncio.sleep(0)
-            assert started
-            # In a turn without a step the timer starts the layout at once.
-            del started[:]
-            await asyncio.sleep(0)
+            screen._on_timer_update()
+            assert not order
+            await asyncio.sleep(0.01)
+            assert order == ["input", "layout"]
+            # With the input read, the timer starts a layout at once.
+            del order[:]
             screen._stop_stepped_layout()
             screen._layout_required = True
             screen._on_timer_update()
-            assert started
+            assert order == ["layout"]
         finally:
             del screen._start_stepped_layout
+
+
+async def test_after_input_resumes_behind_what_arrived_during_the_step() -> None:
+    """A step that waits with `after_input` lets the due timers run first.
+
+    `asyncio.sleep(0)` resumes ahead of them, which is why the steps of a
+    layout do not use it.
+    """
+    loop = asyncio.get_running_loop()
+    order: list[str] = []
+
+    async def stepped(wait) -> None:
+        # Arrives while the step runs.
+        loop.call_later(0, order.append, "input")
+        await wait()
+        order.append("next step")
+
+    await stepped(lambda: asyncio.sleep(0))
+    await after_input()
+    assert order == ["next step", "input"]
+    del order[:]
+    await stepped(after_input)
+    assert order == ["input", "next step"]

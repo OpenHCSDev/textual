@@ -45,6 +45,7 @@ from textual._path import (
     _css_path_type_as_list,
     _make_path_object_relative,
 )
+from textual._time import after_input
 from textual._types import CallbackType
 from textual.actions import SkipAction
 from textual.await_complete import AwaitComplete
@@ -1370,12 +1371,12 @@ class Screen(Generic[ScreenResultType], Widget):
             # The stepped layout publishes with its last step. What was
             # requested meanwhile is laid out after it (it checks idle).
             return
-        if self._layout_stepped_this_turn:
-            # A layout's step already ran in this loop turn (usually its
-            # last, with the timer due behind it in the same turn). What was
-            # requested during that layout starts in the next turn, so the
-            # two are not one wait.
-            asyncio.get_running_loop().call_soon(self._timer_update_next_turn)
+        if self._layout_step_unanswered:
+            # A layout step has run (usually a layout's last, with this
+            # timer due right behind it) and the loop has not read input
+            # since. What was requested during that layout starts after the
+            # loop's next read, so the two are not one wait.
+            asyncio.get_running_loop().call_later(0, self._timer_update_after_input)
             return
         if self.is_current and not self.app._batch_count:
             self._flush_pending_selection()
@@ -1416,17 +1417,23 @@ class Screen(Generic[ScreenResultType], Widget):
         if self._callbacks:
             self.call_next(self._invoke_and_clear_callbacks)
 
-    def _timer_update_next_turn(self) -> None:
-        """The update the timer asked for in a loop turn that had already run a layout step."""
+    def _timer_update_after_input(self) -> None:
+        """The update the timer asked for before the loop had read input after a layout step."""
         if self._running:
             self._on_timer_update()
 
-    _layout_stepped_this_turn = False
-    """Whether a layout step has run in the current loop turn. A turn has room
-    for one: a step is sized to leave the rest of a 16 ms frame to input."""
+    _layout_step_unanswered = False
+    """Whether a layout step has run and the loop has not read input since.
 
-    def _loop_turn_ended(self) -> None:
-        self._layout_stepped_this_turn = False
+    The loop runs what was scheduled during its last turn before the input
+    and timers it finds in this one, so a unit of layout work scheduled
+    straight after another runs ahead of the input that arrived during the
+    first. A step is sized to leave the rest of a 16 ms frame to input; two
+    in a row are not.
+    """
+
+    def _input_read_after_layout_step(self) -> None:
+        self._layout_step_unanswered = False
 
     def _sender_refresh_pending(
         self, sender: Widget, *, refresh_requested: dict[Screen, bool],
@@ -1585,10 +1592,10 @@ class Screen(Generic[ScreenResultType], Widget):
         self, steps: Generator[None, None, None], deadline: StepDeadline, step_ns: int,
     ) -> bool:
         """Run one step of a stepped layout; True when it was the last."""
-        if not self._layout_stepped_this_turn:
-            self._layout_stepped_this_turn = True
-            # Callbacks scheduled now run in the next loop turn.
-            asyncio.get_running_loop().call_soon(self._loop_turn_ended)
+        if not self._layout_step_unanswered:
+            self._layout_step_unanswered = True
+            # A timer callback runs after the input the loop reads in the same turn.
+            asyncio.get_running_loop().call_later(0, self._input_read_after_layout_step)
         deadline.ns = perf_counter_ns() + step_ns
         try:
             next(steps)
@@ -1608,10 +1615,10 @@ class Screen(Generic[ScreenResultType], Widget):
     async def _finish_stepped_layout(
         self, steps: Generator[None, None, None], deadline: StepDeadline, step_ns: int,
     ) -> None:
-        """The remaining steps of a stepped layout, one per loop turn."""
+        """The remaining steps of a stepped layout, with the loop's input and timers between them."""
         try:
             while True:
-                await asyncio.sleep(0)
+                await after_input()
                 if self._stepped_layout is not steps or self._layout_step(steps, deadline, step_ns):
                     return
         finally:
