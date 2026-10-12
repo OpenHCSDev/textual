@@ -23,6 +23,7 @@ from types import MappingProxyType
 from typing import (
     TYPE_CHECKING,
     Callable,
+    Collection,
     Generator,
     Generic,
     Iterable,
@@ -40,7 +41,7 @@ from rich.control import Control
 from rich.segment import Segment
 from rich.style import Style
 
-from textual import errors
+from textual import errors, events
 from textual._context import visible_screen_stack
 from textual._loop import loop_last
 from textual._spatial_map import SpatialMap
@@ -1801,10 +1802,26 @@ class Compositor:
                 missing.append(widget)
         if not missing:
             return False
-        self.reflow_visible(
+        self.size_exposed(self.reflow_visible(
             self.root, self.size, retain_geometry=(*self._layout_map, *missing),
-        )
+        ))
         return True
+
+    def size_exposed(self, exposed: Collection[Widget]) -> None:
+        """Tell the widgets a viewport arrangement newly placed what size they have.
+
+        A later scroll reports only the widgets it adds to the map, so a
+        widget placed here without being told would keep its previous size.
+        """
+        if not exposed:
+            return
+        for widget, geometry in self.layers:
+            if widget in exposed and widget._size_updated(
+                geometry.region.size, geometry.virtual_size,
+                geometry.container_size, layout=False,
+            ):
+                widget.post_message(events.Resize(
+                    widget.outer_size, widget.virtual_size, widget.container_size))
 
     def _get_geometry(self, widget: Widget) -> MapGeometry | None:
         """Select current arrangement or the explicitly borrowed capture.

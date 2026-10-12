@@ -1600,19 +1600,7 @@ class Screen(Generic[ScreenResultType], Widget):
                         self, size, retain_geometry=self._layout_geometry_targets())
                 )
                 self._scrolled_widgets.difference_update(taken_scrolled)
-                if exposed_widgets:
-                    layers = self._compositor.layers
-                    for widget, geometry in layers:
-                        if widget in exposed_widgets:
-                            if widget._size_updated(
-                                geometry.region.size, geometry.virtual_size,
-                                geometry.container_size, layout=False
-                            ):
-                                widget.post_message(
-                                    ResizeEvent(
-                                        widget.outer_size, widget.virtual_size, widget.container_size
-                                    )
-                                )
+                self._compositor.size_exposed(exposed_widgets)
 
             else:
                 viewport_layout = self._use_viewport_layout()
