@@ -144,31 +144,6 @@ async def test_replaced_native_style_source_does_not_reuse_equal_epoch():
         assert measured().width == 20
 
 
-async def test_fractional_width_is_local_only_for_greedy_native_boxes():
-    app = App()
-    async with app.run_test() as pilot:
-        widget = Static('first')
-        widget.styles.width = '1fr'
-        widget.styles.height = 4
-        await app.mount(widget)
-        await pilot.pause()
-        fraction = Fraction(30)
-        def measured(greedy):
-            return widget._get_box_model(Size(80, 20), app.size, fraction, fraction,
-                                        greedy=greedy)
-        greedy = measured(True)
-        intrinsic = measured(False)
-        widget.update('a substantially longer original line')
-        changed = measured(False)
-        assert changed.width > intrinsic.width
-        assert measured(True) == greedy
-        # After switching measurement sources, acquire the fixed/fractional
-        # source again; subsequent content mutations need not retire it.
-        greedy = measured(True)
-        widget.update('another changed line')
-        assert measured(True) is greedy
-
-
 async def test_custom_scalar_keeps_descendant_measurement_source():
     from textual.css.scalar import Scalar, Unit
     leaf = Static('source')

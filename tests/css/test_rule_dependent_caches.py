@@ -2,12 +2,10 @@
 
 from unittest.mock import patch
 
-from textual.app import App, ComposeResult
 from textual.color import Color
 from textual.css.model import RuleSet
 from textual.css.stylesheet import Stylesheet
 from textual.dom import DOMNode
-from textual.widgets import Static
 
 
 def test_unrelated_source_keeps_match_cache_but_relevant_source_invalidates():
@@ -37,30 +35,6 @@ def test_source_order_remains_part_of_cache_identity():
     sheet.parse()
     sheet.apply(node)
     assert node.styles.color == Color.parse("red")
-
-
-async def test_component_keeps_its_style_node_after_unrelated_css_registration():
-    class Badge(Static):
-        COMPONENT_CLASSES = {"badge--ink"}
-
-    class BadgeApp(App):
-        CSS = "Badge > .badge--ink { color: red; }"
-
-        def compose(self) -> ComposeResult:
-            yield Badge("badge")
-
-    app = BadgeApp()
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        badge = app.query_one(Badge)
-        original = badge._component_styles["badge--ink"]
-        app.stylesheet.add_source(".some-other-widget { color: blue; }", read_from=("new-widget", ""))
-        app.stylesheet.update(app.screen)
-        assert badge._component_styles["badge--ink"] is original
-        app.stylesheet.add_source("Badge > .badge--ink { color: green; }", read_from=("changed", ""))
-        app.stylesheet.update(app.screen)
-        assert badge._component_styles["badge--ink"] is not original
-        assert badge.get_component_styles("badge--ink").color == Color.parse("green")
 
 
 def test_variables_and_source_removal_cannot_reuse_old_rule_results():

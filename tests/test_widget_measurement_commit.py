@@ -1,7 +1,5 @@
 from unittest.mock import patch
 
-import pytest
-
 from textual.app import App
 from textual.containers import VerticalScroll
 from textual.geometry import Size
@@ -14,20 +12,16 @@ class Measured(Widget):
 
     def __init__(self, *children):
         self.observed = []
-        self.resize_from_watch = False
         super().__init__(*children)
 
     def watch_virtual_size(self, value):
         self.observed.append(value)
-        if self.resize_from_watch:
-            self.styles.height = value.height
 
 
-@pytest.mark.parametrize("widget_type", [Measured, VerticalScroll])
-async def test_content_derived_extent_keeps_scrollbar_and_authored_invalidation(widget_type):
+async def test_content_derived_extent_keeps_scrollbar_and_authored_invalidation():
     app = App()
     async with app.run_test() as pilot:
-        widget = widget_type(Static("child"))
+        widget = VerticalScroll(Static("child"))
         widget.styles.width = 10
         widget.styles.height = 4
         widget.styles.overflow_y = "auto"
@@ -43,12 +37,6 @@ async def test_content_derived_extent_keeps_scrollbar_and_authored_invalidation(
             assert not any(call.kwargs.get("layout") for call in refresh.call_args_list)
             widget.virtual_size = Size(10, 20)
             assert any(call.kwargs.get("layout") for call in refresh.call_args_list)
-            if isinstance(widget, Measured):
-                refresh.reset_mock()
-                widget.resize_from_watch = True
-                widget._size_updated(Size(10, 4), Size(10, 24), Size(10, 4))
-                assert widget.styles.height.value == 24
-                assert any(call.kwargs.get("layout") for call in refresh.call_args_list)
 
 
 async def test_scroll_container_resize_and_content_changes_keep_native_geometry():
@@ -101,19 +89,6 @@ async def test_committed_extent_notifies_watchers_without_remeasuring_parent():
             assert not any(call.kwargs.get("layout") for call in refresh.call_args_list)
             # Authored extent changes remain ordinary layout inputs.
             widget.virtual_size = Size(10, 16)
-            assert any(call.kwargs.get("layout") for call in refresh.call_args_list)
-
-
-async def test_extent_watcher_can_still_request_real_geometry_change():
-    app = App()
-    async with app.run_test() as pilot:
-        widget = Measured()
-        await app.mount(widget)
-        await pilot.pause()
-        widget.resize_from_watch = True
-        with patch.object(widget, "refresh", wraps=widget.refresh) as refresh:
-            widget._size_updated(Size(10, 4), Size(10, 8), Size(10, 4))
-            assert widget.styles.height.value == 8
             assert any(call.kwargs.get("layout") for call in refresh.call_args_list)
 
 

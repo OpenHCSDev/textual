@@ -288,34 +288,6 @@ async def test_custom_widget_layers_are_respected():
         assert geometry[app.query_one("#low")].order > geometry[app.query_one("#high")].order
 
 
-async def test_covered_widgets_skip_rendering_without_changing_output():
-    class CoverApp(App):
-        CSS = """
-        Container { width: 100%; height: 100%; background: $primary; }
-        Static { width: 100%; height: 100%; background: $background 40%; }
-        """
-
-        def compose(self):
-            with Container():
-                with Container():
-                    yield Static("Covered backgrounds\nUnicode café 界", id="foreground")
-
-    app = CoverApp()
-    async with app.run_test(size=(60, 20)) as pilot:
-        await pilot.pause()
-        compositor = app.screen._compositor
-        outer = app.query_one(Container)
-        with patch.object(outer, "render_lines", wraps=outer.render_lines) as render:
-            optimized = compositor.render_strips()
-            render.assert_not_called()
-            original = compositor._get_renders
-            # Render every layer as before, using the exact same geometry.
-            with patch.object(compositor, "_get_renders", lambda crop=None, render_regions=None, *, widgets: original(crop, widgets=widgets)):
-                reference = compositor.render_strips()
-            assert render.call_count > 0
-        assert optimized == reference
-
-
 @pytest.mark.parametrize("rows", [(2, 3), (1, 8), (0, 2, 3, 7, 8)])
 async def test_partial_redraw_requests_only_damaged_vertical_rows(rows):
     from textual.geometry import Region

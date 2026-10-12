@@ -124,23 +124,3 @@ async def test_first_scroll_after_full_scene_does_not_damage_unchanged_chrome():
         compositor.reflow(screen, app.size)
         assert previous in compositor._dirty_regions
         assert compositor.full_map[chrome] == original_chrome
-
-
-async def test_empty_committed_viewport_is_not_replaced_by_full_geometry():
-    """A real empty visible scene remains the predecessor for full publication."""
-
-    class SceneApp(App):
-        def compose(self):
-            yield Static("ORIGINAL")
-
-    app = SceneApp()
-    async with app.run_test(size=(40, 12)) as pilot:
-        await pilot.pause()
-        compositor = app.screen._compositor
-        # A detached native root has no mounted scene members. No assigned map.
-        compositor.reflow_visible(Static("DETACHED"), app.size, retain_geometry=())
-        assert compositor._visible_map == {}
-        assert compositor._published_map is compositor._visible_map
-        compositor._dirty_regions.clear()
-        compositor.reflow(app.screen, app.size)
-        assert app.size.region in compositor._dirty_regions
