@@ -787,7 +787,7 @@ class OptionList(ScrollView, can_focus=True):
             A list of strips.
         """
         padding = self.get_component_styles("option-list--option").padding
-        render_width = self.scrollable_content_region.width
+        render_width = self.scrollable_size.width
         width = render_width - self._get_left_gutter_width()
         cache_key = (option, style, padding)
         if (strips := self._option_render_cache.get(cache_key)) is None:
@@ -809,14 +809,14 @@ class OptionList(ScrollView, can_focus=True):
 
     def _update_lines(self) -> None:
         """Update internal structures when new lines are added."""
-        if not self.scrollable_content_region:
+        if not self.scrollable_size:
             return
 
         line_cache = self._line_cache
         lines = line_cache.lines
         next_index = lines[-1][0] + 1 if lines else 0
         get_visual = self._get_visual
-        width = self.scrollable_content_region.width - self._get_left_gutter_width()
+        width = self.scrollable_size.width - self._get_left_gutter_width()
 
         if next_index < len(self.options):
             padding = self.get_component_styles("option-list--option").padding
@@ -888,7 +888,7 @@ class OptionList(ScrollView, can_focus=True):
             option = self.options[option_index]
         except IndexError:
             return Strip.blank(
-                self.scrollable_content_region.width,
+                self.scrollable_size.width,
                 self.get_visual_style("option-list--option").rich_style,
             )
 
@@ -911,7 +911,7 @@ class OptionList(ScrollView, can_focus=True):
             strip = strips[line_offset]
         except IndexError:
             return Strip.blank(
-                self.scrollable_content_region.width,
+                self.scrollable_size.width,
                 self.get_visual_style("option-list--option").rich_style,
             )
         return strip
@@ -955,7 +955,7 @@ class OptionList(ScrollView, can_focus=True):
         height = self._heights[highlighted]
 
         self.scroll_to_region(
-            Region(0, y, self.scrollable_content_region.width, height),
+            Region(0, y, self.scrollable_size.width, height),
             force=True,
             animate=False,
             top=top,
@@ -997,7 +997,7 @@ class OptionList(ScrollView, can_focus=True):
         if not self._options:
             return
 
-        height = self.scrollable_content_region.height
+        height = self.scrollable_size.height
         y = clamp(
             self._index_to_line[self.highlighted or 0] + direction * height,
             0,

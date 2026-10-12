@@ -2157,10 +2157,15 @@ class Widget(DOMNode):
     def scrollable_size(self) -> Size:
         """The size of the scrollable content.
 
+        The widget's own laid-out size minus its gutter and scrollbars, like
+        `size`: reading it never asks the compositor to arrange the screen.
+
         Returns:
             Scrollable content size.
         """
-        return self.scrollable_content_region.size
+        width, height = self._size
+        gutter = self.gutter
+        return Size(max(0, width - gutter.width), max(0, height - gutter.height))
 
     @property
     def outer_size(self) -> Size:
