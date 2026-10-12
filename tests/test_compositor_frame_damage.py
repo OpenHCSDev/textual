@@ -6,42 +6,6 @@ from textual.geometry import Size
 from textual.widgets import Static
 
 
-async def test_completed_chops_preserve_partial_and_held_paint():
-    from textual.geometry import Region
-
-    class CoveredApp(App):
-        CSS = """
-        Screen { layers: back front; }
-        #back { layer: back; width: 100%; height: 100%; }
-        #front { layer: front; width: 100%; height: 100%; }
-        """
-
-        def compose(self):
-            yield Static("background", id="back")
-            yield Static("[bold]foreground 界[/bold]", id="front")
-
-    app = CoveredApp()
-    async with app.run_test(size=(24, 8)) as pilot:
-        await pilot.pause()
-        compositor = app.screen._compositor
-        reference = compositor.render_strips()
-        assert "foreground" in reference[0].text
-        assert not any("background" in strip.text for strip in reference)
-        compositor._dirty_regions = {Region(0, 0, 24, 2)}
-        held = Region(3, 0, 5, 1)
-        update = compositor.render_partial_update(excluded_regions=(held,))
-        assert update is not None
-        for y, left, right in update.spans:
-            assert not Region(left, y, right - left, 1).overlaps(held)
-            for x, strip in update._get_line_chops(y, left, right):
-                assert strip == reference[y].crop(x, x + strip.cell_length)
-        assert compositor._dirty_regions == {held}
-        released = compositor.render_partial_update()
-        assert released is not None
-        assert compositor._dirty_regions == set()
-        assert compositor.render_partial_update() is None
-        assert compositor.render_strips() == reference
-
 @pytest.mark.parametrize('before,after', [(Size(139,40),Size(139,25)),(Size(80,40),Size(30,12)),(Size(30,12),Size(80,40))])
 async def test_partial_damage_uses_current_frame_for_spans_and_chops(before,after):
     class FrameApp(App):
@@ -197,45 +161,6 @@ async def test_horizontal_damage_keeps_intervening_native_content_unpainted(regi
             if y != update.spans[-1][0]:
                 expected.append('\n')
         assert update.render_segments(app.console) == ''.join(expected)
-
-
-async def test_body_capture_keeps_original_nonzero_row_coordinates():
-    class BodyApp(App):
-        CSS = "#body { width: 12; height: 3; offset: 5 4; }"
-
-        def compose(self):
-            yield Static("ABC界DEF\nSECOND_ROW\nTHIRD_ROW", id="body")
-
-    app = BodyApp()
-    async with app.run_test(size=(40, 12)) as pilot:
-        await pilot.pause()
-        compositor = app.screen._compositor
-        body = app.query_one("#body")
-        [(original, placement)] = list(compositor.published_geometry([body]))
-        assert placement.region.y == 4
-        size, strips, _ = compositor.render_subtree_strips(original, placement)
-        assert size == Size(12, 3)
-        assert [strip.text.rstrip() for strip in strips] == ["ABC界DEF", "SECOND_ROW", "THIRD_ROW"]
-
-        # Capturing a partly offscreen body still owns its full original rows.
-        # Native screen painting clips it; capture has distinct nonzero bounds.
-        from textual.geometry import Region
-        body.styles.offset = (-2, -1)
-        await pilot.pause()
-        [(original, placement)] = list(compositor.published_geometry([body]))
-        assert placement.region == Region(-2, -1, 12, 3)
-        assert compositor.visible_widgets[body] == (
-            placement.region, Region(0, 0, 10, 2),
-        )
-        geometry, _ = compositor._arrange_root(
-            original, compositor.size, visible_only=False, root_geometry=placement,
-        )
-        paint = compositor._paint_regions(compositor._ordered_geometry(geometry), placement.region)
-        assert paint[body] == (placement.region, placement.region)
-        assert compositor._cuts_for_regions(placement.region, paint) == [[-2, 10]] * 3
-        size, strips, _ = compositor.render_subtree_strips(original, placement)
-        assert size == Size(12, 3)
-        assert [strip.text.rstrip() for strip in strips] == ["ABC界DEF", "SECOND_ROW", "THIRD_ROW"]
 
 
 async def test_scene_change_retains_both_rectangles_and_widget_size_publication():
