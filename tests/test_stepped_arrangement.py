@@ -609,3 +609,41 @@ async def test_a_repaint_between_steps_publishes_with_the_layout() -> None:
         [damage] = published
         assert any(region.contains_region(top.region) for region in damage)
         assert top not in screen._dirty_widgets
+
+
+async def test_timer_update_after_a_layout_step_waits_for_the_next_loop_turn() -> None:
+    """A loop turn runs one unit of layout work.
+
+    The update timer is often due in the turn in which a layout's last step
+    runs; the layout it would start belongs to the next turn, or the two add
+    up to one wait.
+    """
+    async with Tree().run_test(size=(100, 30)) as pilot:
+        await pilot.pause()
+        screen = pilot.app.screen
+        screen._refresh_layout()
+        started = []
+        start = screen._start_stepped_layout
+
+        def record(*args, **kwargs):
+            started.append(True)
+            return start(*args, **kwargs)
+
+        screen._start_stepped_layout = record
+        try:
+            # This turn's layout step (here a layout with nothing left to do).
+            assert screen._layout_step(iter(()), StepDeadline(), screen.LAYOUT_STEP_NS)
+            screen._layout_required = True
+            screen._on_timer_update()
+            assert not started and screen._layout_required
+            await asyncio.sleep(0)
+            assert started
+            # In a turn without a step the timer starts the layout at once.
+            del started[:]
+            await asyncio.sleep(0)
+            screen._stop_stepped_layout()
+            screen._layout_required = True
+            screen._on_timer_update()
+            assert started
+        finally:
+            del screen._start_stepped_layout
