@@ -2846,12 +2846,12 @@ class App(Generic[ReturnType], DOMNode):
         if not _screen.is_running:
             widgets = self._register(self, _screen)
             await_mount = AwaitMount(_screen, widgets)
-            await_mount.call_when_ready(self)
+            # Input that arrives while the screen starts belongs to that
+            # screen, so the app delivers nothing more until it is mounted.
+            self.call_next(await_mount)
             return (_screen, await_mount)
         else:
-            await_mount = AwaitMount(_screen, [])
-            await_mount.call_when_ready(self)
-            return (_screen, await_mount)
+            return (_screen, AwaitMount(_screen, []))
 
     def _load_screen_css(self, screen: Screen):
         """Loads the CSS associated with a screen."""
@@ -3225,6 +3225,8 @@ class App(Generic[ReturnType], DOMNode):
         if current_hover_over is not None and current_hover_over._has_hover_style:
             current_hover_over.update_node_styles()
         self.hover_over = hover_widget
+        if self._screen_stack:
+            self.screen._clear_tooltip_unless_over(self.mouse_over)
 
     def _update_mouse_over(self, screen: Screen) -> None:
         """Updates the mouse over after the next refresh.
@@ -3598,6 +3600,9 @@ class App(Generic[ReturnType], DOMNode):
             ) from error
 
         await self.mount_all(widgets)
+        # The screen resumed before these widgets existed, so its own
+        # auto-focus pass found nothing to focus.
+        self._compose_screen._update_auto_focus()
 
     async def _check_recompose(self) -> None:
         """Check if a recompose is required."""

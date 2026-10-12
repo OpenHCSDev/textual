@@ -1218,12 +1218,6 @@ class Screen(Generic[ScreenResultType], Widget):
         if not self.app._disable_notifications:
             widgets.insert(0, ToastRack(id="textual-toastrack"))
 
-    def _on_mount(self, event: events.Mount) -> None:
-        """Set up the tooltip-clearing signal when we mount."""
-        self.screen_layout_refresh_signal.subscribe(
-            self, self._maybe_clear_tooltip, immediate=True
-        )
-
     @property
     def _refresh_requested(self) -> bool:
         """Whether pending screen work requires the timer regardless of damage."""
@@ -1467,7 +1461,6 @@ class Screen(Generic[ScreenResultType], Widget):
         self._dirty_widgets.clear()
         self._dirty_regions.clear()
         self._arrangement_cache.clear()
-        self.screen_layout_refresh_signal.unsubscribe(self)
         self._nodes._clear()
 
     def _pop_result_callback(self) -> None:
@@ -1992,23 +1985,10 @@ class Screen(Generic[ScreenResultType], Widget):
                 self._tooltip_timer.stop()
             tooltip.display = False
 
-    def _maybe_clear_tooltip(self, _) -> None:
-        """Check if the widget under the mouse cursor still pertains to the tooltip.
-
-        If they differ, the tooltip will be removed.
-        """
-        # If there's a widget associated with the tooltip at all...
-        if self._tooltip_widget is not None:
-            # ...look at what's currently under the mouse.
-            try:
-                under_mouse, _ = self.get_widget_at(*self.app.mouse_position)
-            except NoWidget:
-                pass
-            else:
-                # If it's not the same widget...
-                if under_mouse is not self._tooltip_widget:
-                    # ...clear the tooltip.
-                    self._clear_tooltip()
+    def _clear_tooltip_unless_over(self, under_mouse: Widget | None) -> None:
+        """Clear the tooltip when its widget is no longer the one under the mouse."""
+        if self._tooltip_widget is not None and under_mouse is not self._tooltip_widget:
+            self._clear_tooltip()
 
     def _handle_tooltip_timer(self, widget: Widget) -> None:
         """Called by a timer from _handle_mouse_move to update the tooltip.
