@@ -61,7 +61,7 @@ async def test_real_run_async_pilot_and_driver_share_click_chain_and_modifiers()
     assert app._task is None
 
 
-async def test_pilot_click_refuses_when_press_moves_original_target():
+async def test_pilot_click_reports_the_pressed_widget_when_the_press_moves_it():
     class Moving(PointerCell):
         def on_mouse_down(self, event):
             self.styles.offset = (12, 0)
@@ -73,7 +73,8 @@ async def test_pilot_click_refuses_when_press_moves_original_target():
     app = MovingApp()
     async with app.run_test(size=(40, 8)) as pilot:
         target = app.query_one("#target")
-        assert not await pilot.click(target, offset=(1, 1))
+        # The press reached the target; moving it away means no Click follows.
+        assert await pilot.click(target, offset=(1, 1))
         assert target.region.x == 12
         assert app.delivered == []
 

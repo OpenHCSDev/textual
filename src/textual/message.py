@@ -168,13 +168,11 @@ class Message:
             if widget._task is not caller:
                 self._dispatch_completion = (widget, caller, completion)
 
-    def _complete_dispatch(
-        self, receiver: MessagePump, result: Message | None = None
-    ) -> None:
+    def _complete_dispatch(self, receiver: MessagePump) -> None:
         """Release this delivery only from the queue which still owns it."""
         if self._dispatch_completion is not None:
             owner, _, completion = self._dispatch_completion
             if owner is receiver:
                 self._dispatch_completion = None
                 if not completion.done():
-                    completion.set_result(self if result is None else result)
+                    completion.set_result(self)

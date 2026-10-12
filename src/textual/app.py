@@ -4156,7 +4156,7 @@ class App(Generic[ReturnType], DOMNode):
             return captured.can_replace_mouse_move(message, pending)
         return super()._can_replace_message(message, pending)
 
-    async def on_event(self, event: events.Event) -> events.MouseEvent | None:
+    async def on_event(self, event: events.Event) -> None:
         # Handle input events that haven't been forwarded
         # If the event has been forwarded it may have bubbled up back to the App
         if isinstance(event, events.Compose):
@@ -4223,7 +4223,6 @@ class App(Generic[ReturnType], DOMNode):
                             self._click_chain_last_offset = screen_offset
 
                             await self.screen._forward_event(click_event)
-                            return click_event
                     except NoWidget:
                         pass
 

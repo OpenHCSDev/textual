@@ -229,8 +229,8 @@ class Pilot(Generic[ReturnType]):
             OutOfBounds: If the position to be clicked is outside of the (visible) screen.
 
         Returns:
-            `True` if no selector was specified or if the final admitted click landed on the
-                selected widget. `False` if the click was refused or landed elsewhere.
+            `True` if no selector was specified or if the selected widget received the
+                press that starts the click, `False` if another widget received it.
         """
         try:
             return await self._post_mouse_events(
@@ -286,8 +286,8 @@ class Pilot(Generic[ReturnType]):
             OutOfBounds: If the position to be clicked is outside of the (visible) screen.
 
         Returns:
-            `True` if no selector was specified or if the final admitted click landed on the
-                selected widget. `False` if the click was refused or landed elsewhere.
+            `True` if no selector was specified or if the selected widget received the
+                press that starts the click, `False` if another widget received it.
         """
         return await self.click(
             widget, offset, shift, meta, control, times=2, button=button
@@ -333,8 +333,8 @@ class Pilot(Generic[ReturnType]):
             OutOfBounds: If the position to be clicked is outside of the (visible) screen.
 
         Returns:
-            `True` if no selector was specified or if the final admitted click landed on the
-                selected widget. `False` if the click was refused or landed elsewhere.
+            `True` if no selector was specified or if the selected widget received the
+                press that starts the click, `False` if another widget received it.
         """
         return await self.click(
             widget, offset, shift, meta, control, times=3, button=button
@@ -409,8 +409,9 @@ class Pilot(Generic[ReturnType]):
             OutOfBounds: If the position for the events is outside of the (visible) screen.
 
         Returns:
-            True if no selector was specified or if the *final* event landed on the
-                selected widget, False otherwise.
+            True if no selector was specified or if the selected widget received
+                the first press or release (or, without one, the last move),
+                False otherwise.
         """
         await self.pause()
         app = self.app
@@ -438,23 +439,26 @@ class Pilot(Generic[ReturnType]):
                 "Target offset is outside of currently-visible screen region."
             )
 
-        delivered: MouseEvent | None = None
+        # The first press or release decides where the gesture landed. Its
+        # handler may move or cover the target (a FooterKey opens a screen on
+        # the press), so the release can go elsewhere and no Click follow.
+        # A gesture with no button event (hover) is decided by its last move.
+        landed: MouseEvent | None = None
         for _ in range(times):
+            decided = False
             for mouse_event_cls in events:
                 if mouse_event_cls is Click:
-                    # App owns press/release matching and produces the Click.
-                    # This final gesture member requests its receipt, not a
-                    # second synthetic delivery or a separately authored chain.
-                    if not isinstance(delivered, Click):
-                        delivered = None
+                    # App matches the press with the release and sends the Click.
                     continue
                 event = mouse_event_cls(**message_arguments)
                 results = await app._post_message_and_wait(event)
-                delivered = results[0] if results else None
+                if not decided:
+                    landed = results[0] if results else None
+                    decided = mouse_event_cls.sets_capture
                 await self.pause()
 
         return widget is None or (
-            delivered is not None and delivered.widget is target_widget
+            landed is not None and landed.widget is target_widget
         )
 
     async def _wait_for_screen(self, timeout: float = 30.0) -> bool:

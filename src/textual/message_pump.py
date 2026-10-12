@@ -788,9 +788,8 @@ class MessagePump(metaclass=_MessagePumpMeta):
                 except MessagePumpClosed:
                     break
 
-            result: Message | None = None
             try:
-                result = await self._dispatch_message(message)
+                await self._dispatch_message(message)
             except CancelledError:
                 raise
             except Exception as error:
@@ -799,7 +798,7 @@ class MessagePump(metaclass=_MessagePumpMeta):
                 self.app._handle_exception(error)
                 break
             finally:
-                message._complete_dispatch(self, result)
+                message._complete_dispatch(self)
                 message._discard()
                 # Subscription access initializes this optional signal. Do not
                 # allocate its weak-key subscriber machinery for quiet pumps.
@@ -861,7 +860,7 @@ class MessagePump(metaclass=_MessagePumpMeta):
             for callback in callbacks:
                 callback._discard()
 
-    async def _dispatch_message(self, message: Message) -> Message | None:
+    async def _dispatch_message(self, message: Message) -> None:
         """Dispatch a message received from the message queue.
 
         Args:
@@ -878,11 +877,10 @@ class MessagePump(metaclass=_MessagePumpMeta):
         else:
             message_hook(message)
 
-        result: Message | None = None
         with self.prevent(*message._prevent):
             # Allow apps to treat events and messages separately
             if isinstance(message, Event):
-                result = await self.on_event(message)
+                await self.on_event(message)
             elif "debug" in self.app.features:
                 start = perf_counter()
                 await self._on_message(message)
@@ -897,7 +895,6 @@ class MessagePump(metaclass=_MessagePumpMeta):
                 await self._on_message(message)
             if self._next_callbacks:
                 await self._flush_next_callbacks()
-        return result
 
     def _get_dispatch_methods(
         self, method_name: str, message: Message
@@ -968,15 +965,11 @@ class MessagePump(metaclass=_MessagePumpMeta):
             if method is not None and not getattr(method, "_textual_on", None):
                 yield cls, method.__get__(self, cls)
 
-    async def on_event(self, event: events.Event) -> Message | None:
+    async def on_event(self, event: events.Event) -> None:
         """Called to process an event.
 
         Args:
             event: An Event object.
-
-        Returns:
-            A final message produced by this delivery, or None for the original
-            event. Overrides should return the original owner's result.
         """
         await self._on_message(event)
 
