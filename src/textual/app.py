@@ -1675,15 +1675,11 @@ class App(Generic[ReturnType], DOMNode):
             raise ScreenStackError("No screens on stack") from None
 
     @property
-    def _background_screens(self) -> list[Screen]:
-        """A list of screens that may be visible due to background opacity (top-most first, not including current screen)."""
-        screens: list[Screen] = []
-        for screen in reversed(self._screen_stack[:-1]):
-            screens.append(screen)
-            if screen.styles.background.a == 1:
-                break
-        background_screens = screens[::-1]
-        return background_screens
+    def _drawn_screens(self) -> list[Screen]:
+        """The screens on the terminal, top first: the top screen and the
+        screens it draws behind itself."""
+        top = self.screen
+        return [top, *top._screens_seen_through]
 
     @property
     def size(self) -> Size:
@@ -2546,10 +2542,9 @@ class App(Generic[ReturnType], DOMNode):
             animate: Enable animation?
         """
         if isinstance(node, App):
-            for screen in reversed(self.screen_stack):
-                screen.update_node_styles(animate=animate)
-                if not (screen.is_modal and screen.styles.background.a < 1):
-                    break
+            if self._screen_stack:
+                for screen in self._drawn_screens:
+                    screen.update_node_styles(animate=animate)
         else:
             descendants = node.walk_children(with_self=True)
             self.stylesheet.update_nodes(descendants, animate=animate)
@@ -5099,6 +5094,5 @@ class App(Generic[ReturnType], DOMNode):
             except ScreenError:
                 return
             self._resize_event = None
-            self.screen.post_message(event)
-            for screen in self._background_screens:
+            for screen in self._drawn_screens:
                 screen.post_message(event)

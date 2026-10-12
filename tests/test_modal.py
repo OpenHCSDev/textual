@@ -186,7 +186,48 @@ async def test_widget_added_under_an_opaque_screen_is_displayed_only_once_uncove
         await below.mount(added)
         await pilot.pause()
         await pilot.pause()
+        assert not below.is_current
         assert added not in below._compositor.published_widgets
         await app.pop_screen()
         await pilot.pause()
+        assert below.is_current
         assert added in below._compositor.published_widgets
+
+
+async def test_screens_uncovered_together_are_all_drawn_at_the_new_size():
+    """Closing an opaque screen that covered a see-through screen and the
+    screen behind it draws both, laid out for a terminal resized meanwhile
+    and showing what was added behind while they were covered."""
+    from textual.screen import Screen
+    from textual.widgets import Static
+
+    class SeeThrough(Screen):
+        CSS = "SeeThrough { background: transparent; }"
+
+    class StackApp(App):
+        def compose(self) -> ComposeResult:
+            yield Static("below")
+
+    app = StackApp()
+    async with app.run_test(size=(40, 10)) as pilot:
+        await pilot.pause()
+        below = app.screen
+        await app.push_screen(SeeThrough())
+        await pilot.pause()
+        see_through = app.screen
+        assert below.is_current and see_through.is_current
+        await app.push_screen(Screen())
+        await pilot.pause()
+        assert not below.is_current and not see_through.is_current
+        await below.mount(Static("added while covered"))
+        await pilot.resize_terminal(50, 12)
+        await pilot.pause()
+        first = below.query(Static).first()
+        assert first.size.width == 40
+        await app.pop_screen()
+        await pilot.pause()
+        await pilot.pause()
+        assert below.is_current and see_through.is_current
+        assert first.size.width == 50
+        shown = "\n".join(strip.text for strip in see_through._compositor.render_strips())
+        assert "below" in shown and "added while covered" in shown

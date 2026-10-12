@@ -347,17 +347,21 @@ class Screen(Generic[ScreenResultType], Widget):
 
     @property
     def is_current(self) -> bool:
-        """Is the screen current (i.e. visible to user)?"""
+        """Is the screen current (i.e. drawn on the terminal)?
+
+        The top screen is, and so is each screen it draws behind itself. A
+        screen under an opaque one is on the stack but not current.
+        """
         from textual.app import ScreenStackError
 
         try:
-            return self.app.screen is self or self in self.app._background_screens
+            return self in self.app._drawn_screens
         except ScreenStackError:
             return False
 
     @property
     def _screen_below(self) -> Screen | None:
-        """The screen under this one on its stack, seen through a translucent background.
+        """The screen under this one on its stack.
 
         The app's screen stacks own this, so every render of this screen
         draws the same backdrop, whoever asks for the lines.
@@ -374,7 +378,9 @@ class Screen(Generic[ScreenResultType], Widget):
 
         Each screen below shows while every background above it is
         translucent. A screen under an opaque one is on the stack but not on
-        the terminal, so a frame of this screen draws none of it.
+        the terminal, so a frame of this screen draws none of it. Which
+        screens are drawn (`App._drawn_screens`, `is_current`) follows from
+        this alone.
         """
         screens: list[Screen] = []
         screen = self
@@ -1348,7 +1354,7 @@ class Screen(Generic[ScreenResultType], Widget):
             if drawn_behind:
                 self._release_paint()
             self._dirty_widgets.clear()
-        elif self._compositor._dirty_regions and self in app.screen._screens_seen_through:
+        elif self._compositor._dirty_regions and self.is_current:
             damage = set(self._compositor._dirty_regions)
             # The top screen draws this one behind itself, so it writes this
             # damage. Hand it the regions without consuming them.
@@ -1850,6 +1856,12 @@ class Screen(Generic[ScreenResultType], Widget):
             if self._size != size:
                 self._refresh_layout(size)
             self.refresh()
+            for screen in self._screens_seen_through:
+                # Uncovered along with this screen: it was not drawn, so it
+                # missed any resize and has not laid out what changed.
+                if screen._size != size:
+                    screen._screen_resized(size)
+                screen.refresh()
 
     async def _compose(self) -> None:
         await super()._compose()
@@ -1897,14 +1909,14 @@ class Screen(Generic[ScreenResultType], Widget):
     """
 
     def _retire_inactive_paint(self) -> None:
-        if self.is_current or self._closing or self in self.app._background_screens:
+        if self.is_current or self._closing:
             return
         for widget in self.walk_children(with_self=True):
             widget._release_paint()
         self._repaint_required = True
 
     def _retire_inactive_presentation(self) -> None:
-        if self.is_current or self._closing or self in self.app._background_screens:
+        if self.is_current or self._closing:
             return
         for widget in self.walk_children(with_self=True):
             widget._release_presentation()
@@ -1924,8 +1936,6 @@ class Screen(Generic[ScreenResultType], Widget):
     async def _on_resize(self, event: events.Resize) -> None:
         event.stop()
         self._screen_resized(event.size)
-        for screen in self.app._background_screens:
-            screen._screen_resized(event.size)
 
         horizontal_breakpoints = (
             self.app.HORIZONTAL_BREAKPOINTS

@@ -229,6 +229,6 @@ async def test_visible_backdrop_does_not_retire_its_paint():
         cached_lines = dict(model._styles_cache._cache)
         await app.push_screen(Overlay())
         await pilot.pause()
-        assert owner in app._background_screens
+        assert owner in app._drawn_screens
         owner._retire_inactive_paint()
         assert model._styles_cache._cache == cached_lines
