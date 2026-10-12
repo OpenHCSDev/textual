@@ -74,34 +74,34 @@ async def test_driver_wheel_completes_during_nested_markdown_construction(kind):
                     ))
             return super().get_block_class(name)
 
+    class Reader(VerticalScroll):
+        def watch_scroll_y(self, old_value, new_value):
+            super().watch_scroll_y(old_value, new_value)
+            if new_value > 0 and not delivered.is_set():
+                # The app queues the wheel on this container; the scroll is its delivery.
+                at_delivery.append(len(construction))
+                delivered.set()
+
     class ReadingApp(App):
         def compose(self):
-            with VerticalScroll(id="reader"):
+            with Reader(id="reader"):
                 yield Static("Existing body\n" * 60, id="reader-body")
                 yield Document(id="document")
-
-        async def on_event(self, event):
-            ingress = isinstance(event, events.MouseScrollDown) and not event.is_forwarded
-            result = await super().on_event(event)
-            if ingress:
-                at_delivery.append((len(construction), event.widget))
-                delivered.set()
-            return result
 
     app = ReadingApp()
     async with app.run_test(size=(60, 16)) as pilot:
         await pilot.pause()
         assert app.query_one("#reader", VerticalScroll).allow_vertical_scroll
         document = app.query_one(Document)
-        publication = document.update(source)
+        update = document.update(source)
         try:
             await asyncio.wait_for(delivered.wait(), 3)
-            assert not publication.is_done
+            assert not update.is_done
             reader = app.query_one("#reader", VerticalScroll)
             assert reader.scroll_y > 0, (at_delivery, reader.max_scroll_y, reader.region)
         finally:
-            await publication
-        assert at_delivery[0][0] < len(construction)
+            await update
+        assert at_delivery[0] < len(construction)
         assert len(document.children) == 1
         assert all(child.is_mounted for child in document.walk_children())
         assert document.source == source
