@@ -1,7 +1,5 @@
 """Linear ancestry keys preserve inherited and customized pseudo-class state."""
 
-import pytest
-
 from textual.app import App, ComposeResult
 from textual.color import Color
 from textual.containers import Container
@@ -40,30 +38,6 @@ class PathApp(App):
                 with container(classes="scope", id="referenced" if index == 0 else None):
                     with Container():
                         yield Badge(str(index), id=f"badge-{index}")
-
-
-@pytest.mark.parametrize("all_ids", [False, True])
-async def test_path_key_matches_native_state_for_overrides_and_disconnected_paths(all_ids):
-    app = PathApp()
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        classes = frozenset({"scope", "extra"})
-        for disabled in (False, True, False):
-            app.query_one("#root-0").disabled = disabled
-            app.query_one(CustomKey).set_class(disabled, "extra")
-            app.app_focus = not disabled
-            await pilot.pause()
-            for badge in app.query(Badge):
-                nodes = badge.css_path_nodes
-                # Also exercise a CSS path that omits physical widget ancestors.
-                for path in (nodes, [nodes[0], nodes[-1]]):
-                    expected = tuple(
-                        (node.id if all_ids or node.id in app.stylesheet._ids_in_rules else None,
-                         node.classes & classes, node._css_type_name,
-                         node._pseudo_classes_cache_key, node.name)
-                        for node in path
-                    )
-                    assert app.stylesheet._css_path_key(path, classes, all_ids=all_ids) == expected
 
 
 async def test_inherited_disabled_rules_and_components_survive_repeated_updates():

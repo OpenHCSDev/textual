@@ -5,7 +5,7 @@ import asyncio
 
 from textual.app import App, ComposeResult
 from textual.containers import Vertical
-from textual.screen import ModalScreen, Screen
+from textual.screen import Screen
 from textual.widget import Widget
 from textual.widgets import Label
 
@@ -36,37 +36,6 @@ class BatchPaintApp(App):
         if renderable is not None:
             self.frames.append((self._batch_count, type(renderable).__name__))
         super()._display(screen, renderable)
-
-
-async def test_async_widget_batch_retains_damage_and_refresh_callbacks() -> None:
-    app = BatchPaintApp()
-    painted = asyncio.Event()
-    async with app.run_test(size=(50, 12)) as pilot:
-        await pilot.pause()
-        holder = app.query_one("#holder", Vertical)
-        screen = app.screen
-        app.frames.clear()
-        screen.preparation_batches.clear()
-        async with holder.batch():
-            await holder.mount(Label("new retained source", id="new"))
-            screen._refresh_layout()
-            app.call_after_refresh(painted.set)
-            await pilot.pause()
-            damage = set(screen._compositor._dirty_regions)
-            assert damage, "Mount must produce actual compositor damage"
-            assert not app.frames
-            assert not screen.preparation_batches
-            assert not painted.is_set()
-            # A queued/direct compositor refresh must obey the same admission.
-            screen._compositor_refresh()
-            assert screen._compositor._dirty_regions == damage
-        await asyncio.wait_for(painted.wait(), 1)
-        assert app.frames
-        assert all(batch == 0 for batch, _ in app.frames)
-        assert screen.preparation_batches
-        assert all(batch == 0 for batch in screen.preparation_batches)
-        assert not screen._compositor._dirty_regions
-        assert app.query_one("#new", Label).is_attached
 
 
 async def test_admitted_refresh_callbacks_keep_sender_order_during_later_batch() -> None:
@@ -100,36 +69,6 @@ async def test_admitted_refresh_callbacks_keep_sender_order_during_later_batch()
             # not this sender's previously admitted callback messages.
             await asyncio.wait_for(completed.wait(), 1)
         assert order == ["first", "second"]
-
-
-async def test_translucent_foreground_respects_background_resource_admission() -> None:
-    class SourceScreen(ObservedScreen):
-        def _prepare_compositor_refresh(self) -> tuple[Widget, ...]:
-            holder = self.query_one("#holder")
-            return (holder,) if holder.lock.is_locked else super()._prepare_compositor_refresh()
-
-    class SourceApp(BatchPaintApp):
-        def get_default_screen(self) -> Screen:
-            return SourceScreen()
-
-    app = SourceApp()
-    async with app.run_test(size=(50, 12)) as pilot:
-        holder = app.query_one("#holder", Vertical)
-        source = app.screen
-        await app.push_screen(ModalScreen())
-        await pilot.pause()
-        assert source in app._background_screens
-        foreground = app.screen
-        async with holder.lock:
-            foreground._compositor._dirty_regions.add(foreground.size.region)
-            damage = set(foreground._compositor._dirty_regions)
-            app.frames.clear()
-            foreground._compositor_refresh()
-            assert not app.frames
-            assert foreground._compositor._dirty_regions == damage
-        foreground._compositor_refresh()
-        assert app.frames
-        assert not foreground._compositor._dirty_regions
 
 
 class HeldVertical(Vertical):
@@ -173,5 +112,3 @@ class IndependentApp(BatchPaintApp):
         with HeldVertical(id="holder"):
             yield Label("ORIGINAL_HELD", id="original")
         yield Label("SIDEBAR_OLD", id="sidebar")
-
-

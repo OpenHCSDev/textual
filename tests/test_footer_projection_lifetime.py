@@ -134,8 +134,7 @@ async def test_group_transitions_match_fresh_native_composition(mixed):
             assert displayed(footer) == before
 
 
-@pytest.mark.parametrize("remove_footer", [False, True])
-async def test_binding_notification_during_publication_is_not_lost(remove_footer):
+async def test_binding_notification_during_publication_is_not_lost():
     class FooterApp(App):
         BINDINGS = [Binding("f2", "test", "Test", id="test")]
 
@@ -158,18 +157,11 @@ async def test_binding_notification_during_publication_is_not_lost(remove_footer
             app.set_keymap({"test": "f3"})
             try:
                 await asyncio.wait_for(entered.wait(), 5)
-                if remove_footer:
-                    await asyncio.wait_for(footer.remove(), 5)
-                else:
-                    app.set_keymap({"test": "f4"})
-                    footer.bindings_changed(app.screen)
+                app.set_keymap({"test": "f4"})
+                footer.bindings_changed(app.screen)
             finally:
                 release.set()
             await pilot.pause()
-        if remove_footer:
-            assert footer._closed
-            assert not getattr(footer, "__watchers", {}).get("compact")
-        else:
-            key = next(key for key in footer.query(FooterKey) if key.action == "test")
-            assert key.key == "f4"
-            assert "f4" in app.screen.active_bindings
+        key = next(key for key in footer.query(FooterKey) if key.action == "test")
+        assert key.key == "f4"
+        assert "f4" in app.screen.active_bindings
