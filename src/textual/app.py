@@ -301,8 +301,6 @@ class App(Generic[ReturnType], DOMNode):
     @classmethod
     def running_app(cls) -> App[Any]:
         """Return the sole App whose outer context is running in this process."""
-        if (app := active_app.get(None)) is not None:
-            return app
         apps = tuple(app for app in cls._running_apps if isinstance(app, cls))
         if len(apps) != 1:
             raise NoActiveAppError(
