@@ -77,7 +77,7 @@ from textual._ansi_theme import ALABASTER, MONOKAI
 from textual._callback import invoke
 from textual._compat import cached_property
 from textual._compositor import CompositorUpdate
-from textual._context import active_app, active_message_pump
+from textual._context import NoActiveAppError, active_app, active_message_pump
 from textual._context import message_hook as message_hook_context_var
 from textual._dispatch_key import dispatch_key
 from textual._event_broker import NoHandler, extract_handler_actions
@@ -295,6 +295,20 @@ class _PrintCapture:
 @rich.repr.auto
 class App(Generic[ReturnType], DOMNode):
     """The base class for Textual Applications."""
+
+    _running_apps: ClassVar[WeakKeyDictionary[App[Any], int]] = WeakKeyDictionary()
+
+    @classmethod
+    def running_app(cls) -> App[Any]:
+        """Return the sole App whose outer context is running in this process."""
+        if (app := active_app.get(None)) is not None:
+            return app
+        apps = tuple(app for app in cls._running_apps if isinstance(app, cls))
+        if len(apps) != 1:
+            raise NoActiveAppError(
+                "No sole running application" if not apps else "Multiple applications are running"
+            )
+        return apps[0]
 
     CSS: ClassVar[str] = ""
     """Inline CSS, useful for quick scripts. This is loaded after CSS_PATH,
@@ -1121,6 +1135,9 @@ class App(Generic[ReturnType], DOMNode):
     @contextmanager
     def _context(self) -> Generator[None, None, None]:
         """Context manager to set ContextVars."""
+        outer = active_app.get(None) is None
+        if outer:
+            self._running_apps[self] = self._running_apps.get(self, 0) + 1
         app_reset_token = active_app.set(self)
         message_pump_reset_token = active_message_pump.set(self)
         try:
@@ -1128,6 +1145,12 @@ class App(Generic[ReturnType], DOMNode):
         finally:
             active_message_pump.reset(message_pump_reset_token)
             active_app.reset(app_reset_token)
+            if outer:
+                contexts = self._running_apps[self] - 1
+                if contexts:
+                    self._running_apps[self] = contexts
+                else:
+                    del self._running_apps[self]
 
     def _watch_ansi_color(self, ansi_color: bool | None) -> None:
         """Enable or disable the truecolor filter when the reactive changes"""
