@@ -63,7 +63,7 @@ from textual._measurement import (
 )
 from textual.message_pump import MessagePump
 from textual._styles_cache import StylesCache
-from textual._activation import PrimaryActivation, StyleTarget
+from textual._activation import PrimaryActivation, PrimaryTarget, StyleTarget
 from textual._event_broker import NoHandler, extract_handler_actions
 from textual._types import AnimationLevel
 from textual.actions import SkipAction
@@ -4145,18 +4145,23 @@ class Widget(DOMNode):
     """Decorative paint may opt out of the original pointer hit-test owner."""
 
     def activation_targets(self, region: Region, strips: list[Strip]):
-        """Expose click handlers from admitted strips, without another render."""
+        """Expose original click effects from admitted paint and its ancestry."""
+        primary = next((owner for owner in self.ancestors_with_self
+                        if isinstance(owner, PrimaryActivation)), None)
         for y, strip in zip(region.line_range, strips):
             x = region.x
             for segment in strip:
                 width = segment.cell_length
-                if segment.style is not None and width:
+                if width:
+                    exposed = Region(x, y, width, 1)
                     try:
-                        handler = extract_handler_actions("click", segment.style.meta)
+                        handler = extract_handler_actions("click", segment.style.meta if segment.style else {})
                     except NoHandler:
-                        pass
+                        if primary is not None and not primary.disabled:
+                            yield PrimaryTarget(primary, exposed, primary.primary_activation)
                     else:
-                        yield StyleTarget(self, Region(x, y, width, 1), handler)
+                        if handler.action is not None:
+                            yield StyleTarget(self, exposed, handler)
                 x += width
 
     def render_lines(self, crop: Region) -> list[Strip]:

@@ -82,8 +82,3 @@ class PrimaryActivation:
     @property
     @abstractmethod
     def primary_activation(self) -> Callable: ...
-
-    def activation_targets(self, region, strips):
-        if not self.disabled:
-            yield PrimaryTarget(self, region, self.primary_activation)
-        yield from super().activation_targets(region, strips)
