@@ -1285,9 +1285,11 @@ class Screen(Generic[ScreenResultType], Widget):
         if not targets:
             return
         session = HintSession(self, targets)
-        await self.mount(*session.labels, session)
+        mounted = self.mount(*session.labels, session)
         self._hint_session = session
-        session.focus(scroll_visible=False)
+        await mounted
+        if self._hint_session is session and not session.disabled and self is self.app.screen:
+            session.focus(scroll_visible=False)
 
     def dismiss_hints(self, *, restore=True) -> None:
         if self._hint_session is not None:
