@@ -1991,11 +1991,7 @@ class Screen(Generic[ScreenResultType], Widget):
         self.dismiss_hints()
         self._screen_resized(event.size)
 
-        horizontal_breakpoints = (
-            self.app.HORIZONTAL_BREAKPOINTS
-            if self.HORIZONTAL_BREAKPOINTS is None
-            else self.HORIZONTAL_BREAKPOINTS
-        ) or []
+        horizontal_breakpoints = self.horizontal_breakpoints
 
         vertical_breakpoints = (
             self.app.VERTICAL_BREAKPOINTS
@@ -2010,34 +2006,37 @@ class Screen(Generic[ScreenResultType], Widget):
                 for _, breakpoint in (horizontal_breakpoints + vertical_breakpoints)
             }
 
-            for breakpoint in self._get_breakpoint_classes(
-                width, horizontal_breakpoints
+            for dimension, declarations in (
+                (width, horizontal_breakpoints), (height, vertical_breakpoints)
             ):
-                breakpoints[breakpoint] = True
-
-            for breakpoint in self._get_breakpoint_classes(
-                height, vertical_breakpoints
-            ):
-                breakpoints[breakpoint] = True
+                if (active := self._get_breakpoint(dimension, declarations)) is not None:
+                    breakpoints[active[1]] = True
 
             self.update_classes(breakpoints, animate=False)
 
-    def _get_breakpoint_classes(
+    @property
+    def horizontal_breakpoints(self) -> list[tuple[int, str]]:
+        """Horizontal sizing declarations, using the screen override if supplied."""
+        return (
+            self.app.HORIZONTAL_BREAKPOINTS
+            if self.HORIZONTAL_BREAKPOINTS is None
+            else self.HORIZONTAL_BREAKPOINTS
+        ) or []
+
+    @property
+    def horizontal_breakpoint(self) -> int | None:
+        """The active viewport-width minimum, independent of its CSS class."""
+        active = self._get_breakpoint(self.app.size.width, self.horizontal_breakpoints)
+        return None if active is None else active[0]
+
+    def _get_breakpoint(
         self, dimension: int, breakpoints: list[tuple[int, str]]
-    ) -> set[str]:
-        """Get breakpoint classes for given dimension.
-
-        Args:
-            dimension: Size in cells.
-            breakpoints: Associated breakpoints.
-
-        Returns:
-            A set containing a breakpoint, or an empty set if none apply.
-        """
-        for breakpoint, class_name in sorted(breakpoints, reverse=True):
-            if dimension >= breakpoint:
-                return {class_name}
-        return set()
+    ) -> tuple[int, str] | None:
+        """Resolve a sizing declaration; CSS and native geometry share this rule."""
+        for breakpoint in sorted(breakpoints, reverse=True):
+            if dimension >= breakpoint[0]:
+                return breakpoint
+        return None
 
     def _update_tooltip(self, widget: Widget) -> None:
         """Update the content of the tooltip."""

@@ -485,7 +485,7 @@ class SelectState(NamedTuple):
                         # Only ordinary flow children can be bounded by their
                         # DOM order. Positioned/layered children may be drawn
                         # elsewhere and fall back to the general walker.
-                        if all(child.styles.position == "relative" and not child.styles.layer
+                        if all(child.geometry.position == "relative" and child.layer == "default"
                                for child in siblings):
                             low, high = sorted((first_index, last_index))
                             visible = set(visible_children(root, root_visible))
