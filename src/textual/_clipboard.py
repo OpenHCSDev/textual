@@ -17,9 +17,11 @@ class ClipboardContent:
 
     def paste(self, editor, before, count):
         location, text = self.insertion(editor, before, count)
-        editor.history.end_group()
+        mode = editor.editing_mode
+        mode.suspend(editor)
         editor.replace(text, location, location, maintain_selection_offset=False)
         editor.move_cursor(location)
+        mode.resume(editor)
 
 
 class LinewiseClipboard(ClipboardContent):

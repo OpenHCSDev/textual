@@ -1441,7 +1441,7 @@ TextArea {
 
         scroll_x, scroll_y = self.scroll_offset
         absolute_y = scroll_y + y
-        selection = self.selection
+        selection = self.editing_mode.selection_range(self)
         _, cursor_y = self._cursor_offset
         cache_key = (
             self.size,
@@ -1452,15 +1452,7 @@ TextArea {
                 if selection.contains_line(absolute_y) or self.soft_wrap
                 else selection.end[0] == absolute_y
             ),
-            (
-                selection.end
-                if (
-                    self._cursor_visible
-                    and self.cursor_blink
-                    and absolute_y == cursor_y
-                )
-                else None
-            ),
+            (self.cursor_location, self._draw_cursor) if absolute_y == cursor_y else None,
             self.theme,
             self._matching_bracket_location,
             self.match_cursor_bracket,
@@ -1521,9 +1513,9 @@ TextArea {
         line.set_length(line_character_count + 1)  # space at end for cursor
         virtual_width, _virtual_height = self.virtual_size
 
-        selection = self.selection
+        selection = self.editing_mode.selection_range(self)
         start, end = selection
-        cursor_row, cursor_column = end
+        cursor_row, cursor_column = self.cursor_location
 
         selection_top, selection_bottom = sorted(selection)
         selection_top_row, selection_top_column = selection_top
@@ -1542,7 +1534,6 @@ TextArea {
         if start != end and selection_top_row <= line_index <= selection_bottom_row:
             # If this row intersects with the selection range
             selection_style = theme.selection_style if theme else None
-            cursor_row, _ = end
             if selection_style:
                 if line_character_count == 0 and line_index != cursor_row:
                     # A simple highlight to show empty lines are included in the selection
@@ -1724,8 +1715,8 @@ TextArea {
 
     @property
     def selected_text(self) -> str:
-        """The text between the start and end points of the current selection."""
-        start, end = self.selection
+        """The selected range, shared with paint and modal operators."""
+        start, end = self.editing_mode.selection_range(self)
         return self.get_text_range(start, end)
 
     @property

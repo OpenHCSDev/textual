@@ -5,10 +5,11 @@ behavior; modes own how that behavior participates in an unfinished operation.
 """
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, ClassVar
 
-from textual.document._document import Location
+from textual.document._document import Location, Selection
 from textual._clipboard import ClipboardContent, LinewiseClipboard
 from textual.document._document_navigator import WordBoundary, PreviousWordBoundary, EndWordBoundary
 
@@ -42,9 +43,23 @@ class EditingMode:
     def suspend(self, editor: TextArea) -> None:
         editor.history.end_group()
 
+    def selection_range(self, editor: TextArea) -> Selection:
+        return editor.selection
 
-class VimMode(EditingMode):
+
+class VimMode(EditingMode, ABC):
     modal = True
+
+    def handle_key(self, editor: TextArea, event: Key) -> bool:
+        editor.history.checkpoint()
+        try:
+            return self._handle_key(editor, event)
+        finally:
+            editor.history.checkpoint()
+
+    @abstractmethod
+    def _handle_key(self, editor: TextArea, event: Key) -> bool:
+        raise NotImplementedError
 
     def pasted(self) -> EditingMode:
         return VimInsert()
@@ -56,7 +71,7 @@ class VimInsert(VimMode):
     def resume(self, editor: TextArea) -> None:
         editor.history.begin_group()
 
-    def handle_key(self, editor: TextArea, event: Key) -> bool:
+    def _handle_key(self, editor: TextArea, event: Key) -> bool:
         if event.key != "escape":
             return False
         editor.editing_mode = VimNormal()
@@ -72,7 +87,7 @@ class VimNormal(VimMode):
     def settled(self) -> EditingMode:
         return replace(self, count=0)
 
-    def handle_key(self, editor: TextArea, event: Key) -> bool:
+    def _handle_key(self, editor: TextArea, event: Key) -> bool:
         if event.key.isdecimal() and (self.count or event.key != "0"):
             editor.editing_mode = replace(self, count=self.count * 10 + int(event.key))
             return True
@@ -97,9 +112,12 @@ class VimNormal(VimMode):
     def motion(self, editor: TextArea, motion: type[Motion], count: int) -> None:
         self.move_to(editor, motion.destination(editor, editor.cursor_location, count))
 
+    def character_range(self, editor: TextArea, count: int) -> EditorRange:
+        return EditorRange(editor.cursor_location,
+                           Right.destination(editor, editor.cursor_location, count))
+
     def characters(self, editor: TextArea, operator: type[Operator], count: int) -> None:
-        operator.replace(editor, EditorRange(editor.cursor_location,
-                         Right.destination(editor, editor.cursor_location, count)))
+        operator.replace(editor, self.character_range(editor, count))
 
     def visual(self, editor: TextArea) -> None:
         editor.editing_mode = VimVisual()
@@ -121,17 +139,18 @@ class VimVisual(VimNormal):
     def move_to(self, editor: TextArea, location: Location) -> None:
         editor.move_cursor(location, select=True)
 
-    def characters(self, editor: TextArea, operator: type[Operator], count: int) -> None:
-        self.operate(editor, operator, count)
+    def character_range(self, editor: TextArea, count: int) -> EditorRange:
+        return EditorRange(*self.selection_range(editor))
 
     def visual(self, editor: TextArea) -> None:
         self.escape(editor)
 
-    def operate(self, editor: TextArea, operator: type[Operator], count: int) -> None:
+    def selection_range(self, editor: TextArea) -> Selection:
         start, end = sorted(editor.selection)
-        # Native Selection is half-open; characterwise Visual includes its end.
-        end = editor.navigator.get_location_right(end)
-        operator.replace(editor, EditorRange(start, end))
+        return Selection(start, editor.navigator.get_location_right(end))
+
+    def operate(self, editor: TextArea, operator: type[Operator], count: int) -> None:
+        self.characters(editor, operator, count)
 
     def escape(self, editor: TextArea) -> None:
         editor.move_cursor(editor.cursor_location)
@@ -171,7 +190,10 @@ class AwaitKey(VimMode):
     def document_changed(self) -> EditingMode:
         return self.previous.document_changed()
 
-    def handle_key(self, editor: TextArea, event: Key) -> bool:
+    def selection_range(self, editor: TextArea) -> Selection:
+        return self.previous.selection_range(editor)
+
+    def _handle_key(self, editor: TextArea, event: Key) -> bool:
         editor.editing_mode = self.settled()
         if event.key == "escape":
             return True
@@ -326,6 +348,11 @@ class EditorRange:
     def clipboard_content(self, editor: TextArea) -> ClipboardContent:
         return ClipboardContent(self.text(editor))
 
+    def replace_characters(self, editor: TextArea, character: str) -> None:
+        text = "".join(symbol if symbol in "\r\n" else character for symbol in self.text(editor))
+        editor.replace(text, self.start, self.end, maintain_selection_offset=False)
+        editor.move_cursor(self.start)
+
     def deletion_start(self, editor: TextArea) -> Location:
         return self.start
 
@@ -408,7 +435,6 @@ class Delete(Yank):
         editor.editing_mode = cls.following_mode()
         editor.replace(cls.inserted_text(editor, selection), cls.deletion_start(editor, selection),
                        selection.end, maintain_selection_offset=False)
-        editor.history.checkpoint()
 
 
 class Change(Delete):
@@ -539,7 +565,5 @@ class ReplaceCharacter(CharacterCommand):
     @classmethod
     def character(cls, editor, mode, character, count):
         if character is not None and character.isprintable():
-            start = editor.cursor_location
-            end = Right.destination(editor, start, count)
-            editor.replace(character * (end[1] - start[1]), start, end, maintain_selection_offset=False)
-            editor.move_cursor(start)
+            mode.character_range(editor, count).replace_characters(editor, character)
+            editor.editing_mode = VimNormal()
