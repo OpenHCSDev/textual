@@ -436,7 +436,7 @@ class SelectState(NamedTuple):
         def get_content_region(widget: Widget) -> Region:
             if type(widget).content_region is not Widget.content_region:
                 return widget.content_region
-            return get_region(widget).shrink(widget.styles.gutter)
+            return get_region(widget).shrink(widget.geometry.box_gutter)
 
         def get_selection_order(widget: Widget) -> tuple[int, int]:
             if type(widget)._selection_order is not Widget._selection_order:

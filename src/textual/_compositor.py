@@ -1346,7 +1346,7 @@ class Compositor:
                 invisible_widgets.add(widget)
 
             # Container region is minus border
-            container_region = region.shrink(styles.gutter)
+            container_region = region.shrink(widget.geometry.box_gutter)
             container_size = container_region.size
 
             # Widgets with scrollbars (containers or scroll view) require additional processing
@@ -1415,7 +1415,7 @@ class Compositor:
                     if widget._cover_widget is not None:
                         store_geometry(widget._cover_widget, _MapGeometry.from_widget(
                             widget._cover_widget,
-                            region.shrink(widget.styles.gutter),
+                            region.shrink(widget.geometry.box_gutter),
                             order,
                             clip.region,
                             region.size,

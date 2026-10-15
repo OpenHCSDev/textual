@@ -415,7 +415,7 @@ class Screen(Generic[ScreenResultType], Widget):
     @property
     def size(self) -> Size:
         """The size of the screen."""
-        return self.app.size - self.styles.gutter.totals
+        return self.app.size - self.geometry.box_gutter.totals
 
     def _watch_focused(self):
         self.refresh_bindings()
@@ -1776,7 +1776,7 @@ class Screen(Generic[ScreenResultType], Widget):
             if widget not in self._layout_widgets:
                 self._layout_widgets[ancestor].add(widget)
                 layout_required = True
-            if not ancestor.styles.auto_dimensions:
+            if not ancestor.geometry.auto_dimensions:
                 break
             widget = ancestor
 
@@ -1796,7 +1796,7 @@ class Screen(Generic[ScreenResultType], Widget):
         # keys not sized by their content.
         boundaries = {
             ancestor for ancestor in self._layout_widgets
-            if not ancestor.styles.auto_dimensions
+            if not ancestor.geometry.auto_dimensions
         }
         if not boundaries or self in boundaries:
             return None
@@ -1847,14 +1847,14 @@ class Screen(Generic[ScreenResultType], Widget):
         Returns:
             Height for inline mode.
         """
-        height_scalar = self.styles.height
+        height_scalar = self.geometry.height
         if height_scalar is None or height_scalar.is_auto:
             inline_height = self.get_content_height(size, size, size.width)
         else:
             inline_height = int(height_scalar.resolve(size, size))
-        inline_height += self.styles.gutter.height
-        min_height = self.styles.min_height
-        max_height = self.styles.max_height
+        inline_height += self.geometry.box_gutter.height
+        min_height = self.geometry.min_height
+        max_height = self.geometry.max_height
         if min_height is not None:
             inline_height = max(inline_height, int(min_height.resolve(size, size)))
         if max_height is not None:
@@ -2558,7 +2558,7 @@ class Screen(Generic[ScreenResultType], Widget):
         if widget not in self._compositor.visible_widgets:
             return False
         # If the widget is one that overlays the screen...
-        if widget.styles.overlay == "screen":
+        if widget.geometry.overlay == "screen":
             # ...simply check if it's within the screen's region.
             return widget.region in self.region
         # Failing that fall back to normal checking.
@@ -2576,7 +2576,7 @@ class Screen(Generic[ScreenResultType], Widget):
         if widget not in self._compositor.visible_widgets:
             return False
         # If the widget is one that overlays the screen...
-        if widget.styles.overlay == "screen":
+        if widget.geometry.overlay == "screen":
             # ...simply check if it's within the screen's region.
             return widget.region in self.region
         # Failing that fall back to normal checking.

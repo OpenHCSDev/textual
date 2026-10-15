@@ -49,6 +49,7 @@ from textual.css.match import match
 from textual.css.parse import is_id_selector, parse_declarations, parse_selectors
 from textual.css.query import InvalidQueryFormat, NoMatches, TooManyMatches, WrongType
 from textual.css.styles import RenderStyles, Styles
+from textual.box_model import BoxGeometry
 from textual.geometry import Size
 from textual.css.tokenize import IDENTIFIER
 from textual.css.tokenizer import TokenError
@@ -257,9 +258,9 @@ class DOMNode(MessagePump):
         if not self.is_container:
             return False
         for child in self.children:
-            if child.styles.expand == "optimal":
+            if child.geometry.width_policy == "optimal":
                 continue
-            styles = child.styles
+            styles = child.geometry
             if not child.display:
                 continue
             width = styles.width
@@ -285,7 +286,7 @@ class DOMNode(MessagePump):
         else:
             result = False
             for child in self.children:
-                styles = child.styles
+                styles = child.geometry
                 native = native and (
                     type(child).display is DOMNode.display
                     and type(styles) is RenderStyles
@@ -325,7 +326,7 @@ class DOMNode(MessagePump):
         """Native container paint, shared independently of scene custody."""
         from textual.renderables.blank import Blank
 
-        if self.styles.layout and self.styles.keyline[0] != "none":
+        if self.geometry.child_layout and self.geometry.keyline[0] != "none":
             return self.layout.render_keyline(self)
         return Blank(self.background_colors[1])
 
@@ -1431,6 +1432,11 @@ class DOMNode(MessagePump):
             "screen--selection", default=RICH_NULL_STYLE
         )
         return style
+
+    @property
+    def geometry(self) -> BoxGeometry:
+        """The original sizing/placement source; declared widgets override this."""
+        return self.styles
 
     @property
     def rich_style(self) -> Style:

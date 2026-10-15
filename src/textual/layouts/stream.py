@@ -62,7 +62,7 @@ class StreamLayout(Layout):
 
         placements: list[WidgetPlacement] = []
         width = size.width
-        first_child_styles = children[0].styles
+        first_child_styles = children[0].geometry
         y = 0
         previous_margin = first_child_styles.margin.top
         null_offset = NULL_OFFSET
@@ -75,15 +75,15 @@ class StreamLayout(Layout):
                 else:
                     placements.append(placement)
                     y = placement.region.bottom
-                    styles = widget.styles._base_styles
+                    styles = widget.geometry.flow_geometry
                     previous_margin = styles.margin.bottom
                     continue
             if widget is None:
                 break
 
-            styles = widget.styles._base_styles
+            styles = widget.geometry.flow_geometry
             margin = styles.margin
-            gutter_width, gutter_height = styles.gutter.totals
+            gutter_width, gutter_height = styles.box_gutter.totals
             top, right, bottom, left = margin
             child_width = width - (left + right)
             y += top if top > previous_margin else previous_margin

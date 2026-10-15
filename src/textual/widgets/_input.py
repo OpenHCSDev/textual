@@ -548,7 +548,7 @@ class Input(ScrollView):
         self._suggestion = ""
         if self.suggester and value:
             self.run_worker(self.suggester._get_suggestion(self, value))
-        if self.styles.auto_dimensions:
+        if self.geometry.auto_dimensions:
             self.refresh(layout=True)
 
         validation_result = (

@@ -8,7 +8,7 @@ from typing_extensions import Literal
 
 from textual.box_model import BoxModel
 from textual.css.scalar import Scalar
-from textual.css.styles import RenderStyles
+from textual.box_model import BoxGeometry
 from textual.geometry import Size
 
 if TYPE_CHECKING:
@@ -119,7 +119,7 @@ def resolve(
 
 
 def resolve_fraction_unit(
-    widget_styles: Iterable[RenderStyles],
+    widget_styles: Iterable[BoxGeometry],
     size: Size,
     viewport_size: Size,
     remaining_space: Fraction,
@@ -243,7 +243,7 @@ def resolve_box_models(
     fraction_height = size.height
     margin_size = size - margin
 
-    margins = [widget.styles.margin.totals for widget in widgets]
+    margins = [widget.geometry.margin.totals for widget in widgets]
 
     # Fixed box models
     box_models: list[BoxModel | None] = [
@@ -268,14 +268,14 @@ def resolve_box_models(
         return cast("list[BoxModel]", box_models)
 
     # If all box models have been calculated
-    widget_styles = [widget.styles for widget in widgets]
+    widget_styles = [widget.geometry for widget in widgets]
     if resolve_dimension == "width":
         total_remaining = int(
             sum(
                 [
                     box_model.width
                     for widget, box_model in zip(widgets, box_models)
-                    if (box_model is not None and widget.styles.overlay != "screen")
+                    if (box_model is not None and widget.geometry.overlay != "screen")
                 ]
             )
         )
@@ -302,7 +302,7 @@ def resolve_box_models(
                 [
                     box_model.height
                     for widget, box_model in zip(widgets, box_models)
-                    if (box_model is not None and widget.styles.overlay != "screen")
+                    if (box_model is not None and widget.geometry.overlay != "screen")
                 ]
             )
         )

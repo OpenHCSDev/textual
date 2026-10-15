@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Iterable
 from textual._resolve import resolve
 from textual._measurement import GRID_HEIGHT, height_dependency
 from textual.css.scalar import Scalar
-from textual.geometry import NULL_OFFSET, Region, Size, Spacing
+from textual.geometry import Region, Size, Spacing
 from textual.layout import ArrangeResult, Layout, WidgetPlacement
 from textual.visual import visualize
 
@@ -51,10 +51,10 @@ class GridLayout(Layout):
         self, parent: Widget, children: list[Widget], size: Size, greedy: bool = True
     ) -> ArrangeResult:
         parent.pre_layout(self)
-        styles = parent.styles
+        styles = parent.geometry
         row_scalars = styles.grid_rows or (
             [Scalar.parse("1fr")]
-            if (size.height and not parent.styles.is_auto_height)
+            if (size.height and not parent.geometry.is_auto_height)
             else [Scalar.parse("auto")]
         )
         column_scalars = styles.grid_columns or [Scalar.parse("1fr")]
@@ -159,7 +159,7 @@ class GridLayout(Layout):
         column = row = 0
 
         for child in children:
-            child_styles = child.styles
+            child_styles = child.geometry
             column_span = child_styles.column_span or 1
             row_span = child_styles.row_span or 1
             # Find a slot where this cell fits
@@ -197,7 +197,7 @@ class GridLayout(Layout):
             Returns:
                 New width.
             """
-            styles = widget.styles
+            styles = widget.geometry
             if styles.min_width is not None:
                 width = max(
                     width,
@@ -220,7 +220,7 @@ class GridLayout(Layout):
             Returns:
                 New height
             """
-            styles = widget.styles
+            styles = widget.geometry
             if styles.min_height is not None:
                 height = max(
                     height,
@@ -244,14 +244,14 @@ class GridLayout(Layout):
                     except KeyError:
                         pass
                     else:
-                        if widget.styles.column_span != 1:
+                        if widget.geometry.column_span != 1:
                             continue
                         width = max(
                             width,
                             apply_width_limits(
                                 widget,
                                 widget.get_content_width(size, viewport)
-                                + widget.styles.gutter.width,
+                                + widget.geometry.box_gutter.width,
                             ),
                         )
                 column_scalars[column] = Scalar.from_number(width)
@@ -269,7 +269,7 @@ class GridLayout(Layout):
                             visualize(widget, widget.render()).get_minimal_width(
                                 widget.styles
                             )
-                            + widget.styles.gutter.width,
+                            + widget.geometry.box_gutter.width,
                             column_minimums[column_index],
                         )
 
@@ -295,10 +295,10 @@ class GridLayout(Layout):
                     except KeyError:
                         pass
                     else:
-                        if widget.styles.row_span != 1:
+                        if widget.geometry.row_span != 1:
                             continue
                         column_width = columns[column][1]
-                        gutter_width, gutter_height = widget.styles.gutter.totals
+                        gutter_width, gutter_height = widget.geometry.box_gutter.totals
                         widget_height = apply_height_limits(
                             widget,
                             widget.get_content_height(
@@ -351,16 +351,9 @@ class GridLayout(Layout):
                 .shrink(margin)
             ) + offset
 
-            widget_styles = widget.styles
-            placement_offset = (
-                widget_styles.offset.resolve(cell_size, viewport)
-                if widget_styles.has_rule("offset")
-                else NULL_OFFSET
-            )
-
-            absolute = (
-                widget_styles.has_rule("position") and styles.position == "absolute"
-            )
+            geometry = widget.geometry
+            placement_offset = geometry.resolve_offset(cell_size, viewport)
+            absolute = geometry.position == "absolute"
             add_placement(
                 _WidgetPlacement(
                     region,
