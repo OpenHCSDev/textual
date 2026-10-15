@@ -2193,7 +2193,7 @@ class Compositor:
 
         def collect(widget, region, strips):
             for target in widget.activation_targets(region, strips):
-                if target.identity not in seen:
+                if target.identity not in seen and target.available():
                     seen.append(target.identity)
                     targets.append(target)
 

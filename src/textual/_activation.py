@@ -21,7 +21,12 @@ class Activation:
 
     def available(self) -> bool:
         widget = self.widget
-        if not widget.is_attached or widget.disabled or not widget.visible:
+        if (
+            not widget.is_attached
+            or widget.is_disabled
+            or not widget.visible
+            or any(not node.display for node in widget.ancestors_with_self)
+        ):
             return False
         screen = widget.screen
         if screen is not widget.app.screen:

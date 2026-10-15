@@ -4157,7 +4157,7 @@ class Widget(DOMNode):
                     try:
                         handler = extract_handler_actions("click", segment.style.meta if segment.style else {})
                     except NoHandler:
-                        if primary is not None and not primary.disabled:
+                        if primary is not None:
                             yield PrimaryTarget(primary, exposed, primary.primary_activation)
                     else:
                         if handler.action is not None:
