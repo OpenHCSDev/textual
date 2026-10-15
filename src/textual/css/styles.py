@@ -16,6 +16,7 @@ from textual._animator import DEFAULT_EASING, Animatable, BoundAnimator, EasingF
 from textual._types import AnimationLevel, CallbackType
 from textual.color import Color
 from textual.box_model import BoxGeometry
+from textual._paint_state import PaintLayer
 from textual.css._style_properties import (
     AlignProperty,
     BooleanProperty,
@@ -226,7 +227,7 @@ RULE_NAMES_SET = frozenset(RULE_NAMES)
 _rule_getter = attrgetter(*RULE_NAMES)
 
 
-class StylesBase(BoxGeometry):
+class StylesBase(BoxGeometry, PaintLayer):
     """A common base class for Styles and RenderStyles"""
 
     ANIMATABLE = {
@@ -610,6 +611,20 @@ class StylesBase(BoxGeometry):
     def items(self) -> Iterable[tuple[str, object]]:
         for key in RULE_NAMES:
             yield (key, getattr(self, key))
+
+    @property
+    def paint_foreground(self) -> Color | None:
+        return self.color if self.has_rule("color") else None
+
+    @property
+    def paint_background(self) -> Color | None:
+        return self.background if self.has_rule("background") else None
+
+    @property
+    def layer_opacity(self) -> float:
+        return self.opacity
+
+    paint_cacheable = True
 
     @property
     def gutter(self) -> Spacing:
@@ -1400,6 +1415,10 @@ class RenderStyles(StylesBase):
                 and self._inline_styles._rules == other._inline_styles._rules
             )
         return NotImplemented
+
+    @property
+    def paint_key(self) -> int:
+        return self._cache_key
 
     @property
     def _cache_key(self) -> int:

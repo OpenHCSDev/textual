@@ -62,7 +62,7 @@ from textual._measurement import (
     box_depends_on_available_height, height_dependency,
 )
 from textual.message_pump import MessagePump
-from textual._styles_cache import StylesCache
+from textual._styles_cache import FramePaint, PaintStyles, StylesCache
 from textual._types import AnimationLevel
 from textual.actions import SkipAction
 from textual.await_complete import AwaitComplete, AwaitCompletion
@@ -3955,6 +3955,13 @@ class Widget(DOMNode):
         )
 
         return renderable
+
+    @property
+    def frame_paint(self) -> FramePaint:
+        return PaintStyles.of(self.styles)
+
+    def refresh_paint(self) -> None:
+        self._styles_cache.refresh_paint(self)
 
     def watch_has_focus(self, _has_focus: bool) -> None:
         """Update from CSS if has focus state changes."""

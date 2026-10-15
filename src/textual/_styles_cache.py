@@ -33,17 +33,10 @@ if TYPE_CHECKING:
 RenderLineCallback: TypeAlias = Callable[[int], Strip]
 
 
-@rich.repr.auto(angular=True)
+class FramePaint:
+    """Inputs consumed by the existing line painter, not a second style store."""
 
-@dataclass(frozen=True, slots=True)
-class PaintStyles:
-    """One render's reads of a widget's styles, shared by all of its lines.
-
-    Every line of a render paints with the same styles; reading the CSS
-    properties once per render rather than once per line.
-    """
-
-    gutter: Spacing
+    paint_gutter: Spacing
     border: tuple
     outline: tuple
     hatch: tuple | None
@@ -51,18 +44,43 @@ class PaintStyles:
     text_opacity: float
     border_title_align: str
     border_subtitle_align: str
-    plain: bool
-    """No border, outline, padding, hatch, tint or text opacity: a line is its content line."""
+
+    @property
+    def plain(self) -> bool:
+        return (not any(self.paint_gutter) and not any(edge for edge, _ in self.outline)
+                and self.hatch is None and not self.tint.a and self.text_opacity == 1.0)
+
+    @property
+    def frame_key(self) -> tuple:
+        return (self.paint_gutter, self.border, self.outline, self.hatch, self.tint,
+                self.text_opacity, self.border_title_align, self.border_subtitle_align)
+
+
+@rich.repr.auto(angular=True)
+@dataclass(frozen=True, slots=True)
+class PaintStyles(FramePaint):
+    """One render's reads of a widget's styles, shared by all of its lines.
+
+    Every line of a render paints with the same styles; reading the CSS
+    properties once per render rather than once per line.
+    """
+
+    paint_gutter: Spacing
+    border: tuple
+    outline: tuple
+    hatch: tuple | None
+    tint: Color
+    text_opacity: float
+    border_title_align: str
+    border_subtitle_align: str
 
     @classmethod
     def of(cls, styles: StylesBase) -> PaintStyles:
         hatch = styles.hatch if styles.has_rule("hatch") and styles.hatch != "none" else None
         gutter, border, outline = styles.gutter, styles.border, styles.outline
         tint, text_opacity = styles.tint, styles.text_opacity
-        plain = (not any(gutter) and not any(edge for edge, _ in outline) and hatch is None
-                 and not tint.a and text_opacity == 1.0)
         return cls(gutter, border, outline, hatch, tint, text_opacity,
-                   styles.border_title_align, styles.border_subtitle_align, plain)
+                   styles.border_title_align, styles.border_subtitle_align)
 
 class StylesCache:
     """Responsible for rendering CSS Styles and keeping a cache of rendered lines.
@@ -93,6 +111,7 @@ class StylesCache:
         self._cache: dict[int, Strip] = {}
         self._dirty_lines: set[int] = set()
         self._size = Size(0, 0)
+        self._paint_key: tuple | None = None
         self._simple_strip: Strip | None = None
         """A simple strip consisting of left border + background + right border, which may be reused in a render."""
 
@@ -127,6 +146,16 @@ class StylesCache:
         self._dirty_lines.clear()
         self._simple_strip = None
 
+    @staticmethod
+    def widget_paint_key(widget: Widget, paint: FramePaint) -> tuple:
+        return (paint.frame_key, *widget.background_colors,
+                widget.rich_style, widget.geometry.padding)
+
+    def refresh_paint(self, widget: Widget) -> None:
+        """Dirty only a widget whose current paint differs from its cached lines."""
+        if self.widget_paint_key(widget, widget.frame_paint) != self._paint_key:
+            widget.refresh()
+
     def render_widget(self, widget: Widget, crop: Region) -> list[Strip]:
         """Render the content for a widget.
 
@@ -142,10 +171,14 @@ class StylesCache:
         self._simple_strip = None
 
         base_background, background = widget.background_colors
-        styles = widget.styles
         app = widget.app
+        paint = widget.frame_paint
+        key = self.widget_paint_key(widget, paint)
+        if key != self._paint_key:
+            widget._release_paint()
+            self._paint_key = key
         strips = self.render(
-            styles,
+            paint,
             widget.region.size,
             base_background,
             background,
@@ -168,7 +201,7 @@ class StylesCache:
                 )
             ),
             content_size=widget.content_region.size,
-            padding=styles.padding,
+            padding=widget.geometry.padding,
             crop=crop,
             opacity=widget.opacity,
             ansi_theme=app.ansi_theme,
@@ -193,7 +226,7 @@ class StylesCache:
 
     def render(
         self,
-        styles: StylesBase,
+        styles: FramePaint,
         size: Size,
         base_background: Color,
         background: Color,
@@ -233,7 +266,7 @@ class StylesCache:
         if content_size is None:
             content_size = size
         if padding is None:
-            padding = styles.padding
+            padding = Spacing(0, 0, 0, 0)
         if crop is None:
             crop = size.region
 
@@ -246,7 +279,7 @@ class StylesCache:
 
         is_dirty = self._dirty_lines.__contains__
         render_line = self.render_line
-        painted = PaintStyles.of(styles)
+        painted = styles
         # A plain widget's line is its content line at the widget's width.
         # Returning that strip itself (rather than a copy of its segments)
         # keeps what it has already computed, such as its terminal sequence.
@@ -313,7 +346,7 @@ class StylesCache:
 
     def render_line(
         self,
-        styles: PaintStyles,
+        styles: FramePaint,
         y: int,
         size: Size,
         content_size: Size,
@@ -349,7 +382,7 @@ class StylesCache:
             A line of segments.
         """
 
-        gutter = styles.gutter
+        gutter = styles.paint_gutter
         width, height = size
         content_width, content_height = content_size
 

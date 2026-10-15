@@ -37,7 +37,7 @@ from rich.tree import Tree
 from textual._context import active_message_pump
 from textual._compat import cached_property
 from textual._node_list import NodeList
-from textual._paint_state import EMPTY_PAINT, PaintState, resolve_paint
+from textual._paint_state import EMPTY_PAINT, PaintLayer, PaintState
 from textual._types import WatchCallbackType
 from textual.binding import Binding, BindingsMap, BindingType
 from textual.cache import LRUCache
@@ -1402,13 +1402,14 @@ class DOMNode(MessagePump):
             # style mutations, including when inherited by a native child.
             state = EMPTY_PAINT._replace(cacheable=False)
             for node in reversed(self.ancestors_with_self):
-                state = resolve_paint(state, node.styles)
+                state = PaintState.resolve(state, node.paint_layer)
             return state
         epoch = (Styles._revision, MessagePump._tree_revision)
+        layer = self.paint_layer
         state = self.__dict__.get("_paint_state")
         if (
             state is not None
-            and state.cacheable
+            and state.cacheable and layer.paint_cacheable
             and self.__dict__.get("_paint_epoch") == epoch
         ):
             return state
@@ -1417,11 +1418,11 @@ class DOMNode(MessagePump):
             parent._resolved_paint_state() if isinstance(parent, DOMNode) else EMPTY_PAINT
         )
         if (
-            state is None
+            state is None or not layer.paint_cacheable
             or state.parent is not inherited
-            or state.style_key != self.styles._cache_key
+            or state.style_key != layer.paint_key
         ):
-            state = self._paint_state = resolve_paint(inherited, self.styles)
+            state = self._paint_state = PaintState.resolve(inherited, layer)
         self._paint_epoch = epoch
         return state
 
@@ -1432,6 +1433,10 @@ class DOMNode(MessagePump):
             "screen--selection", default=RICH_NULL_STYLE
         )
         return style
+
+    @property
+    def paint_layer(self) -> PaintLayer:
+        return self.styles
 
     @property
     def geometry(self) -> BoxGeometry:
@@ -1466,45 +1471,41 @@ class DOMNode(MessagePump):
 
         """
         cache_key = (self._pseudo_classes_cache_key, component_classes, partial)
-        if (visual_style := self._visual_style_cache.get(cache_key, None)) is None:
+        cacheable = self._resolved_paint_state().cacheable
+        visual_style = self._visual_style_cache.get(cache_key) if cacheable else None
+        if visual_style is None:
             background = Color(0, 0, 0, 0)
             color = Color(255, 255, 255, 0)
 
             style = Style()
             opacity = 1.0
 
-            def iter_styles() -> Iterable[StylesBase]:
+            def iter_styles() -> Iterable[PaintLayer]:
                 """Iterate over the styles from the DOM and additional components styles."""
                 if partial:
                     node = self
                 else:
                     for node in reversed(self.ancestors_with_self):
-                        yield node.styles
+                        yield node.paint_layer
                 for name in component_classes:
                     yield node.get_component_styles(name)
 
             for styles in iter_styles():
-                has_rule = styles.has_rule
-                opacity *= styles.opacity
-                if has_rule("background"):
-                    text_background = background + styles.background.tint(
-                        styles.background_tint
-                    )
+                opacity *= styles.layer_opacity
+                local_background = styles.paint_background
+                if local_background is not None:
+                    tinted = local_background.tint(styles.background_tint)
+                    text_background = background + tinted
                     if partial:
-                        background_tint = styles.background.tint(styles.background_tint)
-                        background = background.blend(
-                            background_tint, 1 - background_tint.a
-                        ).multiply_alpha(opacity)
+                        background = background.blend(tinted, 1 - tinted.a).multiply_alpha(opacity)
                     else:
-                        background += (
-                            styles.background.tint(styles.background_tint)
-                        ).multiply_alpha(opacity)
+                        background += tinted.multiply_alpha(opacity)
                 else:
                     text_background = background
-                if has_rule("color"):
-                    color = styles.color.multiply_alpha(styles.text_opacity)
+                if (foreground := styles.paint_foreground) is not None:
+                    color = foreground.multiply_alpha(styles.text_opacity)
                 style += styles.text_style
-                if has_rule("auto_color") and styles.auto_color:
+                if styles.auto_color:
                     color = text_background.get_contrast_text(color.a)
 
             visual_style = replace(
@@ -1512,7 +1513,8 @@ class DOMNode(MessagePump):
                 background=background,
                 foreground=color,
             )
-            self._visual_style_cache[cache_key] = visual_style
+            if cacheable:
+                self._visual_style_cache[cache_key] = visual_style
 
         return visual_style
 
@@ -1691,15 +1693,12 @@ class DOMNode(MessagePump):
         base_background = background = WHITE
         base_color = color = BLACK
         for node in reversed(self.ancestors_with_self):
-            styles = node.styles
+            layer = node.paint_layer
             base_background = background
-            background += styles.background.tint(styles.background_tint)
-            if styles.has_rule("color"):
+            background += layer.background_color.tint(layer.background_tint)
+            if (foreground := layer.paint_foreground) is not None:
                 base_color = color
-                if styles.auto_color:
-                    color = background.get_contrast_text(color.a)
-                else:
-                    color = styles.color
+                color = background.get_contrast_text(color.a) if layer.auto_color else foreground
 
         return (base_background, base_color, background, color)
 

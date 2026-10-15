@@ -385,7 +385,7 @@ class Screen(Generic[ScreenResultType], Widget):
         """
         screens: list[Screen] = []
         screen = self
-        while screen.styles.background.a < 1 and (screen := screen._screen_below) is not None:
+        while screen.paint_layer.background_color.a < 1 and (screen := screen._screen_below) is not None:
             screens.append(screen)
         return screens
 
@@ -664,7 +664,7 @@ class Screen(Generic[ScreenResultType], Widget):
         Returns:
             Background renderable.
         """
-        background = self.styles.background
+        background = self.paint_layer.background_color
         if seen_through := self._screens_seen_through:
             # If background is translucent, render the screen below
             return BackgroundScreen(seen_through[0], background)
