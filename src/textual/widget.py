@@ -63,6 +63,8 @@ from textual._measurement import (
 )
 from textual.message_pump import MessagePump
 from textual._styles_cache import StylesCache
+from textual._activation import PrimaryActivation, StyleTarget
+from textual._event_broker import NoHandler, extract_handler_actions
 from textual._types import AnimationLevel
 from textual.actions import SkipAction
 from textual.await_complete import AwaitComplete, AwaitCompletion
@@ -4138,6 +4140,24 @@ class Widget(DOMNode):
             line = Strip.blank(self.size.width, self.visual_style.rich_style)
 
         return line
+
+    hit_test_transparent: ClassVar[bool] = False
+    """Decorative paint may opt out of the original pointer hit-test owner."""
+
+    def activation_targets(self, region: Region, strips: list[Strip]):
+        """Expose click handlers from admitted strips, without another render."""
+        for y, strip in zip(region.line_range, strips):
+            x = region.x
+            for segment in strip:
+                width = segment.cell_length
+                if segment.style is not None and width:
+                    try:
+                        handler = extract_handler_actions("click", segment.style.meta)
+                    except NoHandler:
+                        pass
+                    else:
+                        yield StyleTarget(self, Region(x, y, width, 1), handler)
+                x += width
 
     def render_lines(self, crop: Region) -> list[Strip]:
         """Render the widget into lines.

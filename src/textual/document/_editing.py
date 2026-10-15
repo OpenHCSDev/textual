@@ -9,6 +9,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, ClassVar
 
 from textual.document._document import Location
+from textual._clipboard import ClipboardContent, LinewiseClipboard
 from textual.document._document_navigator import WordBoundary, PreviousWordBoundary, EndWordBoundary
 
 if TYPE_CHECKING:
@@ -83,6 +84,7 @@ class VimNormal(VimMode):
         if event.is_printable or event.key == "enter":
             editor.editing_mode = self.settled()
             return True
+        editor.editing_mode = self.settled()
         return False
 
     def command(self, editor: TextArea, command: type[EditorCommand]) -> None:
@@ -166,10 +168,16 @@ class AwaitKey(VimMode):
     def settled(self) -> EditingMode:
         return self.previous.settled()
 
+    def document_changed(self) -> EditingMode:
+        return self.previous.document_changed()
+
     def handle_key(self, editor: TextArea, event: Key) -> bool:
         editor.editing_mode = self.settled()
-        if event.key != "escape":
-            self.command.character(editor, self.previous, event.character, self.count)
+        if event.key == "escape":
+            return True
+        if not event.is_printable:
+            return False
+        self.command.character(editor, self.previous, event.character, self.count)
         return True
 
 
@@ -315,6 +323,9 @@ class EditorRange:
     def text(self, editor: TextArea) -> str:
         return editor.document.get_text_range(self.start, self.end)
 
+    def clipboard_content(self, editor: TextArea) -> ClipboardContent:
+        return ClipboardContent(self.text(editor))
+
     def deletion_start(self, editor: TextArea) -> Location:
         return self.start
 
@@ -323,6 +334,9 @@ class EditorRange:
 
 
 class LineRange(EditorRange):
+    def clipboard_content(self, editor: TextArea) -> ClipboardContent:
+        return LinewiseClipboard(self.text(editor))
+
     def change_text(self, editor: TextArea) -> str:
         return editor.document.newline
 
@@ -371,7 +385,7 @@ class Yank(Operator):
 
     @classmethod
     def replace(cls, editor, selection: EditorRange):
-        editor.app.copy_to_clipboard(selection.text(editor))
+        editor.app.copy_to_clipboard(selection.clipboard_content(editor))
         editor.move_cursor(selection.start)
         editor.editing_mode = VimNormal()
 

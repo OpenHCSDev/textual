@@ -1275,8 +1275,28 @@ class Screen(Generic[ScreenResultType], Widget):
 
         self._invoke_and_clear_callbacks()
 
+    _hint_session = None
+
+    async def action_show_hints(self) -> None:
+        """Label the original primary effects and links in the displayed scene."""
+        from textual.widgets._hints import HintSession
+        self.dismiss_hints()
+        targets = self._compositor.activation_targets()
+        if not targets:
+            return
+        session = HintSession(self, targets)
+        await self.mount(*session.labels, session)
+        self._hint_session = session
+        session.focus(scroll_visible=False)
+
+    def dismiss_hints(self, *, restore=True) -> None:
+        if self._hint_session is not None:
+            self._hint_session.dismiss(restore=restore)
+
     def _on_frame_published(self) -> None:
         """Observe an actual displayed update."""
+        if self._hint_session is not None:
+            self._hint_session.reconcile_publication()
 
     def _after_refresh_pending(
         self, screen, *, refresh_requested: dict[Screen, bool], refresh_pending: bool,
@@ -1912,6 +1932,7 @@ class Screen(Generic[ScreenResultType], Widget):
 
     def _on_screen_suspend(self) -> None:
         """Screen has suspended."""
+        self.dismiss_hints(restore=False)
         # Releases now route to another Screen. Retain the copyable range,
         # but retire the press and its auto-scroll through the original owner.
         self._mouse_down_offset = None
@@ -1965,6 +1986,7 @@ class Screen(Generic[ScreenResultType], Widget):
 
     async def _on_resize(self, event: events.Resize) -> None:
         event.stop()
+        self.dismiss_hints()
         self._screen_resized(event.size)
 
         horizontal_breakpoints = (
@@ -2263,6 +2285,8 @@ class Screen(Generic[ScreenResultType], Widget):
         self._watch__select_state(self._select_state)
 
     def _forward_event(self, event: events.Event) -> AwaitComplete:
+        if isinstance(event, events.MouseEvent) and not isinstance(event, events.MouseMove):
+            self.dismiss_hints()
         if event.is_forwarded:
             return AwaitComplete.nothing()
         event._set_forwarded()

@@ -883,32 +883,25 @@ TextArea {
     def _watch_editing_mode(self, previous: EditingMode, current: EditingMode) -> None:
         previous.suspend(self)
         current.resume(self)
-        self.border_subtitle = current.label
+        self.show_editing_mode(current)
+
+    def show_editing_mode(self, mode: EditingMode) -> None:
+        """Present the mode at the editor's native border unless embedded."""
+        self.border_subtitle = mode.label
 
     def leave_modal_editor(self) -> None:
         """Hook for an embedding application to focus its navigation surface."""
         self.screen.focus_next()
 
-    async def read_editor_clipboard(self) -> str:
-        return self.app.clipboard
+    async def read_editor_clipboard(self):
+        return self.app.clipboard_content
 
     async def paste_editor_text(self, *, before: bool, count: int = 1) -> None:
         """Paste a clipboard payload without interpreting its text as keys."""
-        text = await self.read_editor_clipboard()
-        if self.read_only or not self.is_attached or not self.has_focus or not text:
+        content = await self.read_editor_clipboard()
+        if self.read_only or not self.is_attached or not self.has_focus or not content.text:
             return
-        row, column = self.cursor_location
-        if text.endswith(self.document.newline):
-            row += not before
-            if row < self.document.line_count:
-                location = (row, 0)
-            else:
-                location = self.document.end
-                text = self.document.newline + text.removesuffix(self.document.newline)
-        else:
-            location = self.navigator.get_location_column_offset((row, column), not before)
-        self._replace_via_keyboard(text * count, location, location)
-        self.move_cursor(location)
+        content.paste(self, before, count)
 
     def _watch_has_focus(self, focus: bool) -> None:
         self._cursor_visible = focus
@@ -1269,6 +1262,7 @@ TextArea {
         self.history.clear()
         self.editing_mode = self.editing_mode.document_changed()
         self._set_document(text, self.language)
+        self.editing_mode.resume(self)
         self.post_message(self.Changed(self).set_sender(self))
         self.update_suggestion()
 
@@ -2615,6 +2609,7 @@ TextArea {
         Returns:
             An EditResult relating to the deletion of all content.
         """
+        self.editing_mode = self.editing_mode.document_changed()
         return self.delete((0, 0), self.document.end, maintain_selection_offset=False)
 
     def _delete_via_keyboard(
@@ -2631,7 +2626,7 @@ TextArea {
         Returns:
             An EditResult or None if no edit was performed (e.g. on read-only mode).
         """
-        if self.read_only:
+        if self.read_only or not self.editing_mode.accepts_text:
             return None
         return self.delete(start, end, maintain_selection_offset=False)
 
@@ -2651,7 +2646,7 @@ TextArea {
         Returns:
             An EditResult or None if no edit was performed (e.g. on read-only mode).
         """
-        if self.read_only:
+        if self.read_only or not self.editing_mode.accepts_text:
             return None
         return self.replace(insert, start, end, maintain_selection_offset=False)
 
@@ -2737,6 +2732,7 @@ TextArea {
         """Paste from local clipboard."""
         if self.read_only:
             return
+        self.editing_mode = self.editing_mode.pasted()
         clipboard = self.app.clipboard
         if result := self._replace_via_keyboard(clipboard, *self.selection):
             self.move_cursor(result.end_location)

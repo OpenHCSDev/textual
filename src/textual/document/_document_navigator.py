@@ -122,22 +122,16 @@ class DocumentNavigator:
 
     def get_location_word_boundary(self, location: Location, count: int, boundary: WordBoundary) -> Location:
         """Find counted raw-word boundaries without moving an editor selection."""
-        for _ in range(count):
-            row, column = location
-            stop = self._document.line_count if boundary.direction > 0 else -1
-            found = False
-            for next_row in range(row, stop, boundary.direction):
-                for match in boundary.matches(self._document[next_row]):
-                    next_column = boundary.position(match)
-                    if next_row != row or boundary.accepts(next_column, column):
-                        location = next_row, next_column
-                        found = True
-                        break
-                if found:
-                    break
-            if not found:
-                return self._document.end if boundary.direction > 0 else self._document.start
-        return location
+        row, column = location
+        stop = self._document.line_count if boundary.direction > 0 else -1
+        for next_row in range(row, stop, boundary.direction):
+            for match in boundary.matches(self._document[next_row]):
+                next_column = boundary.position(match)
+                if next_row != row or boundary.accepts(next_column, column):
+                    count -= 1
+                    if count == 0:
+                        return next_row, next_column
+        return self._document.end if boundary.direction > 0 else self._document.start
 
     def get_location_word_left(self, location: Location) -> Location:
         """The native word-left boundary, including its whitespace semantics."""

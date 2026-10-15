@@ -51,9 +51,8 @@ class EditHistory:
             self._group = []
 
     def end_group(self) -> None:
-        if self._group is not None:
-            self._group = None
-            self.checkpoint()
+        self._group = None
+        self.checkpoint()
 
     def __post_init__(self) -> None:
         self._undo_stack: deque[list[Edit]] = deque(maxlen=self.max_checkpoints)
