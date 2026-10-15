@@ -92,7 +92,7 @@ class HintSession(Widget, can_focus=True):
         original = self.original_focus
         if restore and original is not None and original.is_attached and self.screen is self.app.screen:
             original.focus(scroll_visible=False)
-        self.run_worker(self._retire(target), group="hint-retirement", exclusive=True)
+        self.screen.run_worker(self._retire(target), group="hint-retirement")
 
     async def _retire(self, target):
         screen = self.screen

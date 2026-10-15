@@ -12,14 +12,6 @@ class ClipboardContent:
     def of(cls, value: str | ClipboardContent) -> ClipboardContent:
         return value if isinstance(value, ClipboardContent) else cls(value)
 
-    def observed(self, text: str) -> ClipboardContent:
-        """Unchanged transport text retains known local provenance.
-
-        A different external value is ordinary characterwise text; plain-text
-        clipboard protocols cannot communicate another application's Vim kind.
-        """
-        return self if text == self.text else ClipboardContent(text)
-
     def insertion(self, editor, before, count):
         return editor.navigator.get_location_column_offset(editor.cursor_location, 0 if before else 1), self.text * count
 

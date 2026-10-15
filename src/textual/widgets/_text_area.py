@@ -893,15 +893,11 @@ TextArea {
         """Hook for an embedding application to focus its navigation surface."""
         self.screen.focus_next()
 
-    async def read_editor_clipboard(self):
-        return self.app.clipboard_content
-
-    async def paste_editor_text(self, *, before: bool, count: int = 1) -> None:
-        """Paste a clipboard payload without interpreting its text as keys."""
-        content = await self.read_editor_clipboard()
-        if self.read_only or not self.is_attached or not self.has_focus or not content.text:
-            return
-        content.paste(self, before, count)
+    def paste_editor_text(self, *, before: bool, count: int = 1) -> None:
+        """Paste the retained native register with its original range semantics."""
+        content = self.app.clipboard_content
+        if not self.read_only and content.text:
+            content.paste(self, before, count)
 
     def _watch_has_focus(self, focus: bool) -> None:
         self._cursor_visible = focus

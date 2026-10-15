@@ -489,8 +489,7 @@ class Paste(EditorCommand):
 
     @classmethod
     def apply(cls, editor, mode, count):
-        editor.run_worker(editor.paste_editor_text(before=cls.before, count=count),
-                          group="editor-paste", exclusive=True)
+        editor.paste_editor_text(before=cls.before, count=count)
 
 
 class PasteBefore(Paste):
