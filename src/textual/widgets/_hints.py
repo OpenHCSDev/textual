@@ -33,7 +33,6 @@ class HintSession(Widget, can_focus=True):
     def __init__(self, screen, targets):
         super().__init__()
         self.original_focus = screen.focused
-        self.source_scene = screen._compositor._published_map
         self.targets = tuple(sorted(targets, key=lambda target: (target.region.y, target.region.x)))
         self.prefix = ""
         width = 1
@@ -110,7 +109,5 @@ class HintSession(Widget, can_focus=True):
     def reconcile_publication(self):
         if self.disabled:
             return
-        current = self.screen._compositor._published_map
-        if any(not target.widget.is_attached or current.get(target.widget) != self.source_scene.get(target.widget)
-               for target in self.targets):
+        if any(not target.available() for target in self.targets):
             self.dismiss()
