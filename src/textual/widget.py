@@ -3288,9 +3288,8 @@ class Widget(DOMNode):
             on_complete: A callable to invoke when the animation is finished.
             level: Minimum level required for the animation to take place (inclusive).
         """
-        self.scroll_to(
+        self._scroll_to(
             y=self.scroll_target_y - self.scrollable_content_region.height,
-            immediate=True,
             animate=animate,
             speed=speed,
             duration=duration,
@@ -3322,9 +3321,8 @@ class Widget(DOMNode):
             on_complete: A callable to invoke when the animation is finished.
             level: Minimum level required for the animation to take place (inclusive).
         """
-        self.scroll_to(
+        self._scroll_to(
             y=self.scroll_target_y + self.scrollable_content_region.height,
-            immediate=True,
             animate=animate,
             speed=speed,
             duration=duration,
@@ -3358,9 +3356,8 @@ class Widget(DOMNode):
         """
         if speed is None and duration is None:
             duration = 0.3
-        self.scroll_to(
+        self._scroll_to(
             x=self.scroll_target_x - self.scrollable_content_region.width,
-            immediate=True,
             animate=animate,
             speed=speed,
             duration=duration,
@@ -3394,9 +3391,8 @@ class Widget(DOMNode):
         """
         if speed is None and duration is None:
             duration = 0.3
-        self.scroll_to(
+        self._scroll_to(
             x=self.scroll_target_x + self.scrollable_content_region.width,
-            immediate=True,
             animate=animate,
             speed=speed,
             duration=duration,
