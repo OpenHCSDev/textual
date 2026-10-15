@@ -70,7 +70,7 @@ class HintSession(Widget, can_focus=True):
             remaining = [(label, target) for label, target in self.choices if label.startswith(self.prefix)]
             if not remaining:
                 self.dismiss()
-            elif len(remaining) == 1:
+            elif len(remaining) == 1 and remaining[0][0] == self.prefix:
                 self.dismiss(target=remaining[0][1])
             else:
                 for widget, (label, _target) in zip(self.labels, self.choices):
