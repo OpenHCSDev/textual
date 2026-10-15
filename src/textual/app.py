@@ -4280,6 +4280,11 @@ class App(Generic[ReturnType], DOMNode):
         If the classvar on the screen is *not* set (and left as `None`), then the app's `ESCAPE_TO_MINIMIZE` is used.
 
         """
+        focused = self.screen.focused
+        if focused is not None and any(
+            node.check_consume_key("escape", None) for node in focused.ancestors_with_self
+        ):
+            return False
         return bool(
             self.ESCAPE_TO_MINIMIZE
             if self.screen.ESCAPE_TO_MINIMIZE is None

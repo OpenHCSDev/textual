@@ -41,6 +41,20 @@ class EditHistory:
     Every other edit is considered a pure insertion.
     """
 
+    _group: list[Edit] | None = field(init=False, default=None)
+    """The current explicit group, by identity in the original undo stack."""
+
+    def begin_group(self) -> None:
+        """Keep a modal insert/change interaction in one native undo batch."""
+        if self._group is None:
+            self.checkpoint()
+            self._group = []
+
+    def end_group(self) -> None:
+        if self._group is not None:
+            self._group = None
+            self.checkpoint()
+
     def __post_init__(self) -> None:
         self._undo_stack: deque[list[Edit]] = deque(maxlen=self.max_checkpoints)
         """Batching Edit operations together (edits are simply grouped together in lists)."""
@@ -81,6 +95,13 @@ class EditHistory:
 
         if edit.text == "" and edit_result.replaced_text == "":
             return None
+
+        if self._group is not None:
+            if not self._group:
+                self._undo_stack.append(self._group)
+            self._group.append(edit)
+            self._redo_stack.clear()
+            return
 
         is_replacement = bool(edit_result.replaced_text)
         undo_stack = self._undo_stack
@@ -125,6 +146,7 @@ class EditHistory:
         Returns:
             The batch of Edits from the top of the undo stack or None if it's empty.
         """
+        self.end_group()
         undo_stack = self._undo_stack
         redo_stack = self._redo_stack
         if undo_stack:
@@ -142,6 +164,7 @@ class EditHistory:
         Returns:
             The batch of Edits from the top of the redo stack or None if it's empty.
         """
+        self.end_group()
         undo_stack = self._undo_stack
         redo_stack = self._redo_stack
         if redo_stack:
@@ -154,6 +177,7 @@ class EditHistory:
 
     def clear(self) -> None:
         """Completely clear the history."""
+        self._group = None
         self._undo_stack.clear()
         self._redo_stack.clear()
         self._last_edit_time = time.monotonic()
