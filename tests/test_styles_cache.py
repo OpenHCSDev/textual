@@ -7,7 +7,7 @@ from rich.segment import Segment
 from textual._styles_cache import PaintStyles, StylesCache
 from textual.color import Color
 from textual.css.styles import Styles
-from textual.geometry import Region, Size
+from textual.geometry import Region, Size, Spacing
 from textual.strip import Strip
 
 
@@ -29,6 +29,7 @@ def test_color_memo_does_not_retain_retired_paint_cache():
         [],
         None,
         None,
+        padding=Spacing(0, 0, 0, 0),
     )
     reference = weakref.ref(cache)
     del cache
