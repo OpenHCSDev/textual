@@ -45,6 +45,7 @@ from textual import errors, events
 from textual._activation import Activation
 from textual._loop import loop_last
 from textual._spatial_map import SpatialMap
+from textual.box_model import DEFAULT_LAYER
 from textual.geometry import NULL_OFFSET, NULL_SPACING, Offset, Region, Size, Spacing
 from textual.map_geometry import MapGeometry
 from textual.layout import WidgetPlacement
@@ -1288,7 +1289,7 @@ class Compositor:
             None if root_layers is None
             else {name: index for index, name in enumerate(root_layers)}
         )
-        default_layers = {"default": 0}
+        default_layers = {DEFAULT_LAYER: 0}
         retained_paths: set[Widget] = set()
         if visible_only:
             # Requested targets need their outer placement even when offscreen.

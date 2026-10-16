@@ -69,7 +69,7 @@ from textual._types import AnimationLevel
 from textual.actions import SkipAction
 from textual.await_complete import AwaitComplete, AwaitCompletion
 from textual.await_remove import AwaitRemove
-from textual.box_model import BoxModel
+from textual.box_model import DEFAULT_LAYER, BoxModel
 from textual.cache import FIFOCache, LRUCache
 from textual.color import Color
 from textual.compose import compose, compose_async
@@ -2109,7 +2109,7 @@ class Widget(DOMNode):
             Number of columns in the vertical scrollbar.
         """
         geometry = self.geometry
-        if geometry.scrollbar_policy == "stable" and geometry.overflow_y == "auto":
+        if geometry.stable_gutter and geometry.overflow_y == "auto":
             return geometry.vertical_scrollbar_size
         return geometry.vertical_scrollbar_size if self.show_vertical_scrollbar else 0
 
@@ -2511,7 +2511,7 @@ class Widget(DOMNode):
     def layers(self) -> tuple[str, ...]:
         """Names from the outermost authored layer declaration, or the default."""
         order = self._get_layer_order(self.walk_ancestors(with_self=True))
-        return ("default",) if order is None else order
+        return (DEFAULT_LAYER,) if order is None else order
 
     def _get_layer_order(self, sources: Iterable[DOMNode]) -> tuple[str, ...] | None:
         order = None
@@ -3432,7 +3432,7 @@ class Widget(DOMNode):
 
             container = widget.parent
 
-            if widget.geometry.dock != "none":
+            if widget.geometry.is_docked:
                 scroll_offset = Offset(0, 0)
             else:
                 scroll_offset = container.scroll_to_region(
@@ -3813,7 +3813,7 @@ class Widget(DOMNode):
             show_horizontal_scrollbar and scrollbar_size_horizontal
         )
 
-        if geometry.scrollbar_policy == "stable":
+        if geometry.stable_gutter:
             # Reserve the declared gutter even while the scrollbar is hidden.
             show_vertical_scrollbar = True
             scrollbar_size_vertical = geometry.vertical_scrollbar_size

@@ -15,7 +15,7 @@ from typing_extensions import TypedDict
 from textual._animator import DEFAULT_EASING, Animatable, BoundAnimator, EasingFunction
 from textual._types import AnimationLevel, CallbackType
 from textual.color import Color
-from textual.box_model import BoxGeometry
+from textual.box_model import DEFAULT_LAYER, BoxGeometry
 from textual._paint_state import PaintLayer
 from textual.css._style_properties import (
     AlignProperty,
@@ -660,7 +660,7 @@ class StylesBase(BoxGeometry, PaintLayer):
 
     @property
     def layer_name(self) -> str:
-        return self.layer or "default"
+        return self.layer or DEFAULT_LAYER
 
     @property
     def layer_order(self) -> tuple[str, ...] | None:
@@ -1436,7 +1436,7 @@ class RenderStyles(StylesBase):
 
     @property
     def flow_geometry(self) -> BoxGeometry:
-        # Stream deliberately admits CSS declarations, not inline overrides.
+        # Stream deliberately accepts CSS declarations, not inline overrides.
         return self._base_styles
 
     @property

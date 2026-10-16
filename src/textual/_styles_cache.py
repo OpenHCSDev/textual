@@ -82,6 +82,18 @@ class PaintStyles(FramePaint):
         return cls(gutter, border, outline, hatch, tint, text_opacity,
                    styles.border_title_align, styles.border_subtitle_align)
 
+def border_label(
+    label: Content | None, background: Color, auto_color: bool, color: Color,
+    label_background: Color, style: RichStyle,
+) -> tuple[Content, Color, Color, Style] | None:
+    """A border title or subtitle with its paint, contrasting when its color is auto."""
+    if label is None:
+        return None
+    if auto_color:
+        color = background.get_contrast_text(color.a)
+    return label, color, label_background, Style.from_rich_style(style)
+
+
 class StylesCache:
     """Responsible for rendering CSS Styles and keeping a cache of rendered lines.
 
@@ -166,12 +178,10 @@ class StylesCache:
         Returns:
             Rendered lines.
         """
-        border_title = widget._border_title
-        border_subtitle = widget._border_subtitle
         self._simple_strip = None
 
         base_background, background = widget.background_colors
-        app = widget.app
+        app, styles = widget.app, widget.styles
         paint = widget.frame_paint
         key = self.widget_paint_key(widget, paint)
         if key != self._paint_key:
@@ -184,22 +194,12 @@ class StylesCache:
             background,
             widget.render_line,
             widget.get_line_filters(),
-            (
-                None
-                if border_title is None
-                else (
-                    border_title,
-                    *widget._get_title_style_information(base_background),
-                )
-            ),
-            (
-                None
-                if border_subtitle is None
-                else (
-                    border_subtitle,
-                    *widget._get_subtitle_style_information(base_background),
-                )
-            ),
+            border_label(widget._border_title, base_background, styles.auto_border_title_color,
+                         styles.border_title_color, styles.border_title_background,
+                         styles.border_title_style),
+            border_label(widget._border_subtitle, base_background,
+                         styles.auto_border_subtitle_color, styles.border_subtitle_color,
+                         styles.border_subtitle_background, styles.border_subtitle_style),
             content_size=widget.content_region.size,
             padding=widget.geometry.padding,
             crop=crop,
@@ -226,7 +226,7 @@ class StylesCache:
 
     def render(
         self,
-        styles: FramePaint,
+        painted: FramePaint,
         size: Size,
         base_background: Color,
         background: Color,
@@ -234,8 +234,9 @@ class StylesCache:
         filters: Sequence[LineFilter],
         border_title: tuple[Content, Color, Color, Style] | None,
         border_subtitle: tuple[Content, Color, Color, Style] | None,
+        *,
+        padding: Spacing,
         content_size: Size | None = None,
-        padding: Spacing | None = None,
         crop: Region | None = None,
         opacity: float = 1.0,
         ansi_theme: TerminalTheme = DEFAULT_TERMINAL_THEME,
@@ -244,7 +245,7 @@ class StylesCache:
         """Render a widget content plus CSS styles.
 
         Args:
-            styles: CSS Styles object.
+            painted: The frame paint inputs.
             size: Size of widget.
             base_background: Background color beneath widget.
             background: Background color of widget.
@@ -253,7 +254,7 @@ class StylesCache:
             border_title: Optional tuple of (title, color, background, style).
             border_subtitle: Optional tuple of (subtitle, color, background, style).
             content_size: Size of content or None to assume full size.
-            padding: Override padding from Styles, or None to use styles.padding.
+            padding: Padding declared by the widget's geometry.
             crop: Region to crop to.
             filters: Additional post-processing for the segments.
             opacity: Widget opacity.
@@ -265,8 +266,6 @@ class StylesCache:
         """
         if content_size is None:
             content_size = size
-        if padding is None:
-            padding = Spacing(0, 0, 0, 0)
         if crop is None:
             crop = size.region
 
@@ -279,7 +278,6 @@ class StylesCache:
 
         is_dirty = self._dirty_lines.__contains__
         render_line = self.render_line
-        painted = styles
         # A plain widget's line is its content line at the widget's width.
         # Returning that strip itself (rather than a copy of its segments)
         # keeps what it has already computed, such as its terminal sequence.

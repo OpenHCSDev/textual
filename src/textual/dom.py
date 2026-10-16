@@ -1407,21 +1407,14 @@ class DOMNode(MessagePump):
         epoch = (Styles._revision, MessagePump._tree_revision)
         layer = self.paint_layer
         state = self.__dict__.get("_paint_state")
-        if (
-            state is not None
-            and state.cacheable and layer.paint_cacheable
-            and self.__dict__.get("_paint_epoch") == epoch
-        ):
+        reusable = state is not None and layer.paint_cacheable
+        if reusable and state.cacheable and self.__dict__.get("_paint_epoch") == epoch:
             return state
         parent = self._parent
         inherited = (
             parent._resolved_paint_state() if isinstance(parent, DOMNode) else EMPTY_PAINT
         )
-        if (
-            state is None or not layer.paint_cacheable
-            or state.parent is not inherited
-            or state.style_key != layer.paint_key
-        ):
+        if not (reusable and state.parent is inherited and state.style_key == layer.paint_key):
             state = self._paint_state = PaintState.resolve(inherited, layer)
         self._paint_epoch = epoch
         return state
@@ -1627,51 +1620,6 @@ class DOMNode(MessagePump):
             `True` if the widget may capture the key in its `Key` event handler, or `False` if it won't.
         """
         return False
-
-    def _get_title_style_information(
-        self, background: Color
-    ) -> tuple[Color, Color, VisualStyle]:
-        """Get a Visual Style object for titles.
-
-        Args:
-            background: The background color.
-
-        Returns:
-            A Rich style.
-        """
-
-        styles = self.styles
-        if styles.auto_border_title_color:
-            color = background.get_contrast_text(styles.border_title_color.a)
-        else:
-            color = styles.border_title_color
-        return (
-            color,
-            styles.border_title_background,
-            VisualStyle.from_rich_style(styles.border_title_style),
-        )
-
-    def _get_subtitle_style_information(
-        self, background: Color
-    ) -> tuple[Color, Color, VisualStyle]:
-        """Get a Rich Style object for subtitles.
-
-        Args:
-            background: The background color.
-
-        Returns:
-            A Rich style.
-        """
-        styles = self.styles
-        if styles.auto_border_subtitle_color:
-            color = background.get_contrast_text(styles.border_subtitle_color.a)
-        else:
-            color = styles.border_subtitle_color
-        return (
-            color,
-            styles.border_subtitle_background,
-            VisualStyle.from_rich_style(styles.border_subtitle_style),
-        )
 
     @property
     def background_colors(self) -> tuple[Color, Color]:

@@ -1,17 +1,22 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING, NamedTuple, get_args
 
 from textual._extrema import Extrema, NO_EXTREMA
 from textual.css.scalar import Scalar, ScalarOffset, Unit
-from textual.geometry import NULL_OFFSET, Offset, Size, Spacing
+from textual.css.types import AlignHorizontal, AlignVertical
+from textual.geometry import NULL_OFFSET, NULL_SPACING, Offset, Size, Spacing
 
 if TYPE_CHECKING:
     from textual.color import Color
     from textual.css._style_properties import Edges
     from textual.layout import Layout
     from textual.widget import Widget
+
+
+DEFAULT_LAYER = "default"
+"""The layer a widget paints in when it declares none."""
 
 
 class BoxModel(NamedTuple):
@@ -91,7 +96,7 @@ class BoxGeometry:
 
     @property
     def flow_geometry(self) -> BoxGeometry:
-        """Inputs admitted by the stream layout's existing flow contract."""
+        """Inputs accepted by the stream layout's existing flow contract."""
         return self
 
     @property
@@ -131,19 +136,24 @@ class BoxGeometry:
     def is_split(self) -> bool:
         return self.split != "none"
 
-    def _align_width(self, width: int, parent_width: int) -> int:
-        align = self.align_horizontal
-        return ((parent_width - width) // 2 if align == "center" else
-                parent_width - width if align == "right" else 0)
+    @property
+    def sizing_gutter(self) -> Spacing:
+        """The gutter that a declared size includes."""
+        return self.box_gutter if self.box_sizing == "border-box" else NULL_SPACING
 
-    def _align_height(self, height: int, parent_height: int) -> int:
-        align = self.align_vertical
-        return ((parent_height - height) // 2 if align == "middle" else
-                parent_height - height if align == "bottom" else 0)
+    @property
+    def stable_gutter(self) -> bool:
+        """Whether the scrollbar gutter is reserved while the scrollbar is hidden."""
+        return self.scrollbar_policy == "stable"
+
+    def _reserves_gutter(self, overflow: str) -> bool:
+        return overflow == "auto" and self.stable_gutter
 
     def _align_size(self, child: tuple[int, int], parent: tuple[int, int]) -> Offset:
-        return Offset(self._align_width(child[0], parent[0]),
-                      self._align_height(child[1], parent[1]))
+        # Each alignment Literal declares start, middle, end: its index halves the free space.
+        x = get_args(AlignHorizontal).index(self.align_horizontal)
+        y = get_args(AlignVertical).index(self.align_vertical)
+        return Offset((parent[0] - child[0]) * x // 2, (parent[1] - child[1]) * y // 2)
 
     def resolve_offset(self, size: Size, viewport: Size) -> Offset:
         offset = self.placement_offset
@@ -156,13 +166,11 @@ class BoxGeometry:
         """Resolve constraints independently of the scene's measurement cache."""
         min_width_rule, max_width_rule = self.min_width, self.max_width
         min_height_rule, max_height_rule = self.min_height, self.max_height
-        if (min_width_rule is None and max_width_rule is None
-                and min_height_rule is None and max_height_rule is None):
+        if all(rule is None for rule in (min_width_rule, max_width_rule,
+                                         min_height_rule, max_height_rule)):
             return NO_EXTREMA
         container -= self.margin.totals
-        gutter_width, gutter_height = (
-            self.box_gutter.totals if self.box_sizing == "border-box" else (0, 0)
-        )
+        gutter_width, gutter_height = self.sizing_gutter.totals
         return Extrema(
             None if min_width_rule is None else min_width_rule.resolve(
                 container, viewport, width_fraction) - gutter_width,
@@ -180,8 +188,7 @@ class BoxGeometry:
         constrain_width: bool = False, greedy: bool = True,
     ) -> tuple[BoxModel, Extrema]:
         """Resolve these dimensions using the widget's intrinsic measurements."""
-        is_border_box = self.box_sizing == "border-box"
-        gutter, margin = self.box_gutter, self.margin
+        gutter, margin, sizing_gutter = self.box_gutter, self.margin, self.sizing_gutter
         width, height = self.width, self.height
         if not greedy and width is not None and width.is_fraction:
             width = Scalar(1.0, Unit.AUTO, Unit.AUTO)
@@ -197,15 +204,13 @@ class BoxGeometry:
             content_width = content_container.width - margin.width
         elif is_auto_width:
             content_width = node.get_content_width(content_container - margin.totals, viewport)
-            if (self.overflow_x == "auto" and self.scrollbar_policy == "stable"
-                    or node.show_vertical_scrollbar):
+            if self._reserves_gutter(self.overflow_x) or node.show_vertical_scrollbar:
                 content_width += self.vertical_scrollbar_size
             if content_width < content_container.width and node._has_relative_children_width:
                 content_width = content_container.width
         else:
             content_width = width.resolve(container - margin.totals, viewport, width_fraction)
-            if is_border_box:
-                content_width -= gutter.width
+            content_width -= sizing_gutter.width
         if min_width is not None:
             content_width = max(content_width, min_width, 0)
         if max_width is not None and not (
@@ -223,15 +228,13 @@ class BoxGeometry:
             content_height = node.get_content_height(
                 content_container - margin.totals, viewport, int(content_width)
             )
-            if (self.overflow_y == "auto" and self.scrollbar_policy == "stable"
-                    or node.show_horizontal_scrollbar):
+            if self._reserves_gutter(self.overflow_y) or node.show_horizontal_scrollbar:
                 content_height += self.horizontal_scrollbar_size
             if content_height < content_container.height and node._has_relative_children_height:
                 content_height = content_container.height
         else:
             content_height = height.resolve(container - margin.totals, viewport, height_fraction)
-            if is_border_box:
-                content_height -= gutter.height
+            content_height -= sizing_gutter.height
         if min_height is not None:
             content_height = max(content_height, min_height, 0)
         if max_height is not None and not (
