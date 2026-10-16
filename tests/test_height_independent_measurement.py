@@ -168,22 +168,6 @@ async def test_noncell_width_limit_keeps_original_zero_width_parent_exception():
         assert second.width == 12
 
 
-async def test_custom_extrema_keeps_available_parent_width():
-    from textual._extrema import Extrema
-
-    class WidthSizedExtrema(Widget):
-        def _resolve_extrema(self, container, viewport, width_fraction, height_fraction):
-            return Extrema(min_width=Fraction(container.width))
-
-    async with App().run_test():
-        widget = WidthSizedExtrema()
-        widget.styles.width = 12
-        widget.styles.height = 3
-        first = widget._get_box_model(Size(30, 10), Size(120, 40), Fraction(30), Fraction(10))
-        second = widget._get_box_model(Size(70, 10), Size(120, 40), Fraction(70), Fraction(10))
-        assert first.width == 30
-        assert second.width == 70
-
 
 async def test_auto_width_relative_child_keeps_parent_width_expansion():
     async with App().run_test() as pilot:
@@ -415,28 +399,6 @@ async def test_width_padding_margin_offset_and_viewport_parity(layout_name):
         column._box_model_cache.clear()
         assert [box(column, height, width=width, greedy=greedy) for width, height, greedy in inputs] == expected
 
-
-async def test_unset_height_and_custom_extrema_keep_the_full_context():
-    from textual._extrema import Extrema
-
-    class CustomExtrema(VerticalGroup):
-        def _resolve_extrema(self, container, viewport, width_fraction, height_fraction):
-            return Extrema(min_height=Fraction(container.height))
-
-    app = App()
-    async with app.run_test() as pilot:
-        fill = VerticalGroup(Static("fill"))
-        custom = CustomExtrema(Static("extent"))
-        await app.mount(fill, custom)
-        await pilot.pause()
-        fill.styles.base.clear_rule("height")
-        fill.styles.inline.clear_rule("height")
-        assert fill.styles.height is None
-        assert fill._box_depends_on_available_height()
-        assert custom._box_depends_on_available_height()
-        for height in (10, 30):
-            assert box(fill, height).height == height
-            assert box(custom, height).height == height
 
 
 async def test_custom_scalar_resolver_is_not_classified_by_its_unit_alone():

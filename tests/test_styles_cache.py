@@ -4,7 +4,7 @@ import weakref
 
 from rich.segment import Segment
 
-from textual._styles_cache import StylesCache
+from textual._styles_cache import PaintStyles, StylesCache
 from textual.color import Color
 from textual.css.styles import Styles
 from textual.geometry import Region, Size
@@ -21,7 +21,7 @@ def test_color_memo_does_not_retain_retired_paint_cache():
     """A shared color calculation must not own an otherwise retired scene."""
     cache = StylesCache()
     cache.render(
-        Styles(),
+        PaintStyles.of(Styles()),
         Size(3, 1),
         Color.parse("blue"),
         Color.parse("green"),
@@ -54,7 +54,7 @@ def test_clear_retires_simple_padding_strip():
 
     def render(background):
         return cache.render(
-            styles,
+            PaintStyles.of(styles),
             Size(5, 3),
             Color.parse("black"),
             background,
@@ -63,6 +63,7 @@ def test_clear_retires_simple_padding_strip():
             None,
             None,
             content_size=Size(3, 1),
+            padding=styles.padding,
         )
 
     blue = render(Color.parse("blue"))
@@ -91,7 +92,7 @@ def test_border():
     styles.border = ("heavy", "white")
     cache = StylesCache()
     lines = cache.render(
-        styles,
+        PaintStyles.of(styles),
         Size(5, 5),
         Color.parse("blue"),
         Color.parse("green"),
@@ -100,6 +101,7 @@ def test_border():
         None,
         None,
         content_size=Size(3, 3),
+        padding=styles.padding,
     )
 
     text_content = _extract_content(lines)
@@ -125,7 +127,7 @@ def test_padding():
     styles.padding = 1
     cache = StylesCache()
     lines = cache.render(
-        styles,
+        PaintStyles.of(styles),
         Size(5, 5),
         Color.parse("blue"),
         Color.parse("green"),
@@ -134,6 +136,7 @@ def test_padding():
         None,
         None,
         content_size=Size(3, 3),
+        padding=styles.padding,
     )
 
     text_content = _extract_content(lines)
@@ -160,7 +163,7 @@ def test_padding_border():
     styles.border = ("heavy", "white")
     cache = StylesCache()
     lines = cache.render(
-        styles,
+        PaintStyles.of(styles),
         Size(7, 7),
         Color.parse("blue"),
         Color.parse("green"),
@@ -169,6 +172,7 @@ def test_padding_border():
         None,
         None,
         content_size=Size(3, 3),
+        padding=styles.padding,
     )
 
     text_content = _extract_content(lines)
@@ -196,7 +200,7 @@ def test_outline():
     styles.outline = ("heavy", "white")
     cache = StylesCache()
     lines = cache.render(
-        styles,
+        PaintStyles.of(styles),
         Size(3, 3),
         Color.parse("blue"),
         Color.parse("green"),
@@ -205,6 +209,7 @@ def test_outline():
         None,
         None,
         content_size=Size(3, 3),
+        padding=styles.padding,
     )
 
     text_content = _extract_content(lines)
@@ -227,7 +232,7 @@ def test_crop():
     styles.border = ("heavy", "white")
     cache = StylesCache()
     lines = cache.render(
-        styles,
+        PaintStyles.of(styles),
         Size(7, 7),
         Color.parse("blue"),
         Color.parse("green"),
@@ -237,6 +242,7 @@ def test_crop():
         None,
         content_size=Size(3, 3),
         crop=Region(2, 2, 3, 3),
+        padding=styles.padding,
     )
     text_content = _extract_content(lines)
     expected_text = [
@@ -266,7 +272,7 @@ def test_dirty_cache() -> None:
     styles.border = ("heavy", "white")
     cache = StylesCache()
     lines = cache.render(
-        styles,
+        PaintStyles.of(styles),
         Size(7, 7),
         Color.parse("blue"),
         Color.parse("green"),
@@ -275,6 +281,7 @@ def test_dirty_cache() -> None:
         None,
         None,
         content_size=Size(3, 3),
+        padding=styles.padding,
     )
     assert rendered_lines == [0, 1, 2]
     del rendered_lines[:]
@@ -294,7 +301,7 @@ def test_dirty_cache() -> None:
 
     # Re-render styles, check that content was not requested
     lines = cache.render(
-        styles,
+        PaintStyles.of(styles),
         Size(7, 7),
         Color.parse("blue"),
         Color.parse("green"),
@@ -303,6 +310,7 @@ def test_dirty_cache() -> None:
         None,
         None,
         content_size=Size(3, 3),
+        padding=styles.padding,
     )
     assert rendered_lines == []
     del rendered_lines[:]
@@ -313,7 +321,7 @@ def test_dirty_cache() -> None:
     cache.set_dirty(Region(0, 2, 7, 2))
 
     lines = cache.render(
-        styles,
+        PaintStyles.of(styles),
         Size(7, 7),
         Color.parse("blue"),
         Color.parse("green"),
@@ -322,6 +330,7 @@ def test_dirty_cache() -> None:
         None,
         None,
         content_size=Size(3, 3),
+        padding=styles.padding,
     )
     assert rendered_lines == [0, 1]
     text_content = _extract_content(lines)
