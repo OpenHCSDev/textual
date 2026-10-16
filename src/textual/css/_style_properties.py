@@ -634,7 +634,6 @@ class LayoutProperty(StyleProperty['Layout | None']):
                 or a `Layout` object.
         """
 
-        from textual.layouts.factory import Layout  # Prevents circular import
         from textual.layouts.factory import MissingLayout, get_layout
 
         _rich_traceback_omit = True
@@ -643,20 +642,17 @@ class LayoutProperty(StyleProperty['Layout | None']):
                 obj.refresh(layout=True, children=True)
             return
 
-        if isinstance(layout, Layout):
-            layout = layout.name
-
-        if obj.layout is not None and obj.layout.name == layout:
+        if isinstance(layout, str):
+            try:
+                layout = get_layout(layout)
+            except MissingLayout as error:
+                raise StyleValueError(
+                    str(error),
+                    help_text=layout_property_help_text(self.name, context="inline"),
+                )
+        if obj.layout is layout:
             return
-
-        try:
-            layout_object = get_layout(layout)
-        except MissingLayout as error:
-            raise StyleValueError(
-                str(error),
-                help_text=layout_property_help_text(self.name, context="inline"),
-            )
-        if obj.set_rule("layout", layout_object):
+        if obj.set_rule("layout", layout):
             obj.refresh(layout=True, children=True)
 
 
