@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from asyncio import Future, Task
     from textual.dom import DOMNode
     from textual.message_pump import MessagePump
+    from textual.widget import Widget
 
 
 @rich.repr.auto
@@ -122,6 +123,14 @@ class Message:
         """
         self._sender = sender
         return self
+
+    def can_dispatch_to(self, widget: Widget) -> bool:
+        """Whether this message may run handlers on the receiving widget.
+
+        Lifecycle messages remain deliverable while widgets retire. Input
+        messages specialize this policy using the receiver's current lifetime.
+        """
+        return True
 
     def can_replace(self, message: "Message") -> bool:
         """Check if another message may supersede this one.
