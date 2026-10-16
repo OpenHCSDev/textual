@@ -3,6 +3,7 @@ from __future__ import annotations
 from operator import attrgetter
 from typing import TYPE_CHECKING, Iterable, Iterator, NamedTuple
 
+from textual.box_model import DEFAULT_LAYER
 from textual.geometry import NULL_REGION, Offset, Region, Shape
 
 if TYPE_CHECKING:
@@ -436,7 +437,7 @@ class SelectState(NamedTuple):
         def get_content_region(widget: Widget) -> Region:
             if type(widget).content_region is not Widget.content_region:
                 return widget.content_region
-            return get_region(widget).shrink(widget.styles.gutter)
+            return get_region(widget).shrink(widget.geometry.box_gutter)
 
         def get_selection_order(widget: Widget) -> tuple[int, int]:
             if type(widget)._selection_order is not Widget._selection_order:
@@ -485,7 +486,7 @@ class SelectState(NamedTuple):
                         # Only ordinary flow children can be bounded by their
                         # DOM order. Positioned/layered children may be drawn
                         # elsewhere and fall back to the general walker.
-                        if all(child.styles.position == "relative" and not child.styles.layer
+                        if all(child.geometry.position == "relative" and child.layer == DEFAULT_LAYER
                                for child in siblings):
                             low, high = sorted((first_index, last_index))
                             visible = set(visible_children(root, root_visible))

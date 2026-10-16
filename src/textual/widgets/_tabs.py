@@ -658,7 +658,7 @@ class Tabs(Widget, can_focus=True):
                     pass
                 else:
                     tab_region = active_tab.virtual_region.shrink(
-                        active_tab.styles.gutter
+                        active_tab.geometry.box_gutter
                     )
                     start, end = tab_region.column_span
                     if animate:

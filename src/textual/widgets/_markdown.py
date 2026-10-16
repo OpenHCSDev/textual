@@ -693,7 +693,7 @@ class MarkdownTableContent(Widget):
     def pre_layout(self, layout: Layout) -> None:
         assert isinstance(layout, GridLayout)
         layout.auto_minimum = True
-        layout.expand = not self.query_ancestor(MarkdownTable).styles.is_auto_width
+        layout.expand = not self.query_ancestor(MarkdownTable).geometry.is_auto_width
         layout.shrink = True
         layout.stretch_height = True
 

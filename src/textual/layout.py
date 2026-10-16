@@ -224,7 +224,7 @@ class WidgetPlacement(NamedTuple):
             Processes placement, may be the same instance.
         """
         widget = self.widget
-        styles = widget.styles
+        styles = widget.geometry
         if not widget.uses_screen_coordinates:
             # Bail early if there is nothing to do
             return self
@@ -336,8 +336,8 @@ class Layout(ABC):
             Content height (in lines).
         """
         if widget._nodes:
-            if not widget.styles.is_docked and all(
-                child.styles.is_dynamic_height for child in widget.displayed_children
+            if not widget.geometry.is_docked and all(
+                child.geometry.is_dynamic_height for child in widget.displayed_children
             ):
                 # An exception for containers with all dynamic height widgets
                 arrangement = widget.arrange(Size(width, container.height))
@@ -363,7 +363,7 @@ class Layout(ABC):
         width, height = container.region.size
         canvas = Canvas(width, height)
 
-        line_style, keyline_color = container.styles.keyline
+        line_style, keyline_color = container.geometry.keyline
         if keyline_color:
             keyline_color = container.background_colors[0] + keyline_color
 

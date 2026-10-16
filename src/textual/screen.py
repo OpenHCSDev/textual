@@ -386,7 +386,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         """
         screens: list[Screen] = []
         screen = self
-        while screen.styles.background.a < 1 and (screen := screen._screen_below) is not None:
+        while screen.paint_layer.background_color.a < 1 and (screen := screen._screen_below) is not None:
             screens.append(screen)
         return screens
 
@@ -416,7 +416,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
     @property
     def size(self) -> Size:
         """The size of the screen."""
-        return self.app.size - self.styles.gutter.totals
+        return self.app.size - self.geometry.box_gutter.totals
 
     def _watch_focused(self):
         self.refresh_bindings()
@@ -665,7 +665,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         Returns:
             Background renderable.
         """
-        background = self.styles.background
+        background = self.paint_layer.background_color
         if seen_through := self._screens_seen_through:
             # If background is translucent, render the screen below
             return BackgroundScreen(seen_through[0], background)
@@ -1774,7 +1774,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
             if widget not in self._layout_widgets:
                 self._layout_widgets[ancestor].add(widget)
                 layout_required = True
-            if not ancestor.styles.auto_dimensions:
+            if not ancestor.geometry.auto_dimensions:
                 break
             widget = ancestor
 
@@ -1794,7 +1794,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         # keys not sized by their content.
         boundaries = {
             ancestor for ancestor in self._layout_widgets
-            if not ancestor.styles.auto_dimensions
+            if not ancestor.geometry.auto_dimensions
         }
         if not boundaries or self in boundaries:
             return None
@@ -1845,14 +1845,14 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         Returns:
             Height for inline mode.
         """
-        height_scalar = self.styles.height
+        height_scalar = self.geometry.height
         if height_scalar is None or height_scalar.is_auto:
             inline_height = self.get_content_height(size, size, size.width)
         else:
             inline_height = int(height_scalar.resolve(size, size))
-        inline_height += self.styles.gutter.height
-        min_height = self.styles.min_height
-        max_height = self.styles.max_height
+        inline_height += self.geometry.box_gutter.height
+        min_height = self.geometry.min_height
+        max_height = self.geometry.max_height
         if min_height is not None:
             inline_height = max(inline_height, int(min_height.resolve(size, size)))
         if max_height is not None:
@@ -1967,11 +1967,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         self.dismiss_hints()
         self._screen_resized(event.size)
 
-        horizontal_breakpoints = (
-            self.app.HORIZONTAL_BREAKPOINTS
-            if self.HORIZONTAL_BREAKPOINTS is None
-            else self.HORIZONTAL_BREAKPOINTS
-        ) or []
+        horizontal_breakpoints = self.horizontal_breakpoints
 
         vertical_breakpoints = (
             self.app.VERTICAL_BREAKPOINTS
@@ -1986,34 +1982,37 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
                 for _, breakpoint in (horizontal_breakpoints + vertical_breakpoints)
             }
 
-            for breakpoint in self._get_breakpoint_classes(
-                width, horizontal_breakpoints
+            for dimension, declarations in (
+                (width, horizontal_breakpoints), (height, vertical_breakpoints)
             ):
-                breakpoints[breakpoint] = True
-
-            for breakpoint in self._get_breakpoint_classes(
-                height, vertical_breakpoints
-            ):
-                breakpoints[breakpoint] = True
+                if (active := self._get_breakpoint(dimension, declarations)) is not None:
+                    breakpoints[active[1]] = True
 
             self.update_classes(breakpoints, animate=False)
 
-    def _get_breakpoint_classes(
+    @property
+    def horizontal_breakpoints(self) -> list[tuple[int, str]]:
+        """Horizontal sizing declarations, using the screen override if supplied."""
+        return (
+            self.app.HORIZONTAL_BREAKPOINTS
+            if self.HORIZONTAL_BREAKPOINTS is None
+            else self.HORIZONTAL_BREAKPOINTS
+        ) or []
+
+    @property
+    def horizontal_breakpoint(self) -> int | None:
+        """The active viewport-width minimum, independent of its CSS class."""
+        active = self._get_breakpoint(self.app.size.width, self.horizontal_breakpoints)
+        return None if active is None else active[0]
+
+    def _get_breakpoint(
         self, dimension: int, breakpoints: list[tuple[int, str]]
-    ) -> set[str]:
-        """Get breakpoint classes for given dimension.
-
-        Args:
-            dimension: Size in cells.
-            breakpoints: Associated breakpoints.
-
-        Returns:
-            A set containing a breakpoint, or an empty set if none apply.
-        """
-        for breakpoint, class_name in sorted(breakpoints, reverse=True):
-            if dimension >= breakpoint:
-                return {class_name}
-        return set()
+    ) -> tuple[int, str] | None:
+        """Resolve a sizing declaration; CSS and native geometry share this rule."""
+        for breakpoint in sorted(breakpoints, reverse=True):
+            if dimension >= breakpoint[0]:
+                return breakpoint
+        return None
 
     def _update_tooltip(self, widget: Widget) -> None:
         """Update the content of the tooltip."""
@@ -2560,7 +2559,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         if widget not in self._compositor.visible_widgets:
             return False
         # If the widget is one that overlays the screen...
-        if widget.styles.overlay == "screen":
+        if widget.geometry.overlay == "screen":
             # ...simply check if it's within the screen's region.
             return widget.region in self.region
         # Failing that fall back to normal checking.
@@ -2578,7 +2577,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         if widget not in self._compositor.visible_widgets:
             return False
         # If the widget is one that overlays the screen...
-        if widget.styles.overlay == "screen":
+        if widget.geometry.overlay == "screen":
             # ...simply check if it's within the screen's region.
             return widget.region in self.region
         # Failing that fall back to normal checking.

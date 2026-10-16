@@ -37,7 +37,7 @@ from rich.tree import Tree
 from textual._context import active_message_pump
 from textual._compat import cached_property
 from textual._node_list import NodeList
-from textual._paint_state import EMPTY_PAINT, PaintState, resolve_paint
+from textual._paint_state import EMPTY_PAINT, PaintLayer, PaintState
 from textual._types import WatchCallbackType
 from textual.binding import Binding, BindingsMap, BindingType
 from textual.cache import LRUCache
@@ -49,6 +49,7 @@ from textual.css.match import match
 from textual.css.parse import is_id_selector, parse_declarations, parse_selectors
 from textual.css.query import InvalidQueryFormat, NoMatches, TooManyMatches, WrongType
 from textual.css.styles import RenderStyles, Styles
+from textual.box_model import BoxGeometry
 from textual.geometry import Size
 from textual.css.tokenize import IDENTIFIER
 from textual.css.tokenizer import TokenError
@@ -257,9 +258,9 @@ class DOMNode(MessagePump):
         if not self.is_container:
             return False
         for child in self.children:
-            if child.styles.expand == "optimal":
+            if child.geometry.width_policy == "optimal":
                 continue
-            styles = child.styles
+            styles = child.geometry
             if not child.display:
                 continue
             width = styles.width
@@ -285,7 +286,7 @@ class DOMNode(MessagePump):
         else:
             result = False
             for child in self.children:
-                styles = child.styles
+                styles = child.geometry
                 native = native and (
                     type(child).display is DOMNode.display
                     and type(styles) is RenderStyles
@@ -325,7 +326,7 @@ class DOMNode(MessagePump):
         """Native container paint, shared independently of scene custody."""
         from textual.renderables.blank import Blank
 
-        if self.styles.layout and self.styles.keyline[0] != "none":
+        if self.geometry.child_layout and self.geometry.keyline[0] != "none":
             return self.layout.render_keyline(self)
         return Blank(self.background_colors[1])
 
@@ -1401,26 +1402,20 @@ class DOMNode(MessagePump):
             # style mutations, including when inherited by a native child.
             state = EMPTY_PAINT._replace(cacheable=False)
             for node in reversed(self.ancestors_with_self):
-                state = resolve_paint(state, node.styles)
+                state = PaintState.resolve(state, node.paint_layer)
             return state
         epoch = (Styles._revision, MessagePump._tree_revision)
+        layer = self.paint_layer
         state = self.__dict__.get("_paint_state")
-        if (
-            state is not None
-            and state.cacheable
-            and self.__dict__.get("_paint_epoch") == epoch
-        ):
+        reusable = state is not None and layer.paint_cacheable
+        if reusable and state.cacheable and self.__dict__.get("_paint_epoch") == epoch:
             return state
         parent = self._parent
         inherited = (
             parent._resolved_paint_state() if isinstance(parent, DOMNode) else EMPTY_PAINT
         )
-        if (
-            state is None
-            or state.parent is not inherited
-            or state.style_key != self.styles._cache_key
-        ):
-            state = self._paint_state = resolve_paint(inherited, self.styles)
+        if not (reusable and state.parent is inherited and state.style_key == layer.paint_key):
+            state = self._paint_state = PaintState.resolve(inherited, layer)
         self._paint_epoch = epoch
         return state
 
@@ -1431,6 +1426,15 @@ class DOMNode(MessagePump):
             "screen--selection", default=RICH_NULL_STYLE
         )
         return style
+
+    @property
+    def paint_layer(self) -> PaintLayer:
+        return self.styles
+
+    @property
+    def geometry(self) -> BoxGeometry:
+        """The original sizing/placement source; declared widgets override this."""
+        return self.styles
 
     @property
     def rich_style(self) -> Style:
@@ -1460,45 +1464,41 @@ class DOMNode(MessagePump):
 
         """
         cache_key = (self._pseudo_classes_cache_key, component_classes, partial)
-        if (visual_style := self._visual_style_cache.get(cache_key, None)) is None:
+        cacheable = self._resolved_paint_state().cacheable
+        visual_style = self._visual_style_cache.get(cache_key) if cacheable else None
+        if visual_style is None:
             background = Color(0, 0, 0, 0)
             color = Color(255, 255, 255, 0)
 
             style = Style()
             opacity = 1.0
 
-            def iter_styles() -> Iterable[StylesBase]:
+            def iter_styles() -> Iterable[PaintLayer]:
                 """Iterate over the styles from the DOM and additional components styles."""
                 if partial:
                     node = self
                 else:
                     for node in reversed(self.ancestors_with_self):
-                        yield node.styles
+                        yield node.paint_layer
                 for name in component_classes:
                     yield node.get_component_styles(name)
 
             for styles in iter_styles():
-                has_rule = styles.has_rule
-                opacity *= styles.opacity
-                if has_rule("background"):
-                    text_background = background + styles.background.tint(
-                        styles.background_tint
-                    )
+                opacity *= styles.layer_opacity
+                local_background = styles.paint_background
+                if local_background is not None:
+                    tinted = local_background.tint(styles.background_tint)
+                    text_background = background + tinted
                     if partial:
-                        background_tint = styles.background.tint(styles.background_tint)
-                        background = background.blend(
-                            background_tint, 1 - background_tint.a
-                        ).multiply_alpha(opacity)
+                        background = background.blend(tinted, 1 - tinted.a).multiply_alpha(opacity)
                     else:
-                        background += (
-                            styles.background.tint(styles.background_tint)
-                        ).multiply_alpha(opacity)
+                        background += tinted.multiply_alpha(opacity)
                 else:
                     text_background = background
-                if has_rule("color"):
-                    color = styles.color.multiply_alpha(styles.text_opacity)
+                if (foreground := styles.paint_foreground) is not None:
+                    color = foreground.multiply_alpha(styles.text_opacity)
                 style += styles.text_style
-                if has_rule("auto_color") and styles.auto_color:
+                if styles.auto_color:
                     color = text_background.get_contrast_text(color.a)
 
             visual_style = replace(
@@ -1506,7 +1506,8 @@ class DOMNode(MessagePump):
                 background=background,
                 foreground=color,
             )
-            self._visual_style_cache[cache_key] = visual_style
+            if cacheable:
+                self._visual_style_cache[cache_key] = visual_style
 
         return visual_style
 
@@ -1620,51 +1621,6 @@ class DOMNode(MessagePump):
         """
         return False
 
-    def _get_title_style_information(
-        self, background: Color
-    ) -> tuple[Color, Color, VisualStyle]:
-        """Get a Visual Style object for titles.
-
-        Args:
-            background: The background color.
-
-        Returns:
-            A Rich style.
-        """
-
-        styles = self.styles
-        if styles.auto_border_title_color:
-            color = background.get_contrast_text(styles.border_title_color.a)
-        else:
-            color = styles.border_title_color
-        return (
-            color,
-            styles.border_title_background,
-            VisualStyle.from_rich_style(styles.border_title_style),
-        )
-
-    def _get_subtitle_style_information(
-        self, background: Color
-    ) -> tuple[Color, Color, VisualStyle]:
-        """Get a Rich Style object for subtitles.
-
-        Args:
-            background: The background color.
-
-        Returns:
-            A Rich style.
-        """
-        styles = self.styles
-        if styles.auto_border_subtitle_color:
-            color = background.get_contrast_text(styles.border_subtitle_color.a)
-        else:
-            color = styles.border_subtitle_color
-        return (
-            color,
-            styles.border_subtitle_background,
-            VisualStyle.from_rich_style(styles.border_subtitle_style),
-        )
-
     @property
     def background_colors(self) -> tuple[Color, Color]:
         """Background colors adjusted for opacity.
@@ -1685,15 +1641,12 @@ class DOMNode(MessagePump):
         base_background = background = WHITE
         base_color = color = BLACK
         for node in reversed(self.ancestors_with_self):
-            styles = node.styles
+            layer = node.paint_layer
             base_background = background
-            background += styles.background.tint(styles.background_tint)
-            if styles.has_rule("color"):
+            background += layer.background_color.tint(layer.background_tint)
+            if (foreground := layer.paint_foreground) is not None:
                 base_color = color
-                if styles.auto_color:
-                    color = background.get_contrast_text(color.a)
-                else:
-                    color = styles.color
+                color = background.get_contrast_text(color.a) if layer.auto_color else foreground
 
         return (base_background, base_color, background, color)
 
