@@ -31,6 +31,7 @@ from textual.document._document import (
 from textual.document._document_navigator import DocumentNavigator
 from textual.document._edit import Edit
 from textual.document._history import EditHistory
+from textual.document._editing import EditingMode
 from textual.document._syntax_aware_document import (
     SyntaxAwareDocument,
     SyntaxAwareDocumentError,
@@ -127,9 +128,12 @@ class TextAreaState:
     language: str | None
     languages: tuple[TextAreaLanguage, ...]
     highlight_query: Query | None
+    editing_mode: EditingMode
 
 
 class TextArea(ScrollView):
+    editing_mode: reactive[EditingMode] = reactive(EditingMode, init=False, bindings=True)
+    """The active native editing capability. Ordinary text entry is the default."""
     DEFAULT_CSS = """\
 TextArea {
     width: 1fr;
@@ -661,9 +665,6 @@ TextArea {
         self.indent_type: Literal["tabs", "spaces"] = "spaces"
         """Whether to indent using tabs or spaces."""
 
-        self._word_pattern = re.compile(r"(?<=\W)(?=\w)|(?<=\w)(?=\W)")
-        """Compiled regular expression for what we consider to be a 'word'."""
-
         self.history: EditHistory = EditHistory(
             max_checkpoints=max_checkpoints,
             checkpoint_timer=2.0,
@@ -836,6 +837,8 @@ TextArea {
         Returns:
             `True` if the widget may capture the key in its `Key` message, or `False` if it won't.
         """
+        if key == "escape" and self.editing_mode.modal:
+            return True
         if self.read_only:
             # In read only mode we don't consume any key events
             return False
@@ -877,13 +880,34 @@ TextArea {
                         (0, node_end_column, highlight_name)
                     )
 
+    def _watch_editing_mode(self, previous: EditingMode, current: EditingMode) -> None:
+        previous.suspend(self)
+        current.resume(self)
+        self.show_editing_mode(current)
+
+    def show_editing_mode(self, mode: EditingMode) -> None:
+        """Present the mode at the editor's native border unless embedded."""
+        self.border_subtitle = mode.label
+
+    def leave_modal_editor(self) -> None:
+        """Hook for an embedding application to focus its navigation surface."""
+        self.screen.focus_next()
+
+    def paste_editor_text(self, *, before: bool, count: int = 1) -> None:
+        """Paste the retained native register with its original range semantics."""
+        content = self.app.clipboard_content
+        if not self.read_only and content.text:
+            content.paste(self, before, count)
+
     def _watch_has_focus(self, focus: bool) -> None:
         self._cursor_visible = focus
         if focus:
             self._restart_blink()
-            self.history.checkpoint()
+            self.editing_mode.resume(self)
         else:
             self._pause_blink(visible=False)
+            self.editing_mode.suspend(self)
+            self.editing_mode = self.editing_mode.settled()
 
     def _watch_selection(
         self, previous_selection: Selection, selection: Selection
@@ -1232,7 +1256,9 @@ TextArea {
             text: The text to load into the TextArea.
         """
         self.history.clear()
+        self.editing_mode = self.editing_mode.document_changed()
         self._set_document(text, self.language)
+        self.editing_mode.resume(self)
         self.post_message(self.Changed(self).set_sender(self))
         self.update_suggestion()
 
@@ -1241,6 +1267,7 @@ TextArea {
         return TextAreaState(
             self.document, self.history, self.selection, self.scroll_x, self.scroll_y,
             self.language, tuple(self._languages.values()), self._highlight_query,
+            self.editing_mode.settled(),
         )
 
     def restore_editor_state(self, state: TextAreaState) -> None:
@@ -1259,6 +1286,7 @@ TextArea {
         self._build_highlight_map()
         self._rewrap_and_refresh_virtual_size()
         self.selection = state.selection
+        self.editing_mode = state.editing_mode
         self.record_cursor_width()
         self.call_after_refresh(self.scroll_to, x=state.scroll_x, y=state.scroll_y,
                                 animate=False, immediate=True)
@@ -1413,7 +1441,7 @@ TextArea {
 
         scroll_x, scroll_y = self.scroll_offset
         absolute_y = scroll_y + y
-        selection = self.selection
+        selection = self.editing_mode.selection_range(self)
         _, cursor_y = self._cursor_offset
         cache_key = (
             self.size,
@@ -1424,15 +1452,7 @@ TextArea {
                 if selection.contains_line(absolute_y) or self.soft_wrap
                 else selection.end[0] == absolute_y
             ),
-            (
-                selection.end
-                if (
-                    self._cursor_visible
-                    and self.cursor_blink
-                    and absolute_y == cursor_y
-                )
-                else None
-            ),
+            (self.cursor_location, self._draw_cursor) if absolute_y == cursor_y else None,
             self.theme,
             self._matching_bracket_location,
             self.match_cursor_bracket,
@@ -1493,9 +1513,9 @@ TextArea {
         line.set_length(line_character_count + 1)  # space at end for cursor
         virtual_width, _virtual_height = self.virtual_size
 
-        selection = self.selection
+        selection = self.editing_mode.selection_range(self)
         start, end = selection
-        cursor_row, cursor_column = end
+        cursor_row, cursor_column = self.cursor_location
 
         selection_top, selection_bottom = sorted(selection)
         selection_top_row, selection_top_column = selection_top
@@ -1514,7 +1534,6 @@ TextArea {
         if start != end and selection_top_row <= line_index <= selection_bottom_row:
             # If this row intersects with the selection range
             selection_style = theme.selection_style if theme else None
-            cursor_row, _ = end
             if selection_style:
                 if line_character_count == 0 and line_index != cursor_row:
                     # A simple highlight to show empty lines are included in the selection
@@ -1696,8 +1715,8 @@ TextArea {
 
     @property
     def selected_text(self) -> str:
-        """The text between the start and end points of the current selection."""
-        start, end = self.selection
+        """The selected range, shared with paint and modal operators."""
+        start, end = self.editing_mode.selection_range(self)
         return self.get_text_range(start, end)
 
     @property
@@ -1757,6 +1776,7 @@ TextArea {
         """Undo the edits since the last checkpoint (the most recent batch of edits)."""
         if edits := self.history._pop_undo():
             self._undo_batch(edits)
+        self.editing_mode.resume(self)
 
     def action_undo(self) -> None:
         """Undo the edits since the last checkpoint (the most recent batch of edits)."""
@@ -1766,6 +1786,7 @@ TextArea {
         """Redo the most recently undone batch of edits."""
         if edits := self.history._pop_redo():
             self._redo_batch(edits)
+        self.editing_mode.resume(self)
 
     def action_redo(self) -> None:
         """Redo the most recently undone batch of edits."""
@@ -1871,6 +1892,11 @@ TextArea {
         self._restart_blink()
 
         if self.read_only:
+            return
+
+        if self.editing_mode.handle_key(self, event):
+            event.stop()
+            event.prevent_default()
             return
 
         key = event.key
@@ -2037,6 +2063,7 @@ TextArea {
         """When a paste occurs, insert the text from the paste event into the document."""
         if self.read_only:
             return
+        self.editing_mode = self.editing_mode.pasted()
         if result := self._replace_via_keyboard(event.text, *self.selection):
             self.move_cursor(result.end_location)
             self.focus()
@@ -2416,17 +2443,7 @@ TextArea {
         Returns:
             The location the cursor will jump on "jump word left".
         """
-        cursor_row, cursor_column = self.cursor_location
-        if cursor_row > 0 and cursor_column == 0:
-            # Going to the previous row
-            return cursor_row - 1, len(self.document[cursor_row - 1])
-
-        # Staying on the same row
-        line = self.document[cursor_row][:cursor_column]
-        search_string = line.rstrip()
-        matches = list(re.finditer(self._word_pattern, search_string))
-        cursor_column = matches[-1].start() if matches else 0
-        return cursor_row, cursor_column
+        return self.navigator.get_location_word_left(self.cursor_location)
 
     def action_cursor_word_right(self, select: bool = False) -> None:
         """Move the cursor right by a single word, skipping leading whitespace."""
@@ -2444,25 +2461,7 @@ TextArea {
         Returns:
             The location the cursor will jump on "jump word right".
         """
-        cursor_row, cursor_column = self.selection.end
-        line = self.document[cursor_row]
-        if cursor_row < self.document.line_count - 1 and cursor_column == len(line):
-            # Moving to the line below
-            return cursor_row + 1, 0
-
-        # Staying on the same line
-        search_string = line[cursor_column:]
-        pre_strip_length = len(search_string)
-        search_string = search_string.lstrip()
-        strip_offset = pre_strip_length - len(search_string)
-
-        matches = list(re.finditer(self._word_pattern, search_string))
-        if matches:
-            cursor_column += matches[0].start() + strip_offset
-        else:
-            cursor_column = len(line)
-
-        return cursor_row, cursor_column
+        return self.navigator.get_location_word_right(self.cursor_location)
 
     def action_cursor_page_up(self) -> None:
         """Move the cursor and scroll up one page."""
@@ -2597,6 +2596,7 @@ TextArea {
         Returns:
             An EditResult relating to the deletion of all content.
         """
+        self.editing_mode = self.editing_mode.document_changed()
         return self.delete((0, 0), self.document.end, maintain_selection_offset=False)
 
     def _delete_via_keyboard(
@@ -2613,7 +2613,7 @@ TextArea {
         Returns:
             An EditResult or None if no edit was performed (e.g. on read-only mode).
         """
-        if self.read_only:
+        if self.read_only or not self.editing_mode.accepts_text:
             return None
         return self.delete(start, end, maintain_selection_offset=False)
 
@@ -2633,7 +2633,7 @@ TextArea {
         Returns:
             An EditResult or None if no edit was performed (e.g. on read-only mode).
         """
-        if self.read_only:
+        if self.read_only or not self.editing_mode.accepts_text:
             return None
         return self.replace(insert, start, end, maintain_selection_offset=False)
 
@@ -2719,6 +2719,7 @@ TextArea {
         """Paste from local clipboard."""
         if self.read_only:
             return
+        self.editing_mode = self.editing_mode.pasted()
         clipboard = self.app.clipboard
         if result := self._replace_via_keyboard(clipboard, *self.selection):
             self.move_cursor(result.end_location)

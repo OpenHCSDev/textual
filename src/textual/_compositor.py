@@ -1687,7 +1687,8 @@ class Compositor:
         contains = Region.contains
         if self.size.height > y >= 0:
             for widget, (region, clip) in self.published_widgets.items():
-                if contains(region, x, y) and contains(clip, x, y) and widget.visible:
+                if (contains(region, x, y) and contains(clip, x, y) and widget.visible
+                        and not widget.hit_test_transparent):
                     yield widget, region
 
     def get_style_at(self, x: int, y: int) -> Style:
@@ -1895,7 +1896,7 @@ class Compositor:
         self, crop: Region | None = None,
         render_regions: Callable[[Region], Iterable[Region]] | None = None,
         *, widgets: Mapping[Widget, tuple[Region, Region]],
-    ) -> Iterable[tuple[Region, list[Strip]]]:
+    ) -> Iterable[tuple[Widget, Region, list[Strip]]]:
         """Get rendered widgets (lists of segments) in the composition.
 
         Args:
@@ -1931,7 +1932,7 @@ class Compositor:
                 for render_region in regions:
                     new_x, new_y, new_width, new_height = render_region
                     yield (
-                        render_region,
+                        widget, render_region,
                         widget.render_lines(
                             _Region(
                                 new_x - region.x,
@@ -2181,6 +2182,27 @@ class Compositor:
         ) for y, chop in enumerate(chops[: size.height])]
         return render_strips
 
+    def activation_targets(self):
+        """Borrow only exposed published rows through the existing paint walk."""
+        targets = []
+        seen = []
+        widgets = self.published_widgets
+        bounds = self.size.region
+        if self.root is None or not widgets:
+            return targets
+
+        def collect(widget, region, strips):
+            for target in widget.activation_targets(region, strips):
+                if target.identity not in seen and target.available():
+                    seen.append(target.identity)
+                    targets.append(target)
+
+        cuts = self._cuts_for_regions(bounds, widgets)
+        with self._using_geometry(self.root, self._published_map):
+            self._render_chops(bounds, self._regions_to_spans((bounds,)), widgets=widgets,
+                               cuts=cuts, bounds=bounds, on_render=collect)
+        return targets
+
     def published_geometry(
         self, roots: Iterable[Widget],
     ) -> Iterator[tuple[Widget, MapGeometry]]:
@@ -2203,6 +2225,7 @@ class Compositor:
         spans: Iterable[tuple[int, int, int]],
         *, widgets: Mapping[Widget, tuple[Region, Region]], cuts: list[list[int]],
         bounds: Region,
+        on_render: Callable[[Widget, Region, list[Strip]], None] | None = None,
     ) -> Sequence[Mapping[int, Strip]]:
         """Render update 'chops'.
 
@@ -2261,7 +2284,9 @@ class Compositor:
         # Go through all the renders in reverse order and fill buckets with no render
         renders = self._get_renders(crop, render_regions, widgets=widgets)
 
-        for render_region, strips in renders:
+        for widget, render_region, strips in renders:
+            if on_render is not None:
+                on_render(widget, render_region, strips)
             render_x = render_region.x
             first_cut, last_cut = render_region.column_span
 
