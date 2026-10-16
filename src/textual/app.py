@@ -1936,9 +1936,8 @@ class App(Generic[ReturnType], DOMNode):
             legacy_windows=False,
             safe_box=False,
         )
-        screen_render = run_steps(
-            self.screen._compositor.render_update(full=True, simplify=simplify))
-        console.print(screen_render)
+        console.print(run_steps(
+            self.screen._compositor.render_update(full=True, simplify=simplify)))
         return console.export_svg(title=title or self.title, theme=self.ansi_theme)
 
     def save_screenshot(

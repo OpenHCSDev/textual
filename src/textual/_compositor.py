@@ -2076,16 +2076,10 @@ class Compositor:
         deadline: StepDeadline | None = None,
         dirty_widgets: Iterable[Widget] = (),
     ) -> Generator[None, None, CompositorUpdate | None]:
-        """Render an update renderable.
+        """Return one bound full/partial update after a budget pause.
 
-        Args:
-            full: Perform a full update if `True`, otherwise a partial update.
-            simplify: Simplify segments.
-            deadline: Pause before composition when this step's budget has passed.
-            dirty_widgets: Pending repaint requests to consume after that pause.
-
-        Returns:
-            One publication-bound update, or `None` when nothing needs rendering.
+        Read pending widget damage after pausing. Composition never yields:
+        the returned cells and publication geometry belong to the same frame.
         """
 
         yield from self._pause_before_commit(deadline)
@@ -2105,17 +2099,7 @@ class Compositor:
         deadline: StepDeadline | None = None,
         dirty_widgets: Iterable[Widget] = (),
     ) -> Generator[None, None, InlineUpdate]:
-        """Render an inline update.
-
-        Args:
-            size: Inline size.
-            clear: Also clear below the inline update (set when size decreases).
-            deadline: Pause before composition when this step's budget has passed.
-            dirty_widgets: Pending repaint requests to consume after that pause.
-
-        Returns:
-            One publication-bound inline update.
-        """
+        """Pause, then compose inline cells atomically; clear below a shrinking size."""
         yield from self._pause_before_commit(deadline)
         self.update_widgets(dirty_widgets)
         arranged = self._layout_map
