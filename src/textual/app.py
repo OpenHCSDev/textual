@@ -76,7 +76,7 @@ from textual._ansi_sequences import SYNC_END, SYNC_START
 from textual._ansi_theme import ALABASTER, MONOKAI
 from textual._callback import invoke
 from textual._compat import cached_property
-from textual._compositor import CompositorUpdate
+from textual._compositor import CompositorUpdate, run_steps
 from textual._context import NoActiveAppError, active_app, active_message_pump
 from textual._context import message_hook as message_hook_context_var
 from textual._dispatch_key import dispatch_key
@@ -1936,7 +1936,8 @@ class App(Generic[ReturnType], DOMNode):
             legacy_windows=False,
             safe_box=False,
         )
-        screen_render = self.screen._compositor.render_update(full=True, simplify=simplify)
+        screen_render = run_steps(
+            self.screen._compositor.render_update(full=True, simplify=simplify))
         console.print(screen_render)
         return console.export_svg(title=title or self.title, theme=self.ansi_theme)
 

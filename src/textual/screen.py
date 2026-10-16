@@ -1311,39 +1311,40 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
             if not self._frame_holds:
                 self.refresh()
 
-    def _compositor_refresh(self) -> None:
+    def _compositor_refresh(
+        self, deadline: StepDeadline | None = None,
+    ) -> Generator[None, None, None]:
         """Publish the compositor's damage through the foreground screen."""
         app = self.app
         if app._batch_count or self._frame_holds:
             return
-        if self is app.screen and app.is_inline:
-            inline_height = app._get_inline_height()
-        foreground = self is app.screen
-        if foreground:
-            # Only the screens this frame draws take part in it: a screen
-            # under an opaque one keeps its damage until it is shown.
-            drawn_behind = self._screens_seen_through
-            background_geometry = {
-                screen: screen._compositor._layout_map for screen in drawn_behind
-            }
+        if self is app.screen:
             if app.is_inline:
+                inline_height = app._get_inline_height()
                 clear = (
                     app._previous_inline_height is not None
                     and inline_height < app._previous_inline_height
                 )
-                update = self._compositor.render_inline(
+                update = yield from self._compositor.render_inline(
                     app.size.with_height(inline_height), clear=clear,
+                    deadline=deadline, dirty_widgets=self._dirty_widgets,
                 )
-                if update is not None:
-                    app._previous_inline_height = inline_height
             else:
-                update = self._compositor.render_update()
+                update = yield from self._compositor.render_update(
+                    deadline=deadline, dirty_widgets=self._dirty_widgets)
+            if self is not app.screen or app._batch_count or self._frame_holds:
+                return
+            # Composition is atomic after the budget pause. These are the
+            # backdrops just painted, not snapshots from before that pause.
+            drawn_behind = self._screens_seen_through
             if update is not None:
+                if app.is_inline:
+                    app._previous_inline_height = inline_height
                 # BackgroundScreen can render inside the foreground's renderer;
                 # the same output update publishes the foreground's damage.
                 ready = set(self._compositor._dirty_regions)
                 for screen in drawn_behind:
-                    update.bind_publication(screen._compositor, background_geometry[screen], ready)
+                    update.bind_publication(screen._compositor, screen._compositor._layout_map, ready)
                 app._display(self, update)
                 if update.admitted:
                     self._on_frame_published()
@@ -1353,7 +1354,10 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
             if drawn_behind:
                 self._release_paint()
             self._dirty_widgets.clear()
-        elif self._compositor._dirty_regions and self.is_current:
+        else:
+            self._compositor.update_widgets(self._dirty_widgets)
+            if not self._compositor._dirty_regions or not self.is_current:
+                return
             damage = set(self._compositor._dirty_regions)
             # The top screen draws this one behind itself, so it writes this
             # damage. Hand it the regions without consuming them.
@@ -1399,14 +1403,12 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
                     if self._start_stepped_layout(scroll=scroll_required) is not None:
                         return
 
-            if self._dirty_widgets:
-                self._compositor.update_widgets(self._dirty_widgets)
             if (layout_required or scroll_required
                     or self._dirty_widgets or self._compositor._dirty_regions):
                 # Preparation has source/follow effects even if layout left no
                 # damage. Acquire once, after all synchronous layout effects,
                 # rather than rendering held damage twice in the same timer.
-                self._compositor_refresh()
+                run_steps(self._compositor_refresh())
 
             if self._recompose_required:
                 self._recompose_required = False
@@ -1708,43 +1710,14 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
             self.app._handle_exception(error)
             return
 
-        if deadline is not None and self.is_current:
-            # The damaged rows render within the steps too, so publishing
-            # them reads rendered rows. A layout and render that fit a step
-            # publish in it; a longer one publishes in a step of its own.
-            yield from self._render_damage_steps(deadline)
         if self.is_current:
-            # Repaints requested between the steps publish with this frame
-            # (publishing clears the requests).
-            self._compositor.update_widgets(self._dirty_widgets)
-            self._compositor_refresh()
+            yield from self._compositor_refresh(deadline)
 
         if self.app._dom_ready:
             self.screen_layout_refresh_signal.publish(self.screen)
         else:
             self.app.post_message(events.Ready())
             self.app._dom_ready = True
-
-    def _render_damage_steps(self, deadline: StepDeadline) -> Generator[None, None, None]:
-        """Render the damaged visible rows of each widget, pausing between widgets once `deadline` passes.
-
-        Each widget keeps its rendered rows (its styles cache), so the paint
-        that follows reads them instead of rendering. Nothing is published.
-        """
-        compositor = self._compositor
-        for widget, (region, visible) in tuple(compositor.visible_widgets.items()):
-            damaged = [overlap for damage in compositor._dirty_regions
-                       if (overlap := visible.intersection(damage))]
-            if not damaged:
-                continue
-            if deadline.passed():
-                yield
-                if not widget.is_attached:
-                    continue
-            # One render for the rows the damage spans (rows are cached whole).
-            top = min(overlap.y for overlap in damaged)
-            bottom = max(overlap.bottom for overlap in damaged)
-            widget.render_lines(Region(0, top - region.y, region.width, bottom - top))
 
     async def _on_update(self, message: messages.Update) -> None:
         message.stop()
