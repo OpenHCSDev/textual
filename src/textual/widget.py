@@ -4128,26 +4128,6 @@ class Widget(DOMNode):
     hit_test_transparent: ClassVar[bool] = False
     """Decorative paint may opt out of the original pointer hit-test owner."""
 
-    def activation_targets(self, region: Region, strips: list[Strip]):
-        """Expose original click effects from admitted paint and its ancestry."""
-        primary = next((owner for owner in self.ancestors_with_self
-                        if isinstance(owner, PrimaryActivation)), None)
-        for y, strip in zip(region.line_range, strips):
-            x = region.x
-            for segment in strip:
-                width = segment.cell_length
-                if width:
-                    exposed = Region(x, y, width, 1)
-                    try:
-                        handler = extract_handler_actions("click", segment.style.meta if segment.style else {})
-                    except NoHandler:
-                        if primary is not None:
-                            yield PrimaryTarget(primary, exposed, primary.primary_activation)
-                    else:
-                        if handler.action is not None:
-                            yield StyleTarget(self, exposed, handler)
-                x += width
-
     def render_lines(self, crop: Region) -> list[Strip]:
         """Render the widget into lines.
 

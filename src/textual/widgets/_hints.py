@@ -7,12 +7,34 @@ from textual.widget import Widget
 from textual.widgets._static import Static
 
 
+class HintHost:
+    """Screen capability; mounted children are the only session inventory."""
+
+    async def action_show_hints(self) -> None:
+        self.dismiss_hints()
+        targets = self._compositor.activation_targets()
+        if not targets:
+            return
+        session = HintSession(self, targets)
+        await self.mount(*session.labels, session)
+        session.focus_on_host()
+
+    def dismiss_hints(self, *, restore=True) -> None:
+        for session in self.query_children(HintSession):
+            session.dismiss(restore=restore)
+
+    def _on_frame_published(self) -> None:
+        for session in self.query_children(HintSession):
+            session.reconcile_publication()
+
+
 class HintLabel(Static):
     hit_test_transparent = True
     ALLOW_SELECT = False
 
     def __init__(self, text, target):
         super().__init__(text, markup=False)
+        self.target = target
         self.styles.position = "absolute"
         self.styles.overlay = "screen"
         self.styles.layer = "_tooltips"
@@ -33,13 +55,13 @@ class HintSession(Widget, can_focus=True):
     def __init__(self, screen, targets):
         super().__init__()
         self.original_focus = screen.focused
-        self.targets = tuple(sorted(targets, key=lambda target: (target.region.y, target.region.x)))
+        targets = sorted(targets, key=lambda target: (target.region.y, target.region.x))
         self.prefix = ""
         width = 1
-        while len(self.alphabet) ** width < len(self.targets):
+        while len(self.alphabet) ** width < len(targets):
             width += 1
-        self.choices = tuple((self.label(index, width), target) for index, target in enumerate(self.targets))
-        self.labels = tuple(HintLabel(label, target) for label, target in self.choices)
+        self.labels = tuple(HintLabel(self.label(index, width), target)
+                            for index, target in enumerate(targets))
         self.styles.position = "absolute"
         self.styles.overlay = "screen"
         self.styles.width = 0
@@ -52,6 +74,10 @@ class HintSession(Widget, can_focus=True):
             index, digit = divmod(index, len(cls.alphabet))
             characters.append(cls.alphabet[digit])
         return "".join(reversed(characters))
+
+    def focus_on_host(self):
+        if self.is_attached and self.screen is self.app.screen:
+            self.screen.set_focus(self, scroll_visible=False)
 
     def check_consume_key(self, key, character=None):
         return key == "escape" or (character is not None and character.isprintable())
@@ -67,14 +93,15 @@ class HintSession(Widget, can_focus=True):
             event.stop()
             event.prevent_default()
             self.prefix += event.character
-            remaining = [(label, target) for label, target in self.choices if label.startswith(self.prefix)]
+            remaining = [label for label in self.labels
+                         if str(label.content).startswith(self.prefix)]
             if not remaining:
                 self.dismiss()
-            elif len(remaining) == 1 and remaining[0][0] == self.prefix:
-                self.dismiss(target=remaining[0][1])
+            elif len(remaining) == 1 and remaining[0].content == self.prefix:
+                self.dismiss(target=remaining[0].target)
             else:
-                for widget, (label, _target) in zip(self.labels, self.choices):
-                    widget.display = label.startswith(self.prefix)
+                for label in self.labels:
+                    label.display = str(label.content).startswith(self.prefix)
 
     def on_paste(self, event: events.Paste):
         original = self.original_focus
@@ -83,21 +110,23 @@ class HintSession(Widget, can_focus=True):
         if original is not None and original.is_attached:
             original.post_message(event)
 
+    def restore_focus(self):
+        if self.screen is not self.app.screen:
+            return
+        original = self.original_focus
+        if original is None or original.is_attached:
+            self.screen.set_focus(original, scroll_visible=False)
+
     def dismiss(self, *, target=None, restore=True):
         if self.disabled:
             return
         self.disabled = True
-        # Restore before a pointer's ordinary dispatch, never asynchronously
-        # after that click has already chosen a different focus target.
-        original = self.original_focus
-        if restore and original is not None and original.is_attached and self.screen is self.app.screen:
-            original.focus(scroll_visible=False)
-        self.screen.run_worker(self._retire(target), group="hint-retirement")
-
-    async def _retire(self, target):
+        if restore:
+            self.restore_focus()
         screen = self.screen
-        if screen._hint_session is self:
-            screen._hint_session = None
+        screen.run_worker(self._retire(screen, target), group="hint-retirement")
+
+    async def _retire(self, screen, target):
         await screen.remove_children(self.labels)
         await self.remove()
         if target is not None:
@@ -109,5 +138,5 @@ class HintSession(Widget, can_focus=True):
     def reconcile_publication(self):
         if self.disabled:
             return
-        if any(not target.available() for target in self.targets):
+        if any(not label.target.available() for label in self.labels):
             self.dismiss()
