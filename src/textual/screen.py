@@ -68,6 +68,7 @@ from textual.signal import Signal
 from textual.timer import Timer
 from textual.widget import Widget
 from textual.widgets import Tooltip
+from textual.widgets._hints import HintHost
 from textual.widgets._toast import ToastRack
 
 if TYPE_CHECKING:
@@ -144,7 +145,7 @@ class ResultCallback(Generic[ScreenResultType]):
 
 
 @rich.repr.auto
-class Screen(Generic[ScreenResultType], Widget):
+class Screen(HintHost, Generic[ScreenResultType], Widget):
     """The base class for screens."""
 
     AUTO_FOCUS: ClassVar[str | None] = None
@@ -1274,31 +1275,6 @@ class Screen(Generic[ScreenResultType], Widget):
                 self._update_timer.resume()
 
         self._invoke_and_clear_callbacks()
-
-    _hint_session = None
-
-    async def action_show_hints(self) -> None:
-        """Label the original primary effects and links in the displayed scene."""
-        from textual.widgets._hints import HintSession
-        self.dismiss_hints()
-        targets = self._compositor.activation_targets()
-        if not targets:
-            return
-        session = HintSession(self, targets)
-        mounted = self.mount(*session.labels, session)
-        self._hint_session = session
-        await mounted
-        if self._hint_session is session and not session.disabled and self is self.app.screen:
-            session.focus(scroll_visible=False)
-
-    def dismiss_hints(self, *, restore=True) -> None:
-        if self._hint_session is not None:
-            self._hint_session.dismiss(restore=restore)
-
-    def _on_frame_published(self) -> None:
-        """Observe an actual displayed update."""
-        if self._hint_session is not None:
-            self._hint_session.reconcile_publication()
 
     def _after_refresh_pending(
         self, screen, *, refresh_requested: dict[Screen, bool], refresh_pending: bool,

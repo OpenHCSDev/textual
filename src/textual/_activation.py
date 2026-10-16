@@ -11,6 +11,7 @@ from textual.geometry import Region
 from textual.errors import NoWidget
 
 if TYPE_CHECKING:
+    from textual.strip import Strip
     from textual.widget import Widget
 
 
@@ -18,6 +19,27 @@ if TYPE_CHECKING:
 class Activation:
     widget: Widget
     region: Region
+
+    @classmethod
+    def from_paint(cls, widget: Widget, region: Region, strips: list[Strip]):
+        """Decode exposed click metadata and primary declarations once."""
+        primary = next((owner for owner in widget.ancestors_with_self
+                        if isinstance(owner, PrimaryActivation)), None)
+        for y, strip in zip(region.line_range, strips):
+            x = region.x
+            for segment in strip:
+                width = segment.cell_length
+                if width:
+                    exposed = Region(x, y, width, 1)
+                    try:
+                        handler = extract_handler_actions("click", segment.style.meta if segment.style else {})
+                    except NoHandler:
+                        if primary is not None:
+                            yield PrimaryTarget(primary, exposed, primary.primary_activation)
+                    else:
+                        if handler.action is not None:
+                            yield StyleTarget(widget, exposed, handler)
+                x += width
 
     def available(self) -> bool:
         widget = self.widget

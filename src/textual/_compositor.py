@@ -42,6 +42,7 @@ from rich.segment import Segment
 from rich.style import Style
 
 from textual import errors, events
+from textual._activation import Activation
 from textual._loop import loop_last
 from textual._spatial_map import SpatialMap
 from textual.geometry import NULL_OFFSET, NULL_SPACING, Offset, Region, Size, Spacing
@@ -2192,7 +2193,7 @@ class Compositor:
             return targets
 
         def collect(widget, region, strips):
-            for target in widget.activation_targets(region, strips):
+            for target in Activation.from_paint(widget, region, strips):
                 if target.identity not in seen and target.available():
                     seen.append(target.identity)
                     targets.append(target)
