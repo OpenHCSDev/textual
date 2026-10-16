@@ -1520,7 +1520,7 @@ class Compositor:
                 yield from arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
                                complete, inherited_layers, source)  # noqa: F821 -- closure cleared after traversal
                 return
-            resource_type = widget.subtree_geometry_resource()
+            resource_type = widget.subtree_geometry_resource(visible_only=visible_only)
             enclosing_complete = complete
             # The widget's geometry type chooses a complete or a placed
             # arrangement. Cached children stay inside their parent's cache
