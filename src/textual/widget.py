@@ -689,6 +689,20 @@ class Widget(DOMNode):
         return self._anchored
 
     @property
+    def follows_tail(self) -> bool:
+        """Whether anchoring currently follows the latest content."""
+        return self._anchored and not self._anchor_released
+
+    def tail_follow_changed(self) -> None:
+        """React to entering or leaving tail-follow, not to each scroll offset."""
+
+    def _set_anchor_state(self, *, anchored: bool, released: bool) -> None:
+        following = self.follows_tail
+        self._anchored, self._anchor_released = anchored, released
+        if self.follows_tail != following:
+            self.tail_follow_changed()
+
+    @property
     def is_mouse_over(self) -> bool:
         """Is the mouse currently over this widget?
 
@@ -863,7 +877,7 @@ class Widget(DOMNode):
             anchor: Anchor the widget if `True`, clear the anchor if `False`.
 
         """
-        self._anchored = anchor
+        self._set_anchor_state(anchored=anchor, released=self._anchor_released)
         if anchor:
             self.scroll_end(immediate=True, animate=False)
 
@@ -874,7 +888,7 @@ class Widget(DOMNode):
 
         """
         self.scroll_target_y = self.scroll_y
-        self._anchor_released = True
+        self._set_anchor_state(anchored=self._anchored, released=True)
 
     def _check_anchor(self) -> None:
         """Check if the scroll position is near enough to the bottom to restore anchor."""
@@ -883,7 +897,7 @@ class Widget(DOMNode):
             and self._anchor_released
             and self.scroll_y >= self.max_scroll_y
         ):
-            self._anchor_released = False
+            self._set_anchor_state(anchored=True, released=False)
 
     def _check_disabled(self) -> bool:
         """Check if the widget is disabled either explicitly by setting `disabled`,
@@ -2951,7 +2965,7 @@ class Widget(DOMNode):
             )
 
         if self._anchored and self._anchor_released:
-            self._anchor_released = False
+            self._set_anchor_state(anchored=True, released=False)
 
         if immediate:
             _lazily_scroll_end()
