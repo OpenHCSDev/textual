@@ -21,7 +21,7 @@ from textual.css._error_tools import friendly_list
 from textual.geometry import Size
 from textual.message import Message
 from textual.reactive import reactive
-from textual.widget import Widget
+from textual.widget import PrimaryActivation, Widget
 
 ButtonVariant = Literal["default", "primary", "success", "warning", "error"]
 """The names of the valid button variants.
@@ -36,7 +36,7 @@ class InvalidButtonVariant(Exception):
     """Exception raised if an invalid button variant is used."""
 
 
-class Button(Widget, can_focus=True):
+class Button(PrimaryActivation, Widget, can_focus=True):
     """A simple clickable button.
 
     Clicking the button will send a [Button.Pressed][textual.widgets.Button.Pressed] message,
@@ -412,6 +412,10 @@ class Button(Widget, can_focus=True):
         self, renderable: RenderableType, base_style: Style
     ) -> ConsoleRenderable:
         return cast(ConsoleRenderable, renderable)
+
+    @property
+    def primary_activation(self):
+        return self.action_press
 
     async def _on_click(self, event: events.Click) -> None:
         event.stop()

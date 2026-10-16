@@ -63,6 +63,7 @@ from textual._measurement import (
 )
 from textual.message_pump import MessagePump
 from textual._styles_cache import StylesCache
+from textual._activation import PrimaryActivation
 from textual._types import AnimationLevel
 from textual.actions import SkipAction
 from textual.await_complete import AwaitComplete, AwaitCompletion
@@ -4138,6 +4139,9 @@ class Widget(DOMNode):
             line = Strip.blank(self.size.width, self.visual_style.rich_style)
 
         return line
+
+    hit_test_transparent: ClassVar[bool] = False
+    """Decorative paint may opt out of the original pointer hit-test owner."""
 
     def render_lines(self, crop: Region) -> list[Strip]:
         """Render the widget into lines.

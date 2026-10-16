@@ -68,6 +68,7 @@ from textual.signal import Signal
 from textual.timer import Timer
 from textual.widget import Widget
 from textual.widgets import Tooltip
+from textual.widgets._hints import HintHost
 from textual.widgets._toast import ToastRack
 
 if TYPE_CHECKING:
@@ -144,7 +145,7 @@ class ResultCallback(Generic[ScreenResultType]):
 
 
 @rich.repr.auto
-class Screen(Generic[ScreenResultType], Widget):
+class Screen(HintHost, Generic[ScreenResultType], Widget):
     """The base class for screens."""
 
     AUTO_FOCUS: ClassVar[str | None] = None
@@ -1275,9 +1276,6 @@ class Screen(Generic[ScreenResultType], Widget):
 
         self._invoke_and_clear_callbacks()
 
-    def _on_frame_published(self) -> None:
-        """Observe an actual displayed update."""
-
     def _after_refresh_pending(
         self, screen, *, refresh_requested: dict[Screen, bool], refresh_pending: bool,
     ) -> bool:
@@ -1912,6 +1910,7 @@ class Screen(Generic[ScreenResultType], Widget):
 
     def _on_screen_suspend(self) -> None:
         """Screen has suspended."""
+        self.dismiss_hints(restore=False)
         # Releases now route to another Screen. Retain the copyable range,
         # but retire the press and its auto-scroll through the original owner.
         self._mouse_down_offset = None
@@ -1965,6 +1964,7 @@ class Screen(Generic[ScreenResultType], Widget):
 
     async def _on_resize(self, event: events.Resize) -> None:
         event.stop()
+        self.dismiss_hints()
         self._screen_resized(event.size)
 
         horizontal_breakpoints = (
@@ -2263,6 +2263,8 @@ class Screen(Generic[ScreenResultType], Widget):
         self._watch__select_state(self._select_state)
 
     def _forward_event(self, event: events.Event) -> AwaitComplete:
+        if isinstance(event, events.MouseEvent) and not isinstance(event, events.MouseMove):
+            self.dismiss_hints()
         if event.is_forwarded:
             return AwaitComplete.nothing()
         event._set_forwarded()

@@ -8,6 +8,7 @@ from textual.document._document import (
 )
 from textual.document._document_navigator import DocumentNavigator
 from textual.document._edit import Edit
+from textual.document._editing import EditingMode, VimInsert, VimNormal, VimVisual
 from textual.document._history import EditHistory
 from textual.document._syntax_aware_document import SyntaxAwareDocument
 from textual.document._wrapped_document import WrappedDocument
@@ -30,6 +31,10 @@ __all__ = [
     "Edit",
     "EditResult",
     "EditHistory",
+    "EditingMode",
+    "VimInsert",
+    "VimNormal",
+    "VimVisual",
     "EndColumn",
     "Highlight",
     "HighlightName",

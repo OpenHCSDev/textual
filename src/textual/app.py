@@ -81,6 +81,7 @@ from textual._context import NoActiveAppError, active_app, active_message_pump
 from textual._context import message_hook as message_hook_context_var
 from textual._dispatch_key import dispatch_key
 from textual._event_broker import NoHandler, extract_handler_actions
+from textual._clipboard import ClipboardContent
 from textual._files import generate_datetime_filename
 from textual._path import (
     CSSPathType,
@@ -873,7 +874,7 @@ class App(Generic[ReturnType], DOMNode):
         self._css_update_count: int = 0
         """Incremented when CSS is invalidated."""
 
-        self._clipboard: str = ""
+        self.clipboard_content = ClipboardContent("")
         """Contents of local clipboard."""
 
         self.supports_smooth_scrolling: bool = False
@@ -1050,7 +1051,7 @@ class App(Generic[ReturnType], DOMNode):
         Note, that this only contains text copied in the app, and not
         text copied from elsewhere in the OS.
         """
-        return self._clipboard
+        return self.clipboard_content.text
 
     def _realtime_animation_begin(self) -> None:
         """A scroll or other animation that must be smooth has begun."""
@@ -1818,7 +1819,7 @@ class App(Generic[ReturnType], DOMNode):
 
         return LoadingIndicator()
 
-    def copy_to_clipboard(self, text: str) -> None:
+    def copy_to_clipboard(self, text: str | ClipboardContent) -> None:
         """Copy text to the clipboard.
 
         !!! note
@@ -1828,7 +1829,11 @@ class App(Generic[ReturnType], DOMNode):
         Args:
             text: Text you wish to copy to the clipboard.
         """
-        self._clipboard = text
+        self.clipboard_content = ClipboardContent.of(text)
+        self.publish_clipboard(self.clipboard_content.text)
+
+    def publish_clipboard(self, text: str) -> None:
+        """Transport hook; retaining the typed local payload is App's job."""
         if self._driver is None:
             return
         import base64
@@ -4280,6 +4285,11 @@ class App(Generic[ReturnType], DOMNode):
         If the classvar on the screen is *not* set (and left as `None`), then the app's `ESCAPE_TO_MINIMIZE` is used.
 
         """
+        focused = self.screen.focused
+        if focused is not None and any(
+            node.check_consume_key("escape", None) for node in focused.ancestors_with_self
+        ):
+            return False
         return bool(
             self.ESCAPE_TO_MINIMIZE
             if self.screen.ESCAPE_TO_MINIMIZE is None
@@ -4428,31 +4438,17 @@ class App(Generic[ReturnType], DOMNode):
         except AttributeError:
             return False
         try:
-            _modifiers, action = extract_handler_actions(event_name, style.meta)
+            handler = extract_handler_actions(event_name, style.meta)
         except NoHandler:
             return False
         else:
             event.stop()
 
-        if isinstance(action, str):
-            await self.run_action(action, default_namespace)
-        elif isinstance(action, tuple) and len(action) == 2:
-            action_name, action_params = action
-            namespace, parsed_action, _ = actions.parse(action_name)
-            await self.run_action(
-                (namespace, parsed_action, action_params),
-                default_namespace,
-            )
-        else:
-            if isinstance(action, tuple) and self.debug:
-                # It's a tuple and made it this far, which means it'll be a
-                # malformed action. This is a no-op, but let's log that
-                # anyway.
-                log.warning(
-                    f"Can't parse @{event_name} action from style meta; check your console markup syntax"
-                )
-            return False
-        return True
+        return await self.dispatch_style_action(handler, event, default_namespace)
+
+    async def dispatch_style_action(self, handler, event, default_namespace) -> bool:
+        """Shared decoded-action hook for pointer and keyboard activation."""
+        return await handler.run(self, default_namespace)
 
     async def _on_update(self, message: messages.Update) -> None:
         message.stop()
