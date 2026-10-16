@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Generic, Hashable, Iterable, TypeVar
+from typing import TYPE_CHECKING, ClassVar, Generic, Hashable, Iterable, TypeVar
 
 import rich.repr
 from rich.console import RenderableType
@@ -285,6 +285,9 @@ class Select(Generic[SelectType], Vertical, can_focus=True):
     A Select displays the current selection.
     When activated with ++enter++ the widget displays an overlay with a list of all possible options.
     """
+
+    CURRENT: ClassVar[type[SelectCurrent]] = SelectCurrent
+    OVERLAY: ClassVar[type[SelectOverlay]] = SelectOverlay
 
     NULL = NULL
     """Constant to flag that the widget has no selection."""
@@ -618,8 +621,8 @@ class Select(Generic[SelectType], Vertical, can_focus=True):
 
     def compose(self) -> ComposeResult:
         """Compose Select with overlay and current value."""
-        yield SelectCurrent(self.prompt)
-        yield SelectOverlay(type_to_search=self._type_to_search).data_bind(
+        yield self.CURRENT(self.prompt)
+        yield self.OVERLAY(type_to_search=self._type_to_search).data_bind(
             compact=Select.compact
         )
 

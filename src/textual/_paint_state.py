@@ -1,17 +1,33 @@
-"""Immutable inherited paint values, resolved once per style/topology revision."""
-
+"""Inherited paint and the declaration inputs that produce it."""
 from __future__ import annotations
 
 from typing import NamedTuple
-
 from rich.style import NULL_STYLE, Style
+from textual.color import Color, TRANSPARENT
 
-from textual.color import Color
+
+class PaintLayer:
+    """One local colour layer, independent of how its inputs are declared."""
+
+    paint_foreground: Color | None
+    paint_background: Color | None
+    background_tint: Color
+    text_style: Style
+    text_opacity: float
+    layer_opacity: float
+    auto_color: bool
+    paint_key: int | None
+    paint_cacheable: bool
+
+    @property
+    def background_color(self) -> Color:
+        color = self.paint_background
+        return TRANSPARENT if color is None else color
 
 
 class PaintState(NamedTuple):
     parent: PaintState | None
-    style_key: int
+    style_key: int | None
     background: Color
     foreground: Color
     text_style: Style
@@ -21,25 +37,28 @@ class PaintState(NamedTuple):
     cacheable: bool = True
 
     def same_paint(self, other: PaintState) -> bool:
-        """Compare pixels, independently of the resolver's dependency lineage.
+        return self[2:8] == other[2:8]
 
-        Ancestor visibility or layout edits require fresh dependency resolution,
-        but retained paint remains valid when its resulting values are unchanged.
-        """
-        return (
-            self.background,
-            self.foreground,
-            self.text_style,
-            self.opacity,
-            self.base_background,
-            self.layered_background,
-        ) == (
-            other.background,
-            other.foreground,
-            other.text_style,
-            other.opacity,
-            other.base_background,
-            other.layered_background,
+    @classmethod
+    def resolve(cls, parent: PaintState, layer: PaintLayer) -> PaintState:
+        """Apply one declaration layer, preserving native alpha order."""
+        opacity = parent.opacity * layer.layer_opacity
+        local_background = layer.paint_background
+        tinted = layer.background_color.tint(layer.background_tint)
+        background = text_background = parent.background
+        if local_background is not None:
+            text_background = background + tinted
+            background += tinted.multiply_alpha(opacity)
+        local_foreground = layer.paint_foreground
+        foreground = parent.foreground if local_foreground is None else local_foreground
+        if layer.auto_color:
+            foreground = text_background.get_contrast_text(foreground.a)
+        return cls(
+            parent, layer.paint_key, background, foreground,
+            parent.text_style + layer.text_style, opacity,
+            parent.layered_background,
+            parent.layered_background + tinted.multiply_alpha(opacity),
+            parent.cacheable and layer.paint_cacheable,
         )
 
 
@@ -47,24 +66,3 @@ EMPTY_PAINT = PaintState(
     None, -1, Color(0, 0, 0, 0), Color(255, 255, 255, 0),
     NULL_STYLE, 1.0, Color(0, 0, 0, 0), Color(0, 0, 0, 0),
 )
-
-
-def resolve_paint(parent: PaintState, styles) -> PaintState:
-    """Apply one declaration layer, preserving Textual's native alpha order."""
-    opacity = parent.opacity * styles.opacity
-    tinted = styles.background.tint(styles.background_tint)
-    background = parent.background
-    text_background = background
-    if styles.has_rule("background"):
-        text_background = background + tinted
-        background += tinted.multiply_alpha(opacity)
-    foreground = styles.color if styles.has_rule("color") else parent.foreground
-    if styles.has_rule("auto_color") and styles.auto_color:
-        foreground = text_background.get_contrast_text(foreground.a)
-    return PaintState(
-        parent, styles._cache_key, background, foreground,
-        parent.text_style + styles.text_style, opacity,
-        parent.layered_background,
-        parent.layered_background + tinted.multiply_alpha(opacity),
-        parent.cacheable,
-    )

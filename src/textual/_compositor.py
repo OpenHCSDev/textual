@@ -45,6 +45,7 @@ from textual import errors, events
 from textual._activation import Activation
 from textual._loop import loop_last
 from textual._spatial_map import SpatialMap
+from textual.box_model import DEFAULT_LAYER
 from textual.geometry import NULL_OFFSET, NULL_SPACING, Offset, Region, Size, Spacing
 from textual.map_geometry import MapGeometry
 from textual.layout import WidgetPlacement
@@ -1289,7 +1290,7 @@ class Compositor:
             None if root_layers is None
             else {name: index for index, name in enumerate(root_layers)}
         )
-        default_layers = {"default": 0}
+        default_layers = {DEFAULT_LAYER: 0}
         retained_paths: set[Widget] = set()
         if visible_only:
             # Requested targets need their outer placement even when offscreen.
@@ -1348,7 +1349,7 @@ class Compositor:
                 invisible_widgets.add(widget)
 
             # Container region is minus border
-            container_region = region.shrink(styles.gutter)
+            container_region = region.shrink(widget.geometry.box_gutter)
             container_size = container_region.size
 
             # Widgets with scrollbars (containers or scroll view) require additional processing
@@ -1417,7 +1418,7 @@ class Compositor:
                     if widget._cover_widget is not None:
                         store_geometry(widget._cover_widget, _MapGeometry.from_widget(
                             widget._cover_widget,
-                            region.shrink(widget.styles.gutter),
+                            region.shrink(widget.geometry.box_gutter),
                             order,
                             clip.region,
                             region.size,
@@ -1462,7 +1463,7 @@ class Compositor:
                     if (
                         widget.show_vertical_scrollbar
                         or widget.show_horizontal_scrollbar
-                    ) and styles.scrollbar_visibility == "visible":
+                    ) and widget.geometry.scrollbar_visibility == "visible":
                         for chrome_widget, chrome_region in widget._arrange_scrollbars(
                             container_region
                         ):

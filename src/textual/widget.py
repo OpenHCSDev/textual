@@ -43,7 +43,7 @@ from rich.style import Style
 from rich.text import Text
 from typing_extensions import Self
 
-from textual.css.styles import RenderStyles, StylesBase
+from textual.css.styles import RenderStyles
 
 if TYPE_CHECKING:
     from textual.app import RenderResult
@@ -62,13 +62,14 @@ from textual._measurement import (
     box_depends_on_available_height, height_dependency,
 )
 from textual.message_pump import MessagePump
-from textual._styles_cache import StylesCache
-from textual._activation import PrimaryActivation
+from textual._styles_cache import FramePaint, PaintStyles, StylesCache
+from textual._activation import PrimaryActivation, PrimaryTarget, StyleTarget
+from textual._event_broker import NoHandler, extract_handler_actions
 from textual._types import AnimationLevel
 from textual.actions import SkipAction
 from textual.await_complete import AwaitComplete, AwaitCompletion
 from textual.await_remove import AwaitRemove
-from textual.box_model import BoxModel
+from textual.box_model import DEFAULT_LAYER, BoxModel
 from textual.cache import FIFOCache, LRUCache
 from textual.color import Color
 from textual.compose import compose, compose_async
@@ -348,7 +349,7 @@ class Widget(DOMNode):
             if not isinstance(ancestor, Widget):
                 break
             ancestor._measurement_updated()
-            if not ancestor.styles.auto_dimensions:
+            if not ancestor.geometry.auto_dimensions:
                 break
 
     DEFAULT_CSS = """
@@ -451,6 +452,8 @@ class Widget(DOMNode):
     """A title to show in the bottom border (if there is one)."""
 
     # Default sort order, incremented by constructor
+    DEFAULT_LAYOUT: ClassVar[type[Layout]] = VerticalLayout
+
     _sort_order: ClassVar[int] = 0
 
     _PSEUDO_CLASSES: ClassVar[dict[str, Callable[[Widget], bool]]] = {
@@ -504,7 +507,7 @@ class Widget(DOMNode):
         self._scroll_required = False
         self._recompose_required = False
         self._refresh_styles_required = False
-        self._default_layout = VerticalLayout()
+        self._default_layout = self.DEFAULT_LAYOUT()
         self._animate: BoundAnimator | None = None
         Widget._sort_order += 1
         self.sort_order = Widget._sort_order
@@ -668,11 +671,11 @@ class Widget(DOMNode):
         Returns:
             Relative offset.
         """
-        return self.styles.offset.resolve(self.size, self.screen.size)
+        return self.geometry.resolve_offset(self.size, self.screen.size)
 
     @offset.setter
     def offset(self, offset: tuple[int, int]) -> None:
-        self.styles.offset = ScalarOffset.from_offset(offset)
+        self.geometry.set_placement_offset(ScalarOffset.from_offset(offset))
 
     @property
     def opacity(self) -> float:
@@ -727,7 +730,7 @@ class Widget(DOMNode):
     def uses_screen_coordinates(self) -> bool:
         """Whether the native placement must resolve against the screen."""
         return (self.absolute_offset is not None
-                or self.styles.has_any_rules("constrain_x", "constrain_y"))
+                or self.geometry.constrain_x != "none" or self.geometry.constrain_y != "none")
 
     def subtree_geometry_resource(self):
         """Choose the native arrangement owner for this widget's scroll scope."""
@@ -1780,7 +1783,7 @@ class Widget(DOMNode):
         if local_styles:
             # Fixed/fill native boxes never query child content. Their source
             # is the original local style owner, not descendant layout epochs.
-            styles = self.styles
+            styles = self.geometry
             revision = (id(styles), styles, styles._cache_key)
         cache_container = container
         cache_width_fraction, cache_height_fraction = width_fraction, height_fraction
@@ -1792,8 +1795,8 @@ class Widget(DOMNode):
             parent = self._parent
             revision += (
                 self._parent_revision,
-                parent is not None and parent.styles.is_auto_width,
-                parent is not None and parent.styles.is_auto_height,
+                parent is not None and parent.geometry.is_auto_width,
+                parent is not None and parent.geometry.is_auto_height,
             )
         if independent_height:
             cache_container = container.with_height(0)
@@ -1826,7 +1829,7 @@ class Widget(DOMNode):
             model, self._extrema = cached_measurement
             return model
 
-        model, extrema = BoxModel.resolve(
+        model, extrema = self.geometry.resolve_box(
             self, container, viewport, width_fraction, height_fraction,
             constrain_width, greedy,
         )
@@ -2025,7 +2028,7 @@ class Widget(DOMNode):
         if not self.is_scrollable or not self.container_size:
             return
 
-        styles = self.styles
+        styles = self.geometry
         overflow_x = styles.overflow_x
         overflow_y = styles.overflow_y
 
@@ -2058,11 +2061,11 @@ class Widget(DOMNode):
             # When a single scrollbar is shown, the other dimension changes, so we need to recalculate.
             if overflow_x == "auto" and show_vertical and not show_horizontal:
                 show_horizontal = self.virtual_size.width > (
-                    width - styles.scrollbar_size_vertical
+                    width - styles.vertical_scrollbar_size
                 )
             if overflow_y == "auto" and show_horizontal and not show_vertical:
                 show_vertical = self.virtual_size.height > (
-                    height - styles.scrollbar_size_horizontal
+                    height - styles.horizontal_scrollbar_size
                 )
 
         if (
@@ -2105,10 +2108,10 @@ class Widget(DOMNode):
         Returns:
             Number of columns in the vertical scrollbar.
         """
-        styles = self.styles
-        if styles.scrollbar_gutter == "stable" and styles.overflow_y == "auto":
-            return styles.scrollbar_size_vertical
-        return styles.scrollbar_size_vertical if self.show_vertical_scrollbar else 0
+        geometry = self.geometry
+        if geometry.stable_gutter and geometry.overflow_y == "auto":
+            return geometry.vertical_scrollbar_size
+        return geometry.vertical_scrollbar_size if self.show_vertical_scrollbar else 0
 
     @property
     def scrollbar_size_horizontal(self) -> int:
@@ -2117,8 +2120,7 @@ class Widget(DOMNode):
         Returns:
             Number of rows in the horizontal scrollbar.
         """
-        styles = self.styles
-        return styles.scrollbar_size_horizontal if self.show_horizontal_scrollbar else 0
+        return self.geometry.horizontal_scrollbar_size if self.show_horizontal_scrollbar else 0
 
     @property
     def scrollbar_gutter(self) -> Spacing:
@@ -2138,7 +2140,7 @@ class Widget(DOMNode):
         Returns:
             Additional spacing around content area.
         """
-        return self.styles.gutter + self.scrollbar_gutter
+        return self.geometry.box_gutter + self.scrollbar_gutter
 
     @property
     def size(self) -> Size:
@@ -2151,7 +2153,7 @@ class Widget(DOMNode):
             Content area size.
         """
         width, height = self._size
-        gutter = self.styles.gutter
+        gutter = self.geometry.box_gutter
         return Size(max(0, width - gutter.width), max(0, height - gutter.height))
 
     @property
@@ -2197,7 +2199,7 @@ class Widget(DOMNode):
         Returns:
             Screen region that contains a widget's content.
         """
-        content_region = self.region.shrink(self.styles.gutter)
+        content_region = self.region.shrink(self.geometry.box_gutter)
         return content_region
 
     @property
@@ -2207,7 +2209,7 @@ class Widget(DOMNode):
         Returns:
             Screen region that contains a widget's content.
         """
-        content_region = self.region.shrink(self.styles.gutter).shrink(
+        content_region = self.region.shrink(self.geometry.box_gutter).shrink(
             self.scrollbar_gutter
         )
         return content_region
@@ -2312,7 +2314,7 @@ class Widget(DOMNode):
         Returns:
             The virtual region of the Widget, inclusive of its margin.
         """
-        return self.virtual_region.grow(self.styles.margin)
+        return self.virtual_region.grow(self.geometry.margin)
 
     @property
     def _self_or_ancestors_disabled(self) -> bool:
@@ -2339,7 +2341,7 @@ class Widget(DOMNode):
     def _focus_sort_key(self) -> tuple[int, int]:
         """Key function to sort widgets into focus order."""
         x, y, _, _ = self.virtual_region
-        top, _, _, left = self.styles.margin
+        top, _, _, left = self.geometry.margin
         return y - top, x - left
 
     @property
@@ -2383,7 +2385,7 @@ class Widget(DOMNode):
         native = (
             not self._container_selection_dependency.depends(self)
             and type(self).children is DOMNode.children
-            and type(self.styles) is RenderStyles
+            and type(self.geometry) is RenderStyles
         )
         answers = self._height_dependency_answers()
         if native and "relative_children" in answers:
@@ -2405,29 +2407,6 @@ class Widget(DOMNode):
             return self.screen._compositor._layout_map.get(self) is not None
         except NoScreen:
             return False
-
-    def _resolve_extrema(
-        self,
-        container: Size,
-        viewport: Size,
-        width_fraction: Fraction,
-        height_fraction: Fraction,
-    ) -> Extrema:
-        """Resolve minimum and maximum values for width and height.
-
-        Args:
-            container: Size of outer widget.
-            viewport: Viewport size.
-            width_fraction: Size of 1fr width.
-            height_fraction: Size of 1fr height.
-
-        Returns:
-            Extrema object.
-        """
-
-        return Extrema.resolve(
-            self.styles, container, viewport, width_fraction, height_fraction,
-        )
 
     def animate(
         self,
@@ -2489,18 +2468,18 @@ class Widget(DOMNode):
         Returns:
             A layout object.
         """
-        return self.styles.layout or self._default_layout
+        return self.geometry.child_layout or self._default_layout
 
     @property
     @height_dependency(NATIVE_CONTAINER_SELECTION)
     def is_container(self) -> bool:
         """Is this widget a container (contains other widgets)?"""
-        return bool(self._nodes) or self.styles.layout is not None
+        return bool(self._nodes) or self.geometry.child_layout is not None
 
     @property
     def is_scrollable(self) -> bool:
         """Can this widget be scrolled?"""
-        return self.styles.layout is not None or bool(self._nodes)
+        return self.geometry.child_layout is not None or bool(self._nodes)
 
     @property
     def is_scrolling(self) -> bool:
@@ -2526,21 +2505,21 @@ class Widget(DOMNode):
         Returns:
             Name of layer.
         """
-        return self.styles.layer or "default"
+        return self.geometry.layer_name
 
     @property
     def layers(self) -> tuple[str, ...]:
         """Names from the outermost authored layer declaration, or the default."""
         order = self._get_layer_order(self.walk_ancestors(with_self=True))
-        return ("default",) if order is None else order
+        return (DEFAULT_LAYER,) if order is None else order
 
     def _get_layer_order(self, sources: Iterable[DOMNode]) -> tuple[str, ...] | None:
         order = None
         for node in sources:
             if not isinstance(node, Widget):
                 break
-            if node.styles.has_rule("layers"):
-                order = node.styles.layers
+            if (declared := node.geometry.layer_order) is not None:
+                order = declared
         return order
 
     @property
@@ -2578,7 +2557,7 @@ class Widget(DOMNode):
             # Invalidation must not measure a lazily invalidated compositor.
             # Mark the last committed local content bounds; the next geometry
             # commit dirties its new bounds independently.
-            self._styles_cache.set_dirty(self._size.region.shrink(self.styles.gutter).reset_offset)
+            self._styles_cache.set_dirty(self._size.region.shrink(self.geometry.box_gutter).reset_offset)
             outer_size = self.outer_size
             self._dirty_regions.add(outer_size.region)
             if outer_size:
@@ -3453,7 +3432,7 @@ class Widget(DOMNode):
 
             container = widget.parent
 
-            if widget.styles.dock != "none":
+            if widget.geometry.is_docked:
                 scroll_offset = Offset(0, 0)
             else:
                 scroll_offset = container.scroll_to_region(
@@ -3478,15 +3457,15 @@ class Widget(DOMNode):
             # its parent's virtual coordinate system.
             region = (
                 region.translate(-scroll_offset)
-                .translate(container.styles.margin.top_left)
-                .translate(container.styles.border.spacing.top_left)
+                .translate(container.geometry.margin.top_left)
+                .translate(container.geometry.border.spacing.top_left)
             )
             # Translate and clip against the same acquired parent geometry,
             # after its scroll operation has completed.
             container_region = container.virtual_region_with_margin
             region = (
                 region.translate(container_region.offset)
-                .grow(container.styles.margin)
+                .grow(container.geometry.margin)
                 .intersection(container_region)
             )
 
@@ -3784,7 +3763,6 @@ class Widget(DOMNode):
         )
         cls._native_box_measurement = (
             cls._get_box_model is Widget._get_box_model
-            and cls._resolve_extrema is Widget._resolve_extrema
             and cls._has_relative_children_height is Widget._has_relative_children_height
             and cls._has_relative_children_width is Widget._has_relative_children_width
             and cls.layout is Widget.layout
@@ -3824,9 +3802,9 @@ class Widget(DOMNode):
         """
         show_vertical_scrollbar, show_horizontal_scrollbar = self.scrollbars_enabled
 
-        styles = self.styles
-        scrollbar_size_horizontal = styles.scrollbar_size_horizontal
-        scrollbar_size_vertical = styles.scrollbar_size_vertical
+        geometry = self.geometry
+        scrollbar_size_horizontal = geometry.horizontal_scrollbar_size
+        scrollbar_size_vertical = geometry.vertical_scrollbar_size
 
         show_vertical_scrollbar = bool(
             show_vertical_scrollbar and scrollbar_size_vertical
@@ -3835,10 +3813,10 @@ class Widget(DOMNode):
             show_horizontal_scrollbar and scrollbar_size_horizontal
         )
 
-        if styles.scrollbar_gutter == "stable":
-            # Let's _always_ reserve some space, whether the scrollbar is actually displayed or not:
+        if geometry.stable_gutter:
+            # Reserve the declared gutter even while the scrollbar is hidden.
             show_vertical_scrollbar = True
-            scrollbar_size_vertical = styles.scrollbar_size_vertical
+            scrollbar_size_vertical = geometry.vertical_scrollbar_size
 
         if show_horizontal_scrollbar and show_vertical_scrollbar:
             region, _, _, _ = region.split(
@@ -3980,6 +3958,13 @@ class Widget(DOMNode):
 
         return renderable
 
+    @property
+    def frame_paint(self) -> FramePaint:
+        return PaintStyles.of(self.styles)
+
+    def refresh_paint(self) -> None:
+        self._styles_cache.refresh_paint(self)
+
     def watch_has_focus(self, _has_focus: bool) -> None:
         """Update from CSS if has focus state changes."""
         try:
@@ -4072,13 +4057,13 @@ class Widget(DOMNode):
         self._refresh_scrollbars()
         width, height = self.container_size
 
-        if self.show_vertical_scrollbar and self.styles.scrollbar_size_vertical:
+        if self.show_vertical_scrollbar and self.geometry.vertical_scrollbar_size:
             self.vertical_scrollbar.window_virtual_size = virtual_size.height
             self.vertical_scrollbar.window_size = (
                 height - self.scrollbar_size_horizontal
             )
             self.vertical_scrollbar.refresh()
-        if self.show_horizontal_scrollbar and self.styles.scrollbar_size_horizontal:
+        if self.show_horizontal_scrollbar and self.geometry.horizontal_scrollbar_size:
             self.horizontal_scrollbar.window_virtual_size = virtual_size.width
             self.horizontal_scrollbar.window_size = width - self.scrollbar_size_vertical
             self.horizontal_scrollbar.refresh()
@@ -4470,7 +4455,7 @@ class Widget(DOMNode):
                     self.call_later(self.update_node_styles)
                 if self._scroll_required:
                     self._scroll_required = False
-                    if self.styles.keyline[0] != "none":
+                    if self.geometry.keyline[0] != "none":
                         # A keyline's background follows its content scroll.
                         self._set_dirty()
                     # The screen decides between a scoped and a full reflow.
@@ -4672,9 +4657,9 @@ class Widget(DOMNode):
         """
 
     def _on_mount(self, event: events.Mount) -> None:
-        if self.styles.overflow_y == "scroll":
+        if self.geometry.overflow_y == "scroll":
             self.show_vertical_scrollbar = True
-        if self.styles.overflow_x == "scroll":
+        if self.geometry.overflow_x == "scroll":
             self.show_horizontal_scrollbar = True
 
     def _on_leave(self, event: events.Leave) -> None:
