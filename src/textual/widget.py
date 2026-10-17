@@ -158,7 +158,7 @@ class AwaitMount(AwaitCompletion):
         """Complete registered child startup once, independently of waiters."""
         if self._widgets:
             await gather(*(widget._mounted_event.wait() for widget in self._widgets))
-            if not (self._parent._closing or self._parent._closed or self._parent._pruning):
+            if not (self._parent.is_leaving or self._parent._closed):
                 self._parent.refresh(layout=True)
                 try:
                     self._parent.app._update_mouse_over(self._parent.screen)
@@ -506,7 +506,6 @@ class Widget(DOMNode):
         self._repaint_required = False
         self._scroll_required = False
         self._recompose_required = False
-        self._refresh_styles_required = False
         self._default_layout = self.DEFAULT_LAYOUT()
         self._animate: BoundAnimator | None = None
         Widget._sort_order += 1
@@ -1364,7 +1363,7 @@ class Widget(DOMNode):
             Only one of ``before`` or ``after`` can be provided. If both are
             provided a ``MountError`` will be raised.
         """
-        if self._closing or self._pruning:
+        if self.is_leaving:
             return AwaitMount(self, [])
         if not self.is_attached:
             raise MountError(f"Can't mount widget(s) before {self!r} is mounted")
@@ -1420,11 +1419,6 @@ class Widget(DOMNode):
         await_mount.call_when_ready(self)
 
         return await_mount
-
-    def _refresh_styles(self) -> None:
-        """Request refresh of styles on idle."""
-        self._refresh_styles_required = True
-        self.check_idle()
 
     def mount_all(
         self,
@@ -1602,8 +1596,8 @@ class Widget(DOMNode):
 
         previous = self._parent
         if (isinstance(self, Screen) or not isinstance(previous, Widget)
-                or not self.is_mounted or not self.is_attached or self._closing or self._pruning
-                or not parent.is_mounted or not parent.is_attached or parent._closing or parent._pruning):
+                or not self.is_mounted or not self.is_attached or self.is_leaving
+                or not parent.is_mounted or not parent.is_attached or parent.is_leaving):
             raise WidgetError("Reparent requires live mounted widgets and cannot move screens")
         ancestors = parent.ancestors_with_self
         if self in ancestors or self.ancestors[-1] is not ancestors[-1]:
@@ -4446,8 +4440,7 @@ class Widget(DOMNode):
 
     def _check_refresh(self) -> None:
         """Check if a refresh was requested."""
-        if not (self._refresh_styles_required or self._scroll_required
-                or self._repaint_required or self._layout_required):
+        if not (self._scroll_required or self._repaint_required or self._layout_required):
             return
         if self._parent is not None and not self._closing:
             try:
@@ -4455,9 +4448,6 @@ class Widget(DOMNode):
             except NoScreen:
                 pass
             else:
-                if self._refresh_styles_required:
-                    self._refresh_styles_required = False
-                    self.call_later(self.update_node_styles)
                 if self._scroll_required:
                     self._scroll_required = False
                     if self.geometry.keyline[0] != "none":
