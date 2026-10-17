@@ -59,8 +59,10 @@ MessageType = TypeVar("MessageType", bound="Message")
 Callback: TypeAlias = "Callable[..., Any] | Callable[..., Awaitable[Any]]"
 
 
-def _parent_retired(_reference) -> None:
+def _parent_retired(_reference, child) -> None:
     MessagePump._tree_revision += 1
+    if (node := child()) is not None:
+        node._parent_changed()
 
 
 class CallbackError(Exception):
@@ -211,10 +213,24 @@ class MessagePump(metaclass=_MessagePumpMeta):
         previous = self.__dict__.get("_MessagePump__parent")
         if previous is not None and previous() is parent:
             return
-        self.__parent = None if parent is None else ref(parent, _parent_retired)
+        if previous is not None and (old := previous()) is not None:
+            old._child_pumps.discard(self)
+        self.__parent = None if parent is None else ref(
+            parent, partial(_parent_retired, child=ref(self)))
+        if parent is not None:
+            parent._child_pumps.add(self)
         if previous is not None or parent is not None:
             MessagePump._tree_revision += 1
             self._parent_revision = MessagePump._tree_revision
+            self._parent_changed()
+
+    @cached_property
+    def _child_pumps(self) -> WeakSet[MessagePump]:
+        """Reverse weak parent links, including unmounted and virtual nodes."""
+        return WeakSet()
+
+    def _parent_changed(self) -> None:
+        """Publish a changed or retired parent to inherited resources."""
 
     @cached_property
     def _message_queue(self) -> Queue[Message | None]:

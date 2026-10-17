@@ -29,19 +29,16 @@ from typing import (
 
 import rich.repr
 from rich.highlighter import ReprHighlighter
-from rich.style import NULL_STYLE as RICH_NULL_STYLE
-from rich.style import Style
 from rich.text import Text
 from rich.tree import Tree
 
 from textual._context import active_message_pump
 from textual._compat import cached_property
 from textual._node_list import NodeList
-from textual._paint_state import EMPTY_PAINT, PaintLayer, PaintState
+from textual._paint_state import PaintNode
 from textual._types import WatchCallbackType
 from textual.binding import Binding, BindingsMap, BindingType
 from textual.cache import LRUCache
-from textual.color import BLACK, WHITE, Color
 from textual.css._error_tools import friendly_list
 from textual.css.constants import VALID_DISPLAY, VALID_VISIBILITY
 from textual.css.errors import DeclarationError, StyleValueError
@@ -54,7 +51,7 @@ from textual.geometry import Size
 from textual.css.tokenize import IDENTIFIER
 from textual.message_pump import MessagePump
 from textual.reactive import Reactive, ReactiveError, _Mutated, _watch
-from textual.style import NULL_STYLE, Style as VisualStyle
+from textual.style import NULL_STYLE
 from textual.timer import Timer
 from textual.walk import walk_breadth_first, walk_breadth_search_id, walk_depth_first
 from textual.worker_manager import WorkerManager
@@ -138,7 +135,7 @@ class _ClassesDescriptor:
 
 
 @rich.repr.auto
-class DOMNode(MessagePump):
+class DOMNode(PaintNode, MessagePump):
     """The base class for object that can be in the Textual DOM (App and Widget)"""
 
     _subtree_style_revision = 0
@@ -181,6 +178,7 @@ class DOMNode(MessagePump):
         Descendants are visited only when a changed rule may reach their
         retained measurements (StyleProperty.reaches_descendants).
         """
+        self._update_paint_state()
         self._subtree_style_revision = revision
         if descendants:
             geometry = self._update_inherited_geometry(geometry)
@@ -1392,102 +1390,9 @@ class DOMNode(MessagePump):
         return tree
 
     @property
-    def text_style(self) -> Style:
-        """Get the text style object.
-
-        A widget's style is influenced by its parent. for instance if a parent is bold, then
-        the child will also be bold.
-
-        Returns:
-            A Rich Style.
-        """
-        return self._resolved_paint_state().text_style
-
-    def _resolved_paint_state(self) -> PaintState:
-        state = EMPTY_PAINT
-        for node in reversed(self.ancestors_with_self):
-            state = PaintState.resolve(state, node.paint_layer)
-        return state
-
-    @property
-    def selection_style(self) -> Style:
-        """The style of selected text."""
-        style = self.screen.get_component_rich_style(
-            "screen--selection", default=RICH_NULL_STYLE
-        )
-        return style
-
-    @property
-    def paint_layer(self) -> PaintLayer:
-        return self.styles
-
-    @property
     def geometry(self) -> BoxGeometry:
         """The original sizing/placement source; declared widgets override this."""
         return self.styles
-
-    @property
-    def rich_style(self) -> Style:
-        """Get a Rich Style object for this DOMNode.
-
-        Returns:
-            A Rich style.
-        """
-        return self._resolved_paint_state().rich_style
-
-    def get_visual_style(
-        self, *component_classes: str, partial: bool = False
-    ) -> VisualStyle:
-        """Get the visual style for the widget, including any component styles.
-
-        Args:
-            component_classes: Optional component styles.
-            partial: Return a partial style (not combined with parent).
-
-        Returns:
-            A Visual style instance.
-
-        """
-        return self._resolved_paint_state().component_style(
-            self, *component_classes, partial=partial)
-
-    def _get_style(self, style: VisualStyle | str) -> VisualStyle:
-        """A get_style method for use in Content.
-
-        Args:
-            style: A style prefixed with a dot.
-
-        Returns:
-            A visual style if one is fund, otherwise `None`.
-        """
-        return self._resolved_paint_state().get_style(self, style)
-
-    def _parse_visual_style(self, style: str) -> VisualStyle:
-        """Parse inline styles through this node's presentation owner."""
-        return VisualStyle.parse(style)
-
-    @property
-    def link_style(self) -> Style:
-        """Style of links.
-
-        Returns:
-            Rich style.
-        """
-        return self._resolved_paint_state().link_style(self.styles)
-
-    @property
-    def link_style_hover(self) -> Style:
-        """Style of links underneath the mouse cursor.
-
-        Returns:
-            Rich Style.
-        """
-        return self._resolved_paint_state().link_style(self.styles, hover=True)
-
-    @property
-    def visual_style(self) -> VisualStyle:
-        """The widget's current style."""
-        return self._resolved_paint_state().visual_style
 
     def check_consume_key(self, key: str, character: str | None) -> bool:
         """Check if the widget may consume the given key.
@@ -1506,35 +1411,6 @@ class DOMNode(MessagePump):
             `True` if the widget may capture the key in its `Key` event handler, or `False` if it won't.
         """
         return False
-
-    @property
-    def background_colors(self) -> tuple[Color, Color]:
-        """Background colors adjusted for opacity.
-
-        Returns:
-            `(<background color>, <color>)`
-        """
-        state = self._resolved_paint_state()
-        return state.base_background, state.layered_background
-
-    @property
-    def colors(self) -> tuple[Color, Color, Color, Color]:
-        """The widget's background and foreground colors, and the parent's background and foreground colors.
-
-        Returns:
-            `(<parent background>, <parent color>, <background>, <color>)`
-        """
-        base_background = background = WHITE
-        base_color = color = BLACK
-        for node in reversed(self.ancestors_with_self):
-            layer = node.paint_layer
-            base_background = background
-            background += layer.background_color.tint(layer.background_tint)
-            if (foreground := layer.paint_foreground) is not None:
-                base_color = color
-                color = background.get_contrast_text(color.a) if layer.auto_color else foreground
-
-        return (base_background, base_color, background, color)
 
     def walk_ancestors(self, *, with_self: bool = False) -> Iterator[DOMNode]:
         """Yield the current parent path, nearest first, as it is consumed.
