@@ -4304,9 +4304,7 @@ class Widget(DOMNode):
             A string or object to render as the widget's content.
         """
 
-        if self.is_container:
-            return self._render_container()
-        return self.css_identifier_styled
+        return self._render_container()
 
     def _render(self) -> Visual:
         """Get renderable, promoting str to text as required.
