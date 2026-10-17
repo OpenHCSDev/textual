@@ -47,6 +47,7 @@ from textual.css.constants import VALID_DISPLAY, VALID_VISIBILITY
 from textual.css.errors import DeclarationError, StyleValueError
 from textual.css.parse import is_id_selector, parse_declarations
 from textual.css.query import NoMatches, TooManyMatches, WrongType
+from textual.css.model import HoverDependency
 from textual.css.styles import RenderStyles, Styles
 from textual.box_model import BoxGeometry
 from textual.geometry import Size
@@ -461,8 +462,7 @@ class DOMNode(MessagePump):
         self._auto_refresh: float | None = None
         self._auto_refresh_timer: Timer | None = None
         self._css_types = self._selector_type_names()
-        self._has_own_hover_style: bool = False
-        self._has_ancestor_hover_style: bool = False
+        self._hover_dependency = HoverDependency()
         self._has_focus_within: bool = False
         self._has_order_style: bool = False
         """The node has an ordered dependent pseudo-style (`:odd`, `:even`, `:first-of-type`, `:last-of-type`, `:first-child`, `:last-child`)"""

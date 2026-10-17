@@ -107,6 +107,14 @@ _CHECKS = {
 }
 
 
+@dataclass(frozen=True)
+class HoverDependency:
+    """Hover predicates on this node and hover-dependent ancestor declarations."""
+
+    own_hover: bool = False
+    ancestor_hover: bool = False
+
+
 @dataclass
 class Selector:
     """Represents a CSS selector.
@@ -193,7 +201,7 @@ class SelectorSet:
         for selector, next_selector in zip(self.selectors, self.selectors[1:]):
             selector.advance = int(next_selector.combinator != SAME)
 
-    def hover_dependencies(self, selector_names: frozenset[str]) -> tuple[bool, bool]:
+    def hover_dependencies(self, selector_names: frozenset[str]) -> HoverDependency:
         """Classify a node's own hover predicates and ancestor-dependent subject.
 
         A hover compound can address the node even before the final compound:
@@ -217,7 +225,7 @@ class SelectorSet:
             "hover" in selector.pseudo_classes
             for compound in compounds[:-1] for selector in compound
         )
-        return own_hover, ancestor_hover
+        return HoverDependency(own_hover=own_hover, ancestor_hover=ancestor_hover)
 
     @property
     def is_compound(self) -> bool:
