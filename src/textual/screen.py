@@ -34,7 +34,7 @@ import rich.repr
 from rich.console import RenderableType
 from rich.style import Style
 
-from textual import constants, errors, events, messages
+from textual import constants, errors, events, messages, on
 from textual._arrange import arrange
 from textual._auto_scroll import get_auto_scroll_regions
 from textual._callback import invoke
@@ -1731,6 +1731,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
             self._dirty_widgets.add(widget)
             self.check_idle()
 
+    @on(messages.Layout)
     async def _on_layout(self, message: messages.Layout) -> None:
         message.stop()
         message.prevent_default()
