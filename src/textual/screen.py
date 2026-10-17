@@ -721,9 +721,9 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
             top_widget, top_region = next(widgets_under_coordinate)
         except StopIteration:
             raise errors.NoWidget(f"No hover widget under screen coordinate ({x}, {y})")
-        if not top_widget._has_hover_style:
+        if not top_widget._hover_dependency.own_hover:
             for widget, region in widgets_under_coordinate:
-                if widget._has_hover_style:
+                if widget._hover_dependency.own_hover:
                     return HoverWidgets((top_widget, top_region), (widget, region))
             return HoverWidgets((top_widget, top_region), None)
         return HoverWidgets((top_widget, top_region), (top_widget, top_region))

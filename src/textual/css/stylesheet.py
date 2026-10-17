@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from collections import defaultdict
+from dataclasses import dataclass
 from itertools import chain
 from operator import itemgetter
 from pathlib import Path, PurePath
@@ -17,7 +18,7 @@ from rich.text import Text
 
 from textual.cache import FIFOCache, LRUCache
 from textual.css.errors import StylesheetError
-from textual.css.model import RuleSet, SelectorType
+from textual.css.model import HoverDependency, RuleSet, SelectorType
 from textual.css.parse import parse
 from textual.css.styles import RenderStyles, RulesMap, Styles
 from textual.css.tokenize import Token, tokenize_values
@@ -163,6 +164,37 @@ class CssSource(NamedTuple):
     scope: str = ""
 
 
+@dataclass(frozen=True)
+class CandidateRules:
+    """Declaration-only planning shared by widgets and virtual components."""
+
+    rules: tuple[RuleSet, ...]
+    pseudo_classes: frozenset[str]
+    classes: frozenset[str]
+    hover: HoverDependency
+
+    @classmethod
+    def compile(cls, all_rules, rules_map, selector_names: frozenset[str]) -> CandidateRules:
+        selected = {rule for name in selector_names for rule in rules_map.get(name, ())}
+        rules = tuple(rule for rule in reversed(all_rules) if rule in selected)
+        dependencies = [
+            group.hover_dependencies(selector_names)
+            for rule in rules_map.get(":hover", ()) for group in rule.selector_set
+        ]
+        return cls(
+            rules=rules,
+            pseudo_classes=frozenset().union(*(rule.pseudo_classes for rule in rules)),
+            classes=frozenset(
+                selector.name for rule in rules for group in rule.selector_set
+                for selector in group.selectors if selector.type == SelectorType.CLASS
+            ),
+            hover=HoverDependency(
+                own_hover=any(dependency.own_hover for dependency in dependencies),
+                ancestor_hover=any(dependency.ancestor_hover for dependency in dependencies),
+            ),
+        )
+
+
 @rich.repr.auto(angular=True)
 class Stylesheet:
     """A Stylesheet generated from Textual CSS."""
@@ -182,9 +214,7 @@ class Stylesheet:
         self._ids_in_rules: set[str] = set()
         self._classes_in_rules: set[str] = set()
         self._local_display_classes: dict[str, bool] = {}
-        self._candidate_rules: FIFOCache[
-            frozenset[str], tuple[list[RuleSet], frozenset[str], frozenset[str], tuple[RuleSet, ...]]
-        ] = FIFOCache(1024)
+        self._candidate_rules: FIFOCache[frozenset[str], CandidateRules] = FIFOCache(1024)
 
     def __rich_repr__(self) -> rich.repr.Result:
         yield list(self.source.keys())
@@ -537,7 +567,7 @@ class Stylesheet:
 
     def _get_candidate_rules(
         self, selector_names: set[str]
-    ) -> tuple[list[RuleSet], frozenset[str], frozenset[str], tuple[RuleSet, ...]]:
+    ) -> CandidateRules:
         """Share declaration planning for widgets and their virtual components.
 
         Parsing retires this bounded resource. Ancestry and live pseudo-classes
@@ -546,22 +576,10 @@ class Stylesheet:
         # Resolve pending parsing before consulting the rule index or cache.
         all_rules = self.rules
         rules_map = self.rules_map
-        selectors = frozenset(rules_map.keys() & selector_names)
+        selectors = frozenset(selector_names)
         candidates = self._candidate_rules.get(selectors)
         if candidates is None:
-            limit_rules = {rule for name in selectors for rule in rules_map[name]}
-            rules = list(filter(limit_rules.__contains__, reversed(all_rules)))
-            all_pseudo_classes = frozenset().union(
-                *(rule.pseudo_classes for rule in rules)
-            )
-            rule_classes = frozenset(
-                selector.name
-                for rule in rules
-                for group in rule.selector_set
-                for selector in group.selectors
-                if selector.type == SelectorType.CLASS
-            )
-            candidates = rules, all_pseudo_classes, rule_classes, tuple(rules)
+            candidates = CandidateRules.compile(all_rules, rules_map, selectors)
             self._candidate_rules[selectors] = candidates
         return candidates
 
@@ -605,11 +623,12 @@ class Stylesheet:
                 # must not force identical newly mounted rows to rematch all rules.
                 cache = {}
 
-            rules, all_pseudo_classes, rule_classes, rule_key = (
-                self._get_candidate_rules(node._selector_names)
-            )
+            candidates = self._get_candidate_rules(node._selector_names)
+            rules = rule_key = candidates.rules
+            all_pseudo_classes = candidates.pseudo_classes
+            rule_classes = candidates.classes
+            node._hover_dependency = candidates.hover
             rules_map = self.rules_map
-            node._has_hover_style = "hover" in all_pseudo_classes
             node._has_focus_within = "focus-within" in all_pseudo_classes
             node._has_order_style = not all_pseudo_classes.isdisjoint(
                 {"first-of-type", "last-of-type", "first-child", "last-child", "empty"}
@@ -760,15 +779,15 @@ class Stylesheet:
             # sibling/descendant can change without changing this path key.
             component_candidates = self._get_component_candidate_rules(component_classes)
             if all(
-                pseudo_classes.isdisjoint(self._EXCLUDE_PSEUDO_CLASSES_FROM_CACHE)
-                for _, (_, pseudo_classes, _, _) in component_candidates
+                candidate.pseudo_classes.isdisjoint(self._EXCLUDE_PSEUDO_CLASSES_FROM_CACHE)
+                for _, candidate in component_candidates
             ):
                 relevant_classes = frozenset().union(
-                    *(classes for _, (_, _, classes, _) in component_candidates)
+                    *(candidate.classes for _, candidate in component_candidates)
                 )
                 signature = (
-                    tuple((component, rule_key)
-                          for component, (_, _, _, rule_key) in component_candidates),
+                    tuple((component, candidate.rules)
+                          for component, candidate in component_candidates),
                     frozenset(component_classes),
                     self._css_path_key(node.css_path_nodes, relevant_classes),
                 )
@@ -996,6 +1015,18 @@ class Stylesheet:
             pending.extend((child, names) for child in node.children)
             if isinstance(node, Widget):
                 pending.extend((child, names) for child in node._get_virtual_dom())
+        self.update_nodes(affected, animate=True)
+
+    def update_hover(self, roots: Iterable[DOMNode]) -> None:
+        """Rematch hover owners and only ancestor-hover-dependent descendants.
+
+        Inherited paint is refreshed by Styles' existing descriptor/batch path;
+        inheritance does not require rematching a descendant's declarations.
+        """
+        affected = dict.fromkeys(
+            node for root in roots for node in root.walk_children(with_self=True)
+            if node is root or node._hover_dependency.ancestor_hover
+        )
         self.update_nodes(affected, animate=True)
 
     def update_nodes(

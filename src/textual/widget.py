@@ -4627,12 +4627,7 @@ class Widget(DOMNode):
 
     def _on_leave(self, event: events.Leave) -> None:
         if event.node is self:
-            self.mouse_hover = False
             self.hover_style = Style()
-
-    def _on_enter(self, event: events.Enter) -> None:
-        if event.node is self:
-            self.mouse_hover = True
 
     def _on_focus(self, event: events.Focus) -> None:
         self.has_focus = True

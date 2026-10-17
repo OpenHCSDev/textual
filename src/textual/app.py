@@ -3216,33 +3216,28 @@ class App(Generic[ReturnType], DOMNode):
         Args:
             widget: Widget under mouse, or None for no widgets.
         """
-        if widget is None:
-            if self.mouse_over is not None:
-                try:
-                    self.mouse_over.post_message(events.Leave(self.mouse_over))
-                finally:
-                    self.mouse_over = None
-        else:
-            if self.mouse_over is not widget:
-                try:
-                    if self.mouse_over is not None:
-                        self.mouse_over.post_message(events.Leave(self.mouse_over))
-                    if widget is not None:
-                        widget.post_message(events.Enter(widget))
-                finally:
-                    self.mouse_over = widget
+        previous_mouse_over = self.mouse_over
+        if previous_mouse_over is not widget:
+            try:
+                if previous_mouse_over is not None:
+                    previous_mouse_over.post_message(events.Leave(previous_mouse_over))
+                if widget is not None:
+                    widget.post_message(events.Enter(widget))
+            finally:
+                self.mouse_over = widget
 
         current_hover_over = self.hover_over
-        if current_hover_over is not None:
-            current_hover_over.mouse_hover = False
-
-        if hover_widget is not None:
-            hover_widget.mouse_hover = True
-            if hover_widget._has_hover_style:
-                hover_widget.update_node_styles()
-        if current_hover_over is not None and current_hover_over._has_hover_style:
-            current_hover_over.update_node_styles()
-        self.hover_over = hover_widget
+        if previous_mouse_over is not widget or current_hover_over is not hover_widget:
+            for node in dict.fromkeys(
+                node for node in (previous_mouse_over, widget, current_hover_over, hover_widget)
+                if node is not None
+            ):
+                node.mouse_hover = node is widget or node is hover_widget
+        if current_hover_over is not hover_widget:
+            self.hover_over = hover_widget
+            self.stylesheet.update_hover(
+                node for node in (current_hover_over, hover_widget) if node is not None
+            )
         if self._screen_stack:
             self.screen._clear_tooltip_unless_over(self.mouse_over)
 
