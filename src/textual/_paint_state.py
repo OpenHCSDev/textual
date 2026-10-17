@@ -29,7 +29,6 @@ class PaintLayer:
 
 
 class PaintState(NamedTuple):
-    parent: PaintState | None
     background: Color
     foreground: Color
     text_opacity: float
@@ -121,7 +120,7 @@ class PaintState(NamedTuple):
         if layer.auto_color:
             foreground = text_background.get_contrast_text(foreground.a)
         return cls(
-            parent, background, foreground,
+            background, foreground,
             parent.text_opacity if local_foreground is None else layer.text_opacity,
             parent.text_style + layer.text_style, opacity,
             parent.layered_background,
@@ -130,6 +129,6 @@ class PaintState(NamedTuple):
 
 
 EMPTY_PAINT = PaintState(
-    None, Color(0, 0, 0, 0), Color(255, 255, 255, 0), 1.0,
+    Color(0, 0, 0, 0), Color(255, 255, 255, 0), 1.0,
     NULL_STYLE, 1.0, Color(0, 0, 0, 0), Color(0, 0, 0, 0),
 )

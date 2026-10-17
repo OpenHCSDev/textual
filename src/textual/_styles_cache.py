@@ -160,8 +160,7 @@ class StylesCache:
 
     @staticmethod
     def widget_paint_key(widget: Widget, paint: FramePaint, state: PaintState) -> tuple:
-        return (paint.frame_key, state.base_background, state.layered_background,
-                state.rich_style, widget.geometry.padding)
+        return paint.frame_key, tuple(state), widget.geometry.padding
 
     def refresh_paint(self, widget: Widget) -> None:
         """Dirty only a widget whose current paint differs from its cached lines."""
