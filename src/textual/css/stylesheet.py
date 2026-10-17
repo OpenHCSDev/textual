@@ -521,7 +521,7 @@ class Stylesheet:
             while stack:
                 node, reached = stack.pop()
                 reached = reached or bool(scopes.intersection(node._css_types))
-                if reached:
+                if reached or any(scopes.intersection(child._css_types) for child in node._get_virtual_dom()):
                     screen._pending_styles.add(node)
                 stack.extend((child, reached) for child in node.children)
 
