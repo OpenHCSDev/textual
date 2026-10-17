@@ -114,14 +114,9 @@ class _MessagePumpMeta(type):
                 if isinstance(value, MessageHandler):
                     for message_type, selectors in value.declarations:
                         decorated.setdefault(message_type, []).append((value, selectors))
-            declared_names = {name.removeprefix("_") for name in declarations
-                              if name.startswith(("on_", "_on_"))}
-            named = {}
-            for name in declared_names:
-                method = declarations.get("_" + name) or declarations.get(name)
-                if method is not None and not isinstance(method, MessageHandler):
-                    named[name] = method
-            scopes.append((owner, decorated, named))
+            # A class mapping is live: replacing a named handler during a
+            # decorated yield must affect this same dispatch, not the next class.
+            scopes.append((owner, decorated, declarations))
         cls._dispatch_declarations = tuple(scopes)
 
 
@@ -943,8 +938,8 @@ class MessagePump(metaclass=_MessagePumpMeta):
                                 yield cls, method.__get__(self, cls)
                                 methods_dispatched.add(method)
 
-            conventional = named.get(method_name)
-            if conventional is not None:
+            conventional = named.get("_" + method_name) or named.get(method_name)
+            if conventional is not None and not isinstance(conventional, MessageHandler):
                 yield cls, conventional.__get__(self, cls)
 
     async def on_event(self, event: events.Event) -> None:
