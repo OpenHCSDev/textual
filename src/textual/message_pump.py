@@ -51,7 +51,6 @@ if TYPE_CHECKING:
 
     from textual.app import App
     from textual.await_complete import AwaitComplete
-    from textual.css.model import SelectorSet
     from textual.dom import DOMNode
     from textual.screen import Screen
 
