@@ -455,9 +455,6 @@ class DOMNode(MessagePump):
         self.styles: RenderStyles = RenderStyles(
             self, self._css_styles, self._inline_styles
         )
-        self._visual_style: VisualStyle | None = None
-        self._visual_paint_state = EMPTY_PAINT
-        self._visual_style_cache: dict[tuple, VisualStyle] = {}
         self._first_of_type = (-1, False)
         self._last_of_type = (-1, False)
         self._first_child = (-1, False)
@@ -1393,29 +1390,9 @@ class DOMNode(MessagePump):
         return self._resolved_paint_state().text_style
 
     def _resolved_paint_state(self) -> PaintState:
-        if (type(self).ancestors_with_self is not DOMNode.ancestors_with_self
-                or type(self).walk_ancestors is not DOMNode.walk_ancestors):
-            # Custom ancestry may change independently of native topology or
-            # style mutations, including when inherited by a native child.
-            state = EMPTY_PAINT._replace(cacheable=False)
-            for node in reversed(self.ancestors_with_self):
-                layer = node.paint_layer
-                state = PaintState.resolve(state, layer, (layer.paint_key, layer.paint_cacheable))
-            return state
-        layer = self.paint_layer
-        key = layer.paint_key, layer.paint_cacheable
-        epoch = (Styles._revision, MessagePump._tree_revision, key)
-        state = self.__dict__.get("_paint_state")
-        reusable = state is not None and key[0] is not None
-        if reusable and state.cacheable and self.__dict__.get("_paint_epoch") == epoch:
-            return state
-        parent = self._parent
-        inherited = (
-            parent._resolved_paint_state() if isinstance(parent, DOMNode) else EMPTY_PAINT
-        )
-        if not (reusable and state.parent is inherited and state.style_key == key):
-            state = self._paint_state = PaintState.resolve(inherited, layer, key)
-        self._paint_epoch = epoch
+        state = EMPTY_PAINT
+        for node in reversed(self.ancestors_with_self):
+            state = PaintState.resolve(state, node.paint_layer)
         return state
 
     @property
@@ -1457,53 +1434,8 @@ class DOMNode(MessagePump):
             A Visual style instance.
 
         """
-        cache_key = (self._pseudo_classes_cache_key, component_classes, partial)
-        cacheable = self._resolved_paint_state().cacheable
-        visual_style = self._visual_style_cache.get(cache_key) if cacheable else None
-        if visual_style is None:
-            background = Color(0, 0, 0, 0)
-            color = Color(255, 255, 255, 0)
-
-            style = Style()
-            opacity = 1.0
-
-            def iter_styles() -> Iterable[PaintLayer]:
-                """Iterate over the styles from the DOM and additional components styles."""
-                if partial:
-                    node = self
-                else:
-                    for node in reversed(self.ancestors_with_self):
-                        yield node.paint_layer
-                for name in component_classes:
-                    yield node.get_component_styles(name)
-
-            for styles in iter_styles():
-                opacity *= styles.layer_opacity
-                local_background = styles.paint_background
-                if local_background is not None:
-                    tinted = local_background.tint(styles.background_tint)
-                    text_background = background + tinted
-                    if partial:
-                        background = background.blend(tinted, 1 - tinted.a).multiply_alpha(opacity)
-                    else:
-                        background += tinted.multiply_alpha(opacity)
-                else:
-                    text_background = background
-                if (foreground := styles.paint_foreground) is not None:
-                    color = foreground.multiply_alpha(styles.text_opacity)
-                style += styles.text_style
-                if styles.auto_color:
-                    color = text_background.get_contrast_text(color.a)
-
-            visual_style = replace(
-                VisualStyle.from_rich_style(style),
-                background=background,
-                foreground=color,
-            )
-            if cacheable:
-                self._visual_style_cache[cache_key] = visual_style
-
-        return visual_style
+        return self._resolved_paint_state().component_style(
+            self, *component_classes, partial=partial)
 
     def _get_style(self, style: VisualStyle | str) -> VisualStyle:
         """A get_style method for use in Content.
@@ -1514,25 +1446,7 @@ class DOMNode(MessagePump):
         Returns:
             A visual style if one is fund, otherwise `None`.
         """
-        if isinstance(style, VisualStyle):
-            return style
-
-        if style.startswith("."):
-            style_name = style[1:]
-            for node in self.walk_ancestors(with_self=True):
-                if not node._component_style_scope:
-                    break
-                try:
-                    return node.get_visual_style(style_name, partial=True)
-                except KeyError:
-                    continue
-            else:
-                raise KeyError(f"No matching component class found for '{style}'")
-            return NULL_STYLE
-        try:
-            return self._parse_visual_style(style)
-        except Exception:
-            return NULL_STYLE
+        return self._resolved_paint_state().get_style(self, style)
 
     def _parse_visual_style(self, style: str) -> VisualStyle:
         """Parse inline styles through this node's presentation owner."""
@@ -1545,19 +1459,7 @@ class DOMNode(MessagePump):
         Returns:
             Rich style.
         """
-        styles = self.styles
-        _, background = self.background_colors
-        link_background = background + styles.link_background
-        link_color = link_background + (
-            link_background.get_contrast_text(styles.link_color.a)
-            if styles.auto_link_color
-            else styles.link_color
-        )
-        style = styles.link_style + Style.from_color(
-            link_color.rich_color,
-            link_background.rich_color if styles.link_background.a else None,
-        )
-        return style
+        return self._resolved_paint_state().link_style(self.styles)
 
     @property
     def link_style_hover(self) -> Style:
@@ -1566,36 +1468,12 @@ class DOMNode(MessagePump):
         Returns:
             Rich Style.
         """
-        styles = self.styles
-        _, background = self.background_colors
-        hover_background = background + styles.link_background_hover
-        hover_color = hover_background + (
-            hover_background.get_contrast_text(styles.link_color_hover.a)
-            if styles.auto_link_color_hover
-            else styles.link_color_hover
-        )
-        style = styles.link_style_hover + Style.from_color(
-            hover_color.rich_color,
-            hover_background.rich_color,
-        )
-        return style
+        return self._resolved_paint_state().link_style(self.styles, hover=True)
 
     @property
     def visual_style(self) -> VisualStyle:
         """The widget's current style."""
-        resolved = self._resolved_paint_state()
-        if (
-            self._visual_style is None
-            or not resolved.same_paint(self._visual_paint_state)
-        ):
-            background, color, style = resolved.background, resolved.foreground, resolved.text_style
-            self._visual_style = replace(
-                VisualStyle.from_rich_style(style),
-                background=background,
-                foreground=color,
-            )
-        self._visual_paint_state = resolved
-        return self._visual_style
+        return self._resolved_paint_state().visual_style
 
     def check_consume_key(self, key: str, character: str | None) -> bool:
         """Check if the widget may consume the given key.

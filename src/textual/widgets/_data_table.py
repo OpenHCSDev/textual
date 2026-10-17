@@ -38,6 +38,7 @@ from textual.reactive import Reactive
 from textual.render import measure
 from textual.renderables.styled import Styled
 from textual.scroll_view import ScrollView
+from textual._paint_state import PaintState
 from textual.strip import Strip
 from textual.widget import PseudoClasses
 
@@ -2252,6 +2253,7 @@ class DataTable(ScrollView, Generic[CellType], can_focus=True):
         base_style: Style,
         cursor_location: Coordinate,
         hover_location: Coordinate,
+        paint: PaintState,
     ) -> tuple[SegmentLines, SegmentLines]:
         """Render a single line from a row in the DataTable.
 
@@ -2357,7 +2359,7 @@ class DataTable(ScrollView, Generic[CellType], can_focus=True):
             + self._row_label_column_width
         )
         remaining_space = max(0, widget_width - table_width)
-        background_color = self.background_colors[1]
+        background_color = paint.layered_background
         if self.cursor_type == "row":
             extend_style, _ = self._get_styles_to_render_cell(
                 row_index == -1,
@@ -2413,7 +2415,7 @@ class DataTable(ScrollView, Generic[CellType], can_focus=True):
 
         return y_offsets[y]
 
-    def _render_line(self, y: int, x1: int, x2: int, base_style: Style) -> Strip:
+    def _render_line(self, y: int, x1: int, x2: int, paint: PaintState) -> Strip:
         """Render a (possibly cropped) line into a Strip (a list of segments
             representing a horizontal line).
 
@@ -2428,6 +2430,7 @@ class DataTable(ScrollView, Generic[CellType], can_focus=True):
         """
 
         width = self.size.width
+        base_style = paint.rich_style
 
         try:
             row_key, y_offset_in_row = self._get_offsets(y)
@@ -2456,6 +2459,7 @@ class DataTable(ScrollView, Generic[CellType], can_focus=True):
             base_style,
             cursor_location=self.cursor_coordinate,
             hover_location=self.hover_coordinate,
+            paint=paint,
         )
         fixed_width = sum(
             column.get_render_width(self)
@@ -2475,7 +2479,7 @@ class DataTable(ScrollView, Generic[CellType], can_focus=True):
         self._pseudo_class_state = self.get_pseudo_class_state()
         return super().render_lines(crop)
 
-    def render_line(self, y: int) -> Strip:
+    def render_line(self, y: int, paint: PaintState) -> Strip:
         width, height = self.size
         scroll_x, scroll_y = self.scroll_offset
 
@@ -2493,7 +2497,7 @@ class DataTable(ScrollView, Generic[CellType], can_focus=True):
         if y >= fixed_rows_height:
             y += scroll_y
 
-        return self._render_line(y, scroll_x, scroll_x + width, self.rich_style)
+        return self._render_line(y, scroll_x, scroll_x + width, paint)
 
     def _should_highlight(
         self,

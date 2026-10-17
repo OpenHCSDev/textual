@@ -15,6 +15,7 @@ from textual.actions import SkipAction
 from textual.expand_tabs import expand_tabs_inline
 from textual.screen import Screen
 from textual.scroll_view import ScrollView
+from textual._paint_state import PaintState
 from textual.strip import Strip
 
 if TYPE_CHECKING:
@@ -615,9 +616,9 @@ class Input(ScrollView):
         """Check if the value has passed validation."""
         return self._valid
 
-    def render_line(self, y: int) -> Strip:
+    def render_line(self, y: int, paint: PaintState) -> Strip:
         if y != 0:
-            return Strip.blank(self.size.width, self.rich_style)
+            return Strip.blank(self.size.width, paint.rich_style)
 
         console = self.app.console
         console_options = self.app.console_options
@@ -678,7 +679,7 @@ class Input(ScrollView):
             strip = strip.crop(scroll_x, scroll_x + max_content_width + 1)
             strip = strip.extend_cell_length(max_content_width + 1)
 
-        return strip.apply_style(self.rich_style)
+        return strip.apply_style(paint.rich_style)
 
     @property
     def _value(self) -> Text:

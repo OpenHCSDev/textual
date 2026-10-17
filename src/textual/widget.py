@@ -61,6 +61,7 @@ from textual._measurement import (
     box_depends_on_available_height, height_dependency,
 )
 from textual.message_pump import MessagePump
+from textual._paint_state import PaintState
 from textual._styles_cache import FramePaint, PaintStyles, StylesCache
 from textual._types import AnimationLevel
 from textual.actions import SkipAction
@@ -815,7 +816,6 @@ class Widget(DOMNode):
         If you implement this in a subclass, be sure to call the base class method via super.
 
         """
-        self._visual_style = None
 
     def _cover(self, widget: Widget) -> None:
         """Set a widget used to replace the visuals of this widget (used for loading indicator).
@@ -3913,7 +3913,7 @@ class Widget(DOMNode):
         return text_justify
 
     def post_render(
-        self, renderable: RenderableType, base_style: Style
+        self, renderable: RenderableType, base_style: Style, link_style: Style | None
     ) -> ConsoleRenderable:
         """Applies style attributes to the default renderable.
 
@@ -3940,7 +3940,7 @@ class Widget(DOMNode):
         renderable = _Styled(
             cast(ConsoleRenderable, renderable),
             base_style,
-            self.link_style if self.auto_links else None,
+            link_style,
         )
 
         return renderable
@@ -4082,16 +4082,16 @@ class Widget(DOMNode):
         """
         self.refresh()
 
-    def _render_content(self) -> None:
+    def _render_content(self, paint: PaintState) -> None:
         """Render all lines."""
         size = self.size
         width, height = size
         visual = self._render()
-        strips = Visual.to_strips(self, visual, width, height, self.visual_style)
+        strips = Visual.to_strips(self, visual, width, height, paint)
         self._render_cache = _RenderCache(size, strips)
         self._dirty_regions.clear()
 
-    def render_line(self, y: int) -> Strip:
+    def render_line(self, y: int, paint: PaintState) -> Strip:
         """Render a line of content.
 
         Args:
@@ -4101,14 +4101,14 @@ class Widget(DOMNode):
             A rendered line.
         """
         if self.BLANK:
-            return Strip.blank(self.size.width, self.visual_style.rich_style)
+            return Strip.blank(self.size.width, paint.rich_style)
 
         if self._dirty_regions or self._render_cache.size != self.size:
-            self._render_content()
+            self._render_content(paint)
         try:
             line = self._render_cache.lines[y]
         except IndexError:
-            line = Strip.blank(self.size.width, self.visual_style.rich_style)
+            line = Strip.blank(self.size.width, paint.rich_style)
 
         return line
 
@@ -4124,13 +4124,7 @@ class Widget(DOMNode):
         Returns:
             A list of list of segments.
         """
-        if self.BLANK:
-            strips = [
-                Strip.blank(crop.width, self.visual_style.rich_style)
-            ] * crop.height
-        else:
-            strips = self._styles_cache.render_widget(self, crop)
-        return strips
+        return self._styles_cache.render_widget(self, crop)
 
     def get_style_at(self, x: int, y: int) -> Style:
         """Get the Rich style in a widget at a given relative offset.
@@ -4395,11 +4389,6 @@ class Widget(DOMNode):
         self._layout_cache.clear()
         self._styles_cache.clear()
         self._rich_style_cache.clear()
-        self._visual_style_cache.clear()
-        self._visual_style = None
-        self.__dict__.pop("_paint_state", None)
-        self.__dict__.pop("_paint_epoch", None)
-        self._visual_paint_state = None
 
     def _release_presentation(self) -> None:
         """Release reconstructible paint/measurement state, retaining the model.
@@ -4575,8 +4564,6 @@ class Widget(DOMNode):
 
     def notify_style_update(self) -> None:
         self._rich_style_cache.clear()
-        self._visual_style_cache.clear()
-        self._visual_style = None
         super().notify_style_update()
 
     async def _on_mouse_down(self, event: events.MouseDown) -> None:

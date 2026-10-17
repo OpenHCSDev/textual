@@ -15,6 +15,7 @@ from textual.geometry import Region, Size, Spacing, clamp
 from textual.message import Message
 from textual.reactive import reactive
 from textual.scroll_view import ScrollView
+from textual._paint_state import PaintState
 from textual.strip import Strip
 from textual.style import Style
 from textual.visual import Padding, Visual, VisualType, visualize
@@ -881,16 +882,14 @@ class OptionList(ScrollView, can_focus=True):
         self._update_lines()
         return super().render_lines(crop)
 
-    def render_line(self, y: int) -> Strip:
+    def render_line(self, y: int, paint: PaintState) -> Strip:
         line_number = self.scroll_offset.y + y
+        base_style = paint.component_style(self, "option-list--option")
         try:
             option_index, line_offset = self._lines[line_number]
             option = self.options[option_index]
         except IndexError:
-            return Strip.blank(
-                self.scrollable_content_region.width,
-                self.get_visual_style("option-list--option").rich_style,
-            )
+            return Strip.blank(self.scrollable_content_region.width, base_style.rich_style)
 
         mouse_over = self._mouse_hovering_over == option_index
         component_class = ""
@@ -901,19 +900,13 @@ class OptionList(ScrollView, can_focus=True):
         elif mouse_over:
             component_class = "option-list--option-hover"
 
-        if component_class:
-            style = self.get_visual_style("option-list--option", component_class)
-        else:
-            style = self.get_visual_style("option-list--option")
-
+        style = (paint.component_style(self, "option-list--option", component_class)
+                 if component_class else base_style)
         strips = self._get_option_render(option, style)
         try:
             strip = strips[line_offset]
         except IndexError:
-            return Strip.blank(
-                self.scrollable_content_region.width,
-                self.get_visual_style("option-list--option").rich_style,
-            )
+            return Strip.blank(self.scrollable_content_region.width, base_style.rich_style)
         return strip
 
     def validate_highlighted(self, highlighted: int | None) -> int | None:

@@ -1785,7 +1785,7 @@ class Compositor:
             return widget, Offset(max(0, x), max(0, y))
 
         with self._using_geometry(widget, self._published_map):
-            line = widget.render_line(y)
+            line = widget.render_line(y, widget._resolved_paint_state())
 
         return widget, line.get_content_offset(x)
 
