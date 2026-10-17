@@ -878,7 +878,7 @@ class Compositor:
     def clear(self) -> None:
         """Remove all references to widgets (used when the screen closes)."""
         self.root = None
-        self._full_map.clear()
+        self._full_map = {}
         self._full_map_invalidated = True
         self._visible_map = None
         self._published_map = {}
@@ -914,24 +914,27 @@ class Compositor:
             for owner in widgets
             for member in (owner, owner._render_widget, *owner._get_virtual_dom())
         }
+        if not widgets:
+            return widgets
         if self._discarded_between_steps is not None:
             self._discarded_between_steps.update(widgets)
         for owner, resource in tuple(self._subtree_geometry.items()):
             if resource.references_retired(owner, widgets):
                 del self._subtree_geometry[owner]
-        changed = False
-        for mapping in (self._full_map, self._visible_map, self._published_map):
-            if mapping is None:
-                continue
-            for widget in widgets:
-                if (geometry := mapping.pop(widget, None)) is not None:
-                    changed = True
-                    self._damage(geometry.visible_region)
+        def retire(mapping: CompositorMap) -> CompositorMap:
+            for widget in widgets & mapping.keys():
+                self._damage(mapping[widget].visible_region)
+            return {widget: geometry for widget, geometry in mapping.items()
+                    if widget not in widgets}
+
+        self._full_map = retire(self._full_map)
+        if self._visible_map is not None:
+            self._visible_map = retire(self._visible_map)
+        self._published_map = retire(self._published_map)
         self.widgets.difference_update(widgets)
-        if changed:
-            self._full_map_invalidated = True
-            self._invalidate_render_projection()
-            self._published_widgets = None
+        self._full_map_invalidated = True
+        self._invalidate_render_projection()
+        self._published_widgets = None
         return widgets
 
     @classmethod
@@ -1141,6 +1144,8 @@ class Compositor:
         discarded = self._discarded_between_steps = set()
         try:
             for root in outermost:
+                if root in discarded:
+                    continue
                 old = [widget for widget, geometry in previous.items()
                        if root in geometry.ancestors]
                 # Screen-positioned descendants are not placed by their root alone.
@@ -1179,7 +1184,6 @@ class Compositor:
         widgets.difference_update(discarded)
         shown.difference_update(discarded)
         hidden.difference_update(discarded)
-        self._invalidate_render_projection()
         self._full_map_invalidated = True
         self._visible_map = scene
         self._invalidate_render_projection()
