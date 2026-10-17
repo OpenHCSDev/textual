@@ -72,8 +72,6 @@ from textual.cache import FIFOCache, LRUCache
 from textual.color import Color
 from textual.compose import compose, compose_async
 from textual.content import Content, ContentType
-from textual.css.match import match
-from textual.css.parse import parse_selectors
 from textual.css.query import NoMatches, WrongType
 from textual.css.scalar import ScalarOffset
 from textual.dom import DOMNode, NoScreen
@@ -4244,16 +4242,10 @@ class Widget(DOMNode):
             An awaitable object that waits for the direct children to be removed.
         """
 
-        if callable(selector) and issubclass(selector, Widget):
-            selector = selector.__name__
-
         children_to_remove: Iterable[Widget]
 
-        if isinstance(selector, str):
-            parsed_selectors = parse_selectors(selector)
-            children_to_remove = [
-                child for child in self.children if match(parsed_selectors, child)
-            ]
+        if isinstance(selector, (str, type)):
+            children_to_remove = self.query_children(selector)
         else:
             children_to_remove = selector
         await_remove = AwaitRemove.prune(*children_to_remove, parent=self)
