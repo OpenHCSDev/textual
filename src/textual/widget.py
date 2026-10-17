@@ -3947,14 +3947,6 @@ class Widget(DOMNode):
         self._update_paint_state()
         self._styles_cache.refresh_paint(self)
 
-    def watch_has_focus(self, _has_focus: bool) -> None:
-        """Update from CSS if has focus state changes."""
-        try:
-            self.app.stylesheet.update_widget_focus(self)
-        except NoActiveAppError:
-            pass
-        self.refresh_paint()
-
     def watch_disabled(self, disabled: bool) -> None:
         """Update the styles of the widget and its children when disabled is toggled."""
         from textual.app import ScreenStackError

@@ -5,6 +5,7 @@ from dataclasses import replace
 from typing import NamedTuple
 from rich.style import NULL_STYLE, Style
 from textual.color import Color, TRANSPARENT
+from textual._context import NoActiveAppError
 from textual.style import Style as VisualStyle
 
 
@@ -150,6 +151,14 @@ class PaintNode:
             self._paint_state = state
             for child in tuple(self._child_pumps):
                 child._parent_changed()
+
+    def watch_has_focus(self, _has_focus: bool) -> None:
+        """Focus publishes native CSS and pseudo-class paint through the same owner."""
+        try:
+            self.app.stylesheet.update_widget_focus(self)
+        except NoActiveAppError:
+            pass
+        self.refresh_paint()
 
     @property
     def paint_layer(self) -> PaintLayer:
