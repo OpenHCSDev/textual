@@ -108,14 +108,19 @@ class PaintState(NamedTuple):
     @classmethod
     def resolve(cls, parent: PaintState, layer: PaintLayer) -> PaintState:
         """Apply one declaration layer, preserving native alpha order."""
-        opacity = parent.opacity * layer.layer_opacity
         local_background = layer.paint_background
+        local_foreground = layer.paint_foreground
         tinted = layer.background_color.tint(layer.background_tint)
+        # A transparent child must still advance the first colored parent's base.
+        if not any((local_background is not None, local_foreground is not None,
+                    layer.auto_color, layer.layer_opacity != 1, layer.text_style, tinted.a,
+                    parent.base_background != parent.layered_background)):
+            return parent
+        opacity = parent.opacity * layer.layer_opacity
         background = text_background = parent.background
         if local_background is not None:
             text_background = background + tinted
             background += tinted.multiply_alpha(opacity)
-        local_foreground = layer.paint_foreground
         foreground = parent.foreground if local_foreground is None else local_foreground
         if layer.auto_color:
             foreground = text_background.get_contrast_text(foreground.a)
