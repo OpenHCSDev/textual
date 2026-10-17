@@ -160,8 +160,7 @@ class StylesCache:
 
     @staticmethod
     def widget_paint_key(widget: Widget, paint: FramePaint, state: PaintState) -> tuple:
-        return (paint.frame_key, state.base_background, state.layered_background,
-                state.rich_style, widget.geometry.padding)
+        return paint.frame_key, tuple(state), widget.geometry.padding
 
     def refresh_paint(self, widget: Widget) -> None:
         """Dirty only a widget whose current paint differs from its cached lines."""
@@ -171,6 +170,8 @@ class StylesCache:
     def render_widget(self, widget: Widget, crop: Region) -> list[Strip]:
         """Reuse retained lines; prepare their painter only on the first miss."""
         state = widget._resolved_paint_state()
+        if widget.BLANK:
+            return [Strip.blank(crop.width, state.rich_style)] * crop.height
         paint = widget.frame_paint
         key = self.widget_paint_key(widget, paint, state)
         if key != self._paint_key:
@@ -184,7 +185,7 @@ class StylesCache:
             base_background = state.base_background
             content_size = widget.content_region.size
             padding = widget.geometry.padding
-            render_content = widget.render_line
+            render_content = lambda y: widget.render_line(y, state)
             opacity = state.opacity
             if (paint.plain and opacity == 1.0 and not any(padding)
                     and content_size == size):
@@ -203,8 +204,8 @@ class StylesCache:
                 styles.border_subtitle_style)
             ansi_theme, native_ansi = app.ansi_theme, app.native_ansi_color
             return lambda y: self.render_line(
-                paint, y, size, content_size, padding, base_background, background,
-                render_content, title, subtitle, opacity, ansi_theme, native_ansi)
+                paint, state, y, size, content_size, padding,
+                render_content, title, subtitle, ansi_theme, native_ansi)
 
         strips = self.render(size, prepare, widget.get_line_filters(), background, crop)
 
@@ -215,7 +216,7 @@ class StylesCache:
                 and hover_style._meta
                 and "@click" in hover_style.meta
             ):
-                link_style_hover = widget.link_style_hover
+                link_style_hover = state.link_style(widget.styles, hover=True)
                 if link_style_hover:
                     strips = [
                         strip.style_links(hover_style.link_id, link_style_hover)
@@ -283,16 +284,14 @@ class StylesCache:
     def render_line(
         self,
         styles: FramePaint,
+        paint: PaintState,
         y: int,
         size: Size,
         content_size: Size,
         padding: Spacing,
-        base_background: Color,
-        background: Color,
         render_content_line: Callable[[int], Strip],
         border_title: tuple[Content, Color, Color, Style] | None,
         border_subtitle: tuple[Content, Color, Color, Style] | None,
-        opacity: float,
         ansi_theme: TerminalTheme,
         native_ansi: bool,
     ) -> Strip:
@@ -318,6 +317,8 @@ class StylesCache:
             A line of segments.
         """
 
+        base_background, background = paint.base_background, paint.layered_background
+        opacity = paint.opacity
         gutter = styles.paint_gutter
         width, height = size
         content_width, content_height = content_size

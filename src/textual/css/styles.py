@@ -624,8 +624,6 @@ class StylesBase(BoxGeometry, PaintLayer):
     def layer_opacity(self) -> float:
         return self.opacity
 
-    paint_cacheable = True
-
     @property
     def gutter(self) -> Spacing:
         """The public CSS gutter; geometry resolves the shared calculation."""
@@ -1415,10 +1413,6 @@ class RenderStyles(StylesBase):
                 and self._inline_styles._rules == other._inline_styles._rules
             )
         return NotImplemented
-
-    @property
-    def paint_key(self) -> int:
-        return self._cache_key
 
     @property
     def _cache_key(self) -> int:

@@ -410,7 +410,7 @@ class Button(PrimaryActivation, Widget, can_focus=True):
         return self.label
 
     def post_render(
-        self, renderable: RenderableType, base_style: Style
+        self, renderable: RenderableType, base_style: Style, link_style: Style | None
     ) -> ConsoleRenderable:
         return cast(ConsoleRenderable, renderable)
 

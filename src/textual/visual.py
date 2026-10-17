@@ -13,6 +13,7 @@ from rich.segment import Segment
 from rich.style import Style as RichStyle
 from rich.text import Text
 
+from textual._paint_state import PaintState
 from textual._context import active_app
 from textual.css.styles import RulesMap
 from textual.geometry import Spacing
@@ -46,6 +47,8 @@ class RenderOptions:
     """Style of text selection."""
     post_style: Style | None = None
     """Optional style to apply post render."""
+    link_style: RichStyle | None = None
+    """Link paint already resolved by the drawing owner."""
 
 
 # Note: not runtime checkable currently, as I've found that to be slow
@@ -207,7 +210,7 @@ class Visual(ABC):
         visual: Visual,
         width: int,
         height: int | None,
-        style: Style,
+        paint: PaintState,
         *,
         apply_selection: bool = True,
         pad: bool = False,
@@ -229,6 +232,10 @@ class Visual(ABC):
             A list of Strips containing the render.
         """
 
+        style = paint.visual_style
+        link_style = (paint.link_style(widget.styles)
+                      if widget.auto_links and not widget.is_container and not widget.screen._selecting
+                      else None)
         selection = widget.text_selection
         if selection is not None:
             selection_style = cls.selection_style(widget)
@@ -238,14 +245,10 @@ class Visual(ABC):
         strips = visual.render_strips(
             width, height, style,
             RenderOptions(
-                widget._get_style, widget.styles,
+                lambda style: paint.get_style(widget, style), widget.styles,
                 selection if apply_selection else None, selection_style,
+                link_style=link_style,
             ),
-        )
-        link_style = (
-            widget.link_style
-            if widget.auto_links and not widget.is_container and not widget.screen._selecting
-            else None
         )
         return cls.format_strips(
             strips, width, height, style,
@@ -318,7 +321,7 @@ class RichVisual(Visual):
             self._measurement = Measurement.get(
                 console,
                 options,
-                self._widget.post_render(self._renderable, RichStyle.null()),
+                self._widget.post_render(self._renderable, RichStyle.null(), None),
             )
         return self._measurement
 
@@ -373,7 +376,7 @@ class RichVisual(Visual):
             height=height,
         )
         rich_style = style.rich_style
-        renderable = self._widget.post_render(self._renderable, rich_style)
+        renderable = self._widget.post_render(self._renderable, rich_style, options.link_style)
         segments = console.render(renderable, console_options.update_width(width))
         strips = [
             Strip(line)

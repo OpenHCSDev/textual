@@ -11,6 +11,7 @@ from rich.text import Text
 from typing_extensions import Literal
 
 from textual import events
+from textual._paint_state import PaintState
 from textual.strip import Strip
 
 if TYPE_CHECKING:
@@ -551,9 +552,9 @@ class MaskedInput(Input, can_focus=True):
 
         return combined_result
 
-    def render_line(self, y: int) -> Strip:
+    def render_line(self, y: int, paint: PaintState) -> Strip:
         if y != 0:
-            return Strip.blank(self.size.width, self.rich_style)
+            return Strip.blank(self.size.width, paint.rich_style)
 
         result = self._value
         width = self.content_size.width
@@ -586,7 +587,7 @@ class MaskedInput(Input, can_focus=True):
             line_length = width
 
         strip = Strip(segments).crop(self.scroll_offset.x, self.scroll_offset.x + width)
-        return strip.apply_style(self.rich_style)
+        return strip.apply_style(paint.rich_style)
 
     @property
     def _value(self) -> Text:
