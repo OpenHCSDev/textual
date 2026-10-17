@@ -16,7 +16,6 @@ from typing import (
     Literal,
     NamedTuple,
     Sequence,
-    Self,
     TypeVar,
     cast,
     overload,
@@ -25,7 +24,7 @@ from typing import (
 import rich.errors
 import rich.repr
 from rich.style import Style
-from typing_extensions import TypeAlias
+from typing_extensions import Self, TypeAlias
 
 from textual._border import normalize_border_value
 from textual._cells import cell_len
