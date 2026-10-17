@@ -212,7 +212,6 @@ class Stylesheet:
         self.source: dict[CSSLocation, CssSource] = {}
         self._require_parse = False
         self._invalid_css: set[str] = set()
-        self._parse_cache: LRUCache[tuple, list[RuleSet]] = LRUCache(64)
         self._source_rules: dict[CSSLocation, tuple[CssSource, list[RuleSet]]] = {}
         self._style_parse_cache: LRUCache[str, Style] = LRUCache(1024 * 4)
         self._path_rules_cache: FIFOCache[tuple, RulesMap] = FIFOCache(4096)
@@ -287,7 +286,6 @@ class Stylesheet:
         self.invalidate({""})
         self.__variable_tokens = None
         self._invalid_css = set()
-        self._parse_cache.clear()
         self._source_rules.clear()
         self._style_parse_cache.clear()
         self._path_rules_cache.clear()
@@ -333,13 +331,8 @@ class Stylesheet:
         Returns:
             List of RuleSets.
         """
-        cache_key = (css, read_from, is_default_rules, tie_breaker, scope)
         try:
-            return self._parse_cache[cache_key]
-        except KeyError:
-            pass
-        try:
-            rules = list(
+            return list(
                 parse(
                     scope,
                     css,
@@ -354,9 +347,6 @@ class Stylesheet:
             raise
         except Exception as error:
             raise StylesheetError(f"failed to parse css; {error}") from None
-
-        self._parse_cache[cache_key] = rules
-        return rules
 
     def read(self, filename: str | PurePath) -> None:
         """Read Textual CSS file.
@@ -479,9 +469,8 @@ class Stylesheet:
                 raise StylesheetParseError(error_renderable)
             add_rules(css_rules)
             source_rules[read_from] = (source, css_rules)
-        # Retain only the current declaration for each registered source. Unlike
-        # the small historical parse LRU, this cannot thrash when an app mounts
-        # more widget types than the LRU can hold, nor accumulate edited versions.
+        # Retain only the current declaration and parsed rules for each source.
+        # Edits replace that result; unchanged sources reuse it directly.
         self._publish_sources(source_rules)
         self._rules = rules
         self._ids_in_rules = {
@@ -508,8 +497,6 @@ class Stylesheet:
         # parse publishes only after every source succeeds; failed input leaves
         # the current rules and their source declarations intact.
         self._path_rules_cache.clear()
-        self._local_display_classes.clear()
-        self._candidate_rules.clear()
         self._invalid_css.clear()
         self.parse()
 
