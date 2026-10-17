@@ -461,7 +461,8 @@ class DOMNode(MessagePump):
         self._auto_refresh: float | None = None
         self._auto_refresh_timer: Timer | None = None
         self._css_types = self._selector_type_names()
-        self._has_hover_style: bool = False
+        self._has_own_hover_style: bool = False
+        self._has_ancestor_hover_style: bool = False
         self._has_focus_within: bool = False
         self._has_order_style: bool = False
         """The node has an ordered dependent pseudo-style (`:odd`, `:even`, `:first-of-type`, `:last-of-type`, `:first-child`, `:last-child`)"""

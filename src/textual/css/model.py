@@ -132,14 +132,18 @@ class Selector:
     def css(self) -> str:
         """Rebuilds the selector as it would appear in CSS."""
         pseudo_suffix = "".join(f":{name}" for name in sorted(self.pseudo_classes))
+        return f"{self.selector_name}{pseudo_suffix}"
+
+    @property
+    def selector_name(self) -> str:
+        """The static declaration key, shared by indexing and dependency matching."""
         if self.type == SelectorType.UNIVERSAL:
             return "*"
         elif self.type == SelectorType.TYPE:
-            return f"{self.name}{pseudo_suffix}"
+            return self.name
         elif self.type == SelectorType.CLASS:
-            return f".{self.name}{pseudo_suffix}"
-        else:
-            return f"#{self.name}{pseudo_suffix}"
+            return f".{self.name}"
+        return f"#{self.name}"
 
     def _add_pseudo_class(self, pseudo_class: str) -> None:
         """Adds a pseudo class and updates specificity.
@@ -188,6 +192,32 @@ class SelectorSet:
         SAME = CombinatorType.SAME
         for selector, next_selector in zip(self.selectors, self.selectors[1:]):
             selector.advance = int(next_selector.combinator != SAME)
+
+    def hover_dependencies(self, selector_names: frozenset[str]) -> tuple[bool, bool]:
+        """Classify a node's own hover predicates and ancestor-dependent subject.
+
+        A hover compound can address the node even before the final compound:
+        ``Container:hover Button`` must let Container become the hover owner.
+        Static compound matching keeps this declaration planning independent of
+        the current hover value. Multiple simple selectors are one compound.
+        """
+        compounds: list[list[Selector]] = [[]]
+        for selector in self.selectors:
+            if selector.combinator is not CombinatorType.SAME and compounds[-1]:
+                compounds.append([])
+            compounds[-1].append(selector)
+        own_hover = any(
+            any("hover" in selector.pseudo_classes for selector in compound)
+            and all(selector.selector_name in selector_names for selector in compound)
+            for compound in compounds
+        )
+        ancestor_hover = all(
+            selector.selector_name in selector_names for selector in compounds[-1]
+        ) and any(
+            "hover" in selector.pseudo_classes
+            for compound in compounds[:-1] for selector in compound
+        )
+        return own_hover, ancestor_hover
 
     @property
     def is_compound(self) -> bool:
@@ -353,11 +383,6 @@ class RuleSet:
         """Called after the RuleSet is parsed."""
         # Build a set of the class names that have been updated
 
-        class_type = SelectorType.CLASS
-        id_type = SelectorType.ID
-        type_type = SelectorType.TYPE
-        universal_type = SelectorType.UNIVERSAL
-
         add_selector = self.selector_names.add
         add_pseudo_classes = self.pseudo_classes.update
 
@@ -365,13 +390,4 @@ class RuleSet:
             for selector in selector_set.selectors:
                 add_pseudo_classes(selector.pseudo_classes)
 
-            selector = selector_set.selectors[-1]
-            selector_type = selector.type
-            if selector_type == universal_type:
-                add_selector("*")
-            elif selector_type == type_type:
-                add_selector(selector.name)
-            elif selector_type == class_type:
-                add_selector(f".{selector.name}")
-            elif selector_type == id_type:
-                add_selector(f"#{selector.name}")
+            add_selector(selector_set.selectors[-1].selector_name)
