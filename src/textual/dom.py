@@ -1256,10 +1256,10 @@ class DOMNode(MessagePump):
             if constraints is None:
                 constraints = self._display_constraints = set()
             constraints.add(reason)
-        if self._parent is not None:
-            self._nodes.updated()
         if self.display != was_displayed:
-            self.refresh(layout=True)
+            display_rule = type(self.styles).display
+            display_rule.publish(self.styles, self.styles.display)
+            display_rule.refresh_node(self.styles)
 
     @property
     def visible(self) -> bool:

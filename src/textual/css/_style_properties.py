@@ -16,6 +16,7 @@ from typing import (
     Literal,
     NamedTuple,
     Sequence,
+    Self,
     TypeVar,
     cast,
     overload,
@@ -78,7 +79,7 @@ class StyleProperty(Generic[PropertyGetType]):
     """The value read when the rule is unset."""
 
     @overload
-    def __get__(self, obj: None, objtype: type[StylesBase] | None = None) -> StyleProperty[PropertyGetType]: ...
+    def __get__(self, obj: None, objtype: type[StylesBase] | None = None) -> Self: ...
 
     @overload
     def __get__(self, obj: StylesBase, objtype: type[StylesBase] | None = None) -> PropertyGetType: ...
@@ -757,11 +758,15 @@ class StringEnumProperty(StyleProperty[EnumType], Generic[EnumType]):
                 ),
             )
         if obj.set_rule(self.name, value):
-            obj.refresh(
-                layout=self._layout,
-                children=self._refresh_children,
-                parent=self._refresh_parent,
-            )
+            self.refresh_node(obj)
+
+    def refresh_node(self, obj: StylesBase) -> None:
+        """Schedule this descriptor's declared node damage without a rule write."""
+        obj.refresh(
+            layout=self._layout,
+            children=self._refresh_children,
+            parent=self._refresh_parent,
+        )
 
 
 class DisplayProperty(StringEnumProperty):

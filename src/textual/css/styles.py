@@ -264,7 +264,9 @@ class StylesBase(BoxGeometry, PaintLayer):
         "line_pad",
     }
 
-    display = DisplayProperty(VALID_DISPLAY, "block", layout=True, display=True)
+    display = DisplayProperty(
+        VALID_DISPLAY, "block", layout=True, refresh_parent=True, display=True
+    )
     """Set the display of the widget, defining how it's rendered.
 
     Valid values are "block" or "none".
