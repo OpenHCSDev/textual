@@ -135,11 +135,9 @@ class DOMQuery(Generic[QueryType]):
     @property
     def nodes(self) -> list[QueryType]:
         """Lazily evaluate nodes."""
-        from textual.widget import Widget
-
         if self._nodes is None:
-            initial_nodes = list(
-                self._node.walk_children(Widget) if self._deep else self._node._nodes
+            initial_nodes = (
+                self._node.walk_children() if self._deep else self._node._nodes
             )
             nodes = [node for node in initial_nodes if self._matches(node)]
             self._nodes = cast("list[QueryType]", nodes)
