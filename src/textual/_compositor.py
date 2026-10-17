@@ -73,6 +73,29 @@ class GeometryDemand(ABC):
     """Which original placements this traversal needs, not another geometry store."""
 
     @staticmethod
+    def retained_paths(root: Widget, retain_geometry: Iterable[Widget],
+                       visible_only: bool) -> set[Widget]:
+        retained_paths: set[Widget] = set()
+        if visible_only:
+            # Requested targets need their outer placement even when offscreen.
+            # This places only their ancestor path, not unrelated descendants.
+            for target in retain_geometry:
+                path: list[Widget] = []
+                node = target
+                # Paths already added lead to this same root: add each
+                # shared ancestor once, not once per target.
+                while (
+                    isinstance(node, Widget)
+                    and node is not root
+                    and node not in retained_paths
+                ):
+                    path.append(node)
+                    node = node.parent
+                if node is root or node in retained_paths:
+                    retained_paths.update(path)
+        return retained_paths
+
+    @staticmethod
     def cache_subtree(widget: Widget, capacity: int, capturing_source: bool) -> bool:
         return bool(capacity and widget._is_mounted and (
             widget.CACHE_SUBTREE_GEOMETRY or (capturing_source and widget.is_container)))
@@ -855,7 +878,7 @@ class Compositor:
     def clear(self) -> None:
         """Remove all references to widgets (used when the screen closes)."""
         self.root = None
-        self._full_map.clear()
+        self._full_map = {}
         self._full_map_invalidated = True
         self._visible_map = None
         self._published_map = {}
@@ -891,24 +914,27 @@ class Compositor:
             for owner in widgets
             for member in (owner, owner._render_widget, *owner._get_virtual_dom())
         }
+        if not widgets:
+            return widgets
         if self._discarded_between_steps is not None:
             self._discarded_between_steps.update(widgets)
         for owner, resource in tuple(self._subtree_geometry.items()):
             if resource.references_retired(owner, widgets):
                 del self._subtree_geometry[owner]
-        changed = False
-        for mapping in (self._full_map, self._visible_map, self._published_map):
-            if mapping is None:
-                continue
-            for widget in widgets:
-                if (geometry := mapping.pop(widget, None)) is not None:
-                    changed = True
-                    self._damage(geometry.visible_region)
+        def retire(mapping: CompositorMap) -> CompositorMap:
+            for widget in widgets & mapping.keys():
+                self._damage(mapping[widget].visible_region)
+            return {widget: geometry for widget, geometry in mapping.items()
+                    if widget not in widgets}
+
+        self._full_map = retire(self._full_map)
+        if self._visible_map is not None:
+            self._visible_map = retire(self._visible_map)
+        self._published_map = retire(self._published_map)
         self.widgets.difference_update(widgets)
-        if changed:
-            self._full_map_invalidated = True
-            self._invalidate_render_projection()
-            self._published_widgets = None
+        self._full_map_invalidated = True
+        self._invalidate_render_projection()
+        self._published_widgets = None
         return widgets
 
     @classmethod
@@ -1118,6 +1144,8 @@ class Compositor:
         discarded = self._discarded_between_steps = set()
         try:
             for root in outermost:
+                if root in discarded:
+                    continue
                 old = [widget for widget, geometry in previous.items()
                        if root in geometry.ancestors]
                 # Screen-positioned descendants are not placed by their root alone.
@@ -1156,7 +1184,6 @@ class Compositor:
         widgets.difference_update(discarded)
         shown.difference_update(discarded)
         hidden.difference_update(discarded)
-        self._invalidate_render_projection()
         self._full_map_invalidated = True
         self._visible_map = scene
         self._invalidate_render_projection()
@@ -1328,24 +1355,7 @@ class Compositor:
             else {name: index for index, name in enumerate(root_layers)}
         )
         default_layers = {DEFAULT_LAYER: 0}
-        retained_paths: set[Widget] = set()
-        if visible_only:
-            # Requested targets need their outer placement even when offscreen.
-            # This places only their ancestor path, not unrelated descendants.
-            for target in retain_geometry:
-                path: list[Widget] = []
-                node = target
-                # Paths already added lead to this same root: add each
-                # shared ancestor once, not once per target.
-                while (
-                    isinstance(node, Widget)
-                    and node is not root
-                    and node not in retained_paths
-                ):
-                    path.append(node)
-                    node = node.parent
-                if node is root or node in retained_paths:
-                    retained_paths.update(path)
+        retained_paths = demand.retained_paths(root, retain_geometry, visible_only)
 
         def arrange_widget(
             widget: Widget,
@@ -1550,12 +1560,12 @@ class Compositor:
                 return
             if inherited_layers is None and (order_names := widget._get_layer_order((widget,))) is not None:
                 inherited_layers = {name: index for index, name in enumerate(order_names)}
-            retains_source = widget.CACHE_SUBTREE_GEOMETRY
             if not demand.cache_subtree(
                     widget, self.max_subtree_geometry_entries, capturing_source):
                 yield from arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
                                complete, inherited_layers, source)  # noqa: F821 -- closure cleared after traversal
                 return
+            retains_source = widget.CACHE_SUBTREE_GEOMETRY
             resource_type = widget.subtree_geometry_resource()
             enclosing_complete = complete
             # The widget's geometry type chooses a complete or a placed
