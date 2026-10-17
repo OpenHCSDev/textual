@@ -1621,7 +1621,7 @@ class Compositor:
             child_layer_order = first_layer_order + ordinal
             child_order = order + ((layers.get(child.layer, 0), z, child_layer_order),)
             yield (child, region, child_region,
-                   ((1, 0, 0),) if overlay else child_order, child_layer_order,
+                   ((1, 0, 0),) + child_order[-1:] if overlay else child_order, child_layer_order,
                    no_clip if overlay else sub_clip)
 
     @property
