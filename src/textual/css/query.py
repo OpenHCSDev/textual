@@ -66,7 +66,7 @@ class DOMQuery(Generic[QueryType]):
         exclude: str | None = None,
         deep: bool = True,
         parent: DOMQuery | None = None,
-        of_type: type[QueryType] | None = None,
+        of_type: type[DOMNode] | None = None,
     ) -> None:
         """Initialize a query object.
 
@@ -88,9 +88,7 @@ class DOMQuery(Generic[QueryType]):
         from textual.widget import Widget
 
         _rich_traceback_omit = True
-        self._of_type = (
-            of_type if of_type is not None else cast("type[QueryType]", Widget)
-        )
+        self._of_type = of_type if of_type is not None else Widget
         self._node = node
         self._nodes: list[QueryType] | None = None
         self._filters: list[tuple[SelectorSet, ...]] = (

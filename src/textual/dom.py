@@ -45,14 +45,12 @@ from textual.color import BLACK, WHITE, Color
 from textual.css._error_tools import friendly_list
 from textual.css.constants import VALID_DISPLAY, VALID_VISIBILITY
 from textual.css.errors import DeclarationError, StyleValueError
-from textual.css.match import match
-from textual.css.parse import is_id_selector, parse_declarations, parse_selectors
-from textual.css.query import InvalidQueryFormat, NoMatches, TooManyMatches, WrongType
+from textual.css.parse import is_id_selector, parse_declarations
+from textual.css.query import NoMatches, TooManyMatches, WrongType
 from textual.css.styles import RenderStyles, Styles
 from textual.box_model import BoxGeometry
 from textual.geometry import Size
 from textual.css.tokenize import IDENTIFIER
-from textual.css.tokenizer import TokenError
 from textual.message_pump import MessagePump
 from textual.reactive import Reactive, ReactiveError, _Mutated, _watch
 from textual.style import NULL_STYLE, Style as VisualStyle
@@ -1724,7 +1722,7 @@ class DOMNode(MessagePump):
 
         node = self._get_dom_base()
         if isinstance(selector, str) or selector is None:
-            return DOMQuery[Widget](node, filter=selector)
+            return DOMQuery[Widget](node, filter=selector, of_type=DOMNode)
         else:
             return DOMQuery[QueryType](node, of_type=selector)
 
@@ -1756,7 +1754,7 @@ class DOMNode(MessagePump):
 
         node = self._get_dom_base()
         if isinstance(selector, str) or selector is None:
-            return DOMQuery[Widget](node, deep=False, filter=selector)
+            return DOMQuery[Widget](node, deep=False, filter=selector, of_type=DOMNode)
         else:
             return DOMQuery[QueryType](node, deep=False, of_type=selector)
 
@@ -1960,21 +1958,10 @@ class DOMNode(MessagePump):
             A DOMNode or subclass if `expect_type` is provided.
         """
         base_node = self._get_dom_base()
-        if isinstance(selector, str):
-            try:
-                selector_set = parse_selectors(selector)
-            except TokenError:
-                raise InvalidQueryFormat(
-                    f"Unable to parse {selector!r} as a query; check for syntax errors"
-                ) from None
-            matches = (
-                node for node in base_node.walk_ancestors() if match(selector_set, node)
-            )
-        else:
-            matches = (
-                node for node in base_node.walk_ancestors() if isinstance(node, selector)
-            )
-        for node in matches:
+        query = self.query(selector)
+        for node in base_node.walk_ancestors():
+            if not query._matches(node):
+                continue
             if expect_type is not None and not isinstance(node, expect_type):
                 continue
             return node
