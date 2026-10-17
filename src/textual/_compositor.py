@@ -73,6 +73,29 @@ class GeometryDemand(ABC):
     """Which original placements this traversal needs, not another geometry store."""
 
     @staticmethod
+    def retained_paths(root: Widget, retain_geometry: Iterable[Widget],
+                       visible_only: bool) -> set[Widget]:
+        retained_paths: set[Widget] = set()
+        if visible_only:
+            # Requested targets need their outer placement even when offscreen.
+            # This places only their ancestor path, not unrelated descendants.
+            for target in retain_geometry:
+                path: list[Widget] = []
+                node = target
+                # Paths already added lead to this same root: add each
+                # shared ancestor once, not once per target.
+                while (
+                    isinstance(node, Widget)
+                    and node is not root
+                    and node not in retained_paths
+                ):
+                    path.append(node)
+                    node = node.parent
+                if node is root or node in retained_paths:
+                    retained_paths.update(path)
+        return retained_paths
+
+    @staticmethod
     def cache_subtree(widget: Widget, capacity: int, capturing_source: bool) -> bool:
         return bool(capacity and widget._is_mounted and (
             widget.CACHE_SUBTREE_GEOMETRY or (capturing_source and widget.is_container)))
@@ -1328,24 +1351,7 @@ class Compositor:
             else {name: index for index, name in enumerate(root_layers)}
         )
         default_layers = {DEFAULT_LAYER: 0}
-        retained_paths: set[Widget] = set()
-        if visible_only:
-            # Requested targets need their outer placement even when offscreen.
-            # This places only their ancestor path, not unrelated descendants.
-            for target in retain_geometry:
-                path: list[Widget] = []
-                node = target
-                # Paths already added lead to this same root: add each
-                # shared ancestor once, not once per target.
-                while (
-                    isinstance(node, Widget)
-                    and node is not root
-                    and node not in retained_paths
-                ):
-                    path.append(node)
-                    node = node.parent
-                if node is root or node in retained_paths:
-                    retained_paths.update(path)
+        retained_paths = demand.retained_paths(root, retain_geometry, visible_only)
 
         def arrange_widget(
             widget: Widget,
