@@ -225,7 +225,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
     VERTICAL_BREAKPOINTS: ClassVar[list[tuple[int, str]]] | None = None
     """Vertical breakpoints, will override [App.VERTICAL_BREAKPOINTS][textual.app.App.VERTICAL_BREAKPOINTS] if not `None`."""
 
-    focused: Reactive[Widget | None] = Reactive(None)
+    focused: Reactive[Widget | None] = Reactive(None, repaint=False)
     """The focused [widget][textual.widget.Widget] or `None` for no focus.
     To set focus, do not update this value directly. Use [set_focus][textual.screen.Screen.set_focus] instead."""
     stack_updates: Reactive[int] = Reactive(0, repaint=False)
