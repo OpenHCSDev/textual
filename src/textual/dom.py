@@ -913,6 +913,9 @@ class DOMNode(MessagePump):
         _rich_traceback_omit = True
         Reactive._initialize_object(self)
 
+    def _invalidate_layout(self) -> None:
+        """Non-rendered DOM nodes have no native measurements to retire."""
+
     def _request_layout(self, required: bool = True) -> None:
         """Non-rendered DOM nodes have no layout publication."""
 
@@ -1256,10 +1259,13 @@ class DOMNode(MessagePump):
             if constraints is None:
                 constraints = self._display_constraints = set()
             constraints.add(reason)
-        if self._parent is not None:
-            self._nodes.updated()
         if self.display != was_displayed:
-            self.refresh(layout=True)
+            # Rule writes publish geometry through Styles; model inputs use
+            # the existing native layout owner before requesting the same damage.
+            self._invalidate_layout()
+            display_rule = type(self.styles).display
+            display_rule.publish(self.styles, self.styles.display)
+            display_rule.refresh_node(self.styles)
 
     @property
     def visible(self) -> bool:

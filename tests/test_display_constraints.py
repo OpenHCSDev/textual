@@ -45,6 +45,19 @@ async def test_constraint_updates_native_layout_without_restyling_subtrees():
             assert apply.call_count == 0
 
 
+async def test_constraint_reflows_following_sibling_in_group():
+    app = App()
+    async with app.run_test() as pilot:
+        first, middle, third = (Static(text) for text in ("first", "middle", "third"))
+        for child in (first, middle, third):
+            child.styles.height = 1
+        await app.mount(VerticalGroup(first, middle, third))
+        await pilot.pause()
+        middle.set_display_constraint("t", False)
+        await pilot.pause()
+        assert third.region.y == first.region.y + 1
+
+
 async def test_initial_constraint_and_relative_child_measurement():
     app = App()
     async with app.run_test() as pilot:
