@@ -11,13 +11,16 @@ from textual.style import Style as VisualStyle
 class PaintLayer:
     """One local colour layer, independent of how its inputs are declared."""
 
-    paint_foreground: Color | None
-    paint_background: Color | None
-    background_tint: Color
-    text_style: Style
-    text_opacity: float
-    layer_opacity: float
-    auto_color: bool
+    paint_foreground: Color | None = None
+    paint_background: Color | None = None
+    background_tint = TRANSPARENT
+    text_style = NULL_STYLE
+    text_opacity = layer_opacity = 1.0
+    auto_color = False
+
+    @property
+    def paint_layer(self) -> PaintLayer:
+        return self
 
     @property
     def background_color(self) -> Color:
