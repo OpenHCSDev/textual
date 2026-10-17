@@ -12,7 +12,6 @@ class MarkupPlayground(App):
     TITLE = "Markup Playground"
     CSS = """
     Screen {        
-        layout: vertical;
         #editor {            
             width: 1fr;
             height: 1fr;

@@ -173,7 +173,6 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
 
     DEFAULT_CSS = """
     Screen {
-        layout: vertical;
         overflow-y: auto;
         background: $background;        
         
@@ -2579,7 +2578,6 @@ class ModalScreen(Screen[ScreenResultType]):
 
     DEFAULT_CSS = """
     ModalScreen {
-        layout: vertical;
         overflow-y: auto;
         background: $background 60%;
         &:ansi {
