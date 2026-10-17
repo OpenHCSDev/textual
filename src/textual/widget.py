@@ -4232,11 +4232,7 @@ class Widget(DOMNode):
 
         self._layout_cache.clear()
         if layout:
-            try:
-                self.screen.post_message(messages.LayoutChildren(self))
-            except NoScreen:
-                # Detached content is placed by its parent on the next mount.
-                self._request_layout()
+            self.post_message(messages.LayoutChildren(self))
         if repaint:
             self._set_dirty(*regions)
             self.clear_cached_dimensions()
