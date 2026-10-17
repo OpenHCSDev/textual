@@ -1,0 +1,85 @@
+{
+  "owner": "core-read-locks",
+  "purpose": "retire superseded failed/earlier P21 private packages after all owned clients closed",
+  "checked_at": 1792225371.7553847,
+  "prefixes": {
+    "toad-a6abdc00a-core-fcb9e4c30-native-70f0512abbcfa4e0-20261017T080618Z": {
+      "borrowers": [],
+      "removed": true
+    },
+    "toad-613465afd-core-fcb9e4c30-native-70f0512abbcfa4e0-20261017T081134Z": {
+      "borrowers": [],
+      "removed": true
+    }
+  },
+  "inspection_gaps": [
+    [
+      68488,
+      "AccessDenied"
+    ],
+    [
+      107139,
+      "AccessDenied"
+    ],
+    [
+      140381,
+      "AccessDenied"
+    ],
+    [
+      216738,
+      "AccessDenied"
+    ],
+    [
+      504622,
+      "AccessDenied"
+    ],
+    [
+      1175243,
+      "AccessDenied"
+    ],
+    [
+      1561676,
+      "AccessDenied"
+    ],
+    [
+      1786010,
+      "AccessDenied"
+    ],
+    [
+      1786012,
+      "AccessDenied"
+    ],
+    [
+      1953373,
+      "AccessDenied"
+    ],
+    [
+      2221730,
+      "AccessDenied"
+    ],
+    [
+      3267884,
+      "AccessDenied"
+    ],
+    [
+      3417411,
+      "AccessDenied"
+    ],
+    [
+      3739635,
+      "AccessDenied"
+    ],
+    [
+      3739737,
+      "AccessDenied"
+    ],
+    [
+      4176073,
+      "AccessDenied"
+    ]
+  ],
+  "pointers": {
+    "/home/ts/.local/share/agent-comms/current": "/home/ts/.local/share/agent-comms/runtimes/toad-5264f66b2-core-fcb9e4c30-native-70f0512abbcfa4e0-20261017T070358Z",
+    "/home/ts/wt/toad-close-lifecycle/.artifacts/p21-takeover/root/home/.local/share/agent-comms/current": "/home/ts/.local/share/agent-comms/runtimes/toad-c7447d4ba-core-fcb9e4c30-native-70f0512abbcfa4e0-20261017T081832Z"
+  }
+}

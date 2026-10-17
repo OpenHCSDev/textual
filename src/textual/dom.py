@@ -68,8 +68,6 @@ if TYPE_CHECKING:
     from textual.app import App
     from textual.css.query import DOMQuery, QueryType
     from textual.css.types import CSSLocation
-    from textual.css.styles import StylesBase
-    from textual.message import Message
     from textual.reactive import _StoredReactiveAccess
     from textual.screen import Screen
     from textual.widget import Widget
@@ -244,7 +242,6 @@ class DOMNode(MessagePump):
     _reactives: ClassVar[dict[str, Reactive]]
     _reactive_accessors: ClassVar[dict[str, _StoredReactiveAccess]]
 
-    _decorated_handlers: dict[type[Message], list[tuple[Callable, str | None]]]
 
     # Names of potential computed reactives
     _computes: ClassVar[frozenset[str]]
@@ -1402,20 +1399,22 @@ class DOMNode(MessagePump):
             # style mutations, including when inherited by a native child.
             state = EMPTY_PAINT._replace(cacheable=False)
             for node in reversed(self.ancestors_with_self):
-                state = PaintState.resolve(state, node.paint_layer)
+                layer = node.paint_layer
+                state = PaintState.resolve(state, layer, (layer.paint_key, layer.paint_cacheable))
             return state
-        epoch = (Styles._revision, MessagePump._tree_revision)
         layer = self.paint_layer
+        key = layer.paint_key, layer.paint_cacheable
+        epoch = (Styles._revision, MessagePump._tree_revision, key)
         state = self.__dict__.get("_paint_state")
-        reusable = state is not None and layer.paint_cacheable
+        reusable = state is not None and key[0] is not None
         if reusable and state.cacheable and self.__dict__.get("_paint_epoch") == epoch:
             return state
         parent = self._parent
         inherited = (
             parent._resolved_paint_state() if isinstance(parent, DOMNode) else EMPTY_PAINT
         )
-        if not (reusable and state.parent is inherited and state.style_key == layer.paint_key):
-            state = self._paint_state = PaintState.resolve(inherited, layer)
+        if not (reusable and state.parent is inherited and state.style_key == key):
+            state = self._paint_state = PaintState.resolve(inherited, layer, key)
         self._paint_epoch = epoch
         return state
 
@@ -1443,12 +1442,7 @@ class DOMNode(MessagePump):
         Returns:
             A Rich style.
         """
-        state = self._resolved_paint_state()
-        background, color = state.background, state.foreground
-        return state.text_style + Style.from_color(
-            (background + color).rich_color if (background.a or color.a) else None,
-            background.rich_color if background.a else None,
-        )
+        return self._resolved_paint_state().rich_style
 
     def get_visual_style(
         self, *component_classes: str, partial: bool = False

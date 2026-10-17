@@ -1,0 +1,310 @@
+{
+  "revision": "working",
+  "modules": {
+    "src/textual/_paint_state.py": 1,
+    "src/textual/dom.py": 1
+  },
+  "omissions": [],
+  "sites": [
+    [
+      "src/textual/_paint_state.py",
+      9,
+      "ClassDef",
+      "class PaintLayer:"
+    ],
+    [
+      "src/textual/_paint_state.py",
+      28,
+      "ClassDef",
+      "class PaintState(NamedTuple):"
+    ],
+    [
+      "src/textual/_paint_state.py",
+      73,
+      "Assign",
+      "EMPTY_PAINT = PaintState(None, -1, Color(0, 0, 0, 0), Color(255, 255, 255, 0), NULL_STYLE, 1.0, Color(0, 0, 0, 0), Color(0, 0, 0, 0))"
+    ],
+    [
+      "src/textual/_paint_state.py",
+      19,
+      "AnnAssign",
+      "paint_key: int | None"
+    ],
+    [
+      "src/textual/_paint_state.py",
+      20,
+      "AnnAssign",
+      "paint_cacheable: bool"
+    ],
+    [
+      "src/textual/_paint_state.py",
+      29,
+      "AnnAssign",
+      "parent: PaintState | None"
+    ],
+    [
+      "src/textual/_paint_state.py",
+      47,
+      "FunctionDef",
+      "def same_paint(self, other: PaintState) -> bool:"
+    ],
+    [
+      "src/textual/_paint_state.py",
+      51,
+      "FunctionDef",
+      "def resolve(cls, parent: PaintState, layer: PaintLayer) -> PaintState:"
+    ],
+    [
+      "src/textual/_paint_state.py",
+      73,
+      "Call",
+      "PaintState(None, -1, Color(0, 0, 0, 0), Color(255, 255, 255, 0), NULL_STYLE, 1.0, Color(0, 0, 0, 0), Color(0, 0, 0, 0))"
+    ],
+    [
+      "src/textual/_paint_state.py",
+      64,
+      "Return",
+      "return cls(parent, layer.paint_key, background, foreground, parent.text_style + layer.text_style, opacity, parent.layered_background, parent.layered_background + tinted.multiply_alpha(opacity), parent.cacheable and layer.paint_cacheable)"
+    ],
+    [
+      "src/textual/_paint_state.py",
+      64,
+      "Call",
+      "cls(parent, layer.paint_key, background, foreground, parent.text_style + layer.text_style, opacity, parent.layered_background, parent.layered_background + tinted.multiply_alpha(opacity), parent.cacheable and layer.paint_cacheable)"
+    ],
+    [
+      "src/textual/_paint_state.py",
+      65,
+      "Attribute",
+      "layer.paint_key"
+    ],
+    [
+      "src/textual/_paint_state.py",
+      69,
+      "Attribute",
+      "layer.paint_cacheable"
+    ],
+    [
+      "src/textual/dom.py",
+      40,
+      "ImportFrom",
+      "from textual._paint_state import EMPTY_PAINT, PaintLayer, PaintState"
+    ],
+    [
+      "src/textual/dom.py",
+      711,
+      "FunctionDef",
+      "def is_empty(self) -> bool:"
+    ],
+    [
+      "src/textual/dom.py",
+      1395,
+      "FunctionDef",
+      "def _resolved_paint_state(self) -> PaintState:"
+    ],
+    [
+      "src/textual/dom.py",
+      1428,
+      "FunctionDef",
+      "def paint_layer(self) -> PaintLayer:"
+    ],
+    [
+      "src/textual/dom.py",
+      1393,
+      "Return",
+      "return self._resolved_paint_state().text_style"
+    ],
+    [
+      "src/textual/dom.py",
+      1407,
+      "Assign",
+      "reusable = state is not None and layer.paint_cacheable"
+    ],
+    [
+      "src/textual/dom.py",
+      1411,
+      "Assign",
+      "inherited = parent._resolved_paint_state() if isinstance(parent, DOMNode) else EMPTY_PAINT"
+    ],
+    [
+      "src/textual/dom.py",
+      1414,
+      "If",
+      "if not (reusable and state.parent is inherited and (state.style_key == layer.paint_key)):"
+    ],
+    [
+      "src/textual/dom.py",
+      1443,
+      "Return",
+      "return self._resolved_paint_state().rich_style"
+    ],
+    [
+      "src/textual/dom.py",
+      1459,
+      "Assign",
+      "cacheable = self._resolved_paint_state().cacheable"
+    ],
+    [
+      "src/textual/dom.py",
+      1584,
+      "Assign",
+      "resolved = self._resolved_paint_state()"
+    ],
+    [
+      "src/textual/dom.py",
+      1623,
+      "Assign",
+      "state = self._resolved_paint_state()"
+    ],
+    [
+      "src/textual/dom.py",
+      1393,
+      "Attribute",
+      "self._resolved_paint_state().text_style"
+    ],
+    [
+      "src/textual/dom.py",
+      1415,
+      "Assign",
+      "state = self._paint_state = PaintState.resolve(inherited, layer)"
+    ],
+    [
+      "src/textual/dom.py",
+      1443,
+      "Attribute",
+      "self._resolved_paint_state().rich_style"
+    ],
+    [
+      "src/textual/dom.py",
+      1459,
+      "Attribute",
+      "self._resolved_paint_state().cacheable"
+    ],
+    [
+      "src/textual/dom.py",
+      1468,
+      "FunctionDef",
+      "def iter_styles() -> Iterable[PaintLayer]:"
+    ],
+    [
+      "src/textual/dom.py",
+      1584,
+      "Call",
+      "self._resolved_paint_state()"
+    ],
+    [
+      "src/textual/dom.py",
+      1623,
+      "Call",
+      "self._resolved_paint_state()"
+    ],
+    [
+      "src/textual/dom.py",
+      1393,
+      "Call",
+      "self._resolved_paint_state()"
+    ],
+    [
+      "src/textual/dom.py",
+      1402,
+      "Assign",
+      "state = PaintState.resolve(state, node.paint_layer)"
+    ],
+    [
+      "src/textual/dom.py",
+      1407,
+      "Attribute",
+      "layer.paint_cacheable"
+    ],
+    [
+      "src/textual/dom.py",
+      1412,
+      "Call",
+      "parent._resolved_paint_state()"
+    ],
+    [
+      "src/textual/dom.py",
+      1415,
+      "Call",
+      "PaintState.resolve(inherited, layer)"
+    ],
+    [
+      "src/textual/dom.py",
+      1443,
+      "Call",
+      "self._resolved_paint_state()"
+    ],
+    [
+      "src/textual/dom.py",
+      1459,
+      "Call",
+      "self._resolved_paint_state()"
+    ],
+    [
+      "src/textual/dom.py",
+      1584,
+      "Attribute",
+      "self._resolved_paint_state"
+    ],
+    [
+      "src/textual/dom.py",
+      1623,
+      "Attribute",
+      "self._resolved_paint_state"
+    ],
+    [
+      "src/textual/dom.py",
+      1393,
+      "Attribute",
+      "self._resolved_paint_state"
+    ],
+    [
+      "src/textual/dom.py",
+      1402,
+      "Call",
+      "PaintState.resolve(state, node.paint_layer)"
+    ],
+    [
+      "src/textual/dom.py",
+      1412,
+      "Attribute",
+      "parent._resolved_paint_state"
+    ],
+    [
+      "src/textual/dom.py",
+      1414,
+      "Compare",
+      "state.style_key == layer.paint_key"
+    ],
+    [
+      "src/textual/dom.py",
+      1415,
+      "Attribute",
+      "PaintState.resolve"
+    ],
+    [
+      "src/textual/dom.py",
+      1443,
+      "Attribute",
+      "self._resolved_paint_state"
+    ],
+    [
+      "src/textual/dom.py",
+      1459,
+      "Attribute",
+      "self._resolved_paint_state"
+    ],
+    [
+      "src/textual/dom.py",
+      1402,
+      "Attribute",
+      "PaintState.resolve"
+    ],
+    [
+      "src/textual/dom.py",
+      1414,
+      "Attribute",
+      "layer.paint_key"
+    ]
+  ]
+}

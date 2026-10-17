@@ -45,6 +45,7 @@ class Message:
     namespace: ClassVar[str] = ""  # Namespace to disambiguate messages
     handler_name: ClassVar[str]
     """Name of the default message handler."""
+    _dispatch_types: ClassVar[tuple[type[Message], ...]] = ()
 
     def __init__(self) -> None:
         self.__post_init__()
@@ -73,6 +74,7 @@ class Message:
         namespace: str | None = None,
     ) -> None:
         super().__init_subclass__()
+        cls._dispatch_types = tuple(base for base in cls.__mro__ if issubclass(base, Message))
         if bubble is not None:
             cls.bubble = bubble
         cls.verbose = verbose

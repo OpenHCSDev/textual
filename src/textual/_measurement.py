@@ -7,13 +7,16 @@ from typing import TYPE_CHECKING, Callable, TypeVar
 
 from textual.css.scalar import Scalar, Unit
 from textual.css.styles import RenderStyles
-from textual.geometry import Spacing
+from textual.geometry import Size, Spacing
 
 if TYPE_CHECKING:
     from textual.widget import Widget
 
 
 class HeightDependency(ABC):
+    def measurement_key(self, widget: Widget, container: Size, viewport: Size, width: int) -> object:
+        return container, viewport, width
+
     @abstractmethod
     def depends(self, widget: Widget, *, greedy: bool = True) -> bool:
         """Whether incoming height changes this operation in its actual box mode.
@@ -111,6 +114,11 @@ class NativeWidgetMeasurementHeight(HeightDependency):
 
 
 class NativeWidgetHeight(NativeWidgetMeasurementHeight):
+    def measurement_key(self, widget: Widget, container: Size, viewport: Size, width: int) -> object:
+        return ((widget._geometry_revision,
+                 widget.layout._content_height_dependency.measurement_key(widget, container, viewport, width))
+                if widget.is_container else width)
+
     def layout_dependency(self, widget: Widget) -> HeightDependency:
         return widget.layout._content_height_dependency
 
@@ -121,6 +129,9 @@ class NativeWidgetWidth(NativeWidgetMeasurementHeight):
 
 
 class NativeLayoutHeight(HeightDependency):
+    def measurement_key(self, widget: Widget, container: Size, viewport: Size, width: int) -> object:
+        return width, viewport, container.height if self.depends(widget) else 0
+
     def depends(self, widget: Widget, *, greedy: bool = True) -> bool:
         # Conservatively require a declaration for the arranger too. Even the
         # fixed-zero branch need not opt unknown/custom layout hooks into reuse.
