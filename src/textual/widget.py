@@ -4217,19 +4217,26 @@ class Widget(DOMNode):
 
         if layout:
             self._invalidate_layout()
-            self._request_layout()
 
         if recompose:
+            self._request_layout(layout)
             self._recompose_required = True
             self.call_next(self._check_recompose)
             return self
 
         if not self._is_mounted:
+            self._request_layout(layout)
             self._repaint_required = True
             self.check_idle()
             return self
 
         self._layout_cache.clear()
+        if layout:
+            try:
+                self.screen.post_message(messages.LayoutChildren(self))
+            except NoScreen:
+                # Detached content is placed by its parent on the next mount.
+                self._request_layout()
         if repaint:
             self._set_dirty(*regions)
             self.clear_cached_dimensions()
