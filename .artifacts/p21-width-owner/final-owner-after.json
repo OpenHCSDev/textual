@@ -1,0 +1,3123 @@
+{
+  "revision": "working",
+  "modules": {
+    "src/textual": 254
+  },
+  "omissions": [],
+  "sites": [
+    [
+      "src/textual/_ansi_theme.py",
+      3,
+      "ImportFrom",
+      "from rich.terminal_theme import TerminalTheme"
+    ],
+    [
+      "src/textual/_border.py",
+      326,
+      "FunctionDef",
+      "def render_border_label("
+    ],
+    [
+      "src/textual/_compositor.py",
+      1961,
+      "FunctionDef",
+      "def deferred_regions(self, roots: Iterable[Widget]) -> tuple[Region, ...]:"
+    ],
+    [
+      "src/textual/_compositor.py",
+      750,
+      "Assign",
+      "terminal_sequences = ''.join(sequences)"
+    ],
+    [
+      "src/textual/_compositor.py",
+      751,
+      "Return",
+      "return terminal_sequences"
+    ],
+    [
+      "src/textual/_compositor.py",
+      2069,
+      "Assign",
+      "regions = widget.screen._compositor.deferred_regions((widget,))"
+    ],
+    [
+      "src/textual/_compositor.py",
+      2069,
+      "Call",
+      "widget.screen._compositor.deferred_regions((widget,))"
+    ],
+    [
+      "src/textual/_compositor.py",
+      2069,
+      "Attribute",
+      "widget.screen._compositor.deferred_regions"
+    ],
+    [
+      "src/textual/_doc.py",
+      63,
+      "FunctionDef",
+      "def take_svg_screenshot("
+    ],
+    [
+      "src/textual/_doc.py",
+      142,
+      "Assign",
+      "svg = cast(str, app.run(headless=True, auto_pilot=auto_pilot, size=terminal_size))"
+    ],
+    [
+      "src/textual/_doc.py",
+      171,
+      "Assign",
+      "console = Console(file=io.StringIO(), record=True, force_terminal=True, color_system='truecolor', width=columns, height=rows)"
+    ],
+    [
+      "src/textual/_doc.py",
+      142,
+      "Call",
+      "cast(str, app.run(headless=True, auto_pilot=auto_pilot, size=terminal_size))"
+    ],
+    [
+      "src/textual/_doc.py",
+      171,
+      "Call",
+      "Console(file=io.StringIO(), record=True, force_terminal=True, color_system='truecolor', width=columns, height=rows)"
+    ],
+    [
+      "src/textual/_doc.py",
+      40,
+      "Assign",
+      "svg = take_svg_screenshot(None, path, press, hover=hover, title=title, terminal_size=(columns, rows), wait_for_animation=False, simplify=False)"
+    ],
+    [
+      "src/textual/_doc.py",
+      110,
+      "Call",
+      "hash.update(f'{press}-{hover}-{title}-{terminal_size}'.encode('utf-8'))"
+    ],
+    [
+      "src/textual/_doc.py",
+      144,
+      "Call",
+      "app.run(headless=True, auto_pilot=auto_pilot, size=terminal_size)"
+    ],
+    [
+      "src/textual/_doc.py",
+      40,
+      "Call",
+      "take_svg_screenshot(None, path, press, hover=hover, title=title, terminal_size=(columns, rows), wait_for_animation=False, simplify=False)"
+    ],
+    [
+      "src/textual/_doc.py",
+      110,
+      "Call",
+      "f'{press}-{hover}-{title}-{terminal_size}'.encode('utf-8')"
+    ],
+    [
+      "src/textual/_doc.py",
+      110,
+      "Attribute",
+      "f'{press}-{hover}-{title}-{terminal_size}'.encode"
+    ],
+    [
+      "src/textual/_markup_playground.py",
+      13,
+      "Assign",
+      "CSS = '\\n    Screen {        \\n        layout: vertical;\\n        #editor {            \\n            width: 1fr;\\n            height: 1fr;\\n            border: tab $foreground 50%;  \\n            padding: 1;\\n            margin: 1 0 0 0;\\n            &:focus {\\n                border: tab $primary;  \\n            }\\n            \\n        }\\n        #variables {\\n            width: 1fr;\\n            height: 1fr;\\n            border: tab $foreground 50%;  \\n            padding: 1;\\n            margin: 1 0 0 1;\\n            &:focus {\\n                border: tab $primary;  \\n            }\\n        }\\n        #variables.-bad-json {\\n            border: tab $error;\\n        }\\n        #results-container {           \\n            border: tab $success;                \\n            &.-error {\\n                border: tab $error;\\n            }\\n            overflow-y: auto;\\n        }\\n        #results {                        \\n            padding: 1 1;            \\n            width: 1fr;\\n        }\\n        #spans-container {\\n            border: tab $success;                \\n            overflow-y: auto;\\n            margin: 0 0 0 1;\\n        }\\n        #spans {\\n            padding: 1 1;      \\n            width: 1fr;                \\n        }\\n        HorizontalGroup {\\n            height: 1fr;\\n        }\\n    }\\n    '"
+    ],
+    [
+      "src/textual/_markup_playground.py",
+      104,
+      "Assign",
+      "results = self.query_one('#results', Static)"
+    ],
+    [
+      "src/textual/_markup_playground.py",
+      84,
+      "With",
+      "with containers.VerticalScroll(id='results-container') as container:"
+    ],
+    [
+      "src/textual/_markup_playground.py",
+      104,
+      "Call",
+      "self.query_one('#results', Static)"
+    ],
+    [
+      "src/textual/_markup_playground.py",
+      109,
+      "Call",
+      "results.update(content)"
+    ],
+    [
+      "src/textual/_markup_playground.py",
+      121,
+      "Call",
+      "self.query_one('#results-container').remove_class('-error')"
+    ],
+    [
+      "src/textual/_markup_playground.py",
+      84,
+      "Call",
+      "containers.VerticalScroll(id='results-container')"
+    ],
+    [
+      "src/textual/_markup_playground.py",
+      109,
+      "Attribute",
+      "results.update"
+    ],
+    [
+      "src/textual/_markup_playground.py",
+      114,
+      "Call",
+      "results.update(Traceback())"
+    ],
+    [
+      "src/textual/_markup_playground.py",
+      117,
+      "Call",
+      "self.query_one('#results-container').add_class('-error').scroll_end(animate=False)"
+    ],
+    [
+      "src/textual/_markup_playground.py",
+      121,
+      "Attribute",
+      "self.query_one('#results-container').remove_class"
+    ],
+    [
+      "src/textual/_markup_playground.py",
+      85,
+      "Call",
+      "Static(id='results')"
+    ],
+    [
+      "src/textual/_markup_playground.py",
+      114,
+      "Attribute",
+      "results.update"
+    ],
+    [
+      "src/textual/_markup_playground.py",
+      117,
+      "Attribute",
+      "self.query_one('#results-container').add_class('-error').scroll_end"
+    ],
+    [
+      "src/textual/_markup_playground.py",
+      121,
+      "Call",
+      "self.query_one('#results-container')"
+    ],
+    [
+      "src/textual/_markup_playground.py",
+      117,
+      "Call",
+      "self.query_one('#results-container').add_class('-error')"
+    ],
+    [
+      "src/textual/_markup_playground.py",
+      117,
+      "Attribute",
+      "self.query_one('#results-container').add_class"
+    ],
+    [
+      "src/textual/_markup_playground.py",
+      117,
+      "Call",
+      "self.query_one('#results-container')"
+    ],
+    [
+      "src/textual/_on.py",
+      25,
+      "ClassDef",
+      "class MessageHandler:"
+    ],
+    [
+      "src/textual/_on.py",
+      102,
+      "Assign",
+      "handler = method if isinstance(method, MessageHandler) else MessageHandler(cast(Callable, method))"
+    ],
+    [
+      "src/textual/_on.py",
+      102,
+      "Call",
+      "isinstance(method, MessageHandler)"
+    ],
+    [
+      "src/textual/_on.py",
+      102,
+      "Call",
+      "MessageHandler(cast(Callable, method))"
+    ],
+    [
+      "src/textual/_opacity.py",
+      30,
+      "Assign",
+      "blended_style = style"
+    ],
+    [
+      "src/textual/_opacity.py",
+      34,
+      "Assign",
+      "blended_foreground = blend(color, opacity)"
+    ],
+    [
+      "src/textual/_opacity.py",
+      39,
+      "Assign",
+      "blended_background = blend(bgcolor, opacity)"
+    ],
+    [
+      "src/textual/_opacity.py",
+      35,
+      "Call",
+      "from_color(color=blended_foreground.rich_color)"
+    ],
+    [
+      "src/textual/_opacity.py",
+      40,
+      "Call",
+      "from_color(bgcolor=blended_background.rich_color)"
+    ],
+    [
+      "src/textual/_opacity.py",
+      42,
+      "Call",
+      "_Segment(text, blended_style)"
+    ],
+    [
+      "src/textual/_opacity.py",
+      35,
+      "Attribute",
+      "blended_foreground.rich_color"
+    ],
+    [
+      "src/textual/_opacity.py",
+      40,
+      "Attribute",
+      "blended_background.rich_color"
+    ],
+    [
+      "src/textual/_queue.py",
+      29,
+      "FunctionDef",
+      "def empty(self) -> bool:"
+    ],
+    [
+      "src/textual/_resolve.py",
+      113,
+      "Assign",
+      "results = [(offset1, offset2 - offset1) for offset1, offset2 in zip(offsets[::2], offsets[1::2])]"
+    ],
+    [
+      "src/textual/_resolve.py",
+      118,
+      "Return",
+      "return results"
+    ],
+    [
+      "src/textual/_sleep.py",
+      28,
+      "Call",
+      "self._loop.call_soon_threadsafe(self.future.set_result, None)"
+    ],
+    [
+      "src/textual/_sleep.py",
+      28,
+      "Attribute",
+      "self._loop.call_soon_threadsafe"
+    ],
+    [
+      "src/textual/_spatial_map.py",
+      95,
+      "AnnAssign",
+      "results: list[ValueType] = self._fixed.copy()"
+    ],
+    [
+      "src/textual/_spatial_map.py",
+      96,
+      "Assign",
+      "add_results = results.extend"
+    ],
+    [
+      "src/textual/_spatial_map.py",
+      102,
+      "Assign",
+      "unique_values = list(dict.fromkeys(results))"
+    ],
+    [
+      "src/textual/_spatial_map.py",
+      96,
+      "Attribute",
+      "results.extend"
+    ],
+    [
+      "src/textual/_spatial_map.py",
+      102,
+      "Call",
+      "list(dict.fromkeys(results))"
+    ],
+    [
+      "src/textual/_spatial_map.py",
+      102,
+      "Call",
+      "dict.fromkeys(results)"
+    ],
+    [
+      "src/textual/_spatial_map.py",
+      101,
+      "Call",
+      "add_results(grid_values)"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      10,
+      "ImportFrom",
+      "from rich.terminal_theme import TerminalTheme"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      13,
+      "ImportFrom",
+      "from textual._border import get_box, render_border_label, render_row"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      85,
+      "FunctionDef",
+      "def border_label("
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      196,
+      "Assign",
+      "title = border_label(widget._border_title, base_background, styles.auto_border_title_color, styles.border_title_color, styles.border_title_background, styles.border_title_style)"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      200,
+      "Assign",
+      "subtitle = border_label(widget._border_subtitle, base_background, styles.auto_border_subtitle_color, styles.border_subtitle_color, styles.border_subtitle_background, styles.border_subtitle_style)"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      384,
+      "Assign",
+      "border_label = border_title if is_top else border_subtitle"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      385,
+      "If",
+      "if border_label is None:"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      196,
+      "Call",
+      "border_label(widget._border_title, base_background, styles.auto_border_title_color, styles.border_title_color, styles.border_title_background, styles.border_title_style)"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      200,
+      "Call",
+      "border_label(widget._border_subtitle, base_background, styles.auto_border_subtitle_color, styles.border_subtitle_color, styles.border_subtitle_background, styles.border_subtitle_style)"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      385,
+      "Compare",
+      "border_label is None"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      388,
+      "Assign",
+      "label, label_color, label_background, style = border_label"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      406,
+      "Assign",
+      "label_segments = render_border_label(render_label, is_top, border_edge_type, width - 2, inner, outer, border_color_as_style, has_left, has_right)"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      406,
+      "Call",
+      "render_border_label(render_label, is_top, border_edge_type, width - 2, inner, outer, border_color_as_style, has_left, has_right)"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      260,
+      "Call",
+      "log.warning(f'Strip contains invalid empty Segments: {strip!r}.')"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      23,
+      "Assign",
+      "_re_terminal_mode_response = re.compile('^' + re.escape('\\x1b[') + '\\\\?(?P<mode_id>\\\\d+);(?P<setting_parameter>\\\\d)\\\\$y')"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      41,
+      "AnnAssign",
+      "_re_extended_key: Final[re.Pattern[str]] = re.compile('\\\\x1b\\\\[((?:[\\\\d:]*;?){2,3})([u~ABCDEFHPQRS])')"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      356,
+      "FunctionDef",
+      "def _parse_extended_key(self, sequence: str) -> list[events.Key] | None:"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      69,
+      "AnnAssign",
+      "self.terminal_size: tuple[int, int] | None = None"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      70,
+      "AnnAssign",
+      "self.terminal_pixel_size: tuple[int, int] | None = None"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      366,
+      "If",
+      "if (match := _re_extended_key.fullmatch(sequence)) is None:"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      423,
+      "If",
+      "if not constants.DISABLE_KITTY_KEY and (keys := self._parse_extended_key(sequence)) is not None:"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      69,
+      "Attribute",
+      "self.terminal_size"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      70,
+      "Attribute",
+      "self.terminal_pixel_size"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      94,
+      "If",
+      "if self.mouse_pixels and self.terminal_pixel_size is not None and (self.terminal_size is not None):"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      366,
+      "Compare",
+      "(match := _re_extended_key.fullmatch(sequence)) is None"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      99,
+      "Assign",
+      "pixel_width, pixel_height = self.terminal_pixel_size"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      100,
+      "Assign",
+      "width, height = self.terminal_size"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      158,
+      "Assign",
+      "self.terminal_size = token.size"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      159,
+      "Assign",
+      "self.terminal_pixel_size = token.pixel_size"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      366,
+      "NamedExpr",
+      "(match := _re_extended_key.fullmatch(sequence))"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      425,
+      "Compare",
+      "(keys := self._parse_extended_key(sequence)) is not None"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      96,
+      "Compare",
+      "self.terminal_pixel_size is not None"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      97,
+      "Compare",
+      "self.terminal_size is not None"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      99,
+      "Attribute",
+      "self.terminal_pixel_size"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      100,
+      "Attribute",
+      "self.terminal_size"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      158,
+      "Attribute",
+      "self.terminal_size"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      159,
+      "Attribute",
+      "self.terminal_pixel_size"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      280,
+      "Assign",
+      "self.terminal_size = resize_event.size"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      281,
+      "Assign",
+      "self.terminal_pixel_size = resize_event.pixel_size"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      313,
+      "Assign",
+      "mode_report_match = _re_terminal_mode_response.match(sequence)"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      366,
+      "Call",
+      "_re_extended_key.fullmatch(sequence)"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      425,
+      "NamedExpr",
+      "(keys := self._parse_extended_key(sequence))"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      96,
+      "Attribute",
+      "self.terminal_pixel_size"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      97,
+      "Attribute",
+      "self.terminal_size"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      280,
+      "Attribute",
+      "self.terminal_size"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      281,
+      "Attribute",
+      "self.terminal_pixel_size"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      313,
+      "Call",
+      "_re_terminal_mode_response.match(sequence)"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      366,
+      "Attribute",
+      "_re_extended_key.fullmatch"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      425,
+      "Call",
+      "self._parse_extended_key(sequence)"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      313,
+      "Attribute",
+      "_re_terminal_mode_response.match"
+    ],
+    [
+      "src/textual/_xterm_parser.py",
+      425,
+      "Attribute",
+      "self._parse_extended_key"
+    ],
+    [
+      "src/textual/app.py",
+      61,
+      "ImportFrom",
+      "from rich.terminal_theme import TerminalTheme"
+    ],
+    [
+      "src/textual/app.py",
+      3429,
+      "AsyncFunctionDef",
+      "async def _process_messages_body("
+    ],
+    [
+      "src/textual/app.py",
+      4157,
+      "FunctionDef",
+      "def _can_replace_message(self, message: Message, pending: Message) -> bool:"
+    ],
+    [
+      "src/textual/app.py",
+      4657,
+      "FunctionDef",
+      "def _on_terminal_supports_synchronized_output("
+    ],
+    [
+      "src/textual/app.py",
+      5085,
+      "FunctionDef",
+      "def _on_delivery_failed(self, event: events.DeliveryComplete) -> None:"
+    ],
+    [
+      "src/textual/app.py",
+      644,
+      "Assign",
+      "self.console = Console(color_system=self.get_color_system(), file=_NullFile(), markup=True, highlight=False, emoji=False, legacy_windows=False, _environ=environ, force_terminal=True, safe_box=False, soft_wrap=False)"
+    ],
+    [
+      "src/textual/app.py",
+      1284,
+      "Return",
+      "return ConsoleOptions(max_height=size.height, size=size, legacy_windows=console.legacy_windows, min_width=1, max_width=size.width, encoding=console.encoding, is_terminal=console.is_terminal)"
+    ],
+    [
+      "src/textual/app.py",
+      1890,
+      "AnnAssign",
+      "future: Future[CallThreadReturnType] = asyncio.run_coroutine_threadsafe(run_callback(), loop=self._loop)"
+    ],
+    [
+      "src/textual/app.py",
+      1929,
+      "Assign",
+      "console = Console(width=width, height=height, file=io.StringIO(), force_terminal=True, color_system='truecolor', record=True, legacy_windows=False, safe_box=False)"
+    ],
+    [
+      "src/textual/app.py",
+      4176,
+      "Return",
+      "return super()._can_replace_message(message, pending)"
+    ],
+    [
+      "src/textual/app.py",
+      644,
+      "Call",
+      "Console(color_system=self.get_color_system(), file=_NullFile(), markup=True, highlight=False, emoji=False, legacy_windows=False, _environ=environ, force_terminal=True, safe_box=False, soft_wrap=False)"
+    ],
+    [
+      "src/textual/app.py",
+      1284,
+      "Call",
+      "ConsoleOptions(max_height=size.height, size=size, legacy_windows=console.legacy_windows, min_width=1, max_width=size.width, encoding=console.encoding, is_terminal=console.is_terminal)"
+    ],
+    [
+      "src/textual/app.py",
+      1890,
+      "Call",
+      "asyncio.run_coroutine_threadsafe(run_callback(), loop=self._loop)"
+    ],
+    [
+      "src/textual/app.py",
+      1929,
+      "Call",
+      "Console(width=width, height=height, file=io.StringIO(), force_terminal=True, color_system='truecolor', record=True, legacy_windows=False, safe_box=False)"
+    ],
+    [
+      "src/textual/app.py",
+      3547,
+      "Assign",
+      "driver = self._driver = self._build_driver(headless=headless, inline=inline, mouse=mouse, size=terminal_size)"
+    ],
+    [
+      "src/textual/app.py",
+      4175,
+      "Return",
+      "return captured.can_replace_mouse_move(message, pending)"
+    ],
+    [
+      "src/textual/app.py",
+      4176,
+      "Call",
+      "super()._can_replace_message(message, pending)"
+    ],
+    [
+      "src/textual/app.py",
+      1890,
+      "Attribute",
+      "asyncio.run_coroutine_threadsafe"
+    ],
+    [
+      "src/textual/app.py",
+      3547,
+      "Call",
+      "self._build_driver(headless=headless, inline=inline, mouse=mouse, size=terminal_size)"
+    ],
+    [
+      "src/textual/app.py",
+      4175,
+      "Call",
+      "captured.can_replace_mouse_move(message, pending)"
+    ],
+    [
+      "src/textual/app.py",
+      4176,
+      "Attribute",
+      "super()._can_replace_message"
+    ],
+    [
+      "src/textual/app.py",
+      1291,
+      "Attribute",
+      "console.is_terminal"
+    ],
+    [
+      "src/textual/app.py",
+      4175,
+      "Attribute",
+      "captured.can_replace_mouse_move"
+    ],
+    [
+      "src/textual/app.py",
+      2340,
+      "Call",
+      "app._process_messages(ready_callback=None if auto_pilot is None else app_ready, headless=headless, inline=inline, inline_no_clear=inline_no_clear, mouse=mouse, terminal_size=size)"
+    ],
+    [
+      "src/textual/app.py",
+      2245,
+      "Call",
+      "app._process_messages(ready_callback=on_app_ready, headless=headless, terminal_size=size)"
+    ],
+    [
+      "src/textual/app.py",
+      3953,
+      "Assign",
+      "terminal_sequence = console._render_buffer(segments)"
+    ],
+    [
+      "src/textual/app.py",
+      3965,
+      "For",
+      "for chunk in (terminal_sequence[offset:offset + CHUNK_SIZE] for offset in range(0, len(terminal_sequence), CHUNK_SIZE)):"
+    ],
+    [
+      "src/textual/app.py",
+      3938,
+      "Assign",
+      "terminal_sequence = Control.move(*-self._previous_cursor_position).segment.text"
+    ],
+    [
+      "src/textual/app.py",
+      3946,
+      "Assign",
+      "terminal_sequence = renderable.render_segments(console)"
+    ],
+    [
+      "src/textual/app.py",
+      3973,
+      "Call",
+      "self._driver.write(terminal_sequence)"
+    ],
+    [
+      "src/textual/app.py",
+      3967,
+      "comprehension",
+      " for offset in range(0, len(terminal_sequence), CHUNK_SIZE)"
+    ],
+    [
+      "src/textual/app.py",
+      3967,
+      "Call",
+      "range(0, len(terminal_sequence), CHUNK_SIZE)"
+    ],
+    [
+      "src/textual/app.py",
+      3968,
+      "Call",
+      "len(terminal_sequence)"
+    ],
+    [
+      "src/textual/await_complete.py",
+      69,
+      "FunctionDef",
+      "def completed(future: Future[Any]) -> None:"
+    ],
+    [
+      "src/textual/await_complete.py",
+      76,
+      "Call",
+      "self._start().add_done_callback(completed)"
+    ],
+    [
+      "src/textual/binding.py",
+      179,
+      "Call",
+      "InvalidBinding(f'Can not bind empty string in {binding.key!r}')"
+    ],
+    [
+      "src/textual/color.py",
+      43,
+      "ImportFrom",
+      "from rich.terminal_theme import TerminalTheme"
+    ],
+    [
+      "src/textual/color.py",
+      582,
+      "Assign",
+      "error_message = f'failed to parse {color_text!r} as a color'"
+    ],
+    [
+      "src/textual/command.py",
+      548,
+      "Assign",
+      "DEFAULT_CSS = '\\n   \\n    CommandPalette:inline {\\n        /* If the command palette is invoked in inline mode, we may need additional lines. */\\n        min-height: 20;\\n    }\\n    CommandPalette {\\n        color: $foreground;\\n        background: $background 60%;\\n        align-horizontal: center;        \\n\\n        #--container {\\n            display: none;\\n        }\\n\\n        &:ansi {\\n            background: transparent;\\n        }\\n    }\\n\\n    CommandPalette.-ready {\\n        #--container {\\n            display: block;\\n        }\\n    }\\n\\n\\n    CommandPalette > .command-palette--help-text  {\\n        color: transparent;\\n        text-style: dim not bold;\\n    }\\n    \\n    CommandPalette > .command-palette--highlight {\\n        text-style: bold underline;\\n    }   \\n\\n    CommandPalette:nocolor > .command-palette--highlight {\\n        text-style: underline;\\n    }\\n\\n    CommandPalette > Vertical {\\n        margin-top: 3; \\n        height: 100%;\\n        visibility: hidden;\\n        background: $surface;\\n        &:dark { background: $panel-darken-1; }\\n    }\\n\\n    CommandPalette #--input {\\n        height: auto;\\n        visibility: visible;\\n        border: hkey black 50%;\\n    }\\n\\n    CommandPalette #--input.--list-visible {\\n        border-bottom: none;\\n    }\\n\\n    CommandPalette #--input Label {\\n        margin-top: 1;\\n        margin-left: 1;\\n    }\\n\\n    CommandPalette #--input Button {\\n        min-width: 7;\\n        margin-right: 1;\\n    }\\n\\n    CommandPalette #--results {\\n        overlay: screen;\\n        height: auto;\\n    }\\n\\n    CommandPalette LoadingIndicator {\\n        height: auto;\\n        visibility: hidden;\\n        border-bottom: hkey $border;\\n    }\\n\\n    CommandPalette LoadingIndicator.--visible {\\n        visibility: visible;\\n    }\\n    '"
+    ],
+    [
+      "src/textual/command.py",
+      676,
+      "AnnAssign",
+      "_show_busy: var[bool] = var(False, init=False)"
+    ],
+    [
+      "src/textual/command.py",
+      843,
+      "FunctionDef",
+      "def _stop_busy_countdown(self) -> None:"
+    ],
+    [
+      "src/textual/command.py",
+      852,
+      "FunctionDef",
+      "def _start_busy_countdown(self) -> None:"
+    ],
+    [
+      "src/textual/command.py",
+      916,
+      "AsyncFunctionDef",
+      "async def _watch__show_busy(self) -> None:"
+    ],
+    [
+      "src/textual/command.py",
+      725,
+      "AnnAssign",
+      "self._busy_timer: Timer | None = None"
+    ],
+    [
+      "src/textual/command.py",
+      845,
+      "If",
+      "if self._busy_timer is not None:"
+    ],
+    [
+      "src/textual/command.py",
+      856,
+      "FunctionDef",
+      "def _become_busy() -> None:"
+    ],
+    [
+      "src/textual/command.py",
+      860,
+      "Assign",
+      "self._busy_timer = self.set_timer(self._BUSY_COUNTDOWN, _become_busy)"
+    ],
+    [
+      "src/textual/command.py",
+      1015,
+      "While",
+      "while not aborted and (not commands.empty()):"
+    ],
+    [
+      "src/textual/command.py",
+      1087,
+      "Assign",
+      "self._show_busy = False"
+    ],
+    [
+      "src/textual/command.py",
+      1101,
+      "Assign",
+      "search_results = search_routine.__aiter__()"
+    ],
+    [
+      "src/textual/command.py",
+      1162,
+      "Assign",
+      "self._show_busy = False"
+    ],
+    [
+      "src/textual/command.py",
+      725,
+      "Attribute",
+      "self._busy_timer"
+    ],
+    [
+      "src/textual/command.py",
+      800,
+      "With",
+      "with Vertical(id='--results'):"
+    ],
+    [
+      "src/textual/command.py",
+      845,
+      "Compare",
+      "self._busy_timer is not None"
+    ],
+    [
+      "src/textual/command.py",
+      847,
+      "Assign",
+      "self._busy_timer = None"
+    ],
+    [
+      "src/textual/command.py",
+      854,
+      "Call",
+      "self._stop_busy_countdown()"
+    ],
+    [
+      "src/textual/command.py",
+      860,
+      "Attribute",
+      "self._busy_timer"
+    ],
+    [
+      "src/textual/command.py",
+      860,
+      "Call",
+      "self.set_timer(self._BUSY_COUNTDOWN, _become_busy)"
+    ],
+    [
+      "src/textual/command.py",
+      914,
+      "Assign",
+      "self._show_busy = False"
+    ],
+    [
+      "src/textual/command.py",
+      922,
+      "Call",
+      "self.query_one(LoadingIndicator).set_class(self._show_busy, '--visible')"
+    ],
+    [
+      "src/textual/command.py",
+      923,
+      "Call",
+      "self.query_one(CommandList).set_class(self._show_busy, '--populating')"
+    ],
+    [
+      "src/textual/command.py",
+      963,
+      "Call",
+      "self._start_busy_countdown()"
+    ],
+    [
+      "src/textual/command.py",
+      1087,
+      "Attribute",
+      "self._show_busy"
+    ],
+    [
+      "src/textual/command.py",
+      1106,
+      "Assign",
+      "hit = await search_results.__anext__()"
+    ],
+    [
+      "src/textual/command.py",
+      1162,
+      "Attribute",
+      "self._show_busy"
+    ],
+    [
+      "src/textual/command.py",
+      845,
+      "Attribute",
+      "self._busy_timer"
+    ],
+    [
+      "src/textual/command.py",
+      846,
+      "Call",
+      "self._busy_timer.stop()"
+    ],
+    [
+      "src/textual/command.py",
+      847,
+      "Attribute",
+      "self._busy_timer"
+    ],
+    [
+      "src/textual/command.py",
+      854,
+      "Attribute",
+      "self._stop_busy_countdown"
+    ],
+    [
+      "src/textual/command.py",
+      858,
+      "Assign",
+      "self._show_busy = True"
+    ],
+    [
+      "src/textual/command.py",
+      914,
+      "Attribute",
+      "self._show_busy"
+    ],
+    [
+      "src/textual/command.py",
+      922,
+      "Attribute",
+      "self._show_busy"
+    ],
+    [
+      "src/textual/command.py",
+      923,
+      "Attribute",
+      "self._show_busy"
+    ],
+    [
+      "src/textual/command.py",
+      963,
+      "Attribute",
+      "self._start_busy_countdown"
+    ],
+    [
+      "src/textual/command.py",
+      1010,
+      "Call",
+      "self._stop_busy_countdown()"
+    ],
+    [
+      "src/textual/command.py",
+      800,
+      "Call",
+      "Vertical(id='--results')"
+    ],
+    [
+      "src/textual/command.py",
+      846,
+      "Attribute",
+      "self._busy_timer.stop"
+    ],
+    [
+      "src/textual/command.py",
+      858,
+      "Attribute",
+      "self._show_busy"
+    ],
+    [
+      "src/textual/command.py",
+      1010,
+      "Attribute",
+      "self._stop_busy_countdown"
+    ],
+    [
+      "src/textual/command.py",
+      1015,
+      "Call",
+      "commands.empty()"
+    ],
+    [
+      "src/textual/command.py",
+      1106,
+      "Call",
+      "search_results.__anext__()"
+    ],
+    [
+      "src/textual/command.py",
+      846,
+      "Attribute",
+      "self._busy_timer"
+    ],
+    [
+      "src/textual/command.py",
+      1015,
+      "Attribute",
+      "commands.empty"
+    ],
+    [
+      "src/textual/command.py",
+      1106,
+      "Attribute",
+      "search_results.__anext__"
+    ],
+    [
+      "src/textual/compose.py",
+      44,
+      "ExceptHandler",
+      "except StopIteration as completed:"
+    ],
+    [
+      "src/textual/compose.py",
+      71,
+      "ExceptHandler",
+      "except StopIteration as completed:"
+    ],
+    [
+      "src/textual/compose.py",
+      45,
+      "Return",
+      "return completed.value"
+    ],
+    [
+      "src/textual/compose.py",
+      72,
+      "Return",
+      "return completed.value"
+    ],
+    [
+      "src/textual/compose.py",
+      45,
+      "Attribute",
+      "completed.value"
+    ],
+    [
+      "src/textual/compose.py",
+      72,
+      "Attribute",
+      "completed.value"
+    ],
+    [
+      "src/textual/content.py",
+      24,
+      "ImportFrom",
+      "from rich.terminal_theme import TerminalTheme"
+    ],
+    [
+      "src/textual/content.py",
+      230,
+      "FunctionDef",
+      "def empty(cls) -> Content:"
+    ],
+    [
+      "src/textual/content.py",
+      1571,
+      "Assert",
+      "assert separator, 'separator must not be empty'"
+    ],
+    [
+      "src/textual/css/_error_tools.py",
+      6,
+      "FunctionDef",
+      "def friendly_list("
+    ],
+    [
+      "src/textual/css/_error_tools.py",
+      21,
+      "Assign",
+      "words = [repr(word) for word in sorted(words, key=str.lower) if word or not omit_empty]"
+    ],
+    [
+      "src/textual/css/_error_tools.py",
+      22,
+      "comprehension",
+      " for word in sorted(words, key=str.lower) if word or not omit_empty"
+    ],
+    [
+      "src/textual/css/_styles_builder.py",
+      162,
+      "AnnAssign",
+      "results: list[str] = []"
+    ],
+    [
+      "src/textual/css/_styles_builder.py",
+      163,
+      "Assign",
+      "append = results.append"
+    ],
+    [
+      "src/textual/css/_styles_builder.py",
+      174,
+      "Assign",
+      "short_results = results[:]"
+    ],
+    [
+      "src/textual/css/_styles_builder.py",
+      176,
+      "While",
+      "while len(results) < count:"
+    ],
+    [
+      "src/textual/css/_styles_builder.py",
+      178,
+      "Assign",
+      "results = results[:count]"
+    ],
+    [
+      "src/textual/css/_styles_builder.py",
+      180,
+      "Return",
+      "return tuple(results)"
+    ],
+    [
+      "src/textual/css/_styles_builder.py",
+      163,
+      "Attribute",
+      "results.append"
+    ],
+    [
+      "src/textual/css/_styles_builder.py",
+      176,
+      "Compare",
+      "len(results) < count"
+    ],
+    [
+      "src/textual/css/_styles_builder.py",
+      180,
+      "Call",
+      "tuple(results)"
+    ],
+    [
+      "src/textual/css/_styles_builder.py",
+      176,
+      "Call",
+      "len(results)"
+    ],
+    [
+      "src/textual/css/_styles_builder.py",
+      177,
+      "Call",
+      "results.extend(short_results)"
+    ],
+    [
+      "src/textual/css/_styles_builder.py",
+      177,
+      "Attribute",
+      "results.extend"
+    ],
+    [
+      "src/textual/css/constants.py",
+      65,
+      "AnnAssign",
+      "VALID_PSEUDO_CLASSES: Final = {'ansi', 'blur', 'can-focus', 'dark', 'disabled', 'enabled', 'focus-within', 'focus', 'hover', 'inline', 'light', 'nocolor', 'first-of-type', 'last-of-type', 'first-child', 'last-child', 'odd', 'even', 'empty'}"
+    ],
+    [
+      "src/textual/css/query.py",
+      338,
+      "FunctionDef",
+      "def results("
+    ],
+    [
+      "src/textual/css/query.py",
+      333,
+      "FunctionDef",
+      "def results(self) -> Iterator[QueryType]: ..."
+    ],
+    [
+      "src/textual/css/query.py",
+      336,
+      "FunctionDef",
+      "def results(self, filter_type: type[ExpectType]) -> Iterator[ExpectType]: ..."
+    ],
+    [
+      "src/textual/css/stylesheet.py",
+      506,
+      "AnnAssign",
+      "_EXCLUDE_PSEUDO_CLASSES_FROM_CACHE: Final[set[str]] = {'first-of-type', 'last-of-type', 'first-child', 'last-child', 'odd', 'even', 'focus-within', 'empty'}"
+    ],
+    [
+      "src/textual/css/stylesheet.py",
+      614,
+      "Assign",
+      "node._has_order_style = not all_pseudo_classes.isdisjoint({'first-of-type', 'last-of-type', 'first-child', 'last-child', 'empty'})"
+    ],
+    [
+      "src/textual/css/stylesheet.py",
+      143,
+      "Call",
+      "render(f\" [b][red]CSS parsing failed:[/] {error_count} error{('s' if error_count != 1 else '')}[/] found in stylesheet\")"
+    ],
+    [
+      "src/textual/css/stylesheet.py",
+      322,
+      "Call",
+      "StylesheetError(f'failed to parse css; {error}')"
+    ],
+    [
+      "src/textual/css/stylesheet.py",
+      614,
+      "Call",
+      "all_pseudo_classes.isdisjoint({'first-of-type', 'last-of-type', 'first-child', 'last-child', 'empty'})"
+    ],
+    [
+      "src/textual/demo/_project_data.py",
+      15,
+      "Assign",
+      "PROJECTS = [ProjectInfo('Posting', 'Darren Burns', 'https://posting.sh/', 'Posting is an HTTP client, not unlike Postman and Insomnia. As a TUI application, it can be used over SSH and enables efficient keyboard-centric workflows. ', 'darrenburns/posting'), ProjectInfo('Memray', 'Bloomberg', 'https://github.com/bloomberg/memray', 'Memray is a memory profiler for Python. It can track memory allocations in Python code, in native extension modules, and in the Python interpreter itself.', 'bloomberg/memray'), ProjectInfo('Toolong', 'Will McGugan', 'https://github.com/Textualize/toolong', 'A terminal application to view, tail, merge, and search log files (plus JSONL).', 'Textualize/toolong'), ProjectInfo('Dolphie', 'Charles Thompson', 'https://github.com/charles-001/dolphie', 'Your single pane of glass for real-time analytics into MySQL/MariaDB & ProxySQL', 'charles-001/dolphie'), ProjectInfo('Harlequin', 'Ted Conbeer', 'https://harlequin.sh/', 'Portable, powerful, colorful. An easy, fast, and beautiful database client for the terminal.', 'tconbeer/harlequin'), ProjectInfo('Elia', 'Darren Burns', 'https://github.com/darrenburns/elia', 'A snappy, keyboard-centric terminal user interface for interacting with large language models.', 'darrenburns/elia'), ProjectInfo('Trogon', 'Textualize', 'https://github.com/Textualize/trogon', 'Auto-generate friendly terminal user interfaces for command line apps.', 'Textualize/trogon'), ProjectInfo('TFTUI - The Terraform textual UI', 'Ido Avraham', 'https://github.com/idoavrah/terraform-tui', 'TFTUI is a powerful textual UI that empowers users to effortlessly view and interact with their Terraform state.', 'idoavrah/terraform-tui'), ProjectInfo('RecoverPy', 'Pablo Lecolinet', 'https://github.com/PabloLec/RecoverPy', 'RecoverPy is a powerful tool that leverages your system capabilities to recover lost files.', 'PabloLec/RecoverPy'), ProjectInfo('Frogmouth', 'Dave Pearson', 'https://github.com/Textualize/frogmouth', 'Frogmouth is a Markdown viewer / browser for your terminal, built with Textual.', 'Textualize/frogmouth'), ProjectInfo('oterm', 'Yiorgis Gozadinos', 'https://github.com/ggozad/oterm', 'The text-based terminal client for Ollama.', 'ggozad/oterm'), ProjectInfo('logmerger', 'Paul McGuire', 'https://github.com/ptmcg/logmerger', 'logmerger is a TUI for viewing a merged display of multiple log files, merged by timestamp.', 'ptmcg/logmerger'), ProjectInfo('doit', 'Murli Tawari', 'https://github.com/dooit-org/dooit', \"A todo manager that you didn't ask for, but needed!\", 'dooit-org/dooit')]"
+    ],
+    [
+      "src/textual/demo/_project_data.py",
+      30,
+      "Call",
+      "ProjectInfo('Toolong', 'Will McGugan', 'https://github.com/Textualize/toolong', 'A terminal application to view, tail, merge, and search log files (plus JSONL).', 'Textualize/toolong')"
+    ],
+    [
+      "src/textual/demo/_project_data.py",
+      44,
+      "Call",
+      "ProjectInfo('Harlequin', 'Ted Conbeer', 'https://harlequin.sh/', 'Portable, powerful, colorful. An easy, fast, and beautiful database client for the terminal.', 'tconbeer/harlequin')"
+    ],
+    [
+      "src/textual/demo/_project_data.py",
+      51,
+      "Call",
+      "ProjectInfo('Elia', 'Darren Burns', 'https://github.com/darrenburns/elia', 'A snappy, keyboard-centric terminal user interface for interacting with large language models.', 'darrenburns/elia')"
+    ],
+    [
+      "src/textual/demo/_project_data.py",
+      58,
+      "Call",
+      "ProjectInfo('Trogon', 'Textualize', 'https://github.com/Textualize/trogon', 'Auto-generate friendly terminal user interfaces for command line apps.', 'Textualize/trogon')"
+    ],
+    [
+      "src/textual/demo/_project_data.py",
+      79,
+      "Call",
+      "ProjectInfo('Frogmouth', 'Dave Pearson', 'https://github.com/Textualize/frogmouth', 'Frogmouth is a Markdown viewer / browser for your terminal, built with Textual.', 'Textualize/frogmouth')"
+    ],
+    [
+      "src/textual/demo/_project_data.py",
+      86,
+      "Call",
+      "ProjectInfo('oterm', 'Yiorgis Gozadinos', 'https://github.com/ggozad/oterm', 'The text-based terminal client for Ollama.', 'ggozad/oterm')"
+    ],
+    [
+      "src/textual/demo/home.py",
+      20,
+      "Assign",
+      "WHAT_IS_TEXTUAL_MD = '# What is Textual?\\n\\nSnappy, keyboard-centric, applications that run in the terminal and [the web](https://github.com/Textualize/textual-web).\\n\\n\ud83d\udc0d All you need is Python!\\n\\n'"
+    ],
+    [
+      "src/textual/demo/home.py",
+      64,
+      "Assign",
+      "API_MD = 'A modern Python API from the developer of [Rich](https://github.com/Textualize/rich).\\n\\n```python\\n# Start building!\\nfrom textual.app import App, ComposeResult\\nfrom textual.widgets import Label\\n\\nclass MyApp(App):\\n    def compose(self) -> ComposeResult:\\n        yield Label(\"Hello, World!\")\\n\\nMyApp().run()\\n```\\n\\n* Intuitive, batteries-included, API.\\n* Well documented: See the [tutorial](https://textual.textualize.io/tutorial/), [guide](https://textual.textualize.io/guide/app/), and [reference](https://textual.textualize.io/reference/). \\n* Fully typed, with modern type annotations.\\n* Accessible to Python developers of all skill levels.\\n\\n**Hint:** press **C** to view the code for this page.\\n\\n## Built on Rich\\n\\nWith over 3.1 *billion* downloads, Rich is the most popular terminal library out there.\\nTextual builds on Rich to add interactivity, and is fully-compatible with Rich renderables.\\n\\n## Re-usable widgets\\n\\nTextual\\'s widgets are self-contained and re-usable across projects.\\nVirtually all aspects of a widget\\'s look and feel can be customized to your requirements.\\n\\n## Builtin widgets\\n\\nA large [library of builtin widgets](https://textual.textualize.io/widget_gallery/), and a growing ecosystem of third party widgets on PyPI\\n(this content is generated by the builtin [Markdown](https://textual.textualize.io/widget_gallery/#markdown) widget).\\n    \\n## Reactive variables\\n\\n[Reactivity](https://textual.textualize.io/guide/reactivity/) using Python idioms, keeps your logic separate from display code.\\n\\n## Async support\\n\\nBuilt on asyncio, you can easily integrate async libraries while keeping your UI responsive.\\n\\n## Concurrency\\n\\nTextual\\'s [Workers](https://textual.textualize.io/guide/workers/) provide a far-less error prone interface to\\nconcurrency: both async and threads.\\n\\n## Testing\\n\\nWith a comprehensive [testing framework](https://textual.textualize.io/guide/testing/), you can release reliable software, that can be maintained indefinitely.\\n\\n## Docs\\n\\nTextual has [amazing docs](https://textual.textualize.io/)!\\n\\n'"
+    ],
+    [
+      "src/textual/demo/widgets.py",
+      629,
+      "For",
+      "for switch in self.query('Switch').results(Switch):"
+    ],
+    [
+      "src/textual/demo/widgets.py",
+      629,
+      "Call",
+      "self.query('Switch').results(Switch)"
+    ],
+    [
+      "src/textual/demo/widgets.py",
+      234,
+      "Call",
+      "Input(type='number', placeholder='Type a number here', valid_empty=True)"
+    ],
+    [
+      "src/textual/demo/widgets.py",
+      238,
+      "Call",
+      "MaskedInput('9999-9999-9999-9999;0', tooltip='Obviously not your real credit card!', valid_empty=True)"
+    ],
+    [
+      "src/textual/demo/widgets.py",
+      629,
+      "Attribute",
+      "self.query('Switch').results"
+    ],
+    [
+      "src/textual/document/_document.py",
+      465,
+      "FunctionDef",
+      "def is_empty(self) -> bool:"
+    ],
+    [
+      "src/textual/dom.py",
+      711,
+      "FunctionDef",
+      "def is_empty(self) -> bool:"
+    ],
+    [
+      "src/textual/driver.py",
+      312,
+      "FunctionDef",
+      "def _delivery_failed("
+    ],
+    [
+      "src/textual/driver.py",
+      76,
+      "Call",
+      "self._loop.call_soon_threadsafe(self._app.post_message, message)"
+    ],
+    [
+      "src/textual/driver.py",
+      76,
+      "Attribute",
+      "self._loop.call_soon_threadsafe"
+    ],
+    [
+      "src/textual/driver.py",
+      287,
+      "Call",
+      "self._delivery_failed(delivery_key, exception=error, name=name)"
+    ],
+    [
+      "src/textual/driver.py",
+      287,
+      "Attribute",
+      "self._delivery_failed"
+    ],
+    [
+      "src/textual/drivers/_writer_thread.py",
+      22,
+      "Call",
+      "self.loop.call_soon_threadsafe(self.callback)"
+    ],
+    [
+      "src/textual/drivers/_writer_thread.py",
+      22,
+      "Attribute",
+      "self.loop.call_soon_threadsafe"
+    ],
+    [
+      "src/textual/drivers/headless_driver.py",
+      18,
+      "FunctionDef",
+      "def _get_terminal_size(self) -> tuple[int, int]:"
+    ],
+    [
+      "src/textual/drivers/headless_driver.py",
+      26,
+      "Assign",
+      "width, height = shutil.get_terminal_size()"
+    ],
+    [
+      "src/textual/drivers/headless_driver.py",
+      50,
+      "Assign",
+      "terminal_size = self._get_terminal_size()"
+    ],
+    [
+      "src/textual/drivers/headless_driver.py",
+      51,
+      "Assign",
+      "width, height = terminal_size"
+    ],
+    [
+      "src/textual/drivers/headless_driver.py",
+      26,
+      "Call",
+      "shutil.get_terminal_size()"
+    ],
+    [
+      "src/textual/drivers/headless_driver.py",
+      50,
+      "Call",
+      "self._get_terminal_size()"
+    ],
+    [
+      "src/textual/drivers/headless_driver.py",
+      54,
+      "Call",
+      "asyncio.run_coroutine_threadsafe(self._app._post_message(event), loop=loop)"
+    ],
+    [
+      "src/textual/drivers/headless_driver.py",
+      26,
+      "Attribute",
+      "shutil.get_terminal_size"
+    ],
+    [
+      "src/textual/drivers/headless_driver.py",
+      29,
+      "Assign",
+      "width, height = shutil.get_terminal_size()"
+    ],
+    [
+      "src/textual/drivers/headless_driver.py",
+      50,
+      "Attribute",
+      "self._get_terminal_size"
+    ],
+    [
+      "src/textual/drivers/headless_driver.py",
+      54,
+      "Attribute",
+      "asyncio.run_coroutine_threadsafe"
+    ],
+    [
+      "src/textual/drivers/headless_driver.py",
+      29,
+      "Call",
+      "shutil.get_terminal_size()"
+    ],
+    [
+      "src/textual/drivers/headless_driver.py",
+      29,
+      "Attribute",
+      "shutil.get_terminal_size"
+    ],
+    [
+      "src/textual/drivers/linux_driver.py",
+      107,
+      "FunctionDef",
+      "def _get_terminal_size(self) -> tuple[int, int]:"
+    ],
+    [
+      "src/textual/drivers/linux_driver.py",
+      321,
+      "FunctionDef",
+      "def _request_terminal_sync_mode_support(self) -> None:"
+    ],
+    [
+      "src/textual/drivers/linux_driver.py",
+      251,
+      "FunctionDef",
+      "def on_terminal_resize(signum, stack) -> None:"
+    ],
+    [
+      "src/textual/drivers/linux_driver.py",
+      438,
+      "Assign",
+      "utf8_decoder = getincrementaldecoder('utf-8')().decode"
+    ],
+    [
+      "src/textual/drivers/linux_driver.py",
+      439,
+      "Assign",
+      "decode = utf8_decoder"
+    ],
+    [
+      "src/textual/drivers/linux_driver.py",
+      118,
+      "Assign",
+      "width, height = shutil.get_terminal_size()"
+    ],
+    [
+      "src/textual/drivers/linux_driver.py",
+      239,
+      "Assign",
+      "terminal_size = self._get_terminal_size()"
+    ],
+    [
+      "src/textual/drivers/linux_driver.py",
+      240,
+      "Assign",
+      "width, height = terminal_size"
+    ],
+    [
+      "src/textual/drivers/linux_driver.py",
+      255,
+      "Call",
+      "signal.signal(signal.SIGWINCH, on_terminal_resize)"
+    ],
+    [
+      "src/textual/drivers/linux_driver.py",
+      304,
+      "Call",
+      "self._request_terminal_sync_mode_support()"
+    ],
+    [
+      "src/textual/drivers/linux_driver.py",
+      118,
+      "Call",
+      "shutil.get_terminal_size()"
+    ],
+    [
+      "src/textual/drivers/linux_driver.py",
+      239,
+      "Call",
+      "self._get_terminal_size()"
+    ],
+    [
+      "src/textual/drivers/linux_driver.py",
+      243,
+      "Call",
+      "asyncio.run_coroutine_threadsafe(self._app._post_message(event), loop=loop)"
+    ],
+    [
+      "src/textual/drivers/linux_driver.py",
+      304,
+      "Attribute",
+      "self._request_terminal_sync_mode_support"
+    ],
+    [
+      "src/textual/drivers/linux_driver.py",
+      316,
+      "Call",
+      "asyncio.run_coroutine_threadsafe(self._app._post_message(self.SignalResume()), loop=loop)"
+    ],
+    [
+      "src/textual/drivers/linux_driver.py",
+      118,
+      "Attribute",
+      "shutil.get_terminal_size"
+    ],
+    [
+      "src/textual/drivers/linux_driver.py",
+      121,
+      "Assign",
+      "width, height = shutil.get_terminal_size()"
+    ],
+    [
+      "src/textual/drivers/linux_driver.py",
+      239,
+      "Attribute",
+      "self._get_terminal_size"
+    ],
+    [
+      "src/textual/drivers/linux_driver.py",
+      243,
+      "Attribute",
+      "asyncio.run_coroutine_threadsafe"
+    ],
+    [
+      "src/textual/drivers/linux_driver.py",
+      316,
+      "Attribute",
+      "asyncio.run_coroutine_threadsafe"
+    ],
+    [
+      "src/textual/drivers/linux_driver.py",
+      121,
+      "Call",
+      "shutil.get_terminal_size()"
+    ],
+    [
+      "src/textual/drivers/linux_driver.py",
+      121,
+      "Attribute",
+      "shutil.get_terminal_size"
+    ],
+    [
+      "src/textual/drivers/linux_inline_driver.py",
+      58,
+      "FunctionDef",
+      "def _get_terminal_size(self) -> tuple[int, int]:"
+    ],
+    [
+      "src/textual/drivers/linux_inline_driver.py",
+      247,
+      "FunctionDef",
+      "def _request_terminal_sync_mode_support(self) -> None:"
+    ],
+    [
+      "src/textual/drivers/linux_inline_driver.py",
+      133,
+      "Assign",
+      "utf8_decoder = getincrementaldecoder('utf-8')().decode"
+    ],
+    [
+      "src/textual/drivers/linux_inline_driver.py",
+      134,
+      "Assign",
+      "decode = utf8_decoder"
+    ],
+    [
+      "src/textual/drivers/linux_inline_driver.py",
+      204,
+      "FunctionDef",
+      "def on_terminal_resize(signum, stack) -> None:"
+    ],
+    [
+      "src/textual/drivers/linux_inline_driver.py",
+      69,
+      "Assign",
+      "width, height = shutil.get_terminal_size()"
+    ],
+    [
+      "src/textual/drivers/linux_inline_driver.py",
+      188,
+      "Assign",
+      "terminal_size = self._get_terminal_size()"
+    ],
+    [
+      "src/textual/drivers/linux_inline_driver.py",
+      189,
+      "Assign",
+      "width, height = terminal_size"
+    ],
+    [
+      "src/textual/drivers/linux_inline_driver.py",
+      207,
+      "Call",
+      "signal.signal(signal.SIGWINCH, on_terminal_resize)"
+    ],
+    [
+      "src/textual/drivers/linux_inline_driver.py",
+      244,
+      "Call",
+      "self._request_terminal_sync_mode_support()"
+    ],
+    [
+      "src/textual/drivers/linux_inline_driver.py",
+      69,
+      "Call",
+      "shutil.get_terminal_size()"
+    ],
+    [
+      "src/textual/drivers/linux_inline_driver.py",
+      188,
+      "Call",
+      "self._get_terminal_size()"
+    ],
+    [
+      "src/textual/drivers/linux_inline_driver.py",
+      199,
+      "Call",
+      "asyncio.run_coroutine_threadsafe(update_size(), loop=loop)"
+    ],
+    [
+      "src/textual/drivers/linux_inline_driver.py",
+      244,
+      "Attribute",
+      "self._request_terminal_sync_mode_support"
+    ],
+    [
+      "src/textual/drivers/linux_inline_driver.py",
+      69,
+      "Attribute",
+      "shutil.get_terminal_size"
+    ],
+    [
+      "src/textual/drivers/linux_inline_driver.py",
+      72,
+      "Assign",
+      "width, height = shutil.get_terminal_size()"
+    ],
+    [
+      "src/textual/drivers/linux_inline_driver.py",
+      188,
+      "Attribute",
+      "self._get_terminal_size"
+    ],
+    [
+      "src/textual/drivers/linux_inline_driver.py",
+      199,
+      "Attribute",
+      "asyncio.run_coroutine_threadsafe"
+    ],
+    [
+      "src/textual/drivers/linux_inline_driver.py",
+      72,
+      "Call",
+      "shutil.get_terminal_size()"
+    ],
+    [
+      "src/textual/drivers/linux_inline_driver.py",
+      72,
+      "Attribute",
+      "shutil.get_terminal_size"
+    ],
+    [
+      "src/textual/drivers/web_driver.py",
+      142,
+      "FunctionDef",
+      "def _request_terminal_sync_mode_support(self) -> None:"
+    ],
+    [
+      "src/textual/drivers/web_driver.py",
+      195,
+      "Assign",
+      "utf8_decoder = getincrementaldecoder('utf-8')().decode"
+    ],
+    [
+      "src/textual/drivers/web_driver.py",
+      196,
+      "Assign",
+      "decode = utf8_decoder"
+    ],
+    [
+      "src/textual/drivers/web_driver.py",
+      171,
+      "Call",
+      "asyncio.run_coroutine_threadsafe(self._app._post_message(event), loop=loop)"
+    ],
+    [
+      "src/textual/drivers/web_driver.py",
+      176,
+      "Call",
+      "self._request_terminal_sync_mode_support()"
+    ],
+    [
+      "src/textual/drivers/web_driver.py",
+      153,
+      "Call",
+      "asyncio.run_coroutine_threadsafe(self._app._post_message(messages.ExitApp()), loop=loop)"
+    ],
+    [
+      "src/textual/drivers/web_driver.py",
+      171,
+      "Attribute",
+      "asyncio.run_coroutine_threadsafe"
+    ],
+    [
+      "src/textual/drivers/web_driver.py",
+      176,
+      "Attribute",
+      "self._request_terminal_sync_mode_support"
+    ],
+    [
+      "src/textual/drivers/web_driver.py",
+      153,
+      "Attribute",
+      "asyncio.run_coroutine_threadsafe"
+    ],
+    [
+      "src/textual/drivers/web_driver.py",
+      302,
+      "Call",
+      "self._delivery_failed(delivery_key, exception=error, name=name)"
+    ],
+    [
+      "src/textual/drivers/web_driver.py",
+      302,
+      "Attribute",
+      "self._delivery_failed"
+    ],
+    [
+      "src/textual/drivers/win32.py",
+      7,
+      "ImportFrom",
+      "from asyncio import AbstractEventLoop, run_coroutine_threadsafe"
+    ],
+    [
+      "src/textual/drivers/win32.py",
+      165,
+      "Assign",
+      "terminal_in = sys.__stdin__"
+    ],
+    [
+      "src/textual/drivers/win32.py",
+      166,
+      "Assign",
+      "terminal_out = sys.__stdout__"
+    ],
+    [
+      "src/textual/drivers/win32.py",
+      168,
+      "Assign",
+      "current_console_mode_in = get_console_mode(terminal_in)"
+    ],
+    [
+      "src/textual/drivers/win32.py",
+      169,
+      "Assign",
+      "current_console_mode_out = get_console_mode(terminal_out)"
+    ],
+    [
+      "src/textual/drivers/win32.py",
+      168,
+      "Call",
+      "get_console_mode(terminal_in)"
+    ],
+    [
+      "src/textual/drivers/win32.py",
+      169,
+      "Call",
+      "get_console_mode(terminal_out)"
+    ],
+    [
+      "src/textual/drivers/win32.py",
+      176,
+      "Call",
+      "set_console_mode(terminal_out, current_console_mode_out | ENABLE_VIRTUAL_TERMINAL_PROCESSING)"
+    ],
+    [
+      "src/textual/drivers/win32.py",
+      179,
+      "Call",
+      "set_console_mode(terminal_in, ENABLE_VIRTUAL_TERMINAL_INPUT)"
+    ],
+    [
+      "src/textual/drivers/win32.py",
+      173,
+      "Call",
+      "set_console_mode(terminal_in, current_console_mode_in)"
+    ],
+    [
+      "src/textual/drivers/win32.py",
+      174,
+      "Call",
+      "set_console_mode(terminal_out, current_console_mode_out)"
+    ],
+    [
+      "src/textual/drivers/win32.py",
+      304,
+      "Call",
+      "run_coroutine_threadsafe(self.app._post_message(event), loop=self.loop)"
+    ],
+    [
+      "src/textual/eta.py",
+      35,
+      "Assert",
+      "assert self._samples, 'Assumes samples not empty'"
+    ],
+    [
+      "src/textual/eta.py",
+      41,
+      "Assert",
+      "assert self._samples, 'Assumes samples not empty'"
+    ],
+    [
+      "src/textual/events.py",
+      146,
+      "FunctionDef",
+      "def can_replace(self, message: \"Message\") -> bool:"
+    ],
+    [
+      "src/textual/filter.py",
+      22,
+      "ImportFrom",
+      "from rich.terminal_theme import TerminalTheme"
+    ],
+    [
+      "src/textual/filter.py",
+      222,
+      "FunctionDef",
+      "def __init__(self, terminal_theme: TerminalTheme, enabled: bool = True):"
+    ],
+    [
+      "src/textual/filter.py",
+      228,
+      "Assign",
+      "self._terminal_theme = terminal_theme"
+    ],
+    [
+      "src/textual/filter.py",
+      241,
+      "Assign",
+      "terminal_theme = self._terminal_theme"
+    ],
+    [
+      "src/textual/filter.py",
+      228,
+      "Attribute",
+      "self._terminal_theme"
+    ],
+    [
+      "src/textual/filter.py",
+      241,
+      "Attribute",
+      "self._terminal_theme"
+    ],
+    [
+      "src/textual/filter.py",
+      252,
+      "Assign",
+      "bgcolor = RichColor.from_triplet(bgcolor.get_truecolor(terminal_theme, foreground=False))"
+    ],
+    [
+      "src/textual/filter.py",
+      246,
+      "Assign",
+      "color = RichColor.from_triplet(color.get_truecolor(terminal_theme, foreground=True))"
+    ],
+    [
+      "src/textual/filter.py",
+      252,
+      "Call",
+      "RichColor.from_triplet(bgcolor.get_truecolor(terminal_theme, foreground=False))"
+    ],
+    [
+      "src/textual/filter.py",
+      246,
+      "Call",
+      "RichColor.from_triplet(color.get_truecolor(terminal_theme, foreground=True))"
+    ],
+    [
+      "src/textual/filter.py",
+      253,
+      "Call",
+      "bgcolor.get_truecolor(terminal_theme, foreground=False)"
+    ],
+    [
+      "src/textual/filter.py",
+      247,
+      "Call",
+      "color.get_truecolor(terminal_theme, foreground=True)"
+    ],
+    [
+      "src/textual/layouts/stream.py",
+      56,
+      "Assign",
+      "previous_results = self._cached_placements or []"
+    ],
+    [
+      "src/textual/layouts/stream.py",
+      70,
+      "Assign",
+      "pre_populate = bool(previous_results and layout_widgets)"
+    ],
+    [
+      "src/textual/layouts/stream.py",
+      71,
+      "For",
+      "for widget, placement in zip_longest(children, previous_results):"
+    ],
+    [
+      "src/textual/layouts/stream.py",
+      70,
+      "Call",
+      "bool(previous_results and layout_widgets)"
+    ],
+    [
+      "src/textual/layouts/stream.py",
+      71,
+      "Call",
+      "zip_longest(children, previous_results)"
+    ],
+    [
+      "src/textual/message.py",
+      128,
+      "FunctionDef",
+      "def can_replace(self, message: \"Message\") -> bool:"
+    ],
+    [
+      "src/textual/message_pump.py",
+      38,
+      "ImportFrom",
+      "from textual._on import MessageHandler, OnNoWidget"
+    ],
+    [
+      "src/textual/message_pump.py",
+      838,
+      "FunctionDef",
+      "def _can_replace_message(self, message: Message, pending: Message) -> bool:"
+    ],
+    [
+      "src/textual/message_pump.py",
+      844,
+      "Return",
+      "return message.can_replace(pending)"
+    ],
+    [
+      "src/textual/message_pump.py",
+      990,
+      "If",
+      "if self._running and self._message_queue.empty():"
+    ],
+    [
+      "src/textual/message_pump.py",
+      610,
+      "While",
+      "while not queue.empty():"
+    ],
+    [
+      "src/textual/message_pump.py",
+      832,
+      "If",
+      "if not self._closed and (not self._message_queue.empty()):"
+    ],
+    [
+      "src/textual/message_pump.py",
+      844,
+      "Call",
+      "message.can_replace(pending)"
+    ],
+    [
+      "src/textual/message_pump.py",
+      941,
+      "If",
+      "if conventional is not None and (not isinstance(conventional, MessageHandler)):"
+    ],
+    [
+      "src/textual/message_pump.py",
+      113,
+      "If",
+      "if isinstance(value, MessageHandler):"
+    ],
+    [
+      "src/textual/message_pump.py",
+      783,
+      "If",
+      "if pending is None or not self._can_replace_message(message, pending):"
+    ],
+    [
+      "src/textual/message_pump.py",
+      815,
+      "If",
+      "if self._message_queue.empty() or (self._max_idle is not None and current_time - self._last_idle > self._max_idle):"
+    ],
+    [
+      "src/textual/message_pump.py",
+      844,
+      "Attribute",
+      "message.can_replace"
+    ],
+    [
+      "src/textual/message_pump.py",
+      990,
+      "Call",
+      "self._message_queue.empty()"
+    ],
+    [
+      "src/textual/message_pump.py",
+      1063,
+      "Call",
+      "loop.call_soon_threadsafe(self._message_queue.put_nowait, message)"
+    ],
+    [
+      "src/textual/message_pump.py",
+      113,
+      "Call",
+      "isinstance(value, MessageHandler)"
+    ],
+    [
+      "src/textual/message_pump.py",
+      610,
+      "Call",
+      "queue.empty()"
+    ],
+    [
+      "src/textual/message_pump.py",
+      990,
+      "Attribute",
+      "self._message_queue.empty"
+    ],
+    [
+      "src/textual/message_pump.py",
+      1063,
+      "Attribute",
+      "loop.call_soon_threadsafe"
+    ],
+    [
+      "src/textual/message_pump.py",
+      610,
+      "Attribute",
+      "queue.empty"
+    ],
+    [
+      "src/textual/message_pump.py",
+      815,
+      "Call",
+      "self._message_queue.empty()"
+    ],
+    [
+      "src/textual/message_pump.py",
+      832,
+      "Call",
+      "self._message_queue.empty()"
+    ],
+    [
+      "src/textual/message_pump.py",
+      941,
+      "Call",
+      "isinstance(conventional, MessageHandler)"
+    ],
+    [
+      "src/textual/message_pump.py",
+      783,
+      "Call",
+      "self._can_replace_message(message, pending)"
+    ],
+    [
+      "src/textual/message_pump.py",
+      815,
+      "Attribute",
+      "self._message_queue.empty"
+    ],
+    [
+      "src/textual/message_pump.py",
+      832,
+      "Attribute",
+      "self._message_queue.empty"
+    ],
+    [
+      "src/textual/message_pump.py",
+      783,
+      "Attribute",
+      "self._can_replace_message"
+    ],
+    [
+      "src/textual/messages.py",
+      70,
+      "ClassDef",
+      "class LayoutChildren(Layout, verbose=True):"
+    ],
+    [
+      "src/textual/messages.py",
+      48,
+      "FunctionDef",
+      "def can_replace(self, message: Message) -> bool:"
+    ],
+    [
+      "src/textual/messages.py",
+      65,
+      "FunctionDef",
+      "def can_replace(self, message: Message) -> bool:"
+    ],
+    [
+      "src/textual/messages.py",
+      81,
+      "FunctionDef",
+      "def can_replace(self, message: Message) -> bool:"
+    ],
+    [
+      "src/textual/messages.py",
+      109,
+      "FunctionDef",
+      "def can_replace(self, message: Message) -> bool:"
+    ],
+    [
+      "src/textual/pilot.py",
+      86,
+      "AsyncFunctionDef",
+      "async def resize_terminal(self, width: int, height: int) -> None:"
+    ],
+    [
+      "src/textual/pilot.py",
+      454,
+      "Assign",
+      "results = await app._post_message_and_wait(event)"
+    ],
+    [
+      "src/textual/pilot.py",
+      456,
+      "Assign",
+      "landed = results[0] if results else None"
+    ],
+    [
+      "src/textual/renderables/text_opacity.py",
+      9,
+      "ImportFrom",
+      "from rich.terminal_theme import TerminalTheme"
+    ],
+    [
+      "src/textual/renderables/text_opacity.py",
+      19,
+      "FunctionDef",
+      "def _get_blended_style_cached("
+    ],
+    [
+      "src/textual/renderables/text_opacity.py",
+      123,
+      "Assign",
+      "color_style = _get_blended_style_cached(bgcolor, color, opacity)"
+    ],
+    [
+      "src/textual/renderables/text_opacity.py",
+      144,
+      "Assign",
+      "color_style = _get_blended_style_cached(bgcolor, color, opacity)"
+    ],
+    [
+      "src/textual/renderables/text_opacity.py",
+      123,
+      "Call",
+      "_get_blended_style_cached(bgcolor, color, opacity)"
+    ],
+    [
+      "src/textual/renderables/text_opacity.py",
+      144,
+      "Call",
+      "_get_blended_style_cached(bgcolor, color, opacity)"
+    ],
+    [
+      "src/textual/renderables/tint.py",
+      8,
+      "ImportFrom",
+      "from rich.terminal_theme import TerminalTheme"
+    ],
+    [
+      "src/textual/screen.py",
+      174,
+      "Assign",
+      "DEFAULT_CSS = '\\n    Screen {\\n        layout: vertical;\\n        overflow-y: auto;\\n        background: $background;        \\n        \\n        &:inline {\\n            height: auto;\\n            min-height: 1;\\n            border-top: tall $background;\\n            border-bottom: tall $background;\\n        }\\n        & > .screen--selection {\\n            background: $screen-selection-background;\\n            color: $screen-selection-foreground;           \\n        }\\n        &:ansi {\\n            background: ansi_default;\\n            color: ansi_default;\\n            &.-screen-suspended {\\n                text-style: dim;\\n                ScrollBar {\\n                    text-style: not dim;\\n                }\\n            }\\n            &:inline {\\n                border-top: tall $ansi-background;\\n                border-bottom: tall $ansi-background;\\n            }\\n        }\\n    }\\n    \\n    '"
+    ],
+    [
+      "src/textual/style.py",
+      18,
+      "ImportFrom",
+      "from rich.terminal_theme import TerminalTheme"
+    ],
+    [
+      "src/textual/validation.py",
+      29,
+      "FunctionDef",
+      "def merge(results: Sequence[\"ValidationResult\"]) -> \"ValidationResult\":"
+    ],
+    [
+      "src/textual/validation.py",
+      38,
+      "Assign",
+      "is_valid = all((result.is_valid for result in results))"
+    ],
+    [
+      "src/textual/validation.py",
+      39,
+      "Assign",
+      "failures = [failure for result in results for failure in result.failures]"
+    ],
+    [
+      "src/textual/validation.py",
+      38,
+      "Call",
+      "all((result.is_valid for result in results))"
+    ],
+    [
+      "src/textual/validation.py",
+      39,
+      "comprehension",
+      " for result in results"
+    ],
+    [
+      "src/textual/validation.py",
+      38,
+      "comprehension",
+      " for result in results"
+    ],
+    [
+      "src/textual/widget.py",
+      454,
+      "AnnAssign",
+      "_PSEUDO_CLASSES: ClassVar[dict[str, Callable[[Widget], bool]]] = {'hover': lambda widget: widget.mouse_hover, 'focus': lambda widget: widget.has_focus, 'blur': lambda widget: not widget.has_focus, 'can-focus': lambda widget: widget.allow_focus(), 'disabled': lambda widget: widget.is_disabled, 'enabled': lambda widget: not widget.is_disabled, 'dark': lambda widget: widget.app.current_theme.dark, 'light': lambda widget: not widget.app.current_theme.dark, 'focus-within': lambda widget: widget.has_focus_within, 'inline': lambda widget: widget.app.is_inline, 'ansi': lambda widget: widget.app.native_ansi_color, 'nocolor': lambda widget: widget.app.no_color, 'first-of-type': lambda widget: widget.first_of_type, 'last-of-type': lambda widget: widget.last_of_type, 'first-child': lambda widget: widget.first_child, 'last-child': lambda widget: widget.last_child, 'odd': lambda widget: widget.is_odd, 'even': lambda widget: widget.is_even, 'empty': lambda widget: widget.is_empty}"
+    ],
+    [
+      "src/textual/widget.py",
+      4499,
+      "FunctionDef",
+      "def can_replace_mouse_move("
+    ],
+    [
+      "src/textual/widget.py",
+      473,
+      "Attribute",
+      "widget.is_empty"
+    ],
+    [
+      "src/textual/widget.py",
+      4223,
+      "Call",
+      "self.post_message(messages.LayoutChildren(self))"
+    ],
+    [
+      "src/textual/widget.py",
+      4223,
+      "Call",
+      "messages.LayoutChildren(self)"
+    ],
+    [
+      "src/textual/widget.py",
+      4223,
+      "Attribute",
+      "messages.LayoutChildren"
+    ],
+    [
+      "src/textual/widgets/_button.py",
+      300,
+      "AnnAssign",
+      "label: reactive[ContentText] = reactive[ContentText](Content.empty())"
+    ],
+    [
+      "src/textual/widgets/_button.py",
+      300,
+      "Call",
+      "reactive[ContentText](Content.empty())"
+    ],
+    [
+      "src/textual/widgets/_button.py",
+      300,
+      "Call",
+      "Content.empty()"
+    ],
+    [
+      "src/textual/widgets/_button.py",
+      300,
+      "Attribute",
+      "Content.empty"
+    ],
+    [
+      "src/textual/widgets/_input.py",
+      66,
+      "FunctionDef",
+      "def is_empty(self) -> bool:"
+    ],
+    [
+      "src/textual/widgets/_input.py",
+      281,
+      "Assign",
+      "valid_empty = var(False)"
+    ],
+    [
+      "src/textual/widgets/_input.py",
+      354,
+      "FunctionDef",
+      "def __init__("
+    ],
+    [
+      "src/textual/widgets/_input.py",
+      568,
+      "FunctionDef",
+      "def _watch_valid_empty(self) -> None:"
+    ],
+    [
+      "src/textual/widgets/_input.py",
+      436,
+      "Assign",
+      "self._reactive_valid_empty = valid_empty"
+    ],
+    [
+      "src/textual/widgets/_input.py",
+      599,
+      "If",
+      "if self.valid_empty and (not value):"
+    ],
+    [
+      "src/textual/widgets/_input.py",
+      604,
+      "AnnAssign",
+      "validation_results: list[ValidationResult] = [validator.validate(value) for validator in self.validators]"
+    ],
+    [
+      "src/textual/widgets/_input.py",
+      607,
+      "Assign",
+      "combined_result = ValidationResult.merge(validation_results)"
+    ],
+    [
+      "src/textual/widgets/_input.py",
+      1039,
+      "If",
+      "if self.selection.is_empty:"
+    ],
+    [
+      "src/textual/widgets/_input.py",
+      1046,
+      "If",
+      "if not self.selection.is_empty:"
+    ],
+    [
+      "src/textual/widgets/_input.py",
+      1066,
+      "If",
+      "if self.selection.is_empty:"
+    ],
+    [
+      "src/textual/widgets/_input.py",
+      1073,
+      "If",
+      "if self.selection.is_empty:"
+    ],
+    [
+      "src/textual/widgets/_input.py",
+      1080,
+      "If",
+      "if not self.selection.is_empty:"
+    ],
+    [
+      "src/textual/widgets/_input.py",
+      1102,
+      "If",
+      "if self.selection.is_empty:"
+    ],
+    [
+      "src/textual/widgets/_input.py",
+      436,
+      "Attribute",
+      "self._reactive_valid_empty"
+    ],
+    [
+      "src/textual/widgets/_input.py",
+      607,
+      "Call",
+      "ValidationResult.merge(validation_results)"
+    ],
+    [
+      "src/textual/widgets/_input.py",
+      751,
+      "If",
+      "if selection.is_empty:"
+    ],
+    [
+      "src/textual/widgets/_input.py",
+      761,
+      "If",
+      "if selection.is_empty:"
+    ],
+    [
+      "src/textual/widgets/_input.py",
+      870,
+      "If",
+      "if self.selection.is_empty:"
+    ],
+    [
+      "src/textual/widgets/_input.py",
+      1039,
+      "Attribute",
+      "self.selection.is_empty"
+    ],
+    [
+      "src/textual/widgets/_input.py",
+      1066,
+      "Attribute",
+      "self.selection.is_empty"
+    ],
+    [
+      "src/textual/widgets/_input.py",
+      1073,
+      "Attribute",
+      "self.selection.is_empty"
+    ],
+    [
+      "src/textual/widgets/_input.py",
+      1102,
+      "Attribute",
+      "self.selection.is_empty"
+    ],
+    [
+      "src/textual/widgets/_input.py",
+      599,
+      "Attribute",
+      "self.valid_empty"
+    ],
+    [
+      "src/textual/widgets/_input.py",
+      659,
+      "If",
+      "if not self.selection.is_empty:"
+    ],
+    [
+      "src/textual/widgets/_input.py",
+      751,
+      "Attribute",
+      "selection.is_empty"
+    ],
+    [
+      "src/textual/widgets/_input.py",
+      761,
+      "Attribute",
+      "selection.is_empty"
+    ],
+    [
+      "src/textual/widgets/_input.py",
+      870,
+      "Attribute",
+      "self.selection.is_empty"
+    ],
+    [
+      "src/textual/widgets/_input.py",
+      889,
+      "If",
+      "if self.selection.is_empty:"
+    ],
+    [
+      "src/textual/widgets/_input.py",
+      1046,
+      "Attribute",
+      "self.selection.is_empty"
+    ],
+    [
+      "src/textual/widgets/_input.py",
+      1080,
+      "Attribute",
+      "self.selection.is_empty"
+    ],
+    [
+      "src/textual/widgets/_input.py",
+      889,
+      "Attribute",
+      "self.selection.is_empty"
+    ],
+    [
+      "src/textual/widgets/_input.py",
+      659,
+      "Attribute",
+      "self.selection.is_empty"
+    ],
+    [
+      "src/textual/widgets/_list_view.py",
+      298,
+      "Call",
+      "IndexError('pop from empty list')"
+    ],
+    [
+      "src/textual/widgets/_markdown.py",
+      1212,
+      "AsyncFunctionDef",
+      "async def complete_empty_document() -> None:"
+    ],
+    [
+      "src/textual/widgets/_markdown.py",
+      1220,
+      "Return",
+      "return AwaitComplete(complete_empty_document())"
+    ],
+    [
+      "src/textual/widgets/_markdown.py",
+      1220,
+      "Call",
+      "AwaitComplete(complete_empty_document())"
+    ],
+    [
+      "src/textual/widgets/_markdown.py",
+      1220,
+      "Call",
+      "complete_empty_document()"
+    ],
+    [
+      "src/textual/widgets/_masked_input.py",
+      429,
+      "FunctionDef",
+      "def empty_mask(self) -> str:"
+    ],
+    [
+      "src/textual/widgets/_masked_input.py",
+      449,
+      "FunctionDef",
+      "def __init__("
+    ],
+    [
+      "src/textual/widgets/_masked_input.py",
+      545,
+      "AnnAssign",
+      "validation_results: list[ValidationResult] = [self._template.validate(value)]"
+    ],
+    [
+      "src/textual/widgets/_masked_input.py",
+      548,
+      "Assign",
+      "combined_result = ValidationResult.merge(validation_results)"
+    ],
+    [
+      "src/textual/widgets/_masked_input.py",
+      485,
+      "Call",
+      "super().__init__(placeholder=placeholder, validators=validators, validate_on=validate_on, valid_empty=valid_empty, select_on_focus=select_on_focus, name=name, id=id, classes=classes, disabled=disabled, compact=compact)"
+    ],
+    [
+      "src/textual/widgets/_masked_input.py",
+      548,
+      "Call",
+      "ValidationResult.merge(validation_results)"
+    ],
+    [
+      "src/textual/widgets/_masked_input.py",
+      547,
+      "Call",
+      "validation_results.append(result)"
+    ],
+    [
+      "src/textual/widgets/_masked_input.py",
+      703,
+      "Assign",
+      "self.value = self._template.empty_mask[:cursor_position] + self.value[cursor_position:]"
+    ],
+    [
+      "src/textual/widgets/_masked_input.py",
+      547,
+      "Attribute",
+      "validation_results.append"
+    ],
+    [
+      "src/textual/widgets/_masked_input.py",
+      704,
+      "Attribute",
+      "self._template.empty_mask"
+    ],
+    [
+      "src/textual/widgets/_rich_log.py",
+      106,
+      "AnnAssign",
+      "self._deferred_renders: deque[DeferredRender] = deque()"
+    ],
+    [
+      "src/textual/widgets/_rich_log.py",
+      106,
+      "Attribute",
+      "self._deferred_renders"
+    ],
+    [
+      "src/textual/widgets/_rich_log.py",
+      136,
+      "Assign",
+      "deferred_renders = self._deferred_renders"
+    ],
+    [
+      "src/textual/widgets/_rich_log.py",
+      137,
+      "While",
+      "while deferred_renders:"
+    ],
+    [
+      "src/textual/widgets/_rich_log.py",
+      296,
+      "Call",
+      "self._deferred_renders.clear()"
+    ],
+    [
+      "src/textual/widgets/_rich_log.py",
+      136,
+      "Attribute",
+      "self._deferred_renders"
+    ],
+    [
+      "src/textual/widgets/_rich_log.py",
+      138,
+      "Assign",
+      "deferred_render = deferred_renders.popleft()"
+    ],
+    [
+      "src/textual/widgets/_rich_log.py",
+      210,
+      "Call",
+      "self._deferred_renders.append(DeferredRender(content, width, expand, shrink, scroll_end))"
+    ],
+    [
+      "src/textual/widgets/_rich_log.py",
+      296,
+      "Attribute",
+      "self._deferred_renders.clear"
+    ],
+    [
+      "src/textual/widgets/_rich_log.py",
+      138,
+      "Call",
+      "deferred_renders.popleft()"
+    ],
+    [
+      "src/textual/widgets/_rich_log.py",
+      139,
+      "Call",
+      "self.write(*deferred_render)"
+    ],
+    [
+      "src/textual/widgets/_rich_log.py",
+      210,
+      "Attribute",
+      "self._deferred_renders.append"
+    ],
+    [
+      "src/textual/widgets/_rich_log.py",
+      296,
+      "Attribute",
+      "self._deferred_renders"
+    ],
+    [
+      "src/textual/widgets/_rich_log.py",
+      138,
+      "Attribute",
+      "deferred_renders.popleft"
+    ],
+    [
+      "src/textual/widgets/_rich_log.py",
+      210,
+      "Attribute",
+      "self._deferred_renders"
+    ],
+    [
+      "src/textual/widgets/_select.py",
+      533,
+      "Call",
+      "EmptySelectError(\"Select options cannot be empty if selection can't be blank.\")"
+    ],
+    [
+      "src/textual/widgets/_selection_list.py",
+      40,
+      "FunctionDef",
+      "def __init__("
+    ],
+    [
+      "src/textual/widgets/_selection_list.py",
+      71,
+      "FunctionDef",
+      "def initial_state(self) -> bool:"
+    ],
+    [
+      "src/textual/widgets/_selection_list.py",
+      62,
+      "AnnAssign",
+      "self._initial_state: bool = initial_state"
+    ],
+    [
+      "src/textual/widgets/_selection_list.py",
+      73,
+      "Return",
+      "return self._initial_state"
+    ],
+    [
+      "src/textual/widgets/_selection_list.py",
+      480,
+      "If",
+      "if selection.initial_state:"
+    ],
+    [
+      "src/textual/widgets/_selection_list.py",
+      62,
+      "Attribute",
+      "self._initial_state"
+    ],
+    [
+      "src/textual/widgets/_selection_list.py",
+      73,
+      "Attribute",
+      "self._initial_state"
+    ],
+    [
+      "src/textual/widgets/_selection_list.py",
+      480,
+      "Attribute",
+      "selection.initial_state"
+    ],
+    [
+      "src/textual/widgets/_tabbed_content.py",
+      593,
+      "Call",
+      "ValueError(\"'pane_id' must be a non-empty string or a TabPane with an id.\")"
+    ],
+    [
+      "src/textual/widgets/_tabbed_content.py",
+      620,
+      "Call",
+      "ValueError(\"'pane_id' must be a non-empty string or a ContentTab with an id.\")"
+    ],
+    [
+      "src/textual/widgets/_tabs.py",
+      402,
+      "Return",
+      "return [tab for tab in self.query('#tabs-list > Tab').results(Tab) if (not tab.disabled or tab is self.active_tab) and tab.display]"
+    ],
+    [
+      "src/textual/widgets/_tabs.py",
+      479,
+      "Assign",
+      "from_empty = self.tab_count == 0"
+    ],
+    [
+      "src/textual/widgets/_tabs.py",
+      490,
+      "If",
+      "if from_empty:"
+    ],
+    [
+      "src/textual/widgets/_tabs.py",
+      404,
+      "comprehension",
+      " for tab in self.query('#tabs-list > Tab').results(Tab) if (not tab.disabled or tab is self.active_tab) and tab.display"
+    ],
+    [
+      "src/textual/widgets/_tabs.py",
+      404,
+      "Call",
+      "self.query('#tabs-list > Tab').results(Tab)"
+    ],
+    [
+      "src/textual/widgets/_tabs.py",
+      404,
+      "Attribute",
+      "self.query('#tabs-list > Tab').results"
+    ],
+    [
+      "src/textual/widgets/_text_area.py",
+      2302,
+      "Assign",
+      "target = self.get_cursor_left_location() if select or self.selection.is_empty else min(*self.selection)"
+    ],
+    [
+      "src/textual/widgets/_text_area.py",
+      2333,
+      "Assign",
+      "target = self.get_cursor_right_location() if select or self.selection.is_empty else max(*self.selection)"
+    ],
+    [
+      "src/textual/widgets/_text_area.py",
+      2651,
+      "If",
+      "if selection.is_empty:"
+    ],
+    [
+      "src/textual/widgets/_text_area.py",
+      2666,
+      "If",
+      "if selection.is_empty:"
+    ],
+    [
+      "src/textual/widgets/_text_area.py",
+      2237,
+      "Call",
+      "self.move_cursor(location, select=not self.selection.is_empty)"
+    ],
+    [
+      "src/textual/widgets/_text_area.py",
+      2651,
+      "Attribute",
+      "selection.is_empty"
+    ],
+    [
+      "src/textual/widgets/_text_area.py",
+      2666,
+      "Attribute",
+      "selection.is_empty"
+    ],
+    [
+      "src/textual/widgets/_text_area.py",
+      2735,
+      "If",
+      "if selection.is_empty:"
+    ],
+    [
+      "src/textual/widgets/_text_area.py",
+      2735,
+      "Attribute",
+      "selection.is_empty"
+    ],
+    [
+      "src/textual/widgets/_text_area.py",
+      2304,
+      "Attribute",
+      "self.selection.is_empty"
+    ],
+    [
+      "src/textual/widgets/_text_area.py",
+      2335,
+      "Attribute",
+      "self.selection.is_empty"
+    ],
+    [
+      "src/textual/widgets/_text_area.py",
+      2237,
+      "Attribute",
+      "self.selection.is_empty"
+    ],
+    [
+      "src/textual/worker.py",
+      240,
+      "FunctionDef",
+      "def completed_steps(self) -> int:"
+    ],
+    [
+      "src/textual/worker.py",
+      269,
+      "FunctionDef",
+      "def update("
+    ],
+    [
+      "src/textual/worker.py",
+      185,
+      "AnnAssign",
+      "self._completed_steps: int = 0"
+    ],
+    [
+      "src/textual/worker.py",
+      242,
+      "Return",
+      "return self._completed_steps"
+    ],
+    [
+      "src/textual/worker.py",
+      257,
+      "Return",
+      "return max(0, min(100, self._completed_steps / self._total_steps * 100.0))"
+    ],
+    [
+      "src/textual/worker.py",
+      278,
+      "If",
+      "if completed_steps is not None:"
+    ],
+    [
+      "src/textual/worker.py",
+      185,
+      "Attribute",
+      "self._completed_steps"
+    ],
+    [
+      "src/textual/worker.py",
+      242,
+      "Attribute",
+      "self._completed_steps"
+    ],
+    [
+      "src/textual/worker.py",
+      257,
+      "Call",
+      "max(0, min(100, self._completed_steps / self._total_steps * 100.0))"
+    ],
+    [
+      "src/textual/worker.py",
+      278,
+      "Compare",
+      "completed_steps is not None"
+    ],
+    [
+      "src/textual/worker.py",
+      289,
+      "Attribute",
+      "self._completed_steps"
+    ],
+    [
+      "src/textual/worker.py",
+      257,
+      "Call",
+      "min(100, self._completed_steps / self._total_steps * 100.0)"
+    ],
+    [
+      "src/textual/worker.py",
+      279,
+      "Attribute",
+      "self._completed_steps"
+    ],
+    [
+      "src/textual/worker.py",
+      402,
+      "Call",
+      "app.log.worker(self, 'failed', repr(error))"
+    ],
+    [
+      "src/textual/worker.py",
+      407,
+      "Assign",
+      "worker_failed = WorkerFailed(self._error)"
+    ],
+    [
+      "src/textual/worker.py",
+      257,
+      "Attribute",
+      "self._completed_steps"
+    ],
+    [
+      "src/textual/worker.py",
+      408,
+      "Call",
+      "app._handle_exception(worker_failed)"
+    ]
+  ]
+}
