@@ -36,6 +36,14 @@ class PaintState(NamedTuple):
     layered_background: Color
     cacheable: bool = True
 
+    @property
+    def rich_style(self) -> Style:
+        background, color = self.background, self.foreground
+        return self.text_style + Style.from_color(
+            (background + color).rich_color if (background.a or color.a) else None,
+            background.rich_color if background.a else None,
+        )
+
     def same_paint(self, other: PaintState) -> bool:
         return self[2:8] == other[2:8]
 

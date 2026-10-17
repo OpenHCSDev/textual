@@ -13,6 +13,7 @@ from textual import log
 from textual._ansi_theme import DEFAULT_TERMINAL_THEME
 from textual._border import get_box, render_border_label, render_row
 from textual._opacity import _apply_opacity
+from textual._paint_state import PaintState
 from textual._segment_tools import apply_hatch, line_pad, line_trim, make_blank
 from textual.color import TRANSPARENT, Color
 from textual.constants import DEBUG
@@ -159,13 +160,13 @@ class StylesCache:
         self._simple_strip = None
 
     @staticmethod
-    def widget_paint_key(widget: Widget, paint: FramePaint) -> tuple:
-        return (paint.frame_key, *widget.background_colors,
-                widget.rich_style, widget.geometry.padding)
+    def widget_paint_key(widget: Widget, paint: FramePaint, state: PaintState) -> tuple:
+        return (paint.frame_key, state.base_background, state.layered_background,
+                state.rich_style, widget.geometry.padding)
 
     def refresh_paint(self, widget: Widget) -> None:
         """Dirty only a widget whose current paint differs from its cached lines."""
-        if self.widget_paint_key(widget, widget.frame_paint) != self._paint_key:
+        if self.widget_paint_key(widget, widget.frame_paint, widget._resolved_paint_state()) != self._paint_key:
             widget.refresh()
 
     def render_widget(self, widget: Widget, crop: Region) -> list[Strip]:
@@ -180,10 +181,11 @@ class StylesCache:
         """
         self._simple_strip = None
 
-        base_background, background = widget.background_colors
+        state = widget._resolved_paint_state()
+        base_background, background = state.base_background, state.layered_background
         app, styles = widget.app, widget.styles
         paint = widget.frame_paint
-        key = self.widget_paint_key(widget, paint)
+        key = self.widget_paint_key(widget, paint, state)
         if key != self._paint_key:
             widget._release_paint()
             self._paint_key = key
@@ -196,14 +198,15 @@ class StylesCache:
             widget.get_line_filters(),
             border_label(widget._border_title, base_background, styles.auto_border_title_color,
                          styles.border_title_color, styles.border_title_background,
-                         styles.border_title_style),
+                         styles.border_title_style) if widget._border_title is not None else None,
             border_label(widget._border_subtitle, base_background,
                          styles.auto_border_subtitle_color, styles.border_subtitle_color,
-                         styles.border_subtitle_background, styles.border_subtitle_style),
+                         styles.border_subtitle_background, styles.border_subtitle_style)
+                         if widget._border_subtitle is not None else None,
             content_size=widget.content_region.size,
             padding=widget.geometry.padding,
             crop=crop,
-            opacity=widget.opacity,
+            opacity=state.opacity,
             ansi_theme=app.ansi_theme,
             native_ansi=app.native_ansi_color,
         )

@@ -68,8 +68,6 @@ if TYPE_CHECKING:
     from textual.app import App
     from textual.css.query import DOMQuery, QueryType
     from textual.css.types import CSSLocation
-    from textual.css.styles import StylesBase
-    from textual.message import Message
     from textual.reactive import _StoredReactiveAccess
     from textual.screen import Screen
     from textual.widget import Widget
@@ -1442,12 +1440,7 @@ class DOMNode(MessagePump):
         Returns:
             A Rich style.
         """
-        state = self._resolved_paint_state()
-        background, color = state.background, state.foreground
-        return state.text_style + Style.from_color(
-            (background + color).rich_color if (background.a or color.a) else None,
-            background.rich_color if background.a else None,
-        )
+        return self._resolved_paint_state().rich_style
 
     def get_visual_style(
         self, *component_classes: str, partial: bool = False

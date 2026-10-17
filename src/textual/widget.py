@@ -8,7 +8,6 @@ from __future__ import annotations
 from asyncio import Task, create_task, gather, shield
 from collections import Counter
 from contextlib import asynccontextmanager
-from dataclasses import replace
 from fractions import Fraction
 from time import monotonic
 from types import TracebackType
@@ -63,8 +62,6 @@ from textual._measurement import (
 )
 from textual.message_pump import MessagePump
 from textual._styles_cache import FramePaint, PaintStyles, StylesCache
-from textual._activation import PrimaryActivation, PrimaryTarget, StyleTarget
-from textual._event_broker import NoHandler, extract_handler_actions
 from textual._types import AnimationLevel
 from textual.actions import SkipAction
 from textual.await_complete import AwaitComplete, AwaitCompletion
@@ -77,7 +74,7 @@ from textual.content import Content, ContentType
 from textual.css.match import match
 from textual.css.parse import parse_selectors
 from textual.css.query import NoMatches, WrongType
-from textual.css.scalar import Scalar, ScalarOffset
+from textual.css.scalar import ScalarOffset
 from textual.dom import DOMNode, NoScreen
 from textual.geometry import (
     NULL_REGION,
@@ -95,18 +92,16 @@ from textual.message import Message
 from textual.messages import CallbackType, Prune
 from textual.notifications import SeverityLevel
 from textual.reactive import Reactive
-from textual.renderables.blank import Blank
 from textual.rlock import RLock
 from textual.selection import Selection
 from textual.strip import Strip
-from textual.style import NULL_STYLE
-from textual.style import Style as VisualStyle
 from textual.visual import Visual, VisualType, visualize
 
 if TYPE_CHECKING:
     from textual.app import App, ComposeResult
     from textual.css.query import QueryType
     from textual.filter import LineFilter
+    from textual.screen import Screen
     from textual.scrollbar import (
         ScrollBar,
         ScrollBarCorner,
@@ -1876,18 +1871,11 @@ class Widget(DOMNode):
         """
         if not width:
             return 0
-        if self.is_container:
-            assert self.layout is not None
-            height = self._measure_content_height(container, viewport, width)
-        else:
-            cache_key = width
-
-            if self._content_height_cache[0] == cache_key:
-                return self._content_height_cache[1]
-
-            height = self._measure_content_height(container, viewport, width)
-            self._content_height_cache = (cache_key, height)
-
+        cache_key = self._content_height_dependency.measurement_key(self, container, viewport, width)
+        if self._content_height_cache[0] == cache_key:
+            return self._content_height_cache[1]
+        height = self._measure_content_height(container, viewport, width)
+        self._content_height_cache = (cache_key, height)
         return height
 
     def watch_hover_style(
