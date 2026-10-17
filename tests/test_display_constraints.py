@@ -1,7 +1,7 @@
 from unittest.mock import patch
 
 from textual.app import App
-from textual.containers import VerticalGroup
+from textual.containers import HorizontalGroup, VerticalGroup, VerticalScroll
 from textual.widgets import Static
 
 
@@ -56,6 +56,38 @@ async def test_constraint_reflows_following_sibling_in_group():
         middle.set_display_constraint("t", False)
         await pilot.pause()
         assert third.region.y == first.region.y + 1
+
+
+async def test_nested_auto_height_members_release_hidden_row_space():
+    app = App()
+    rows = [Static(name) for name in ("first", "second", "third")]
+    for row in rows:
+        row.styles.height = 2
+    header = HorizontalGroup(Static("group"))
+    header.styles.height = 1
+    members = VerticalGroup(*rows)
+    group = VerticalGroup(header, members)
+    following = Static("following")
+    following.styles.height = 1
+    viewport = VerticalScroll(group, following)
+    viewport.CACHE_SUBTREE_GEOMETRY = True
+    async with app.run_test() as pilot:
+        await app.mount(viewport)
+        await pilot.pause()
+        assert members.region.height == 6
+        assert group.region.height == 7
+        for row in rows[:2]:
+            row.set_display_constraint("sidebar-search", False)
+        await pilot.pause()
+        assert members.region.height == 2
+        assert group.region.height == 3
+        assert rows[2].region.y == header.region.bottom
+        assert following.region.y == group.region.bottom
+        for row in rows[:2]:
+            row.set_display_constraint("sidebar-search", True)
+        await pilot.pause()
+        assert members.region.height == 6
+        assert group.region.height == 7
 
 
 async def test_initial_constraint_and_relative_child_measurement():
