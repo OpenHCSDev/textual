@@ -760,7 +760,6 @@ class StringEnumProperty(StyleProperty[EnumType], Generic[EnumType]):
             self.refresh_node(obj)
 
     def refresh_node(self, obj: StylesBase) -> None:
-        """Schedule this descriptor's declared node damage without a rule write."""
         obj.refresh(
             layout=self._layout,
             children=self._refresh_children,
