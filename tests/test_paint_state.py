@@ -15,7 +15,7 @@ def test_empty_layer_reuses_settled_parent():
 
 def test_first_empty_child_advances_colored_parent_background_base():
     layer = PaintLayer()
-    layer.paint_background = Color.parse("red 50%")
+    layer.paint_background = Color.parse("red").with_alpha(.5)
     parent = PaintState.resolve(EMPTY_PAINT, layer)
     assert parent.base_background != parent.layered_background
     child = PaintState.resolve(parent, PaintLayer())
