@@ -874,6 +874,15 @@ class DOMNode(MessagePump):
             for name, reactive in reactives.items()
         }
 
+    def find_component_owner(self, name: str) -> DOMNode | None:
+        """Find a declared component within this node's native style scope."""
+        for node in self.walk_ancestors(with_self=True):
+            if not node._component_style_scope:
+                return None
+            if name in node._component_styles:
+                return node
+        raise KeyError(f"No matching component class found for '.{name}'")
+
     def get_component_styles(self, *names: str) -> RenderStyles:
         """Get a "component" styles object (must be defined in COMPONENT_CLASSES classvar).
 

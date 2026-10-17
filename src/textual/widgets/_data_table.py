@@ -2415,21 +2415,19 @@ class DataTable(ScrollView, Generic[CellType], can_focus=True):
 
         return y_offsets[y]
 
-    def _render_line(self, y: int, x1: int, x2: int, paint: PaintState) -> Strip:
-        """Render a (possibly cropped) line into a Strip (a list of segments
-            representing a horizontal line).
-
-        Args:
-            y: Y coordinate of line
-            x1: X start crop.
-            x2: X end crop (exclusive).
-            base_style: Style to apply to line.
-
-        Returns:
-            The Strip which represents this cropped line.
-        """
-
+    def render_line(self, y: int, paint: PaintState) -> Strip:
+        """Render the current viewport row, keeping fixed rows unscrolled."""
         width = self.size.width
+        scroll_x, scroll_y = self.scroll_offset
+        fixed_rows_height = sum(
+            self.get_row_height(self._row_locations.get_key(row_index))
+            for row_index in range(self.fixed_rows)
+        )
+        if self.show_header:
+            fixed_rows_height += self.get_row_height(self._header_row_key)
+        if y >= fixed_rows_height:
+            y += scroll_y
+        x1, x2 = scroll_x, scroll_x + width
         base_style = paint.rich_style
 
         try:
@@ -2478,26 +2476,6 @@ class DataTable(ScrollView, Generic[CellType], can_focus=True):
     def render_lines(self, crop: Region) -> list[Strip]:
         self._pseudo_class_state = self.get_pseudo_class_state()
         return super().render_lines(crop)
-
-    def render_line(self, y: int, paint: PaintState) -> Strip:
-        width, height = self.size
-        scroll_x, scroll_y = self.scroll_offset
-
-        fixed_row_keys: list[RowKey] = [
-            self._row_locations.get_key(row_index)
-            for row_index in range(self.fixed_rows)
-        ]
-
-        fixed_rows_height = sum(
-            self.get_row_height(row_key) for row_key in fixed_row_keys
-        )
-        if self.show_header:
-            fixed_rows_height += self.get_row_height(self._header_row_key)
-
-        if y >= fixed_rows_height:
-            y += scroll_y
-
-        return self._render_line(y, scroll_x, scroll_x + width, paint)
 
     def _should_highlight(
         self,

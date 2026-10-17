@@ -80,16 +80,9 @@ class PaintState(NamedTuple):
         if isinstance(style, VisualStyle):
             return style
         if style.startswith("."):
-            for ancestor in node.walk_ancestors(with_self=True):
-                if not ancestor._component_style_scope:
-                    break
-                try:
-                    return self.component_style(ancestor, style[1:], partial=True)
-                except KeyError:
-                    continue
-            else:
-                raise KeyError(f"No matching component class found for '{style}'")
-            return VisualStyle()
+            owner = node.find_component_owner(style[1:])
+            return (VisualStyle() if owner is None
+                    else self.component_style(owner, style[1:], partial=True))
         try:
             return node._parse_visual_style(style)
         except Exception:
