@@ -151,9 +151,6 @@ class PaintNode:
             for child in tuple(self._child_pumps):
                 child._parent_changed()
 
-    def _resolved_paint_state(self) -> PaintState:
-        return self._paint_state
-
     @property
     def paint_layer(self) -> PaintLayer:
         return self.styles

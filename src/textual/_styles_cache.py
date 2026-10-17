@@ -164,12 +164,12 @@ class StylesCache:
 
     def refresh_paint(self, widget: Widget) -> None:
         """Dirty only a widget whose current paint differs from its cached lines."""
-        if self.widget_paint_key(widget, widget.frame_paint, widget._resolved_paint_state()) != self._paint_key:
+        if self.widget_paint_key(widget, widget.frame_paint, widget._paint_state) != self._paint_key:
             widget.refresh()
 
     def render_widget(self, widget: Widget, crop: Region) -> list[Strip]:
         """Reuse retained lines; prepare their painter only on the first miss."""
-        state = widget._resolved_paint_state()
+        state = widget._paint_state
         if widget.BLANK:
             return [Strip.blank(crop.width, state.rich_style)] * crop.height
         paint = widget.frame_paint

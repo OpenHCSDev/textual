@@ -674,7 +674,7 @@ class Widget(DOMNode):
     @property
     def opacity(self) -> float:
         """Total opacity of widget."""
-        return self._resolved_paint_state().opacity
+        return self._paint_state.opacity
 
     @property
     def is_anchored(self) -> bool:

@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 from rich.style import Style
 
+from textual._paint_state import PaintState
 from textual.color import Color
 from textual.css.styles import Styles
 from textual.dom import DOMNode
@@ -81,7 +82,7 @@ def test_unchanged_paint_does_not_rewalk_ancestors_and_raw_rules_invalidate():
     parent._parent = root
     leaf._parent = parent
     leaf.rich_style
-    with patch.object(parent, "_resolved_paint_state", wraps=parent._resolved_paint_state) as resolve:
+    with patch.object(PaintState, "resolve", wraps=PaintState.resolve) as resolve:
         for _ in range(20):
             leaf.rich_style
             leaf.visual_style
@@ -137,7 +138,7 @@ def test_style_views_and_unchanged_rules_preserve_paint_until_original_mutation(
     leaf._parent = root
     root.styles.color = "red"
     before = leaf.rich_style
-    paint = leaf._resolved_paint_state()
+    paint = leaf._paint_state
     rules_key = root.styles._cache_key
 
     # Parsing and serializing declarations do not modify a widget. Merging
@@ -151,7 +152,7 @@ def test_style_views_and_unchanged_rules_preserve_paint_until_original_mutation(
     root.styles.base.reset()
     assert root.styles._cache_key == rules_key
     assert leaf.rich_style == before
-    assert leaf._resolved_paint_state() is paint
+    assert leaf._paint_state is paint
 
     # Genuine bulk writes and removals are visible immediately, including
     # reads inside the existing synchronous refresh batch.
@@ -177,23 +178,23 @@ def test_layout_dependency_changes_preserve_retained_paint_values():
     parent._parent = root
     leaf._parent = parent
     root.styles.color = "red"
-    original = leaf._resolved_paint_state()
+    original = leaf._paint_state
     visual = leaf.visual_style
 
     # A tab's visibility changes dependency epochs without changing pixels.
     for visible in (False, True):
         parent.display = visible
-        current = leaf._resolved_paint_state()
+        current = leaf._paint_state
         assert current is original
         assert current == original
         assert leaf.visual_style == visual
 
     # Real inherited paint changes remain invalidating, including opacity.
     parent.styles.opacity = .5
-    assert original != leaf._resolved_paint_state()
+    assert original != leaf._paint_state
     parent.styles.opacity = 1
     parent.styles.color = "blue"
-    assert original != leaf._resolved_paint_state()
+    assert original != leaf._paint_state
     assert leaf.visual_style != visual
 
 
