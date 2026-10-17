@@ -85,7 +85,7 @@ WalkMethod: TypeAlias = Literal["depth", "breadth"]
 ReactiveType = TypeVar("ReactiveType")
 
 
-QueryOneCacheKey: TypeAlias = "tuple[int, str, Type[Widget] | None]"
+QueryOneCacheKey: TypeAlias = "tuple[int, str | Type[Widget], Type[Widget] | None]"
 """The key used to cache query_one results."""
 
 
@@ -1726,7 +1726,7 @@ class DOMNode(MessagePump):
         if isinstance(selector, str) or selector is None:
             return DOMQuery[Widget](node, filter=selector)
         else:
-            return DOMQuery[QueryType](node, filter=selector.__name__)
+            return DOMQuery[QueryType](node, of_type=selector)
 
     if TYPE_CHECKING:
 
@@ -1758,7 +1758,7 @@ class DOMNode(MessagePump):
         if isinstance(selector, str) or selector is None:
             return DOMQuery[Widget](node, deep=False, filter=selector)
         else:
-            return DOMQuery[QueryType](node, deep=False, filter=selector.__name__)
+            return DOMQuery[QueryType](node, deep=False, of_type=selector)
 
     if TYPE_CHECKING:
 
@@ -1795,38 +1795,25 @@ class DOMNode(MessagePump):
 
         base_node = self._get_dom_base()
 
-        if isinstance(selector, str):
-            query_selector = selector
-        else:
-            query_selector = selector.__name__
-
-        if is_id_selector(query_selector):
-            cache_key = (base_node._nodes._updates, query_selector, expect_type)
+        if isinstance(selector, str) and is_id_selector(selector):
+            cache_key = (base_node._nodes._updates, selector, expect_type)
             cached_result = base_node._query_one_cache.get(cache_key)
             if cached_result is not None:
                 return cached_result
             if (
-                node := walk_breadth_search_id(
-                    base_node, query_selector[1:], with_root=False
-                )
+                node := walk_breadth_search_id(base_node, selector[1:], with_root=False)
             ) is not None:
                 if expect_type is not None and not isinstance(node, expect_type):
                     raise WrongType(
-                        f"Node matching {query_selector!r} is the wrong type; expected type {expect_type.__name__!r}, found {node}"
+                        f"Node matching {selector!r} is the wrong type; expected type {expect_type.__name__!r}, found {node}"
                     )
                 base_node._query_one_cache[cache_key] = node
                 return node
-            raise NoMatches(f"No nodes match {query_selector!r} on {base_node!r}")
+            raise NoMatches(f"No nodes match {selector!r} on {base_node!r}")
 
-        try:
-            selector_set = parse_selectors(query_selector)
-        except TokenError:
-            raise InvalidQueryFormat(
-                f"Unable to parse {query_selector!r} as a query; check for syntax errors"
-            ) from None
-
-        if all(selectors.is_simple for selectors in selector_set):
-            cache_key = (base_node._nodes._updates, query_selector, expect_type)
+        query = self.query(selector)
+        if query.is_simple:
+            cache_key = (base_node._nodes._updates, selector, expect_type)
             cached_result = base_node._query_one_cache.get(cache_key)
             if cached_result is not None:
                 return cached_result
@@ -1834,17 +1821,17 @@ class DOMNode(MessagePump):
             cache_key = None
 
         for node in walk_breadth_first(base_node, with_root=False):
-            if not match(selector_set, node):
+            if not query._matches(node):
                 continue
             if expect_type is not None and not isinstance(node, expect_type):
                 raise WrongType(
-                    f"Node matching {query_selector!r} is the wrong type; expected type {expect_type.__name__!r}, found {node}"
+                    f"Node matching {selector!r} is the wrong type; expected type {expect_type.__name__!r}, found {node}"
                 )
             if cache_key is not None:
                 base_node._query_one_cache[cache_key] = node
             return node
 
-        raise NoMatches(f"No nodes match {query_selector!r} on {base_node!r}")
+        raise NoMatches(f"No nodes match {selector!r} on {base_node!r}")
 
     if TYPE_CHECKING:
 
@@ -1923,45 +1910,23 @@ class DOMNode(MessagePump):
 
         base_node = self._get_dom_base()
 
-        if isinstance(selector, str):
-            query_selector = selector
-        else:
-            query_selector = selector.__name__
-
-        try:
-            selector_set = parse_selectors(query_selector)
-        except TokenError:
-            raise InvalidQueryFormat(
-                f"Unable to parse {query_selector!r} as a query; check for syntax errors"
-            ) from None
-
-        if all(selectors.is_simple for selectors in selector_set):
-            cache_key = (base_node._nodes._updates, query_selector, expect_type)
-            cached_result = base_node._query_one_cache.get(cache_key)
-            if cached_result is not None:
-                return cached_result
-        else:
-            cache_key = None
-
-        children = walk_breadth_first(base_node, with_root=False)
-        iter_children = iter(children)
+        query = self.query(selector)
+        iter_children = iter(walk_breadth_first(base_node, with_root=False))
         for node in iter_children:
-            if not match(selector_set, node):
+            if not query._matches(node):
                 continue
             if expect_type is not None and not isinstance(node, expect_type):
                 raise WrongType(
-                    f"Node matching {query_selector!r} is the wrong type; expected type {expect_type.__name__!r}, found {node}"
+                    f"Node matching {selector!r} is the wrong type; expected type {expect_type.__name__!r}, found {node}"
                 )
             for later_node in iter_children:
-                if match(selector_set, later_node):
+                if query._matches(later_node):
                     raise TooManyMatches(
-                        "Call to query_one resulted in more than one matched node"
+                        "Call to query_exactly_one resulted in more than one matched node"
                     )
-            if cache_key is not None:
-                base_node._query_one_cache[cache_key] = node
             return node
 
-        raise NoMatches(f"No nodes match {query_selector!r} on {base_node!r}")
+        raise NoMatches(f"No nodes match {selector!r} on {base_node!r}")
 
     if TYPE_CHECKING:
 
@@ -1996,19 +1961,20 @@ class DOMNode(MessagePump):
         """
         base_node = self._get_dom_base()
         if isinstance(selector, str):
-            query_selector = selector
+            try:
+                selector_set = parse_selectors(selector)
+            except TokenError:
+                raise InvalidQueryFormat(
+                    f"Unable to parse {selector!r} as a query; check for syntax errors"
+                ) from None
+            matches = (
+                node for node in base_node.walk_ancestors() if match(selector_set, node)
+            )
         else:
-            query_selector = selector.__name__
-
-        try:
-            selector_set = parse_selectors(query_selector)
-        except TokenError:
-            raise InvalidQueryFormat(
-                f"Unable to parse {query_selector!r} as a query; check for syntax errors"
-            ) from None
-        for node in base_node.walk_ancestors():
-            if not match(selector_set, node):
-                continue
+            matches = (
+                node for node in base_node.walk_ancestors() if isinstance(node, selector)
+            )
+        for node in matches:
             if expect_type is not None and not isinstance(node, expect_type):
                 continue
             return node
