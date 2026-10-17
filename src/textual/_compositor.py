@@ -1556,12 +1556,12 @@ class Compositor:
                 return
             if inherited_layers is None and (order_names := widget._get_layer_order((widget,))) is not None:
                 inherited_layers = {name: index for index, name in enumerate(order_names)}
-            retains_source = widget.CACHE_SUBTREE_GEOMETRY
             if not demand.cache_subtree(
                     widget, self.max_subtree_geometry_entries, capturing_source):
                 yield from arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
                                complete, inherited_layers, source)  # noqa: F821 -- closure cleared after traversal
                 return
+            retains_source = widget.CACHE_SUBTREE_GEOMETRY
             resource_type = widget.subtree_geometry_resource()
             enclosing_complete = complete
             # The widget's geometry type chooses a complete or a placed
