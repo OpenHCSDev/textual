@@ -48,7 +48,7 @@ from textual._spatial_map import SpatialMap
 from textual.box_model import DEFAULT_LAYER
 from textual.geometry import NULL_OFFSET, NULL_SPACING, Offset, Region, Size, Spacing
 from textual.map_geometry import MapGeometry
-from textual.layout import WidgetPlacement
+from textual.layout import DockArrangeResult, WidgetPlacement
 from textual.strip import Strip, StripRenderable
 from textual.widget import Widget
 
@@ -67,6 +67,35 @@ class ReflowResult(NamedTuple):
 
 # Maps a widget on to its geometry (information that describes its position in the composition)
 CompositorMap: TypeAlias = "dict[Widget, MapGeometry]"
+
+
+class GeometryDemand(ABC):
+    """Which original placements this traversal needs, not another geometry store."""
+
+    cache_subtrees = True
+
+    @staticmethod
+    @abstractmethod
+    def select(arrangement: DockArrangeResult, region: Region,
+               retained: set[Widget], visible_only: bool): ...
+
+
+class ViewportGeometry(GeometryDemand):
+    @staticmethod
+    def select(arrangement, region, retained, visible_only):
+        return (arrangement.get_visible_placements(region, retain=retained)
+                if visible_only else arrangement.placements)
+
+
+class RequiredGeometry(GeometryDemand):
+    """Queries consume arranged positions, not whole retained paint captures."""
+
+    cache_subtrees = False
+
+    @staticmethod
+    def select(arrangement, region, retained, visible_only):
+        return [(ordinal, placement) for ordinal, placement in arrangement.placements
+                if placement.widget in retained]
 
 
 class SubtreeGeometryKey(NamedTuple):
@@ -1233,6 +1262,7 @@ class Compositor:
         self, root: Widget, size: Size, visible_only: bool = True,
         retain_geometry: Iterable[Widget] = (),
         *, root_geometry: MapGeometry | None = None,
+        demand: type[GeometryDemand] = ViewportGeometry,
     ) -> tuple[CompositorMap, set[Widget]]:
         """Arrange a widget's children based on its layout attribute.
 
@@ -1246,12 +1276,14 @@ class Compositor:
             Compositor map and set of widgets.
         """
         return run_steps(self._arrange_steps(
-            root, size, visible_only, retain_geometry, root_geometry=root_geometry))
+            root, size, visible_only, retain_geometry, root_geometry=root_geometry,
+            demand=demand))
 
     def _arrange_steps(
         self, root: Widget, size: Size, visible_only: bool = True,
         retain_geometry: Iterable[Widget] = (),
         *, root_geometry: MapGeometry | None = None, deadline: StepDeadline | None = None,
+        demand: type[GeometryDemand] = ViewportGeometry,
     ) -> Generator[None, None, tuple[CompositorMap, set[Widget]]]:
         """`_arrange_root` as steps: it pauses before a widget once `deadline` has passed.
 
@@ -1389,13 +1421,11 @@ class Compositor:
                         widget.set_reactive(Widget.scroll_target_y, new_scroll_y)
                         widget.vertical_scrollbar._reactive_position = new_scroll_y
 
-                    if visible_only and not complete:
-                        placements = arrange_result.get_visible_placements(
-                            sub_clip.region - child_region.offset + widget.scroll_offset,
-                            retain=retained_paths,
-                        )
-                    else:
-                        placements = arrange_result.placements
+                    placements = demand.select(
+                        arrange_result,
+                        sub_clip.region - child_region.offset + widget.scroll_offset,
+                        retained_paths, visible_only and not complete,
+                    )
                     total_region = total_region.union(arrange_result.total_region)
 
                     placement_scroll_offset = container_region.offset - widget.scroll_offset
@@ -1516,7 +1546,7 @@ class Compositor:
             if inherited_layers is None and (order_names := widget._get_layer_order((widget,))) is not None:
                 inherited_layers = {name: index for index, name in enumerate(order_names)}
             retains_source = widget.CACHE_SUBTREE_GEOMETRY
-            if (not self.max_subtree_geometry_entries
+            if (not demand.cache_subtrees or not self.max_subtree_geometry_entries
                     or not widget._is_mounted or not (retains_source or
                         (capturing_source and widget.is_container))):
                 yield from arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
@@ -1786,7 +1816,10 @@ class Compositor:
         placements. Keep the committed scene's readers and add the complete
         demand together, instead of reflowing for each missing position.
         Captured descendants retain their strict original arrangement boundary.
-        Returns whether a viewport arrangement was performed.
+        The native traversal places only the requested paths, including its
+        ordinary visibility, loading, cover and container rules. Missing DOM
+        placements remain missing; callers retain the normal NoWidget result.
+        Returns whether a path arrangement was performed.
         """
         if self.root is None or not self._full_map_invalidated or self._arranging:
             return False
@@ -1802,9 +1835,18 @@ class Compositor:
                 missing.append(widget)
         if not missing:
             return False
-        self.size_exposed(self.reflow_visible(
-            self.root, self.size, retain_geometry=(*self._layout_map, *missing),
-        ))
+        previous = self._layout_map
+        acquired, widgets = self._arrange_root(
+            self.root, self.size, retain_geometry=missing, demand=RequiredGeometry,
+        )
+        # Replace the ordinary publication; borrowed maps remain immutable.
+        # Only requested paths were arranged. Existing placements do not move.
+        scene = previous | acquired
+        self._visible_map = scene
+        self.widgets.update(widgets)
+        self._invalidate_render_projection()
+        self._damage_geometry(previous, scene, self.root)
+        self.size_exposed(scene.keys() - previous.keys())
         return True
 
     def size_exposed(self, exposed: Collection[Widget]) -> None:
