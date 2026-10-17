@@ -5,7 +5,7 @@ from textual.app import App
 from textual.containers import VerticalScroll
 from textual.geometry import Offset
 from textual.screen import Screen
-from textual.widgets import Static
+from textual.widgets import Checkbox, Static
 
 
 def pointer(app, kind, point, button):
@@ -47,6 +47,32 @@ async def positioned(app, pilot):
     edge = Offset(first.x, history.content_region.bottom - 1)
     assert app.screen.get_widget_and_offset_at(*edge)[0] is not None
     return history, first, last, edge
+
+
+async def test_primary_control_click_preserves_text_but_text_click_clears_it():
+    class ControlsApp(HistoryApp):
+        def compose(self):
+            yield from super().compose()
+            yield Checkbox("Thinking", value=True)
+
+    app = ControlsApp()
+    async with app.run_test(size=(40, 10)) as pilot:
+        _, first, last, _ = await positioned(app, pilot)
+        pointer(app, events.MouseDown, first, 1)
+        pointer(app, events.MouseMove, last, 1)
+        pointer(app, events.MouseUp, last, 1)
+        await pilot.pause()
+        selected = app.screen.get_selected_text()
+        assert selected
+        checkbox = app.query_one(Checkbox)
+        assert await pilot.click(checkbox)
+        assert not checkbox.value
+        assert app.screen.get_selected_text() == selected
+        assert await pilot.click(checkbox)
+        assert checkbox.value
+        assert app.screen.get_selected_text() == selected
+        assert await pilot.click(app.query_one("#row-22"))
+        assert app.screen.get_selected_text() is None
 
 
 async def test_secondary_edge_drag_does_not_acquire_selection_or_auto_scroll():
