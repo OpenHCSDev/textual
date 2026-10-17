@@ -21,7 +21,8 @@ from textual.css._error_tools import friendly_list
 from textual.geometry import Size
 from textual.message import Message
 from textual.reactive import reactive
-from textual.widget import PrimaryActivation, Widget
+from textual._activation import PrimaryActivation
+from textual.widget import Widget
 
 ButtonVariant = Literal["default", "primary", "success", "warning", "error"]
 """The names of the valid button variants.
