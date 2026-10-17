@@ -34,7 +34,6 @@ from textual.css._help_text import (
     border_property_help_text,
     color_property_help_text,
     fractional_property_help_text,
-    layout_property_help_text,
     offset_property_help_text,
     scalar_help_text,
     spacing_wrong_number_of_values_help_text,
@@ -626,37 +625,14 @@ class SplitProperty(StyleProperty[DockEdge]):
 class LayoutProperty(StyleProperty['Layout | None']):
     """Descriptor for getting and setting layout."""
 
-    def __set__(self, obj: StylesBase, layout: str | Layout | None):
-        """
-        Args:
-            obj: The Styles object.
-            layout: The layout to use. You can supply the name of the layout
-                or a `Layout` object.
-        """
-
-        from textual.layouts.factory import Layout  # Prevents circular import
-        from textual.layouts.factory import MissingLayout, get_layout
-
-        _rich_traceback_omit = True
+    def __set__(self, obj: StylesBase, layout: Layout | None):
         if layout is None:
             if obj.clear_rule("layout"):
                 obj.refresh(layout=True, children=True)
             return
-
-        if isinstance(layout, Layout):
-            layout = layout.name
-
-        if obj.layout is not None and obj.layout.name == layout:
+        if obj.layout is layout:
             return
-
-        try:
-            layout_object = get_layout(layout)
-        except MissingLayout as error:
-            raise StyleValueError(
-                str(error),
-                help_text=layout_property_help_text(self.name, context="inline"),
-            )
-        if obj.set_rule("layout", layout_object):
+        if obj.set_rule("layout", layout):
             obj.refresh(layout=True, children=True)
 
 

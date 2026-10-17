@@ -36,7 +36,7 @@ from typing import (
 )
 
 import rich.repr
-from rich.console import Console, ConsoleOptions, RenderableType, RenderResult
+from rich.console import Console, ConsoleOptions, RenderResult
 from rich.control import Control
 from rich.segment import Segment
 from rich.style import Style
@@ -170,9 +170,9 @@ class NestedSceneClip(SceneClip):
 
 
 class StepDeadline:
-    """When a resumable arrangement pauses: once `ns` (perf_counter_ns) has passed.
+    """When resumable compositor work pauses: once `ns` has passed.
 
-    Whoever drives the arrangement sets the deadline before each step.
+    Whoever drives the work sets this perf-counter deadline before each step.
     """
 
     __slots__ = ("ns",)
@@ -188,12 +188,12 @@ StepResult = TypeVar("StepResult")
 
 
 def run_steps(steps: Generator[None, None, StepResult]) -> StepResult:
-    """Run an arrangement given no deadline: it finishes without pausing."""
+    """Run compositor work without a deadline: it finishes without pausing."""
     try:
         next(steps)
     except StopIteration as finished:
         return finished.value
-    raise RuntimeError("An arrangement without a deadline paused")
+    raise RuntimeError("Compositor work without a deadline paused")
 
 
 class SubtreeReflow(NamedTuple):
@@ -1131,9 +1131,10 @@ class Compositor:
         return SubtreeReflow(hidden=hidden, shown=shown, placed=placed)
 
     def _pause_before_commit(self, deadline: StepDeadline | None) -> Generator[None, None, None]:
-        """Give committing an arrangement (and what follows it) a step of its own
-        once `deadline` has passed. Until the commit, readers see the previous
-        scene, and lazy readers do not arrange."""
+        """Pause before atomic geometry or paint work once `deadline` passes.
+
+        While paused, lazy readers retain the published scene without arranging.
+        """
         if deadline is not None and deadline.passed():
             previous_arranging, self._arranging = self._arranging, True
             try:
@@ -2072,17 +2073,18 @@ class Compositor:
         self,
         full: bool = False,
         simplify: bool = False,
-    ) -> RenderableType | None:
-        """Render an update renderable.
+        *,
+        deadline: StepDeadline | None = None,
+        dirty_widgets: Iterable[Widget] = (),
+    ) -> Generator[None, None, CompositorUpdate | None]:
+        """Return one bound full/partial update after a budget pause.
 
-        Args:
-            full: Perform a full update if `True`, otherwise a partial update.
-            simplify: Simplify segments.
-
-        Returns:
-            A renderable for the update, or `None` if no update was required.
+        Read pending widget damage after pausing. Composition never yields:
+        the returned cells and publication geometry belong to the same frame.
         """
 
+        yield from self._pause_before_commit(deadline)
+        self.update_widgets(dirty_widgets)
         screen_region = self.size.region
         if full:
             self._dirty_regions.add(screen_region)
@@ -2094,16 +2096,13 @@ class Compositor:
         self,
         size: Size,
         clear: bool = False,
-    ) -> RenderableType | None:
-        """Render an inline update.
-
-        Args:
-            size: Inline size.
-            clear: Also clear below the inline update (set when size decreases).
-
-        Returns:
-            A renderable.
-        """
+        *,
+        deadline: StepDeadline | None = None,
+        dirty_widgets: Iterable[Widget] = (),
+    ) -> Generator[None, None, InlineUpdate]:
+        """Pause, then compose inline cells atomically; clear below a shrinking size."""
+        yield from self._pause_before_commit(deadline)
+        self.update_widgets(dirty_widgets)
         arranged = self._layout_map
         strips = self.render_strips(size)
         update = InlineUpdate(strips, clear=clear)
