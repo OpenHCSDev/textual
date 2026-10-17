@@ -88,6 +88,13 @@ async def test_nested_auto_height_members_release_hidden_row_space():
         await pilot.pause()
         assert members.region.height == 6
         assert group.region.height == 7
+        rows[0].remove()
+        rows[1].remove()
+        await pilot.pause()
+        assert len(members.children) == 1
+        assert members.region.height == 2
+        assert group.region.height == 3
+        assert rows[2].region.y == header.region.bottom
 
 
 async def test_initial_constraint_and_relative_child_measurement():

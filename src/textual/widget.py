@@ -332,15 +332,13 @@ class Widget(DOMNode):
         self._clear_arrangement_cache()
 
     def _invalidate_layout(self) -> None:
-        """Retire measurements through the first fixed-size ancestor."""
+        """Retire ancestor measurements, including intrinsic fixed-box content."""
         self._invalidate_subtree_geometry()
         self._measurement_updated()
         for ancestor in self.walk_ancestors():
             if not isinstance(ancestor, Widget):
                 break
             ancestor._measurement_updated()
-            if not ancestor.geometry.auto_dimensions:
-                break
 
     DEFAULT_CSS = """
     Widget{
