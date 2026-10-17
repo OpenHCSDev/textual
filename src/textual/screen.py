@@ -34,7 +34,7 @@ import rich.repr
 from rich.console import RenderableType
 from rich.style import Style
 
-from textual import constants, errors, events, messages
+from textual import constants, errors, events, messages, on
 from textual._arrange import arrange
 from textual._auto_scroll import get_auto_scroll_regions
 from textual._callback import invoke
@@ -1731,6 +1731,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
             self._dirty_widgets.add(widget)
             self.check_idle()
 
+    @on(messages.Layout)
     async def _on_layout(self, message: messages.Layout) -> None:
         message.stop()
         message.prevent_default()
@@ -1739,13 +1740,12 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         widget: DOMNode = message.widget
         if widget._pruning or widget._closed:
             return
-        for ancestor in message.widget.walk_ancestors():
+        for ancestor in message.ancestors():
             if not isinstance(ancestor, Widget):
                 break
-            if ancestor not in self._layout_widgets:
-                self._layout_widgets[ancestor] = set()
-            if widget not in self._layout_widgets:
-                self._layout_widgets[ancestor].add(widget)
+            requesters = self._layout_widgets.setdefault(ancestor, set())
+            if widget not in requesters:
+                requesters.add(widget)
                 layout_required = True
             if not ancestor.geometry.auto_dimensions:
                 break
