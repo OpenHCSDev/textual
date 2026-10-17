@@ -32,6 +32,7 @@ class PaintState(NamedTuple):
     parent: PaintState | None
     background: Color
     foreground: Color
+    text_opacity: float
     text_style: Style
     opacity: float
     base_background: Color
@@ -53,7 +54,8 @@ class PaintState(NamedTuple):
     def component_style(self, node, *names: str, partial: bool = False) -> VisualStyle:
         """Apply component declarations to this render's already inherited paint."""
         background = TRANSPARENT if partial else self.background
-        foreground = Color(255, 255, 255, 0) if partial else self.foreground
+        foreground = (Color(255, 255, 255, 0) if partial
+                      else self.foreground.multiply_alpha(self.text_opacity))
         text_style = NULL_STYLE if partial else self.text_style
         opacity = 1.0 if partial else self.opacity
         for name in names:
@@ -120,6 +122,7 @@ class PaintState(NamedTuple):
             foreground = text_background.get_contrast_text(foreground.a)
         return cls(
             parent, background, foreground,
+            parent.text_opacity if local_foreground is None else layer.text_opacity,
             parent.text_style + layer.text_style, opacity,
             parent.layered_background,
             parent.layered_background + tinted.multiply_alpha(opacity),
@@ -127,6 +130,6 @@ class PaintState(NamedTuple):
 
 
 EMPTY_PAINT = PaintState(
-    None, Color(0, 0, 0, 0), Color(255, 255, 255, 0),
+    None, Color(0, 0, 0, 0), Color(255, 255, 255, 0), 1.0,
     NULL_STYLE, 1.0, Color(0, 0, 0, 0), Color(0, 0, 0, 0),
 )
