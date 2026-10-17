@@ -1852,7 +1852,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         if self.is_attached:
 
             if event.refresh_styles:
-                self.update_node_styles(animate=False)
+                self.app.stylesheet.update(self, animate=False)
             if self._size != size:
                 self._refresh_layout(size)
             self.refresh()
