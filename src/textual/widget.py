@@ -326,17 +326,13 @@ class Widget(DOMNode):
         return geometry
 
     def _measurement_updated(self) -> None:
-        """Retire measurements at their original source mutation."""
         self._layout_updates += 1
         self.clear_cached_dimensions()
         self._layout_cache.clear()
         self._clear_arrangement_cache()
 
     def _invalidate_layout(self) -> None:
-        """Retire authored layout inputs before requesting a frame.
-
-        Capture invalidation spans ancestors; measurement stops at fixed size.
-        """
+        """Retire measurements through the first fixed-size ancestor."""
         self._invalidate_subtree_geometry()
         self._measurement_updated()
         for ancestor in self.walk_ancestors():
@@ -4550,6 +4546,10 @@ class Widget(DOMNode):
 
     async def broker_event(self, event_name: str, event: events.Event) -> bool:
         return await self.app._broker_event(event_name, event, default_namespace=self)
+
+    def _display_changed(self) -> None:
+        self._invalidate_layout()
+        super()._display_changed()
 
     def _request_layout(self, required: bool = True) -> None:
         self._layout_required |= required
