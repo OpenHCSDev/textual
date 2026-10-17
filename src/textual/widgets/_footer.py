@@ -13,6 +13,7 @@ from textual.binding import Binding
 from textual.containers import HorizontalGroup, ScrollableContainer
 from textual.reactive import reactive
 from textual.widget import Widget
+from textual.layouts.horizontal import HorizontalLayout
 from textual.widgets import Label
 
 if TYPE_CHECKING:
@@ -155,9 +156,9 @@ class FooterLabel(Label):
 @rich.repr.auto
 class Footer(ScrollableContainer, can_focus=False, can_focus_children=False):
     ALLOW_SELECT = False
+    DEFAULT_LAYOUT = HorizontalLayout
     DEFAULT_CSS = """
     Footer {
-        layout: horizontal;        
         color: $footer-foreground;
         background: $footer-background;
         dock: bottom;
@@ -200,7 +201,6 @@ class Footer(ScrollableContainer, can_focus=False, can_focus_children=False):
         HorizontalGroup.binding-group {            
             width: auto;
             height: 1;
-            layout: horizontal;
         }
         KeyGroup.-compact {            
             FooterKey.-grouped {

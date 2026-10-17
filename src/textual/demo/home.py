@@ -141,7 +141,7 @@ with zero configuration. Even behind a firewall.
 """
 
 
-class StarCount(Vertical):
+class StarCount(Horizontal):
     """Widget to get and display GitHub star count."""
 
     DEFAULT_CSS = """
@@ -150,7 +150,6 @@ class StarCount(Vertical):
         height: 6;
         border-bottom: hkey $background;
         border-top: hkey $background;
-        layout: horizontal;
         background: $boost;
         padding: 0 1;
         color: $text-warning;

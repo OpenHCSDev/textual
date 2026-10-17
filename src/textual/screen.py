@@ -58,7 +58,8 @@ from textual.dom import DOMNode
 from textual.errors import NoWidget
 from textual.geometry import Offset, Region, Size
 from textual.keys import key_to_character
-from textual.layout import DockArrangeResult
+from textual.layout import DockArrangeResult, Layout
+from textual.layouts.vertical import VerticalLayout
 from textual.message_pump import MessagePump, MessagePumpClosed
 from textual.reactive import Reactive, var
 from textual.renderables.background_screen import BackgroundScreen
@@ -173,7 +174,6 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
 
     DEFAULT_CSS = """
     Screen {
-        layout: vertical;
         overflow-y: auto;
         background: $background;        
         
@@ -288,6 +288,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         """
         self._modal = False
         super().__init__(name=name, id=id, classes=classes)
+        self._maximized_layout = VerticalLayout()
         self._compositor = Compositor(max_subtree_geometry_entries=self.SUBTREE_GEOMETRY_CACHE_ENTRIES)
         self._dirty_widgets: set[Widget] = set()
         self._selection_update_pending = False
@@ -449,6 +450,11 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
     def refresh_bindings(self) -> None:
         """Call to request a refresh of bindings."""
         self.bindings_updated_signal.publish(self)
+
+    @property
+    def layout(self) -> Layout:
+        """A maximized screen arranges its one exposed source vertically."""
+        return self._maximized_layout if self.maximized is not None else super().layout
 
     def _watch_maximized(
         self, previously_maximized: Widget | None, maximized: Widget | None
@@ -2579,7 +2585,6 @@ class ModalScreen(Screen[ScreenResultType]):
 
     DEFAULT_CSS = """
     ModalScreen {
-        layout: vertical;
         overflow-y: auto;
         background: $background 60%;
         &:ansi {

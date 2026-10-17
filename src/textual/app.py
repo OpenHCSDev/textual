@@ -352,8 +352,7 @@ class App(Generic[ReturnType], DOMNode):
         }
 
         /* When a widget is maximized */
-        Screen.-maximized-view {                    
-            layout: vertical !important;
+        Screen.-maximized-view {
             hatch: right $panel;
             overflow-y: auto !important;
             align: center middle;
