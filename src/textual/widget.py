@@ -598,6 +598,11 @@ class Widget(DOMNode):
         return self._is_mounted
 
     @property
+    def is_leaving(self) -> bool:
+        """Whether native closing or pruning has begun, before detachment."""
+        return self._closing or self._pruning
+
+    @property
     def siblings(self) -> list[Widget]:
         """Get the widget's siblings (self is removed from the return list).
 
