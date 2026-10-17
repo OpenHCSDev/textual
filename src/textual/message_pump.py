@@ -76,9 +76,7 @@ _MessagePumpMetaSub = TypeVar("_MessagePumpMetaSub", bound="_MessagePumpMeta")
 
 
 class _MessagePumpMeta(type):
-    """Metaclass for message pump. This exists to populate a Message inner class of a Widget with the
-    parent classes' name.
-    """
+    """Build message pump classes and their declared dispatch routes."""
 
     def __new__(
         cls: Type[_MessagePumpMetaSub],
@@ -107,18 +105,6 @@ class _MessagePumpMeta(type):
             class_obj._compile_dispatch()
         return class_obj
 
-
-class MessagePump(metaclass=_MessagePumpMeta):
-    """Base class which supplies a message pump."""
-
-    _tree_revision = 0
-    _parent_revision = 0
-
-    def __init_subclass__(cls, **kwargs) -> None:
-        super().__init_subclass__(**kwargs)
-        cls._compile_dispatch()
-
-    @classmethod
     def _compile_dispatch(cls) -> None:
         """Declare C3 handler routes once; event delivery only binds their methods."""
         scopes = []
@@ -145,6 +131,17 @@ class MessagePump(metaclass=_MessagePumpMeta):
                         if decorated or name in named)
             for name in (*names, None)
         }
+
+
+class MessagePump(metaclass=_MessagePumpMeta):
+    """Base class which supplies a message pump."""
+
+    _tree_revision = 0
+    _parent_revision = 0
+
+    def __init_subclass__(cls, **kwargs) -> None:
+        super().__init_subclass__(**kwargs)
+        cls._compile_dispatch()
 
     def __init__(self, parent: MessagePump | None = None) -> None:
         self._parent = parent
