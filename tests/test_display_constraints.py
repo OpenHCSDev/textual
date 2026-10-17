@@ -1,3 +1,4 @@
+import asyncio
 from unittest.mock import patch
 
 from textual.app import App
@@ -95,6 +96,39 @@ async def test_nested_auto_height_members_release_hidden_row_space():
         assert members.region.height == 2
         assert group.region.height == 3
         assert rows[2].region.y == header.region.bottom
+
+
+async def test_nested_removal_reflows_before_all_teardown_finishes():
+    release = asyncio.Event()
+
+    class ReleasingRow(Static):
+        async def on_unmount(self):
+            await release.wait()
+
+    rows = [Static("first"), ReleasingRow("second"), Static("kept")]
+    for row in rows:
+        row.styles.height = 2
+    header = HorizontalGroup(Static("header"))
+    header.styles.height = 1
+    members = VerticalGroup(*rows)
+    members.styles.margin = (0, 0, 0, 2)
+    group = VerticalGroup(header, members)
+    app = App()
+    async with app.run_test() as pilot:
+        try:
+            await app.mount(VerticalScroll(group))
+            await pilot.pause()
+            assert group.region.height == 7
+            members.remove_children(rows[:2])
+            await pilot.pause()
+            assert rows[0] not in members.children
+            assert rows[1] in members.children
+            assert members.region.height == 2
+            assert group.region.height == 3
+            assert rows[2].region.y == header.region.bottom
+        finally:
+            release.set()
+            await pilot.pause()
 
 
 async def test_initial_constraint_and_relative_child_measurement():

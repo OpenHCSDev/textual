@@ -332,13 +332,15 @@ class Widget(DOMNode):
         self._clear_arrangement_cache()
 
     def _invalidate_layout(self) -> None:
-        """Retire ancestor measurements, including intrinsic fixed-box content."""
+        """Retire measurements through the first fixed-size ancestor."""
         self._invalidate_subtree_geometry()
         self._measurement_updated()
         for ancestor in self.walk_ancestors():
             if not isinstance(ancestor, Widget):
                 break
             ancestor._measurement_updated()
+            if not ancestor.geometry.auto_dimensions:
+                break
 
     DEFAULT_CSS = """
     Widget{
@@ -1259,7 +1261,7 @@ class Widget(DOMNode):
         # cached placements. Inactive parents may never arrange again.
         self._clear_arrangement_cache()
         self.layout.clear_cache()
-        self._invalidate_layout()
+        self.refresh(layout=True)
 
     def _get_virtual_dom(self) -> Iterable[Widget]:
         """Get widgets not part of the DOM.
