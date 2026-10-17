@@ -808,7 +808,7 @@ class GeometryReader(ABC):
         """
         if self._render_geometry is not None:
             root, geometry = self._render_geometry
-            # The original arrangement already admits its members, including
+            # The original arrangement already contains its members, including
             # cover and scrollbar resources. Only a missing query needs its
             # ancestry to distinguish an omitted descendant from another scene.
             placement = geometry.get(widget)
