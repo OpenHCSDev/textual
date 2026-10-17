@@ -16,8 +16,12 @@ class PaintLayer:
     text_opacity: float
     layer_opacity: float
     auto_color: bool
-    paint_key: int | None
-    paint_cacheable: bool
+    paint_cacheable = False
+
+    @property
+    def paint_key(self) -> object:
+        """Local source identity; epoch stability is a separate declaration."""
+        return tuple(getattr(self, name) for name in PaintLayer.__annotations__)
 
     @property
     def background_color(self) -> Color:
@@ -27,7 +31,7 @@ class PaintLayer:
 
 class PaintState(NamedTuple):
     parent: PaintState | None
-    style_key: int | None
+    style_key: object
     background: Color
     foreground: Color
     text_style: Style
@@ -48,7 +52,7 @@ class PaintState(NamedTuple):
         return self[2:8] == other[2:8]
 
     @classmethod
-    def resolve(cls, parent: PaintState, layer: PaintLayer) -> PaintState:
+    def resolve(cls, parent: PaintState, layer: PaintLayer, source_key: object) -> PaintState:
         """Apply one declaration layer, preserving native alpha order."""
         opacity = parent.opacity * layer.layer_opacity
         local_background = layer.paint_background
@@ -62,7 +66,7 @@ class PaintState(NamedTuple):
         if layer.auto_color:
             foreground = text_background.get_contrast_text(foreground.a)
         return cls(
-            parent, layer.paint_key, background, foreground,
+            parent, source_key, background, foreground,
             parent.text_style + layer.text_style, opacity,
             parent.layered_background,
             parent.layered_background + tinted.multiply_alpha(opacity),

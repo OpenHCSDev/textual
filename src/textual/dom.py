@@ -1399,20 +1399,22 @@ class DOMNode(MessagePump):
             # style mutations, including when inherited by a native child.
             state = EMPTY_PAINT._replace(cacheable=False)
             for node in reversed(self.ancestors_with_self):
-                state = PaintState.resolve(state, node.paint_layer)
+                layer = node.paint_layer
+                state = PaintState.resolve(state, layer, (layer.paint_key, layer.paint_cacheable))
             return state
-        epoch = (Styles._revision, MessagePump._tree_revision)
         layer = self.paint_layer
+        key = layer.paint_key, layer.paint_cacheable
+        epoch = (Styles._revision, MessagePump._tree_revision, key)
         state = self.__dict__.get("_paint_state")
-        reusable = state is not None and layer.paint_cacheable
+        reusable = state is not None and key[0] is not None
         if reusable and state.cacheable and self.__dict__.get("_paint_epoch") == epoch:
             return state
         parent = self._parent
         inherited = (
             parent._resolved_paint_state() if isinstance(parent, DOMNode) else EMPTY_PAINT
         )
-        if not (reusable and state.parent is inherited and state.style_key == layer.paint_key):
-            state = self._paint_state = PaintState.resolve(inherited, layer)
+        if not (reusable and state.parent is inherited and state.style_key == key):
+            state = self._paint_state = PaintState.resolve(inherited, layer, key)
         self._paint_epoch = epoch
         return state
 
