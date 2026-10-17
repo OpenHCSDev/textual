@@ -69,7 +69,7 @@ async def test_style_publication_preserves_source_and_content_lifetimes():
         assert app.screen._geometry_revision > geometry
         await pilot.pause()
         assert widget.size.height == 3
-        assert "three" in widget.render_line(2).text
+        assert "three" in widget.render_line(2, widget._resolved_paint_state()).text
 
 
 async def test_app_style_publication_keeps_current_screen_layout():
@@ -222,7 +222,7 @@ async def test_offset_only_cohort_moves_native_scene_without_repainting_content(
         widget.set_styles(width=12, height=1)
         await app.mount(widget)
         await pilot.pause()
-        row = widget.render_line(0)
+        row = widget.render_line(0, widget._resolved_paint_state())
         cache = widget._render_cache
         before = widget.region
         widget.set_styles(offset=(3, 2))
@@ -230,7 +230,7 @@ async def test_offset_only_cohort_moves_native_scene_without_repainting_content(
         assert widget._render_cache is cache
         await pilot.pause()
         assert widget.region == before.translate((3, 2))
-        assert widget.render_line(0) is row
+        assert widget.render_line(0, widget._resolved_paint_state()) is row
         assert widget._render_cache is cache
         compositor = app.screen._compositor
         assert compositor.get_widget_at(widget.region.x, widget.region.y)[0] is widget

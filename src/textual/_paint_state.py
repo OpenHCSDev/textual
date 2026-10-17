@@ -144,8 +144,8 @@ class PaintNode:
 
     def _update_paint_state(self) -> None:
         parent = self._parent
-        inherited = EMPTY_PAINT if parent is None else parent._paint_state
-        state = PaintState.resolve(inherited, self.paint_layer)
+        state = (EMPTY_PAINT if parent is None
+                 else PaintState.resolve(parent._paint_state, self.paint_layer))
         if state != self._paint_state:
             self._paint_state = state
             for child in tuple(self._child_pumps):
