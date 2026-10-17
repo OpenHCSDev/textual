@@ -1739,13 +1739,12 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         widget: DOMNode = message.widget
         if widget._pruning or widget._closed:
             return
-        for ancestor in message.widget.walk_ancestors():
+        for ancestor in message.ancestors():
             if not isinstance(ancestor, Widget):
                 break
-            if ancestor not in self._layout_widgets:
-                self._layout_widgets[ancestor] = set()
-            if widget not in self._layout_widgets:
-                self._layout_widgets[ancestor].add(widget)
+            requesters = self._layout_widgets.setdefault(ancestor, set())
+            if widget not in requesters:
+                requesters.add(widget)
                 layout_required = True
             if not ancestor.geometry.auto_dimensions:
                 break

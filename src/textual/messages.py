@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import TYPE_CHECKING
 
 import rich.repr
@@ -9,6 +10,7 @@ from textual.geometry import Region
 from textual.message import Message
 
 if TYPE_CHECKING:
+    from textual.dom import DOMNode
     from textual.widget import Widget
 
 
@@ -56,10 +58,21 @@ class Layout(Message, verbose=True):
         super().__init__()
         self.widget = widget
 
+    def ancestors(self) -> Iterator[DOMNode]:
+        """A changed outer box must be placed by its parent."""
+        return self.widget.walk_ancestors()
+
     def can_replace(self, message: Message) -> bool:
-        # Screen retains requests by source while a subtree borrows committed
-        # geometry. Another widget's request cannot consume that source.
-        return isinstance(message, Layout) and self.widget is message.widget
+        # Preserve both the source and the requested placement scope.
+        return (isinstance(message, Layout) and self.widget is message.widget
+                and next(self.ancestors(), None) is next(message.ancestors(), None))
+
+
+class LayoutChildren(Layout, verbose=True):
+    """Rearrange content, propagating outward only through automatic sizes."""
+
+    def ancestors(self) -> Iterator[DOMNode]:
+        return self.widget.walk_ancestors(with_self=True)
 
 
 @rich.repr.auto
