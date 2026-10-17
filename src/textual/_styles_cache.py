@@ -196,11 +196,11 @@ class StylesCache:
             title = border_label(
                 widget._border_title, base_background, styles.auto_border_title_color,
                 styles.border_title_color, styles.border_title_background,
-                styles.border_title_style) if widget._border_title is not None else None
+                styles.border_title_style)
             subtitle = border_label(
                 widget._border_subtitle, base_background, styles.auto_border_subtitle_color,
                 styles.border_subtitle_color, styles.border_subtitle_background,
-                styles.border_subtitle_style) if widget._border_subtitle is not None else None
+                styles.border_subtitle_style)
             ansi_theme, native_ansi = app.ansi_theme, app.native_ansi_color
             return lambda y: self.render_line(
                 paint, y, size, content_size, padding, base_background, background,

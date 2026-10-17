@@ -35,7 +35,7 @@ from textual._compat import cached_property
 from textual._context import NoActiveAppError, active_app, active_message_pump
 from textual._context import message_hook as message_hook_context_var
 from textual._context import prevent_message_types_stack
-from textual._on import OnNoWidget
+from textual._on import MessageHandler, OnNoWidget
 from textual._queue import Queue
 from textual._time import time
 from textual.constants import SLOW_THRESHOLD
@@ -111,15 +111,15 @@ class _MessagePumpMeta(type):
             declarations = owner.__dict__
             decorated = {}
             for value in declarations.values():
-                if callable(value):
-                    for message_type, selectors in getattr(value, "_textual_on", ()):
+                if isinstance(value, MessageHandler):
+                    for message_type, selectors in value.declarations:
                         decorated.setdefault(message_type, []).append((value, selectors))
             declared_names = {name.removeprefix("_") for name in declarations
                               if name.startswith(("on_", "_on_"))}
             named = {}
             for name in declared_names:
                 method = declarations.get("_" + name) or declarations.get(name)
-                if method is not None and not getattr(method, "_textual_on", None):
+                if method is not None and not isinstance(method, MessageHandler):
                     named[name] = method
             scopes.append((owner, decorated, named))
         cls._dispatch_declarations = tuple(scopes)
