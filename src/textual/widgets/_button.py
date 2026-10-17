@@ -360,7 +360,7 @@ class Button(PrimaryActivation, Widget, can_focus=True):
         super().__init__(name=name, id=id, classes=classes, disabled=disabled)
 
         if label is None:
-            label = self.css_identifier_styled
+            label = ""
 
         self.variant = variant
         self.flat = flat
