@@ -740,7 +740,10 @@ class App(Generic[ReturnType], DOMNode):
 
         # Note that the theme must be set *before* self.get_css_variables() is called
         # to ensure that the variables are retrieved from the currently active theme.
-        self.stylesheet = Stylesheet(variables=self.get_css_variables())
+        self.stylesheet = Stylesheet(
+            variables=self.get_css_variables(),
+            screens=lambda: (screen for stack in self._screen_stacks.values() for screen in stack),
+        )
 
         css_path = css_path or self.CSS_PATH
         css_paths = [
@@ -869,9 +872,6 @@ class App(Generic[ReturnType], DOMNode):
         """A pending resize event, sent on idle."""
 
         self._size: Size | None = None
-
-        self._css_update_count: int = 0
-        """Incremented when CSS is invalidated."""
 
         self.clipboard_content = ClipboardContent("")
         """Contents of local clipboard."""
@@ -1559,24 +1559,17 @@ class App(Generic[ReturnType], DOMNode):
         self.update_classes(classes, update=False)
 
         self._refresh_truecolor_filter(self.ansi_theme)
-        self._invalidate_css()
         self.call_next(partial(self.refresh_css, animate=False))
         self.call_next(self.theme_changed_signal.publish, theme)
-
-    def _invalidate_css(self) -> None:
-        """Invalidate CSS, so it will be refreshed."""
-        self._css_update_count += 1
 
     def watch_ansi_theme_dark(self, theme: TerminalTheme) -> None:
         if self.current_theme.dark:
             self._refresh_truecolor_filter(theme)
-            self._invalidate_css()
             self.call_next(self.refresh_css)
 
     def watch_ansi_theme_light(self, theme: TerminalTheme) -> None:
         if not self.current_theme.dark:
             self._refresh_truecolor_filter(theme)
-            self._invalidate_css()
             self.call_next(self.refresh_css)
 
     @property
@@ -2567,9 +2560,11 @@ class App(Generic[ReturnType], DOMNode):
             animate: Enable animation?
         """
         if isinstance(node, App):
+            self.stylesheet.invalidate({""})
             if self._screen_stack:
                 for screen in self._drawn_screens:
                     screen.update_node_styles(animate=animate)
+                    screen._pending_styles.clear()
         else:
             descendants = node.walk_children(with_self=True)
             self.stylesheet.update_nodes(descendants, animate=animate)
@@ -2662,9 +2657,6 @@ class App(Generic[ReturnType], DOMNode):
             screen, await_mount = self._get_screen(new_screen)
             stack.append(screen)
             self._load_screen_css(screen)
-            if screen._css_update_count != self._css_update_count:
-                self.refresh_css()
-
             screen.post_message(events.ScreenResume())
         else:
             # Mode is not defined
@@ -2711,9 +2703,6 @@ class App(Generic[ReturnType], DOMNode):
             await_mount = AwaitMount(self.screen, [])
 
         self._current_mode = mode
-        if self.screen._css_update_count != self._css_update_count:
-            self.refresh_css()
-
         self.mode_change_signal.publish(mode)
         self.screen_change_signal.publish(self.screen)
 
@@ -3890,7 +3879,6 @@ class App(Generic[ReturnType], DOMNode):
         try:
             if self.screen.is_mounted:
                 self.screen._refresh_layout(self.size)
-                self.screen._css_update_count = self._css_update_count
         except ScreenError:
             pass
         # The other screens in the stack will need to know about some style
@@ -3899,7 +3887,6 @@ class App(Generic[ReturnType], DOMNode):
         for screen in self.screen_stack:
             if screen != self.screen:
                 stylesheet.update(screen, animate=animate)
-                screen._css_update_count = self._css_update_count
 
     def _display(self, screen: Screen, renderable: RenderableType | None) -> None:
         """Display a renderable within a sync.

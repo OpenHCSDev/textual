@@ -9,6 +9,7 @@ The `Screen` class is a special widget which represents the content in the termi
 from __future__ import annotations
 
 import asyncio
+from weakref import WeakSet
 from contextlib import contextmanager
 from functools import partial
 from operator import attrgetter
@@ -323,8 +324,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         )
         """A signal published when text selection has started."""
 
-        self._css_update_count = -1
-        """Track updates to CSS."""
+        self._pending_styles: WeakSet[DOMNode] = WeakSet()
 
         self._layout_widgets: dict[DOMNode, set[Widget]] = {}
         """Widgets whose layout may have changed."""
@@ -1852,7 +1852,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         if self.is_attached:
 
             if event.refresh_styles:
-                self.update_node_styles(animate=False)
+                self.app.stylesheet.update(self, animate=False, nodes=self._pending_styles)
             if self._size != size:
                 self._refresh_layout(size)
             self.refresh()
