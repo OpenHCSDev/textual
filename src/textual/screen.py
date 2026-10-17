@@ -324,8 +324,6 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         )
         """A signal published when text selection has started."""
 
-        self._css_update_count = -1
-        """Track updates to CSS."""
         self._pending_styles: WeakSet[DOMNode] = WeakSet()
 
         self._layout_widgets: dict[DOMNode, set[Widget]] = {}
@@ -1854,9 +1852,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         if self.is_attached:
 
             if event.refresh_styles:
-                pending = set(self._pending_styles)
-                self.app.stylesheet.update(self, animate=False, nodes=pending)
-                self._pending_styles.difference_update(pending)
+                self.app.stylesheet.update(self, animate=False, nodes=self._pending_styles)
             if self._size != size:
                 self._refresh_layout(size)
             self.refresh()
