@@ -919,7 +919,7 @@ class MessagePump(metaclass=_MessagePumpMeta):
         """Bind declared routes, retaining live selector and default-action checks."""
         methods_dispatched: set[Callable] | None = None
         declarations = self._dispatch_declarations
-        for cls, decorated_handlers, method in declarations.get(method_name, declarations[None]):
+        for cls, decorated_handlers, conventional in declarations.get(method_name, declarations[None]):
             if message._no_default_action:
                 break
             if decorated_handlers:
@@ -956,8 +956,8 @@ class MessagePump(metaclass=_MessagePumpMeta):
                                 yield cls, method.__get__(self, cls)
                                 methods_dispatched.add(method)
 
-            if method is not None:
-                yield cls, method.__get__(self, cls)
+            if conventional is not None:
+                yield cls, conventional.__get__(self, cls)
 
     async def on_event(self, event: events.Event) -> None:
         """Called to process an event.
