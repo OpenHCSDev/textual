@@ -4087,7 +4087,7 @@ class Widget(DOMNode):
         size = self.size
         width, height = size
         visual = self._render()
-        strips = Visual.to_strips(self, visual, width, height, paint)
+        strips = Visual.to_strips(self, visual, width, height, paint, paint.visual_style)
         self._render_cache = _RenderCache(size, strips)
         self._dirty_regions.clear()
 

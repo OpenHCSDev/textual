@@ -211,6 +211,7 @@ class Visual(ABC):
         width: int,
         height: int | None,
         paint: PaintState,
+        style: Style,
         *,
         apply_selection: bool = True,
         pad: bool = False,
@@ -223,7 +224,8 @@ class Visual(ABC):
             visual: A Visual instance.
             width: Desired width (in cells).
             height: Desired height (in lines) or `None` for no limit.
-            style: A (Visual) Style instance.
+            paint: This widget render's resolved paint.
+            style: Paint-derived base or component visual style.
             apply_selection: Automatically apply selection styles?
             pad: Pad to desired width?
             post_style: Optional Style to apply to strips after rendering.
@@ -232,7 +234,6 @@ class Visual(ABC):
             A list of Strips containing the render.
         """
 
-        style = paint.visual_style
         link_style = (paint.link_style(widget.styles)
                       if widget.auto_links and not widget.is_container and not widget.screen._selecting
                       else None)

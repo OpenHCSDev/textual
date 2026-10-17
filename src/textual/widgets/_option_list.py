@@ -777,7 +777,7 @@ class OptionList(ScrollView, can_focus=True):
         option = self.get_option_at_index(index)
         return self._get_visual(option)
 
-    def _get_option_render(self, option: Option, style: Style) -> list[Strip]:
+    def _get_option_render(self, option: Option, style: Style, paint: PaintState) -> list[Strip]:
         """Get rendered option with a given style.
 
         Args:
@@ -795,14 +795,14 @@ class OptionList(ScrollView, can_focus=True):
             visual = self._get_visual(option)
             if padding:
                 visual = Padding(visual, padding)
-            strips = visual.to_strips(self, visual, width, None, style)
+            strips = visual.to_strips(self, visual, width, None, paint, style)
             meta = {"option": self._option_to_index[option]}
             strips = [
                 strip.extend_cell_length(width, style.rich_style).apply_meta(meta)
                 for strip in strips
             ]
             if option._divider:
-                style = self.get_visual_style("option-list--separator")
+                style = paint.component_style(self, "option-list--separator")
                 rule_segments = [Segment("─" * width, style.rich_style)]
                 strips.append(Strip(rule_segments, width))
             self._option_render_cache[cache_key] = strips
@@ -872,12 +872,6 @@ class OptionList(ScrollView, can_focus=True):
         )
         return height
 
-    def _get_line(self, style: Style, y: int) -> Strip:
-        index, line_offset = self._lines[y]
-        option = self.get_option_at_index(index)
-        strips = self._get_option_render(option, style)
-        return strips[line_offset]
-
     def render_lines(self, crop: Region) -> list[Strip]:
         self._update_lines()
         return super().render_lines(crop)
@@ -902,7 +896,7 @@ class OptionList(ScrollView, can_focus=True):
 
         style = (paint.component_style(self, "option-list--option", component_class)
                  if component_class else base_style)
-        strips = self._get_option_render(option, style)
+        strips = self._get_option_render(option, style, paint)
         try:
             strip = strips[line_offset]
         except IndexError:
