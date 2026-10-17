@@ -1256,7 +1256,7 @@ class Widget(DOMNode):
         # cached placements. Inactive parents may never arrange again.
         self._clear_arrangement_cache()
         self.layout.clear_cache()
-        self._invalidate_layout()
+        self.refresh(layout=True)
 
     def _get_virtual_dom(self) -> Iterable[Widget]:
         """Get widgets not part of the DOM.
