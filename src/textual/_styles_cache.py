@@ -10,7 +10,6 @@ from rich.style import Style as RichStyle
 from rich.terminal_theme import TerminalTheme
 
 from textual import log
-from textual._ansi_theme import DEFAULT_TERMINAL_THEME
 from textual._border import get_box, render_border_label, render_row
 from textual._opacity import _apply_opacity
 from textual._paint_state import PaintState
@@ -170,46 +169,44 @@ class StylesCache:
             widget.refresh()
 
     def render_widget(self, widget: Widget, crop: Region) -> list[Strip]:
-        """Render the content for a widget.
-
-        Args:
-            widget: A widget.
-            region: A region of the widget to render.
-
-        Returns:
-            Rendered lines.
-        """
-        self._simple_strip = None
-
+        """Reuse retained lines; prepare their painter only on the first miss."""
         state = widget._resolved_paint_state()
-        base_background, background = state.base_background, state.layered_background
-        app, styles = widget.app, widget.styles
         paint = widget.frame_paint
         key = self.widget_paint_key(widget, paint, state)
         if key != self._paint_key:
             widget._release_paint()
             self._paint_key = key
-        strips = self.render(
-            paint,
-            widget.region.size,
-            base_background,
-            background,
-            widget.render_line,
-            widget.get_line_filters(),
-            border_label(widget._border_title, base_background, styles.auto_border_title_color,
-                         styles.border_title_color, styles.border_title_background,
-                         styles.border_title_style) if widget._border_title is not None else None,
-            border_label(widget._border_subtitle, base_background,
-                         styles.auto_border_subtitle_color, styles.border_subtitle_color,
-                         styles.border_subtitle_background, styles.border_subtitle_style)
-                         if widget._border_subtitle is not None else None,
-            content_size=widget.content_region.size,
-            padding=widget.geometry.padding,
-            crop=crop,
-            opacity=state.opacity,
-            ansi_theme=app.ansi_theme,
-            native_ansi=app.native_ansi_color,
-        )
+        size = widget.region.size
+        background = state.layered_background
+
+        def prepare() -> RenderLineCallback:
+            self._simple_strip = None
+            base_background = state.base_background
+            content_size = widget.content_region.size
+            padding = widget.geometry.padding
+            render_content = widget.render_line
+            opacity = state.opacity
+            if (paint.plain and opacity == 1.0 and not any(padding)
+                    and content_size == size):
+                inner = self.get_inner_outer(base_background, background)[0].rich_style
+                return lambda y: (
+                    render_content(y) if y < content_size.height else Strip.blank(size.width, inner)
+                ).adjust_cell_length(size.width, inner)
+            app, styles = widget.app, widget.styles
+            title = border_label(
+                widget._border_title, base_background, styles.auto_border_title_color,
+                styles.border_title_color, styles.border_title_background,
+                styles.border_title_style) if widget._border_title is not None else None
+            subtitle = border_label(
+                widget._border_subtitle, base_background, styles.auto_border_subtitle_color,
+                styles.border_subtitle_color, styles.border_subtitle_background,
+                styles.border_subtitle_style) if widget._border_subtitle is not None else None
+            ansi_theme, native_ansi = app.ansi_theme, app.native_ansi_color
+            return lambda y: self.render_line(
+                paint, y, size, content_size, padding, base_background, background,
+                render_content, title, subtitle, opacity, ansi_theme, native_ansi)
+
+        strips = self.render(size, prepare, widget.get_line_filters(), background, crop)
 
         if widget.auto_links:
             hover_style = widget.hover_style
@@ -229,90 +226,28 @@ class StylesCache:
 
     def render(
         self,
-        painted: FramePaint,
         size: Size,
-        base_background: Color,
-        background: Color,
-        render_content_line: RenderLineCallback,
+        prepare: Callable[[], RenderLineCallback],
         filters: Sequence[LineFilter],
-        border_title: tuple[Content, Color, Color, Style] | None,
-        border_subtitle: tuple[Content, Color, Color, Style] | None,
-        *,
-        padding: Spacing,
-        content_size: Size | None = None,
+        background: Color,
         crop: Region | None = None,
-        opacity: float = 1.0,
-        ansi_theme: TerminalTheme = DEFAULT_TERMINAL_THEME,
-        native_ansi: bool = False,
     ) -> list[Strip]:
-        """Render a widget content plus CSS styles.
-
-        Args:
-            painted: The frame paint inputs.
-            size: Size of widget.
-            base_background: Background color beneath widget.
-            background: Background color of widget.
-            render_content_line: Callback to render content line.
-            console: The console in use by the app.
-            border_title: Optional tuple of (title, color, background, style).
-            border_subtitle: Optional tuple of (subtitle, color, background, style).
-            content_size: Size of content or None to assume full size.
-            padding: Padding declared by the widget's geometry.
-            crop: Region to crop to.
-            filters: Additional post-processing for the segments.
-            opacity: Widget opacity.
-            ansi_theme: Theme for ANSI colors.
-            native_ansi: Use native ANSI colors?
-
-        Returns:
-            Rendered lines.
-        """
-        if content_size is None:
-            content_size = size
+        """Render missing lines with one lazily prepared painter, then filter hits too."""
         if crop is None:
             crop = size.region
-
         width, _height = size
         if size != self._size:
             self.clear()
             self._size = size
         strips: list[Strip] = []
         add_strip = strips.append
-
         is_dirty = self._dirty_lines.__contains__
-        render_line = self.render_line
-        # A plain widget's line is its content line at the widget's width.
-        # Returning that strip itself (rather than a copy of its segments)
-        # keeps what it has already computed, such as its terminal sequence.
-        plain = (painted.plain and opacity == 1.0 and not any(padding)
-                 and content_size == size)
-        if plain:
-            inner_style = self.get_inner_outer(base_background, background)[0].rich_style
-            content_height = content_size.height
-
+        render_line = None
         for y in crop.line_range:
             if is_dirty(y) or y not in self._cache:
-                if plain:
-                    strip = (
-                        render_content_line(y) if y < content_height
-                        else Strip.blank(width, inner_style)
-                    ).adjust_cell_length(width, inner_style)
-                else:
-                    strip = render_line(
-                        painted,
-                        y,
-                        size,
-                        content_size,
-                        padding,
-                        base_background,
-                        background,
-                        render_content_line,
-                        border_title,
-                        border_subtitle,
-                        opacity,
-                        ansi_theme,
-                        native_ansi,
-                    )
+                if render_line is None:
+                    render_line = prepare()
+                strip = render_line(y)
                 self._cache[y] = strip
             else:
                 strip = self._cache[y]
