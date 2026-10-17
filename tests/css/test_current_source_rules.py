@@ -102,22 +102,27 @@ async def test_scoped_updates_cover_each_selector_and_skip_unrelated_roots():
         await pilot.pause()
         sheet = app.stylesheet
         sheet.update(outside)
+        app.screen._pending_styles.clear()
         outside_color = outside.children[0].styles.color
         location = ("scoped-update", "")
         sheet.add_source(".one, .two { color: red; }", read_from=location, scope="Scoped")
         sheet.parse()
+        pending = set(app.screen._pending_styles)
+        assert outside not in pending and outside.children[0] not in pending
         with patch.object(sheet, "apply", wraps=sheet.apply) as apply:
-            sheet.update(outside)
+            sheet.update(outside, nodes=pending)
             apply.assert_not_called()
-        sheet.update(inside)
+        sheet.update(app.screen, nodes=pending)
+        app.screen._pending_styles.difference_update(pending)
         assert all(child.styles.color == Color.parse("red") for child in inside.children)
         assert outside.children[0].styles.color == outside_color
         with patch.object(sheet, "apply", wraps=sheet.apply) as apply:
-            sheet.update(inside)
+            sheet.reparse()
+            sheet.update(app.screen, nodes=app.screen._pending_styles)
             apply.assert_not_called()
         sheet.source.pop(location)
         sheet.parse()
-        sheet.update(inside)
+        sheet.update(app.screen, nodes=app.screen._pending_styles)
         assert all(child.styles.color != Color.parse("red") for child in inside.children)
 
 

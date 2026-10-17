@@ -3,10 +3,10 @@ from __future__ import annotations
 import os
 from collections import defaultdict
 from dataclasses import dataclass
-from itertools import chain
+from itertools import chain, zip_longest
 from operator import itemgetter
 from pathlib import Path, PurePath
-from typing import Final, Iterable, NamedTuple, Sequence, cast
+from typing import TYPE_CHECKING, Callable, Collection, Final, Iterable, NamedTuple, Sequence, cast
 from weakref import proxy
 
 import rich.repr
@@ -28,6 +28,9 @@ from textual.dom import DOMNode
 from textual.markup import parse_style_tokens
 from textual.style import Style
 from textual.widget import Widget
+
+if TYPE_CHECKING:
+    from textual.screen import Screen
 
 _DEFAULT_STYLES = Styles()
 
@@ -199,7 +202,9 @@ class CandidateRules:
 class Stylesheet:
     """A Stylesheet generated from Textual CSS."""
 
-    def __init__(self, *, variables: dict[str, str] | None = None) -> None:
+    def __init__(self, *, variables: dict[str, str] | None = None,
+                 screens: Callable[[], Iterable[Screen]] = tuple) -> None:
+        self._screens = screens
         self._rules: list[RuleSet] = []
         self._rules_map: dict[str, list[RuleSet]] | None = None
         self._variables = variables or {}
@@ -270,7 +275,7 @@ class Stylesheet:
         Returns:
             New stylesheet.
         """
-        stylesheet = Stylesheet(variables=self._variables.copy())
+        stylesheet = Stylesheet(variables=self._variables.copy(), screens=self._screens)
         stylesheet.source = self.source.copy()
         return stylesheet
 
@@ -281,6 +286,7 @@ class Stylesheet:
             variables: A mapping of name to variable.
         """
         self._variables = variables
+        self.invalidate({""})
         self.__variable_tokens = None
         self._invalid_css = set()
         self._parse_cache.clear()
@@ -478,7 +484,7 @@ class Stylesheet:
         # Retain only the current declaration for each registered source. Unlike
         # the small historical parse LRU, this cannot thrash when an app mounts
         # more widget types than the LRU can hold, nor accumulate edited versions.
-        self._source_rules = source_rules
+        self._publish_sources(source_rules)
         self._rules = rules
         self._ids_in_rules = {
             selector.name for rule in rules for group in rule.selector_set
@@ -524,12 +530,37 @@ class Stylesheet:
             raise
         else:
             self._rules = stylesheet.rules
-            self._source_rules = stylesheet._source_rules
+            self._publish_sources(stylesheet._source_rules)
             self._ids_in_rules = stylesheet._ids_in_rules
             self._classes_in_rules = stylesheet._classes_in_rules
             self._rules_map = None
             self.source = stylesheet.source
             self._require_parse = False
+
+    def _publish_sources(self, sources: dict[CSSLocation, tuple[CssSource, list[RuleSet]]]) -> None:
+        """Invalidate changed scopes once, including removed and reordered sources."""
+        scopes = set()
+        for before, after in zip_longest(self._source_rules.items(), sources.items()):
+            if (before is None or after is None or
+                    (before[0], before[1][0]) != (after[0], after[1][0])):
+                scopes.update(item[1][0].scope for item in (before, after) if item is not None)
+        self._source_rules = sources
+        self.invalidate(scopes)
+
+    def invalidate(self, scopes: set[str]) -> None:
+        """Queue affected nodes on their screens at the time a source changes."""
+        if not scopes:
+            return
+        for screen in self._screens():
+            ancestors = screen.css_path_nodes[:-1]
+            reached = "" in scopes or any(scopes.intersection(node._css_types) for node in ancestors)
+            stack = [(screen, reached)]
+            while stack:
+                node, reached = stack.pop()
+                reached = reached or bool(scopes.intersection(node._css_types))
+                if reached:
+                    screen._pending_styles.add(node)
+                stack.extend((child, reached) for child in node.children)
 
     # pseudo classes which iterate over multiple nodes
     # These shouldn't be used in a cache key
@@ -928,18 +959,24 @@ class Stylesheet:
         self._local_display_classes[class_name] = mentioned
         return mentioned
 
-    def update(self, root: DOMNode, animate: bool = False) -> None:
+    def update(self, root: DOMNode, animate: bool = False, *, nodes: Collection[DOMNode] | None = None) -> None:
         """Update styles on node and its children.
 
         Args:
             root: Root note to update.
             animate: Enable CSS animation.
+            nodes: Pending nodes to update, or all descendants for an explicit reload.
         """
 
         # A whole stylesheet/theme reload also changes inputs outside matched
         # declarations (highlighting and component renderers). Keep that explicit
         # refresh distinct from ordinary class/pseudo-class rematching.
-        self.update_nodes(root.walk_children(with_self=True), animate=animate, refresh=True)
+        if nodes is not None and not nodes:
+            return
+        affected = [node for node in root.walk_children(with_self=True) if nodes is None or node in nodes]
+        self.update_nodes(affected, animate=animate, refresh=True)
+        for screen in self._screens():
+            screen._pending_styles.difference_update(affected)
 
     def update_app_focus(self, root: DOMNode) -> None:
         """Restyle only subtrees whose rules can depend on application focus.
