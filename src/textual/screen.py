@@ -2293,10 +2293,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
                     select_widget, select_offset = self.get_widget_and_offset_at(
                         event.x, event.y
                     )
-                    # Exclude scrollbars, so the user may navigate without clearing the selection
-                    if select_widget is None or not select_widget.has_class(
-                        "-textual-system"
-                    ):
+                    if select_widget is not None and select_widget.allow_select:
                         self.clear_selection()
 
                 self._mouse_down_offset = None
