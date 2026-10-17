@@ -101,14 +101,12 @@ class _MessagePumpMeta(type):
                     )
 
         class_obj = super().__new__(cls, name, bases, class_dict, **kwargs)
-        if not bases:
-            class_obj._compile_dispatch()
+        class_obj._compile_dispatch()
         return class_obj
 
     def _compile_dispatch(cls) -> None:
         """Declare C3 handler routes once; event delivery only binds their methods."""
         scopes = []
-        names = set()
         for owner in cls.__mro__:
             declarations = owner.__dict__
             decorated = {}
@@ -123,14 +121,8 @@ class _MessagePumpMeta(type):
                 method = declarations.get("_" + name) or declarations.get(name)
                 if method is not None and not getattr(method, "_textual_on", None):
                     named[name] = method
-            names.update(named)
             scopes.append((owner, decorated, named))
-        cls._dispatch_declarations = {
-            name: tuple((owner, decorated, named.get(name))
-                        for owner, decorated, named in scopes
-                        if decorated or name in named)
-            for name in (*names, None)
-        }
+        cls._dispatch_declarations = tuple(scopes)
 
 
 class MessagePump(metaclass=_MessagePumpMeta):
@@ -138,10 +130,6 @@ class MessagePump(metaclass=_MessagePumpMeta):
 
     _tree_revision = 0
     _parent_revision = 0
-
-    def __init_subclass__(cls, **kwargs) -> None:
-        super().__init_subclass__(**kwargs)
-        cls._compile_dispatch()
 
     def __init__(self, parent: MessagePump | None = None) -> None:
         self._parent = parent
@@ -918,8 +906,7 @@ class MessagePump(metaclass=_MessagePumpMeta):
     ) -> Iterable[tuple[type, Callable[[Message], Awaitable]]]:
         """Bind declared routes, retaining live selector and default-action checks."""
         methods_dispatched: set[Callable] | None = None
-        declarations = self._dispatch_declarations
-        for cls, decorated_handlers, conventional in declarations.get(method_name, declarations[None]):
+        for cls, decorated_handlers, named in self._dispatch_declarations:
             if message._no_default_action:
                 break
             if decorated_handlers:
@@ -956,6 +943,7 @@ class MessagePump(metaclass=_MessagePumpMeta):
                                 yield cls, method.__get__(self, cls)
                                 methods_dispatched.add(method)
 
+            conventional = named.get(method_name)
             if conventional is not None:
                 yield cls, conventional.__get__(self, cls)
 

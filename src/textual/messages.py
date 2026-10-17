@@ -63,9 +63,7 @@ class Layout(Message, verbose=True):
         return self.widget.walk_ancestors()
 
     def can_replace(self, message: Message) -> bool:
-        # Preserve both the source and the requested placement scope.
-        return (isinstance(message, Layout) and self.widget is message.widget
-                and next(self.ancestors(), None) is next(message.ancestors(), None))
+        return type(message) is type(self) and self.widget is message.widget
 
 
 class LayoutChildren(Layout, verbose=True):
