@@ -1,0 +1,12 @@
+{
+  "script": "/home/ts/wt/toad-close-lifecycle/.artifacts/p21-takeover/same_width_ab.py",
+  "syntax": "pass",
+  "ruff": "pass",
+  "percentile_owner_equivalent": true,
+  "meter_path": "/home/ts/wt/toad-close-lifecycle/.artifacts/p21-takeover/instrumentation/phases.py",
+  "meter_sha256": "a2160815bc0a6456ecf821af65c2c20b75d58f2c3d5ee93577bf31b01312c2f9",
+  "viewers": "closed; awaiting Codex baseline after stop window",
+  "candidate_keep": "T084924Z",
+  "baseline_source": "362d8c928",
+  "candidate_source": "8128f757b"
+}
