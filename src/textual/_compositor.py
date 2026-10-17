@@ -2239,9 +2239,11 @@ class Compositor:
             Chops structure.
         """
         chops: list[dict[int, Strip | None]] = [{} for _ in cuts]
-        for y, x, _end in ChopsUpdate._span_cuts(spans, cuts, bounds.y):
-            chops[y - bounds.y][x] = None
-        remaining = {row: len(line) for row, line in enumerate(chops) if line}
+        remaining: dict[int, dict[int, int]] = {}
+        for y, x, end in ChopsUpdate._span_cuts(spans, cuts, bounds.y):
+            row = y - bounds.y
+            chops[row][x] = None
+            remaining.setdefault(row, {})[x] = end
         if not remaining:
             return cast("Sequence[Mapping[int, Strip]]", chops)
 
@@ -2257,19 +2259,20 @@ class Compositor:
             for y in region.line_range:
                 row = y - bounds.y
                 spans: set[tuple[int, int]] = set()
-                if row in remaining:
-                    start_x = None
-                    row_cuts = cuts[row]
-                    for index in range(bisect_left(row_cuts, first), bisect_left(row_cuts, last)):
-                        x = row_cuts[index]
-                        if x in chops[row] and chops[row][x] is None:
-                            if start_x is None:
-                                start_x = x
-                        elif start_x is not None:
-                            spans.add((start_x, x))
+                start_x = None
+                end_x = first
+                # _regions_to_spans supplies ordered damage; deleting painted
+                # cells preserves that order. Covered cuts are never revisited.
+                for x, end in remaining.get(row, {}).items():
+                    if first <= x < last:
+                        if start_x is not None and x != end_x:
+                            spans.add((start_x, end_x))
                             start_x = None
-                    if start_x is not None:
-                        spans.add((start_x, last))
+                        if start_x is None:
+                            start_x = x
+                        end_x = end
+                if start_x is not None:
+                    spans.add((start_x, end_x))
                 for span in tuple(runs):
                     if span not in spans:
                         start_y = runs.pop(span)
@@ -2294,7 +2297,8 @@ class Compositor:
             for y, strip in zip(render_region.line_range, strips):
                 row = y - bounds.y
                 chops_line = chops[row]
-                if not chops_line:
+                pending = remaining.get(row)
+                if pending is None:
                     continue
                 row_cuts = cuts[row]
                 final_cuts = row_cuts[bisect_left(row_cuts, first_cut):bisect_right(row_cuts, last_cut)]
@@ -2302,13 +2306,11 @@ class Compositor:
 
                 # Since we are painting front to back, the first segments for a cut "wins"
                 for cut, strip in zip(final_cuts, cut_strips):
-                    if cut in chops_line and chops_line[cut] is None:
+                    if cut in pending:
                         chops_line[cut] = strip
-                        count = remaining[row] - 1
-                        if count:
-                            remaining[row] = count
-                        else:
-                            del remaining[row]
+                        del pending[cut]
+                if not pending:
+                    del remaining[row]
             # These are the original pending chop rows, not widget readiness.
             # Once foreground paint has supplied every requested cut, no lower
             # widget can contribute. Do not scan its covered exposure again.

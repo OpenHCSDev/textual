@@ -87,20 +87,6 @@ class _MessagePumpMeta(type):
         class_dict: dict[str, Any],
         **kwargs: Any,
     ) -> _MessagePumpMetaSub:
-        handlers: dict[
-            type[Message], list[tuple[Callable, dict[str, tuple[SelectorSet, ...]]]]
-        ] = class_dict.get("_decorated_handlers", {})
-
-        class_dict["_decorated_handlers"] = handlers
-
-        for value in class_dict.values():
-            if callable(value) and hasattr(value, "_textual_on"):
-                textual_on: list[
-                    tuple[type[Message], dict[str, tuple[SelectorSet, ...]]]
-                ] = getattr(value, "_textual_on")
-                for message_type, selectors in textual_on:
-                    handlers.setdefault(message_type, []).append((value, selectors))
-
         # Look for reactives with public AND private compute methods.
         prefix = "compute_"
         prefix_len = len(prefix)
@@ -117,6 +103,8 @@ class _MessagePumpMeta(type):
                     )
 
         class_obj = super().__new__(cls, name, bases, class_dict, **kwargs)
+        if not bases:
+            class_obj._compile_dispatch()
         return class_obj
 
 
@@ -125,6 +113,38 @@ class MessagePump(metaclass=_MessagePumpMeta):
 
     _tree_revision = 0
     _parent_revision = 0
+
+    def __init_subclass__(cls, **kwargs) -> None:
+        super().__init_subclass__(**kwargs)
+        cls._compile_dispatch()
+
+    @classmethod
+    def _compile_dispatch(cls) -> None:
+        """Declare C3 handler routes once; event delivery only binds their methods."""
+        scopes = []
+        names = set()
+        for owner in cls.__mro__:
+            declarations = owner.__dict__
+            decorated = {}
+            for value in declarations.values():
+                if callable(value):
+                    for message_type, selectors in getattr(value, "_textual_on", ()):
+                        decorated.setdefault(message_type, []).append((value, selectors))
+            declared_names = {name.removeprefix("_") for name in declarations
+                              if name.startswith(("on_", "_on_"))}
+            named = {}
+            for name in declared_names:
+                method = declarations.get("_" + name) or declarations.get(name)
+                if method is not None and not getattr(method, "_textual_on", None):
+                    named[name] = method
+            names.update(named)
+            scopes.append((owner, decorated, named))
+        cls._dispatch_declarations = {
+            name: tuple((owner, decorated, named.get(name))
+                        for owner, decorated, named in scopes
+                        if decorated or name in named)
+            for name in (*names, None)
+        }
 
     def __init__(self, parent: MessagePump | None = None) -> None:
         self._parent = parent
@@ -899,32 +919,14 @@ class MessagePump(metaclass=_MessagePumpMeta):
     def _get_dispatch_methods(
         self, method_name: str, message: Message
     ) -> Iterable[tuple[type, Callable[[Message], Awaitable]]]:
-        """Gets handlers from the MRO
-
-        Args:
-            method_name: Handler method name.
-            message: Message object.
-        """
+        """Bind declared routes, retaining live selector and default-action checks."""
         methods_dispatched: set[Callable] | None = None
-        message_types = message.__class__.__mro__
-        message_mro: list[type[Message]] | None = None
-        private_method_name = f"_{method_name}"
-        for cls in self.__class__.__mro__:
+        declarations = self._dispatch_declarations
+        for cls, decorated_handlers, method in declarations.get(method_name, declarations[None]):
             if message._no_default_action:
                 break
-            declarations = cls.__dict__
-            # Try decorated handlers first
-            decorated_handlers = cast(
-                "dict[type[Message], list[tuple[Callable, dict[str, tuple[SelectorSet, ...]]]]] | None",
-                declarations.get("_decorated_handlers"),
-            )
-
             if decorated_handlers:
-                if message_mro is None:
-                    message_mro = [
-                        _type for _type in message_types if issubclass(_type, Message)
-                    ]
-                for message_class in message_mro:
+                for message_class in message._dispatch_types:
                     handlers = decorated_handlers.get(message_class, ())
 
                     for method, selectors in handlers:
@@ -957,12 +959,7 @@ class MessagePump(metaclass=_MessagePumpMeta):
                                 yield cls, method.__get__(self, cls)
                                 methods_dispatched.add(method)
 
-            # Fall back to the naming convention
-            # But avoid calling the handler if it was decorated
-            method = declarations.get(private_method_name) or declarations.get(
-                method_name
-            )
-            if method is not None and not getattr(method, "_textual_on", None):
+            if method is not None:
                 yield cls, method.__get__(self, cls)
 
     async def on_event(self, event: events.Event) -> None:
