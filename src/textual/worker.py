@@ -54,6 +54,7 @@ class WorkerFailed(WorkerError):
     def __init__(self, error: BaseException) -> None:
         self.error = error
         super().__init__(f"Worker raised exception: {error!r}")
+        self.__cause__ = error
 
 
 class DeadlockError(WorkerError):
