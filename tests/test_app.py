@@ -1,3 +1,5 @@
+from textual.ansi_palette import MappedAnsiPalette, NativeAnsiPalette
+from textual.driver import TerminalGaveNoPalette
 import asyncio
 import contextlib
 
@@ -140,22 +142,22 @@ async def test_no_return_code_while_running():
 async def test_ansi_theme():
     app = App()
     async with app.run_test():
-        app.ansi_theme_dark = NIGHT_OWLISH
-        assert app.ansi_theme == NIGHT_OWLISH
+        app.ansi_theme_dark = MappedAnsiPalette(NIGHT_OWLISH)
+        assert app.ansi_theme.export_theme() == NIGHT_OWLISH
 
         app.theme = "textual-light"
-        assert app.ansi_theme != NIGHT_OWLISH
+        assert app.ansi_theme.export_theme() != NIGHT_OWLISH
 
-        app.ansi_theme_light = MONOKAI
-        assert app.ansi_theme == MONOKAI
+        app.ansi_theme_light = MappedAnsiPalette(MONOKAI)
+        assert app.ansi_theme.export_theme() == MONOKAI
 
         # Ensure if we change the dark theme while on light mode,
         # then change back to dark mode, the dark theme is updated.
-        app.ansi_theme_dark = DIMMED_MONOKAI
-        assert app.ansi_theme == MONOKAI
+        app.ansi_theme_dark = MappedAnsiPalette(DIMMED_MONOKAI)
+        assert app.ansi_theme.export_theme() == MONOKAI
 
         app.theme = "textual-dark"
-        assert app.ansi_theme == DIMMED_MONOKAI
+        assert app.ansi_theme.export_theme() == DIMMED_MONOKAI
 
 
 @pytest.mark.parametrize("theme", ["textual-dark", "ansi-light"])
@@ -170,8 +172,8 @@ async def test_export_screenshot_uses_current_ansi_palette(theme):
     app = PaletteApp(ansi_color=True)
     async with app.run_test() as pilot:
         app.theme = theme
-        app.ansi_theme_dark = NIGHT_OWLISH
-        app.ansi_theme_light = DIMMED_MONOKAI
+        app.ansi_theme_dark = MappedAnsiPalette(NIGHT_OWLISH)
+        app.ansi_theme_light = MappedAnsiPalette(DIMMED_MONOKAI)
         await pilot.pause()
         svg = app.export_screenshot()
         document = ElementTree.fromstring(svg)
@@ -181,7 +183,7 @@ async def test_export_screenshot_uses_current_ansi_palette(theme):
             if node.text == "export-palette"
         )
         rule = style.split(f".{text.attrib['class']} {{", 1)[1].split("}", 1)[0]
-        assert f"fill: {app.ansi_theme.foreground_color.hex}" in rule
+        assert f"fill: {app.ansi_theme.export_theme().foreground_color.hex}" in rule
 
 
 async def test_early_exit():
@@ -448,3 +450,13 @@ async def test_get_screen_stack() -> None:
         assert isinstance(screen_stack, list)
         assert len(screen_stack) == 1
         assert screen_stack[0].id == "foo"
+
+
+async def test_unknown_palette_preserves_native_colour_and_refuses_svg():
+    app = App(ansi_color=True)
+    async with app.run_test() as pilot:
+        app.ansi_theme_dark = NativeAnsiPalette()
+        await pilot.pause()
+        assert app.native_ansi_color
+        with pytest.raises(TerminalGaveNoPalette, match="SVG export needs RGB"):
+            app.export_screenshot()

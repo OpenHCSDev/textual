@@ -58,7 +58,6 @@ from rich.console import Console, ConsoleDimensions, ConsoleOptions, RenderableT
 from rich.control import Control
 from rich.protocol import is_renderable
 from rich.segment import Segment, Segments
-from rich.terminal_theme import TerminalTheme
 
 from textual import (
     Logger,
@@ -74,6 +73,7 @@ from textual import (
 from textual._animator import DEFAULT_EASING, Animatable, Animator, EasingFunction
 from textual._ansi_sequences import SYNC_END, SYNC_START
 from textual._ansi_theme import ALABASTER, MONOKAI
+from textual.ansi_palette import AnsiPalette, MappedAnsiPalette
 from textual._callback import invoke
 from textual._compat import cached_property
 from textual._compositor import CompositorUpdate, run_steps
@@ -105,7 +105,7 @@ from textual.driver import Driver
 from textual.errors import NoWidget
 from textual.features import FeatureFlag, parse_features
 from textual.file_monitor import FileMonitor
-from textual.filter import ANSIToTruecolor, DimFilter, Monochrome, NoColor
+from textual.filter import DimFilter, Monochrome, NoColor
 from textual.geometry import Offset, Region, Size
 from textual.keys import (
     REPLACED_KEYS,
@@ -578,10 +578,10 @@ class App(Generic[ReturnType], DOMNode):
     theme: Reactive[str] = Reactive(constants.DEFAULT_THEME)
     """The name of the currently active theme."""
 
-    ansi_theme_dark = Reactive(MONOKAI, init=False)
+    ansi_theme_dark = Reactive(lambda: MappedAnsiPalette(MONOKAI), init=False)
     """Maps ANSI colors to hex colors using a Rich TerminalTheme object while using a dark theme."""
 
-    ansi_theme_light = Reactive(ALABASTER, init=False)
+    ansi_theme_light = Reactive(lambda: MappedAnsiPalette(ALABASTER), init=False)
     """Maps ANSI colors to hex colors using a Rich TerminalTheme object while using a light theme."""
 
     ansi_color: Reactive[bool | None] = Reactive(None)
@@ -627,9 +627,8 @@ class App(Generic[ReturnType], DOMNode):
             self.register_theme(theme)
 
         self.set_reactive(App.ansi_color, ansi_color)
-        self._filters: list[LineFilter] = [
-            ANSIToTruecolor(self.ansi_theme, enabled=not self.native_ansi_color)
-        ]
+        self._filters: list[LineFilter] = [self.ansi_theme]
+        self.ansi_theme.enabled = not self.native_ansi_color
         environ = dict(os.environ)
         self.no_color = environ.pop("NO_COLOR", None) is not None
         if self.no_color:
@@ -1157,7 +1156,7 @@ class App(Generic[ReturnType], DOMNode):
                 ansi_color = theme.ansi
 
         for filter in self._filters:
-            if isinstance(filter, ANSIToTruecolor):
+            if isinstance(filter, AnsiPalette):
                 filter.enabled = not ansi_color
 
     def animate(
@@ -1562,18 +1561,18 @@ class App(Generic[ReturnType], DOMNode):
         self.call_next(partial(self.refresh_css, animate=False))
         self.call_next(self.theme_changed_signal.publish, theme)
 
-    def watch_ansi_theme_dark(self, theme: TerminalTheme) -> None:
+    def watch_ansi_theme_dark(self, theme: AnsiPalette) -> None:
         if self.current_theme.dark:
             self._refresh_truecolor_filter(theme)
             self.call_next(self.refresh_css)
 
-    def watch_ansi_theme_light(self, theme: TerminalTheme) -> None:
+    def watch_ansi_theme_light(self, theme: AnsiPalette) -> None:
         if not self.current_theme.dark:
             self._refresh_truecolor_filter(theme)
             self.call_next(self.refresh_css)
 
     @property
-    def ansi_theme(self) -> TerminalTheme:
+    def ansi_theme(self) -> AnsiPalette:
         """The ANSI TerminalTheme currently being used.
 
         Defines how colors defined as ANSI (e.g. `magenta`) inside Rich renderables
@@ -1593,7 +1592,7 @@ class App(Generic[ReturnType], DOMNode):
         ansi = self.current_theme.ansi if self.ansi_color is None else self.ansi_color
         return ansi
 
-    def _refresh_truecolor_filter(self, theme: TerminalTheme) -> None:
+    def _refresh_truecolor_filter(self, theme: AnsiPalette) -> None:
         """Update the ANSI to Truecolor filter, if available, with a new theme mapping.
 
         Args:
@@ -1602,8 +1601,9 @@ class App(Generic[ReturnType], DOMNode):
         filters = self._filters
         ansi_color = self.native_ansi_color
         for index, filter in enumerate(filters):
-            if isinstance(filter, ANSIToTruecolor):
-                filters[index] = ANSIToTruecolor(theme, enabled=not ansi_color)
+            if isinstance(filter, AnsiPalette):
+                theme.enabled = not ansi_color
+                filters[index] = theme
                 return
 
     def get_color_system(self) -> str:
@@ -1915,6 +1915,7 @@ class App(Generic[ReturnType], DOMNode):
                 to use app title.
             simplify: Simplify the segments by combining contiguous segments with the same style.
         """
+        export_theme = self.ansi_theme.export_theme()
         assert self._driver is not None, "App must be running"
         width, height = self.size
 
@@ -1930,7 +1931,7 @@ class App(Generic[ReturnType], DOMNode):
         )
         console.print(run_steps(
             self.screen._compositor.render_update(full=True, simplify=simplify)))
-        return console.export_svg(title=title or self.title, theme=self.ansi_theme)
+        return console.export_svg(title=title or self.title, theme=export_theme)
 
     def save_screenshot(
         self,

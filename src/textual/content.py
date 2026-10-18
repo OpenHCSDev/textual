@@ -21,7 +21,7 @@ from rich.cells import set_cell_size
 from rich.console import Console
 from rich.segment import Segment
 from rich.style import Style as RichStyle
-from rich.terminal_theme import TerminalTheme
+from textual.ansi_palette import AnsiPalette, NativeAnsiPalette
 from rich.text import Text
 from typing_extensions import Final, TypeAlias
 
@@ -317,7 +317,7 @@ class Content(Visual):
         if isinstance(text, str):
             text = Text.from_markup(text)
 
-        ansi_theme: TerminalTheme | None = None
+        ansi_theme: AnsiPalette = NativeAnsiPalette()
 
         if console is not None:
             get_style = console.get_style
@@ -333,15 +333,15 @@ class Content(Visual):
             try:
                 ansi_theme = active_app.get().ansi_theme
             except LookupError:
-                ansi_theme = None
+                ansi_theme = NativeAnsiPalette()
             spans = [
                 Span(
                     start,
                     end,
                     (
-                        Style.from_rich_style(get_style(style), ansi_theme)
+                        ansi_theme.rich_style(get_style(style))
                         if isinstance(style, str)
-                        else Style.from_rich_style(style, ansi_theme)
+                        else ansi_theme.rich_style(style)
                     ),
                 )
                 for start, end, style in text._spans
@@ -355,11 +355,11 @@ class Content(Visual):
             try:
                 ansi_theme = active_app.get().ansi_theme
             except LookupError:
-                ansi_theme = None
+                ansi_theme = NativeAnsiPalette()
             content = content.stylize_before(
                 text.style
                 if isinstance(text.style, str)
-                else Style.from_rich_style(text.style, ansi_theme)
+                else ansi_theme.rich_style(text.style)
             )
         return content
 

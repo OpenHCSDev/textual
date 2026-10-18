@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import threading
-from concurrent.futures import Future, wait
+from concurrent.futures import Future
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from pathlib import Path
@@ -145,7 +145,7 @@ class Driver(ABC):
 
         self.send_message(message)
 
-    def query_colours(self, *, timeout: float) -> dict[str, tuple[int, int, int]]:
+    async def query_colours(self, *, timeout: float) -> dict[str, tuple[int, int, int]]:
         """Query default foreground/background and ANSI 0–15 via the input thread.
 
         Call after application mode starts, from outside the input thread.
@@ -162,11 +162,12 @@ class Driver(ABC):
         try:
             self.write("".join(f"\x1b]{key};?\x1b\\" for key in keys))
             self.flush()
-            _, missing = wait(replies.values(), timeout=timeout)
+            _, missing = await asyncio.wait(
+                [asyncio.wrap_future(reply) for reply in replies.values()], timeout=timeout)
             if missing:
                 raise TerminalGaveNoPalette(
                     "terminal gave no palette: unanswered "
-                    + ", ".join(key for key, reply in replies.items() if reply in missing)
+                    + ", ".join(key for key, reply in replies.items() if not reply.done())
                 )
             return {key: reply.result() for key, reply in replies.items()}
         finally:
