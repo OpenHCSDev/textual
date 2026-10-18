@@ -223,6 +223,7 @@ class ScrollBarRender:
 
 @rich.repr.auto
 class ScrollBar(Widget):
+    _paint_only_render = True
     renderer: ClassVar[Type[ScrollBarRender]] = ScrollBarRender
     """The class used for rendering scrollbars.
     This can be overridden and set to a ScrollBarRender-derived class
@@ -277,20 +278,6 @@ class ScrollBar(Widget):
     def validate_position(self, position: float) -> float:
         """Position has a granulatory of 1/8 of a cell."""
         return int(position * 8) / 8
-
-    def _render_styles_sensitive(self) -> bool:
-        """Native bar colors change paint, not the renderer's cell extent.
-
-        Custom renderers and wrappers retain their arbitrary measurement
-        inputs. Select the live instance renderer, including runtime replacement.
-        """
-        return (
-            type(self) is not ScrollBar
-            or getattr(self.render, "__func__", None) is not ScrollBar.render
-            or getattr(self._render_bar, "__func__", None) is not ScrollBar._render_bar
-            or getattr(self._render, "__func__", None) is not Widget._render
-            or self.renderer is not ScrollBarRender
-        )
 
     def render(self) -> RenderableType:
         assert self.parent is not None
@@ -418,13 +405,7 @@ class ScrollBarCorner(Widget):
     """Widget which fills the gap between horizontal and vertical scrollbars,
     should they both be present."""
 
-    def _render_styles_sensitive(self) -> bool:
-        """Original Blank measures width and one row independently of color."""
-        return (
-            type(self) is not ScrollBarCorner
-            or getattr(self.render, "__func__", None) is not ScrollBarCorner.render
-            or getattr(self._render, "__func__", None) is not Widget._render
-        )
+    _paint_only_render = True
 
     def render(self) -> Blank:
         assert self.parent is not None
