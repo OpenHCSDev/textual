@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import threading
+from concurrent.futures import Future, wait
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from pathlib import Path
@@ -13,6 +14,10 @@ from textual.drivers._writer_thread import _FlushSignal
 
 if TYPE_CHECKING:
     from textual.app import App
+
+
+class TerminalGaveNoPalette(RuntimeError):
+    """The terminal did not answer the colour query before its deadline."""
 
 
 class Driver(ABC):
@@ -41,6 +46,8 @@ class Driver(ABC):
         self._loop = asyncio.get_running_loop()
         self._down_buttons: list[int] = []
         self._last_move_event: events.MouseMove | None = None
+        self._colour_queries: dict[str, Future[tuple[int, int, int]]] = {}
+        self._colour_query_lock = threading.Lock()
         self._auto_restart = True
         """Should the application auto-restart (where appropriate)?"""
         self.cursor_origin: tuple[int, int] | None = None
@@ -81,6 +88,12 @@ class Driver(ABC):
         Args:
             event: A message to process.
         """
+        if isinstance(message, messages.TerminalColour):
+            with self._colour_query_lock:
+                reply = self._colour_queries.get(message.key)
+                if reply is not None and not reply.done():
+                    reply.set_result(message.rgb)
+            return
         # NOTE: This runs in a thread.
         # Avoid calling methods on the app.
         message.set_sender(self._app)
@@ -131,6 +144,34 @@ class Driver(ABC):
             self._last_move_event = message
 
         self.send_message(message)
+
+    def query_colours(self, *, timeout: float) -> dict[str, tuple[int, int, int]]:
+        """Query default foreground/background and ANSI 0–15 via the input thread.
+
+        Call after application mode starts, from outside the input thread.
+        Replies are transient here; the caller owns the returned palette.
+        """
+        keys = ("10", "11", *(f"4;{index}" for index in range(16)))
+        replies: dict[str, Future[tuple[int, int, int]]] = {
+            key: Future() for key in keys
+        }
+        with self._colour_query_lock:
+            if self._colour_queries:
+                raise RuntimeError("A terminal colour query is already running")
+            self._colour_queries = replies
+        try:
+            self.write("".join(f"\x1b]{key};?\x1b\\" for key in keys))
+            self.flush()
+            _, missing = wait(replies.values(), timeout=timeout)
+            if missing:
+                raise TerminalGaveNoPalette(
+                    "terminal gave no palette: unanswered "
+                    + ", ".join(key for key, reply in replies.items() if reply in missing)
+                )
+            return {key: reply.result() for key, reply in replies.items()}
+        finally:
+            with self._colour_query_lock:
+                self._colour_queries = {}
 
     @abstractmethod
     def write(self, data: str) -> None:

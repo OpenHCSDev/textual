@@ -14,7 +14,18 @@ from textual.events import (
     MouseUp,
     Paste,
 )
-from textual.messages import TerminalSupportsSynchronizedOutput
+from textual.messages import TerminalColour, TerminalSupportsSynchronizedOutput
+
+
+@pytest.mark.parametrize("terminator", ["\x07", "\x1b\\"])
+@pytest.mark.parametrize("chunk_size", [1, 2, 7, 32])
+def test_colour_replies_do_not_become_keys(terminator, chunk_size):
+    parser = XTermParser()
+    data = "a\x1b]10;rgb:dbdb/dbdb/dbdb" + terminator + "\x1b]4;15;rgb:f/80/ffff" + terminator + "z"
+    result = [event for part in chunks(data, chunk_size) for event in parser.feed(part)]
+    assert [event.key for event in result if isinstance(event, Key)] == ["a", "z"]
+    assert [(event.key, event.rgb) for event in result if isinstance(event, TerminalColour)] == [
+        ("10", (219, 219, 219)), ("4;15", (255, 128, 255))]
 
 
 def chunks(data, size):

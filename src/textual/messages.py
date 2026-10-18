@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+import re
 from typing import TYPE_CHECKING
 
 import rich.repr
@@ -12,6 +13,27 @@ from textual.message import Message
 if TYPE_CHECKING:
     from textual.dom import DOMNode
     from textual.widget import Widget
+
+
+class TerminalColour(Message, bubble=False):
+    """An OSC 4, 10 or 11 colour reply decoded at the terminal boundary."""
+
+    _reply = re.compile(r"(10|11|4;\d+);rgb:([\da-fA-F]{1,4})/([\da-fA-F]{1,4})/([\da-fA-F]{1,4})")
+
+    def __init__(self, key: str, rgb: tuple[int, int, int]) -> None:
+        super().__init__()
+        self.key = key
+        self.rgb = rgb
+
+    @classmethod
+    def from_osc(cls, payload: str) -> TerminalColour:
+        match = cls._reply.fullmatch(payload)
+        if match is None:
+            raise ValueError(f"Invalid terminal colour reply: {payload!r}")
+        key, red, green, blue = match.groups()
+        def channel(value: str) -> int:
+            return round(int(value, 16) * 255 / (16 ** len(value) - 1))
+        return cls(key, (channel(red), channel(green), channel(blue)))
 
 
 @rich.repr.auto
