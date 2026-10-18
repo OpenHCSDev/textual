@@ -12,6 +12,7 @@ from textual.message import Message
 
 if TYPE_CHECKING:
     from textual.dom import DOMNode
+    from textual.driver import Driver
     from textual.widget import Widget
 
 
@@ -24,6 +25,9 @@ class TerminalColour(Message, bubble=False):
         super().__init__()
         self.key = key
         self.rgb = rgb
+
+    def deliver_from_driver(self, driver: Driver) -> None:
+        driver.resolve_colour(self.key, self.rgb)
 
     @classmethod
     def from_osc(cls, payload: str) -> TerminalColour:

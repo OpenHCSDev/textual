@@ -96,12 +96,6 @@ class Driver(ABC):
         Args:
             event: A message to process.
         """
-        if isinstance(message, messages.TerminalColour):
-            with self._colour_query_lock:
-                reply = self._colour_queries.get(message.key)
-                if reply is not None and not reply.done():
-                    reply.set_result(message.rgb)
-            return
         # NOTE: This runs in a thread.
         # Avoid calling methods on the app.
         message.set_sender(self._app)
@@ -151,7 +145,14 @@ class Driver(ABC):
                     )
             self._last_move_event = message
 
-        self.send_message(message)
+        message.deliver_from_driver(self)
+
+    def resolve_colour(self, key: str, rgb: tuple[int, int, int]) -> None:
+        """Complete a query on the input thread without waiting for the app."""
+        with self._colour_query_lock:
+            reply = self._colour_queries.get(key)
+            if reply is not None and not reply.done():
+                reply.set_result(rgb)
 
     async def query_colours(self, *, timeout: float) -> TerminalColours:
         """Query default foreground/background and ANSI 0–15 via the input thread.

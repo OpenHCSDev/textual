@@ -260,7 +260,7 @@ class XTermParser(Parser[Message]):
                                 payload += yield read1(constants.ESCAPE_DELAY)
                             except (ParseTimeout, ParseEOF):
                                 break
-                            if payload.endswith("\x07") or payload.endswith("\x1b\\"):
+                            if payload.endswith(("\x07", "\x1b\\")):
                                 payload = payload.removesuffix("\x07").removesuffix(
                                     "\x1b\\"
                                 )
