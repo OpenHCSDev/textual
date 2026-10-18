@@ -58,7 +58,6 @@ from rich.console import Console, ConsoleDimensions, ConsoleOptions, RenderableT
 from rich.control import Control
 from rich.protocol import is_renderable
 from rich.segment import Segment, Segments
-from rich.terminal_theme import TerminalTheme
 
 from textual import (
     Logger,
@@ -75,13 +74,13 @@ from textual._animator import DEFAULT_EASING, Animatable, Animator, EasingFuncti
 from textual._ansi_sequences import SYNC_END, SYNC_START
 from textual._ansi_theme import ALABASTER, MONOKAI
 from textual._callback import invoke
+from textual._clipboard import ClipboardContent
 from textual._compat import cached_property
 from textual._compositor import CompositorUpdate, run_steps
 from textual._context import NoActiveAppError, active_app, active_message_pump
 from textual._context import message_hook as message_hook_context_var
 from textual._dispatch_key import dispatch_key
 from textual._event_broker import NoHandler, extract_handler_actions
-from textual._clipboard import ClipboardContent
 from textual._files import generate_datetime_filename
 from textual._path import (
     CSSPathType,
@@ -91,6 +90,7 @@ from textual._path import (
 from textual._types import AnimationLevel
 from textual._wait import wait_for_idle
 from textual.actions import ActionParseResult, SkipAction
+from textual.ansi_palette import AnsiPalette, MappedAnsiPalette
 from textual.await_complete import AwaitComplete
 from textual.await_remove import AwaitRemove
 from textual.binding import Binding, BindingsMap, BindingType, Keymap
@@ -105,7 +105,7 @@ from textual.driver import Driver
 from textual.errors import NoWidget
 from textual.features import FeatureFlag, parse_features
 from textual.file_monitor import FileMonitor
-from textual.filter import ANSIToTruecolor, DimFilter, Monochrome, NoColor
+from textual.filter import DimFilter, Monochrome, NoColor
 from textual.geometry import Offset, Region, Size
 from textual.keys import (
     REPLACED_KEYS,
@@ -578,11 +578,11 @@ class App(Generic[ReturnType], DOMNode):
     theme: Reactive[str] = Reactive(constants.DEFAULT_THEME)
     """The name of the currently active theme."""
 
-    ansi_theme_dark = Reactive(MONOKAI, init=False)
-    """Maps ANSI colors to hex colors using a Rich TerminalTheme object while using a dark theme."""
+    ansi_theme_dark: Reactive[AnsiPalette] = Reactive(lambda: MappedAnsiPalette(MONOKAI), init=False)
+    """Owns ANSI rendering and RGB-only operations for dark themes."""
 
-    ansi_theme_light = Reactive(ALABASTER, init=False)
-    """Maps ANSI colors to hex colors using a Rich TerminalTheme object while using a light theme."""
+    ansi_theme_light: Reactive[AnsiPalette] = Reactive(lambda: MappedAnsiPalette(ALABASTER), init=False)
+    """Owns ANSI rendering and RGB-only operations for light themes."""
 
     ansi_color: Reactive[bool | None] = Reactive(None)
     """Allow ANSI colors in UI?"""
@@ -627,9 +627,8 @@ class App(Generic[ReturnType], DOMNode):
             self.register_theme(theme)
 
         self.set_reactive(App.ansi_color, ansi_color)
-        self._filters: list[LineFilter] = [
-            ANSIToTruecolor(self.ansi_theme, enabled=not self.native_ansi_color)
-        ]
+        self._filters: list[LineFilter] = [self.ansi_theme]
+        self.ansi_theme.enabled = not self.native_ansi_color
         environ = dict(os.environ)
         self.no_color = environ.pop("NO_COLOR", None) is not None
         if self.no_color:
@@ -1157,7 +1156,7 @@ class App(Generic[ReturnType], DOMNode):
                 ansi_color = theme.ansi
 
         for filter in self._filters:
-            if isinstance(filter, ANSIToTruecolor):
+            if isinstance(filter, AnsiPalette):
                 filter.enabled = not ansi_color
 
     def animate(
@@ -1562,19 +1561,19 @@ class App(Generic[ReturnType], DOMNode):
         self.call_next(partial(self.refresh_css, animate=False))
         self.call_next(self.theme_changed_signal.publish, theme)
 
-    def watch_ansi_theme_dark(self, theme: TerminalTheme) -> None:
+    def watch_ansi_theme_dark(self, theme: AnsiPalette) -> None:
         if self.current_theme.dark:
             self._refresh_truecolor_filter(theme)
             self.call_next(self.refresh_css)
 
-    def watch_ansi_theme_light(self, theme: TerminalTheme) -> None:
+    def watch_ansi_theme_light(self, theme: AnsiPalette) -> None:
         if not self.current_theme.dark:
             self._refresh_truecolor_filter(theme)
             self.call_next(self.refresh_css)
 
     @property
-    def ansi_theme(self) -> TerminalTheme:
-        """The ANSI TerminalTheme currently being used.
+    def ansi_theme(self) -> AnsiPalette:
+        """The current native ANSI or mapped RGB rendering palette.
 
         Defines how colors defined as ANSI (e.g. `magenta`) inside Rich renderables
         are mapped to hex codes.
@@ -1593,7 +1592,7 @@ class App(Generic[ReturnType], DOMNode):
         ansi = self.current_theme.ansi if self.ansi_color is None else self.ansi_color
         return ansi
 
-    def _refresh_truecolor_filter(self, theme: TerminalTheme) -> None:
+    def _refresh_truecolor_filter(self, theme: AnsiPalette) -> None:
         """Update the ANSI to Truecolor filter, if available, with a new theme mapping.
 
         Args:
@@ -1602,8 +1601,9 @@ class App(Generic[ReturnType], DOMNode):
         filters = self._filters
         ansi_color = self.native_ansi_color
         for index, filter in enumerate(filters):
-            if isinstance(filter, ANSIToTruecolor):
-                filters[index] = ANSIToTruecolor(theme, enabled=not ansi_color)
+            if isinstance(filter, AnsiPalette):
+                theme.enabled = not ansi_color
+                filters[index] = theme
                 return
 
     def get_color_system(self) -> str:
@@ -1915,6 +1915,7 @@ class App(Generic[ReturnType], DOMNode):
                 to use app title.
             simplify: Simplify the segments by combining contiguous segments with the same style.
         """
+        export_theme = self.ansi_theme.export_theme()
         assert self._driver is not None, "App must be running"
         width, height = self.size
 
@@ -1930,7 +1931,7 @@ class App(Generic[ReturnType], DOMNode):
         )
         console.print(run_steps(
             self.screen._compositor.render_update(full=True, simplify=simplify)))
-        return console.export_svg(title=title or self.title, theme=self.ansi_theme)
+        return console.export_svg(title=title or self.title, theme=export_theme)
 
     def save_screenshot(
         self,

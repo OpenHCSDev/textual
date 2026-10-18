@@ -154,6 +154,10 @@ class TextOpacity:
         except LookupError:
             ansi_theme = DEFAULT_TERMINAL_THEME
         else:
-            ansi_theme = app.ansi_theme
+            return app.ansi_theme.opacity(
+                console.render(self.renderable, options),
+                self.opacity,
+                app.native_ansi_color,
+            )
         segments = console.render(self.renderable, options)
         return self.process_segments(segments, self.opacity, ansi_theme)
