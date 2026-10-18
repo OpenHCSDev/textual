@@ -935,17 +935,11 @@ class DOMNode(PaintNode, MessagePump):
             An iterable of DOMNode classes.
         """
         classes: list[type[DOMNode]] = []
-        _class = base
-        while True:
-            classes.append(_class)
-            if not _class._inherit_css:
-                break
-            for _base in _class.__bases__:
-                if issubclass(_base, DOMNode):
-                    _class = _base
+        for ancestor in base.__mro__:
+            if issubclass(ancestor, DOMNode):
+                classes.append(ancestor)
+                if not ancestor._inherit_css:
                     break
-            else:
-                break
         return classes
 
     @classmethod
