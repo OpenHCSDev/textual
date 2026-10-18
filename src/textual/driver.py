@@ -5,6 +5,7 @@ import threading
 from abc import ABC, abstractmethod
 from concurrent.futures import Future
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, BinaryIO, Callable, Iterator, Literal, TextIO
 
@@ -18,6 +19,13 @@ if TYPE_CHECKING:
 
 class TerminalGaveNoPalette(RuntimeError):
     """The terminal did not answer the colour query before its deadline."""
+
+
+@dataclass(frozen=True)
+class TerminalColours:
+    foreground: tuple[int, int, int]
+    background: tuple[int, int, int]
+    ansi: tuple[tuple[int, int, int], ...]
 
 
 class Driver(ABC):
@@ -145,7 +153,7 @@ class Driver(ABC):
 
         self.send_message(message)
 
-    async def query_colours(self, *, timeout: float) -> dict[str, tuple[int, int, int]]:
+    async def query_colours(self, *, timeout: float) -> TerminalColours:
         """Query default foreground/background and ANSI 0–15 via the input thread.
 
         Call after application mode starts, from outside the input thread.
@@ -173,7 +181,10 @@ class Driver(ABC):
                         key for key, reply in replies.items() if not reply.done()
                     )
                 )
-            return {key: reply.result() for key, reply in replies.items()}
+            foreground, background, *ansi = (
+                reply.result() for reply in replies.values()
+            )
+            return TerminalColours(foreground, background, tuple(ansi))
         finally:
             with self._colour_query_lock:
                 self._colour_queries = {}
