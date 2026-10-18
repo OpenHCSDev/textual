@@ -311,10 +311,11 @@ class Widget(DOMNode):
     _container_selection_dependency: ClassVar[HeightDependency] = NATIVE_CONTAINER_SELECTION
     _native_box_measurement: ClassVar[bool] = True
     _native_measurement_layout_hooks: ClassVar[bool] = True
+    _paint_only_render: ClassVar[bool] = False
 
     def _render_styles_sensitive(self) -> bool:
-        """Unknown rendering can turn any style input into measured content."""
-        return True
+        """Only a declared fixed-shape renderer can ignore paint-style changes."""
+        return not type(self)._paint_only_render
 
     def _style_geometry_updated(self, geometry: bool) -> bool:
         geometry = super()._style_geometry_updated(
@@ -3730,6 +3731,10 @@ class Widget(DOMNode):
             inherit_css=inherit_css,
             inherit_bindings=inherit_bindings,
         )
+        if "_paint_only_render" not in cls.__dict__ and any(
+            method in cls.__dict__ for method in ("render", "_render", "_render_bar")
+        ):
+            cls._paint_only_render = False
         # Bind method contracts once per concrete class, never probe capabilities
         # on every measurement. Undeclared overrides select the safe full context.
         cls._content_height_dependency = getattr(cls.get_content_height, "_height_dependency", CONTEXT_HEIGHT)
