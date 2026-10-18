@@ -7,13 +7,13 @@ from typing import TYPE_CHECKING, Callable, Iterable, Sequence
 import rich.repr
 from rich.segment import Segment
 from rich.style import Style as RichStyle
-from textual.ansi_palette import AnsiPalette
 
 from textual import log
 from textual._border import get_box, render_border_label, render_row
 from textual._opacity import _apply_opacity
 from textual._paint_state import PaintState
 from textual._segment_tools import apply_hatch, line_pad, line_trim, make_blank
+from textual.ansi_palette import AnsiPalette
 from textual.color import TRANSPARENT, Color
 from textual.constants import DEBUG
 from textual.content import Content

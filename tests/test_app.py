@@ -1,5 +1,3 @@
-from textual.ansi_palette import MappedAnsiPalette, NativeAnsiPalette
-from textual.driver import TerminalGaveNoPalette
 import asyncio
 import contextlib
 
@@ -7,8 +5,10 @@ import pytest
 from rich.terminal_theme import DIMMED_MONOKAI, MONOKAI, NIGHT_OWLISH
 
 from textual import events
+from textual.ansi_palette import MappedAnsiPalette, NativeAnsiPalette
 from textual.app import App, ComposeResult
 from textual.command import SimpleCommand
+from textual.driver import TerminalGaveNoPalette
 from textual.pilot import Pilot, _get_mouse_message_arguments
 from textual.screen import Screen
 from textual.widgets import Button, Input, Label, Static

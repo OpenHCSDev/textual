@@ -21,13 +21,13 @@ from rich.cells import set_cell_size
 from rich.console import Console
 from rich.segment import Segment
 from rich.style import Style as RichStyle
-from textual.ansi_palette import AnsiPalette, NativeAnsiPalette
 from rich.text import Text
 from typing_extensions import Final, TypeAlias
 
 from textual._cells import cell_len
 from textual._context import active_app
 from textual._loop import loop_last
+from textual.ansi_palette import AnsiPalette, NativeAnsiPalette
 from textual.cache import FIFOCache
 from textual.color import Color
 from textual.css.types import TextAlign, TextOverflow

@@ -73,15 +73,14 @@ from textual import (
 from textual._animator import DEFAULT_EASING, Animatable, Animator, EasingFunction
 from textual._ansi_sequences import SYNC_END, SYNC_START
 from textual._ansi_theme import ALABASTER, MONOKAI
-from textual.ansi_palette import AnsiPalette, MappedAnsiPalette
 from textual._callback import invoke
+from textual._clipboard import ClipboardContent
 from textual._compat import cached_property
 from textual._compositor import CompositorUpdate, run_steps
 from textual._context import NoActiveAppError, active_app, active_message_pump
 from textual._context import message_hook as message_hook_context_var
 from textual._dispatch_key import dispatch_key
 from textual._event_broker import NoHandler, extract_handler_actions
-from textual._clipboard import ClipboardContent
 from textual._files import generate_datetime_filename
 from textual._path import (
     CSSPathType,
@@ -91,6 +90,7 @@ from textual._path import (
 from textual._types import AnimationLevel
 from textual._wait import wait_for_idle
 from textual.actions import ActionParseResult, SkipAction
+from textual.ansi_palette import AnsiPalette, MappedAnsiPalette
 from textual.await_complete import AwaitComplete
 from textual.await_remove import AwaitRemove
 from textual.binding import Binding, BindingsMap, BindingType, Keymap
@@ -578,11 +578,11 @@ class App(Generic[ReturnType], DOMNode):
     theme: Reactive[str] = Reactive(constants.DEFAULT_THEME)
     """The name of the currently active theme."""
 
-    ansi_theme_dark = Reactive(lambda: MappedAnsiPalette(MONOKAI), init=False)
-    """Maps ANSI colors to hex colors using a Rich TerminalTheme object while using a dark theme."""
+    ansi_theme_dark: Reactive[AnsiPalette] = Reactive(lambda: MappedAnsiPalette(MONOKAI), init=False)
+    """Owns ANSI rendering and RGB-only operations for dark themes."""
 
-    ansi_theme_light = Reactive(lambda: MappedAnsiPalette(ALABASTER), init=False)
-    """Maps ANSI colors to hex colors using a Rich TerminalTheme object while using a light theme."""
+    ansi_theme_light: Reactive[AnsiPalette] = Reactive(lambda: MappedAnsiPalette(ALABASTER), init=False)
+    """Owns ANSI rendering and RGB-only operations for light themes."""
 
     ansi_color: Reactive[bool | None] = Reactive(None)
     """Allow ANSI colors in UI?"""
@@ -1573,7 +1573,7 @@ class App(Generic[ReturnType], DOMNode):
 
     @property
     def ansi_theme(self) -> AnsiPalette:
-        """The ANSI TerminalTheme currently being used.
+        """The current native ANSI or mapped RGB rendering palette.
 
         Defines how colors defined as ANSI (e.g. `magenta`) inside Rich renderables
         are mapped to hex codes.

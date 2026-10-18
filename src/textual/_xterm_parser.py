@@ -261,7 +261,9 @@ class XTermParser(Parser[Message]):
                             except (ParseTimeout, ParseEOF):
                                 break
                             if payload.endswith("\x07") or payload.endswith("\x1b\\"):
-                                payload = payload.removesuffix("\x07").removesuffix("\x1b\\")
+                                payload = payload.removesuffix("\x07").removesuffix(
+                                    "\x1b\\"
+                                )
                                 if payload.startswith(("10;", "11;", "4;")):
                                     on_token(messages.TerminalColour.from_osc(payload))
                                 break

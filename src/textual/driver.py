@@ -2,15 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import threading
-from concurrent.futures import Future
 from abc import ABC, abstractmethod
+from concurrent.futures import Future
 from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, BinaryIO, Callable, Iterator, Literal, TextIO
 
 from textual import events, log, messages
-from textual.events import MouseUp
 from textual.drivers._writer_thread import _FlushSignal
+from textual.events import MouseUp
 
 if TYPE_CHECKING:
     from textual.app import App
@@ -163,11 +163,15 @@ class Driver(ABC):
             self.write("".join(f"\x1b]{key};?\x1b\\" for key in keys))
             self.flush()
             _, missing = await asyncio.wait(
-                [asyncio.wrap_future(reply) for reply in replies.values()], timeout=timeout)
+                [asyncio.wrap_future(reply) for reply in replies.values()],
+                timeout=timeout,
+            )
             if missing:
                 raise TerminalGaveNoPalette(
                     "terminal gave no palette: unanswered "
-                    + ", ".join(key for key, reply in replies.items() if not reply.done())
+                    + ", ".join(
+                        key for key, reply in replies.items() if not reply.done()
+                    )
                 )
             return {key: reply.result() for key, reply in replies.items()}
         finally:
