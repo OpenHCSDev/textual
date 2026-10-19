@@ -83,6 +83,9 @@ class Layout(Message, verbose=True):
     def __init__(self, widget: Widget) -> None:
         super().__init__()
         self.widget = widget
+        # An ancestor may request this child's layout from its own handler.
+        # That handler must not become the sender and stop the request bubbling.
+        self.set_sender(widget)
 
     def ancestors(self) -> Iterator[DOMNode]:
         """A changed outer box must be placed by its parent."""
