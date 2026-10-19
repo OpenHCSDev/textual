@@ -1651,8 +1651,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
                 taken_scrolled = set(self._scrolled_widgets)
                 scoped = yield from self._compositor.reflow_subtrees_steps(
                     self, size, taken_scrolled,
-                    retain_geometry=self._layout_geometry_targets(), deadline=deadline,
-                    scroll=True)
+                    retain_geometry=self._layout_geometry_targets(), deadline=deadline)
                 exposed_widgets = (
                     scoped.shown if scoped is not None else
                     self._compositor.reflow_visible(
