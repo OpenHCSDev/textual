@@ -90,22 +90,20 @@ class NodeList(Sequence["Widget"]):
     def updated(self, *, added: frozenset[Widget] = frozenset(),
                 removed: frozenset[Widget] = frozenset()) -> None:
         """Invalidate projections and apply a native child change through its parents."""
-        nodes = self
-        while True:
-            nodes._updates += 1
-            if added or removed:
-                nodes._descendants = (nodes._descendants | added) - removed
-            node = None if nodes._parent is None else nodes._parent()
-            if node is None:
-                break
+        self._updates += 1
+        self._descendants = (self._descendants | added) - removed
+        node = None if self._parent is None else self._parent()
+        if node is not None:
             node._query_one_cache.clear()
-            parent = node._parent
-            if parent is None:
-                break
+        while node is not None and (parent := node._parent) is not None:
             nodes = parent._nodes
             # Virtual children share an event parent without joining its native tree.
             if node not in nodes._nodes_set:
                 added = removed = frozenset()
+            nodes._descendants = (nodes._descendants | added) - removed
+            nodes._updates += 1
+            parent._query_one_cache.clear()
+            node = parent
 
     def _sort(
         self,
