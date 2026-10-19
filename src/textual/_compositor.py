@@ -1146,11 +1146,8 @@ class Compositor:
             for root in outermost:
                 if root in discarded:
                     continue
-                original_members = (self._subtree_geometry[root].members() if root in self._subtree_geometry
-                                    else (widget for widget in widgets
-                                          if widget is not root and root in widget.ancestors))
                 old = [widget for widget, geometry in previous.items()
-                       if root in geometry.ancestors]
+                       if geometry.descends_from(root)]
                 # Screen-positioned descendants are not placed by their root alone.
                 if root.uses_screen_coordinates or any(
                     widget.uses_screen_coordinates for widget in old
@@ -1168,7 +1165,7 @@ class Compositor:
                 # first and so in front, as in a full arrangement.
                 for widget in (*old, root):
                     del scene[widget]
-                widgets.difference_update(tuple(original_members))
+                widgets.difference_update(root._nodes.descendants)
                 scene.update(arranged)
                 widgets.update(members)
                 placed.update(arranged)
