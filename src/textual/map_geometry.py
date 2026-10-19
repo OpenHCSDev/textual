@@ -72,3 +72,7 @@ class MapGeometry(NamedTuple):
     def descends_from(self, owner: DOMNode) -> bool:
         """Membership in the parent path acquired with this placement."""
         return owner in self.ancestors
+
+    def borrowed_widgets(self, *, invisible: bool = False) -> frozenset[Widget]:
+        """A local placement contributes no borrowed child source."""
+        return frozenset()

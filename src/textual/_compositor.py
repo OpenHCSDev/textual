@@ -304,6 +304,10 @@ class SubtreeGeometryPlacement:
     clip: SceneClip
     clip_bounds: tuple[Region, ...] = ()
 
+    def borrowed_widgets(self, *, invisible: bool = False) -> frozenset[Widget]:
+        """Logical membership stays with this original child source."""
+        return self.source.invisible_widgets if invisible else self.source.widgets
+
     @property
     def region(self) -> Region:
         """All child bounds, including overflow outside the root rectangle."""
@@ -331,7 +335,8 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
         return cls(key, MappingProxyType({
             node: (ordinal, entry)
             for ordinal, (node, entry) in enumerate(geometry.items())
-        }), widgets, invisible_widgets)
+        }), widgets.union(*(entry.borrowed_widgets() for entry in geometry.values())),
+            invisible_widgets.union(*(entry.borrowed_widgets(invisible=True) for entry in geometry.values())))
 
     @staticmethod
     def _route_geometry(geometry) -> Mapping[Widget, tuple[Widget, ...]]:
@@ -373,9 +378,6 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
     def members(self, *, invisible: bool = False) -> Iterator[Widget]:
         """Logical membership stays with each original source."""
         yield from self.invisible_widgets if invisible else self.widgets
-        for _, entry in self.geometry.values():
-            if isinstance(entry, SubtreeGeometryPlacement):
-                yield from entry.source.members(invisible=invisible)
 
     @cached_property
     def complete(self) -> bool:
