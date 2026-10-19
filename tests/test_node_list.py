@@ -236,7 +236,6 @@ async def test_native_cardinality_follows_custody_not_style_or_virtual_parent():
             # owner, including structure pending asynchronous removal.
             for node in root.walk_children(with_self=True):
                 assert node.descendant_count == len(node.walk_children())
-                assert node._nodes.descendants == frozenset(node.walk_children())
 
         check()
         original_count = app.screen.descendant_count

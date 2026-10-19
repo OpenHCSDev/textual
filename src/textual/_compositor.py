@@ -101,6 +101,11 @@ class GeometryDemand(ABC):
             widget.CACHE_SUBTREE_GEOMETRY or (capturing_source and widget.is_container)))
 
     @staticmethod
+    def restore_members(source, geometry, widgets, invisible_widgets):
+        widgets.update(source.members())
+        invisible_widgets.update(source.members(invisible=True))
+
+    @staticmethod
     @abstractmethod
     def select(arrangement: DockArrangeResult, region: Region,
                retained: set[Widget], visible_only: bool): ...
@@ -111,6 +116,14 @@ class ViewportGeometry(GeometryDemand):
     def select(arrangement, region, retained, visible_only):
         return (arrangement.get_visible_placements(region, retain=retained)
                 if visible_only else arrangement.placements)
+
+
+class ScrolledGeometry(ViewportGeometry):
+    """Scrolling exposes placements without changing offscreen visibility."""
+
+    @staticmethod
+    def restore_members(source, geometry, widgets, invisible_widgets):
+        widgets.update(geometry)
 
 
 class RequiredGeometry(GeometryDemand):
@@ -265,9 +278,6 @@ class SubtreeMapGeometry(NamedTuple):
     """Original native geometry with its untruncated intrinsic clip bounds."""
 
     geometry: MapGeometry
-    def borrowed_widgets(self, *, invisible: bool = False) -> frozenset[Widget]:
-        """Intrinsic placement retains the local record's membership contract."""
-        return self.geometry.borrowed_widgets(invisible=invisible)
     clip_bounds: tuple[Region, ...]
 
     @property
@@ -307,10 +317,6 @@ class SubtreeGeometryPlacement:
     clip: SceneClip
     clip_bounds: tuple[Region, ...] = ()
 
-    def borrowed_widgets(self, *, invisible: bool = False) -> frozenset[Widget]:
-        """Logical membership stays with this original child source."""
-        return self.source.invisible_widgets if invisible else self.source.widgets
-
     @property
     def region(self) -> Region:
         """All child bounds, including overflow outside the root rectangle."""
@@ -338,8 +344,7 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
         return cls(key, MappingProxyType({
             node: (ordinal, entry)
             for ordinal, (node, entry) in enumerate(geometry.items())
-        }), widgets.union(*(entry.borrowed_widgets() for entry in geometry.values())),
-            invisible_widgets.union(*(entry.borrowed_widgets(invisible=True) for entry in geometry.values())))
+        }), widgets, invisible_widgets)
 
     @staticmethod
     def _route_geometry(geometry) -> Mapping[Widget, tuple[Widget, ...]]:
@@ -381,6 +386,9 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
     def members(self, *, invisible: bool = False) -> Iterator[Widget]:
         """Logical membership stays with each original source."""
         yield from self.invisible_widgets if invisible else self.widgets
+        for _, entry in self.geometry.values():
+            if isinstance(entry, SubtreeGeometryPlacement):
+                yield from entry.source.members(invisible=invisible)
 
     @cached_property
     def complete(self) -> bool:
@@ -408,15 +416,14 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
         self, geometry: CompositorMap, widgets: set[Widget], invisible_widgets: set[Widget],
         key: SubtreeGeometryKey, clip: SceneClip, clips: dict[Widget, SceneClip],
         root: Widget, *, visible_only: bool, retained: set[Widget], bounds: Region,
-        deadline: StepDeadline | None,
+        deadline: StepDeadline | None, demand: type[GeometryDemand],
     ) -> Generator[None, None, None]:
         """Project this arrangement into `geometry`, pausing between entries once `deadline` passes."""
         yield from self.project_into(geometry, key, clip, clips, root,
                                      visible_only=visible_only, retained=retained, bounds=bounds,
                                      ancestry_root=root,
                                      ancestors=tuple(root.walk_ancestors()), deadline=deadline)
-        widgets.update(self.members())
-        invisible_widgets.update(self.members(invisible=True))
+        demand.restore_members(self, geometry, widgets, invisible_widgets)
 
     def project_into(self, geometry: CompositorMap, key: SubtreeGeometryKey,
                      clip: SceneClip, clips: dict[Widget, SceneClip], root: Widget,
@@ -1124,6 +1131,7 @@ class Compositor:
     def reflow_subtrees_steps(
         self, parent: Widget, size: Size, roots: Iterable[Widget], *,
         retain_geometry: Iterable[Widget] = (), deadline: StepDeadline | None = None,
+        layout_widgets: Iterable[Widget] = (), demand: type[GeometryDemand] = ViewportGeometry,
     ) -> Generator[None, None, SubtreeReflow | None]:
         """`reflow_subtrees`, pausing whenever `deadline` passes between widgets.
 
@@ -1142,7 +1150,9 @@ class Compositor:
             return None
         retain = tuple(retain_geometry)
         scene = dict(previous)
-        widgets = set(self.widgets)
+        widgets: set[Widget] = set()
+        changed = {child for widget in layout_widgets
+                   for child in widget.walk_children(with_self=True)}
         shown: set[Widget] = set()
         hidden: set[Widget] = set()
         placed: dict[Widget, MapGeometry] = {}
@@ -1152,7 +1162,7 @@ class Compositor:
                 if root in discarded:
                     continue
                 old = [widget for widget, geometry in previous.items()
-                       if geometry.descends_from(root)]
+                       if root in geometry.ancestors]
                 # Screen-positioned descendants are not placed by their root alone.
                 if root.uses_screen_coordinates or any(
                     widget.uses_screen_coordinates for widget in old
@@ -1163,14 +1173,13 @@ class Compositor:
                     retain_geometry=tuple(
                         target for target in retain if root in target.ancestors
                     ),
-                    deadline=deadline,
+                    deadline=deadline, demand=demand,
                 )
                 # The root goes too: re-added with its subtree, it keeps the
                 # arranged order, where its scrollbars (same order key) come
                 # first and so in front, as in a full arrangement.
                 for widget in (*old, root):
                     del scene[widget]
-                widgets.difference_update(root._nodes.descendants)
                 scene.update(arranged)
                 widgets.update(members)
                 placed.update(arranged)
@@ -1189,7 +1198,8 @@ class Compositor:
         self._full_map_invalidated = True
         self._visible_map = scene
         self._invalidate_render_projection()
-        self.widgets = widgets
+        self.widgets.difference_update(changed | discarded)
+        self.widgets.update(widgets)
         self._damage_geometry(previous, scene, parent)
         return SubtreeReflow(hidden=hidden, shown=shown, placed=placed)
 
@@ -1620,7 +1630,7 @@ class Compositor:
                 yield from resource.restore_into(
                     map, widgets, invisible_widgets, key, clip, clips, widget._render_widget,
                     visible_only=visible_only and not enclosing_complete,
-                    retained=retained_paths, bounds=root_geometry.region, deadline=deadline)
+                    retained=retained_paths, bounds=root_geometry.region, deadline=deadline, demand=demand)
 
         # Add top level (root) widget
         discarded = self._discarded_between_steps

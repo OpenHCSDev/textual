@@ -68,11 +68,3 @@ class MapGeometry(NamedTuple):
     def visible_region(self) -> Region:
         """The Widget region after clipping."""
         return self.clip.intersection(self.region)
-
-    def descends_from(self, owner: DOMNode) -> bool:
-        """Membership in the parent path acquired with this placement."""
-        return owner in self.ancestors
-
-    def borrowed_widgets(self, *, invisible: bool = False) -> frozenset[Widget]:
-        """A local placement contributes no borrowed child source."""
-        return frozenset()
