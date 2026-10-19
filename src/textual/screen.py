@@ -1768,7 +1768,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
             ancestor for ancestor in self._layout_widgets
             if not ancestor.geometry.auto_dimensions
         }
-        if not boundaries or self in boundaries:
+        if not boundaries or self in self._layout_widgets:
             return None
         return boundaries
 
