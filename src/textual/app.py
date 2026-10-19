@@ -101,6 +101,7 @@ from textual.css.errors import StylesheetError
 from textual.css.query import NoMatches
 from textual.css.stylesheet import RulesMap, Stylesheet
 from textual.dom import DOMNode, NoScreen
+from textual.design import ColorSystem
 from textual.driver import Driver
 from textual.errors import NoWidget
 from textual.features import FeatureFlag, parse_features
@@ -1469,7 +1470,8 @@ class App(Generic[ReturnType], DOMNode):
         theme = self.current_theme
         # Build the Textual color system from the theme.
         # This will contain $secondary, $primary, $background, etc.
-        variables = theme.to_color_system().generate()
+        self.color_system: ColorSystem = theme.to_color_system()
+        variables = self.color_system.generate()
         # Apply the additional variables from the theme
         variables = {**variables, **(theme.variables)}
         theme_variables = self.get_theme_variable_defaults()
