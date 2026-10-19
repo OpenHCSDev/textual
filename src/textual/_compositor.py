@@ -1146,12 +1146,9 @@ class Compositor:
             for root in outermost:
                 if root in discarded:
                     continue
-                original = self._subtree_geometry.get(root)
-                original_members = (
-                    original.members() if original is not None and original.complete
-                    else (widget for widget in widgets
-                          if widget is not root and root in widget.ancestors)
-                )
+                original_members = (self._subtree_geometry[root].members() if root in self._subtree_geometry
+                                    else (widget for widget in widgets
+                                          if widget is not root and root in widget.ancestors))
                 old = [widget for widget, geometry in previous.items()
                        if root in geometry.ancestors]
                 # Screen-positioned descendants are not placed by their root alone.
@@ -1171,8 +1168,6 @@ class Compositor:
                 # first and so in front, as in a full arrangement.
                 for widget in (*old, root):
                     del scene[widget]
-                # A complete acquired subtree already owns its logical members,
-                # including clipped children. Uncached roots have no such source.
                 widgets.difference_update(tuple(original_members))
                 scene.update(arranged)
                 widgets.update(members)
