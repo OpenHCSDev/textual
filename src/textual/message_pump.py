@@ -813,8 +813,8 @@ class MessagePump(ParentLinks, metaclass=_MessagePumpMeta):
             except Exception as error:
                 self._mounted_event.set()
                 self._is_mounted = True
-                self.app._handle_exception(error)
-                break
+                if not self.app._handle_exception(error):
+                    break
             finally:
                 message._complete_dispatch(self)
                 message._discard()
@@ -844,8 +844,8 @@ class MessagePump(ParentLinks, metaclass=_MessagePumpMeta):
                             try:
                                 await invoke(method, event)
                             except Exception as error:
-                                self.app._handle_exception(error)
-                                break
+                                if not self.app._handle_exception(error):
+                                    break
                     await self._flush_next_callbacks()
 
             if not self._closed and not self._message_queue.empty():
@@ -872,8 +872,8 @@ class MessagePump(ParentLinks, metaclass=_MessagePumpMeta):
                     with self.prevent(*callback._prevent):
                         await invoke(callback.callback)
                 except Exception as error:
-                    self.app._handle_exception(error)
-                    break
+                    if not self.app._handle_exception(error):
+                        break
         finally:
             for callback in callbacks:
                 callback._discard()
