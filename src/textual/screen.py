@@ -39,7 +39,7 @@ from textual import constants, errors, events, messages, on
 from textual._arrange import arrange
 from textual._auto_scroll import get_auto_scroll_regions
 from textual._callback import invoke
-from textual._compositor import Compositor, MapGeometry, StepDeadline, run_steps
+from textual._compositor import ScrolledGeometry, Compositor, MapGeometry, StepDeadline, run_steps
 from textual._context import active_message_pump
 from textual._path import (
     CSSPathType,
@@ -1643,15 +1643,14 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         ResizeEvent = events.Resize
 
         try:
-            # Pending layout requests require layout beyond the visible-scroll
-            # traversal.
             if scroll and not any(self._layout_widgets.values()):
                 # Only scrolls changed: re-arrange just the scrolled
                 # containers when they can be scoped, else the viewport.
                 taken_scrolled = set(self._scrolled_widgets)
                 scoped = yield from self._compositor.reflow_subtrees_steps(
                     self, size, taken_scrolled,
-                    retain_geometry=self._layout_geometry_targets(), deadline=deadline)
+                    retain_geometry=self._layout_geometry_targets(), deadline=deadline,
+                    demand=ScrolledGeometry)
                 exposed_widgets = (
                     scoped.shown if scoped is not None else
                     self._compositor.reflow_visible(
@@ -1662,8 +1661,6 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
 
             else:
                 viewport_layout = self._use_viewport_layout()
-                # Requests whose boundaries keep their boxes re-arrange only
-                # those subtrees (with any scrolled containers).
                 # What this layout consumes; requests made between its steps
                 # stay for the next one.
                 taken_layout = {ancestor: set(requesters)
@@ -1673,6 +1670,9 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
                 scoped = None if boundaries is None else (
                     yield from self._compositor.reflow_subtrees_steps(
                         self, size, boundaries | taken_scrolled,
+                        layout_widgets={widget for ancestor, requesters in taken_layout.items()
+                                        for widget in requesters
+                                        if widget not in taken_layout or widget is ancestor},
                         retain_geometry=self._layout_geometry_targets(), deadline=deadline,
                     ))
                 if scoped is not None:
