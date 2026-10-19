@@ -416,7 +416,8 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
         self, geometry: CompositorMap, widgets: set[Widget], invisible_widgets: set[Widget],
         key: SubtreeGeometryKey, clip: SceneClip, clips: dict[Widget, SceneClip],
         root: Widget, *, visible_only: bool, retained: set[Widget], bounds: Region,
-        deadline: StepDeadline | None, demand: type[GeometryDemand],
+        demand: type[GeometryDemand],
+        deadline: StepDeadline | None,
     ) -> Generator[None, None, None]:
         """Project this arrangement into `geometry`, pausing between entries once `deadline` passes."""
         yield from self.project_into(geometry, key, clip, clips, root,

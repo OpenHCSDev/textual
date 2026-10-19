@@ -1643,8 +1643,6 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         ResizeEvent = events.Resize
 
         try:
-            # Pending layout requests require layout beyond the visible-scroll
-            # traversal.
             if scroll and not any(self._layout_widgets.values()):
                 # Only scrolls changed: re-arrange just the scrolled
                 # containers when they can be scoped, else the viewport.
@@ -1663,8 +1661,6 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
 
             else:
                 viewport_layout = self._use_viewport_layout()
-                # Requests whose boundaries keep their boxes re-arrange only
-                # those subtrees (with any scrolled containers).
                 # What this layout consumes; requests made between its steps
                 # stay for the next one.
                 taken_layout = {ancestor: set(requesters)
