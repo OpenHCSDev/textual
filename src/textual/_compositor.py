@@ -1119,6 +1119,7 @@ class Compositor:
     def reflow_subtrees_steps(
         self, parent: Widget, size: Size, roots: Iterable[Widget], *,
         retain_geometry: Iterable[Widget] = (), deadline: StepDeadline | None = None,
+        scroll: bool = False,
     ) -> Generator[None, None, SubtreeReflow | None]:
         """`reflow_subtrees`, pausing whenever `deadline` passes between widgets.
 
@@ -1137,7 +1138,9 @@ class Compositor:
             return None
         retain = tuple(retain_geometry)
         scene = dict(previous)
-        widgets = set(self.widgets)
+        # A pure scroll changes placements, not the arrangement's membership.
+        # Layout changes still replace the considered members of each root.
+        widgets = self.widgets if scroll else set(self.widgets)
         shown: set[Widget] = set()
         hidden: set[Widget] = set()
         placed: dict[Widget, MapGeometry] = {}
@@ -1165,12 +1168,14 @@ class Compositor:
                 # first and so in front, as in a full arrangement.
                 for widget in (*old, root):
                     del scene[widget]
-                widgets.difference_update([
-                    widget for widget in widgets
-                    if widget is not root and root in widget.ancestors
-                ])
+                if not scroll:
+                    widgets.difference_update([
+                        widget for widget in widgets
+                        if widget is not root and root in widget.ancestors
+                    ])
                 scene.update(arranged)
-                widgets.update(members)
+                if not scroll:
+                    widgets.update(members)
                 placed.update(arranged)
                 shown.update(arranged.keys() - previous.keys())
                 hidden.update(set(old) - arranged.keys())
