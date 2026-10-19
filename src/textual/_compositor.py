@@ -100,7 +100,7 @@ class GeometryDemand(ABC):
 
     @classmethod
     def cache_subtree(cls, widget: Widget, capacity: int, capturing_source: bool) -> bool:
-        return bool(cls.capture_subtrees and capacity and widget._is_mounted and (
+        return cls.capture_subtrees and bool(capacity and widget._is_mounted and (
             widget.CACHE_SUBTREE_GEOMETRY or (capturing_source and widget.is_container)))
 
     @staticmethod
