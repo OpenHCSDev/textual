@@ -2015,8 +2015,11 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         """Called by a timer from _handle_mouse_move to update the tooltip.
 
         Args:
-            widget: The widget under the mouse.
+            widget: The widget under the mouse when the callback was scheduled.
         """
+        # A stopped timer may already have queued its callback.
+        if widget is not self._tooltip_widget:
+            return
 
         try:
             tooltip = self.get_child_by_type(Tooltip)
