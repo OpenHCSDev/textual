@@ -265,6 +265,9 @@ class SubtreeMapGeometry(NamedTuple):
     """Original native geometry with its untruncated intrinsic clip bounds."""
 
     geometry: MapGeometry
+    def borrowed_widgets(self, *, invisible: bool = False) -> frozenset[Widget]:
+        """Intrinsic placement retains the local record's membership contract."""
+        return self.geometry.borrowed_widgets(invisible=invisible)
     clip_bounds: tuple[Region, ...]
 
     @property
