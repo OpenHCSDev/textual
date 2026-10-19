@@ -23,6 +23,7 @@ from types import MappingProxyType
 from typing import (
     TYPE_CHECKING,
     Callable,
+    ClassVar,
     Collection,
     Generator,
     Generic,
@@ -72,6 +73,8 @@ CompositorMap: TypeAlias = "dict[Widget, MapGeometry]"
 class GeometryDemand(ABC):
     """Which original placements this traversal needs, not another geometry store."""
 
+    capture_subtrees: ClassVar[bool] = True
+
     @staticmethod
     def retained_paths(root: Widget, retain_geometry: Iterable[Widget],
                        visible_only: bool) -> set[Widget]:
@@ -95,9 +98,9 @@ class GeometryDemand(ABC):
                     retained_paths.update(path)
         return retained_paths
 
-    @staticmethod
-    def cache_subtree(widget: Widget, capacity: int, capturing_source: bool) -> bool:
-        return bool(capacity and widget._is_mounted and (
+    @classmethod
+    def cache_subtree(cls, widget: Widget, capacity: int, capturing_source: bool) -> bool:
+        return bool(cls.capture_subtrees and capacity and widget._is_mounted and (
             widget.CACHE_SUBTREE_GEOMETRY or (capturing_source and widget.is_container)))
 
     @staticmethod
@@ -121,6 +124,8 @@ class ViewportGeometry(GeometryDemand):
 class ScrolledGeometry(ViewportGeometry):
     """Scrolling exposes placements without changing offscreen visibility."""
 
+    capture_subtrees = False
+
     @staticmethod
     def restore_members(source, geometry, widgets, invisible_widgets):
         widgets.update(geometry)
@@ -129,9 +134,7 @@ class ScrolledGeometry(ViewportGeometry):
 class RequiredGeometry(GeometryDemand):
     """Queries consume arranged positions, not whole retained paint captures."""
 
-    @staticmethod
-    def cache_subtree(widget, capacity, capturing_source):
-        return False
+    capture_subtrees = False
 
     @staticmethod
     def select(arrangement, region, retained, visible_only):
