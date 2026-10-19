@@ -3309,10 +3309,11 @@ class App(Generic[ReturnType], DOMNode):
 
         self._close_messages_no_wait()
 
-    def _handle_exception(self, error: Exception) -> None:
-        """Called with an unhandled exception.
+    def _handle_exception(self, error: Exception) -> bool:
+        """Report an exception and return whether processing may continue.
 
-        Always results in the app exiting.
+        The default handler is fatal and returns False. Applications may
+        handle a runtime error and return True; startup is not retried.
 
         Args:
             error: An exception instance.
@@ -3330,6 +3331,7 @@ class App(Generic[ReturnType], DOMNode):
         else:
             # Use default exception rendering
             self._fatal_error()
+        return False
 
     def _fatal_error(self) -> None:
         """Exits the app after an unhandled exception."""
