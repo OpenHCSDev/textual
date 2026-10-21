@@ -7,6 +7,7 @@ class Tooltip(Static, inherit_css=False):
     DEFAULT_CSS = """
     Tooltip {
         layer: _tooltips;
+        overlay: screen;
         margin: 1 0;
         padding: 1 2;
         background: $panel;

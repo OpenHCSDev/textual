@@ -9,6 +9,7 @@ The `Screen` class is a special widget which represents the content in the termi
 from __future__ import annotations
 
 import asyncio
+from weakref import WeakSet
 from contextlib import contextmanager
 from functools import partial
 from operator import attrgetter
@@ -38,7 +39,7 @@ from textual import constants, errors, events, messages, on
 from textual._arrange import arrange
 from textual._auto_scroll import get_auto_scroll_regions
 from textual._callback import invoke
-from textual._compositor import Compositor, MapGeometry, StepDeadline, run_steps
+from textual._compositor import ScrolledGeometry, Compositor, MapGeometry, StepDeadline, run_steps
 from textual._context import active_message_pump
 from textual._path import (
     CSSPathType,
@@ -323,8 +324,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         )
         """A signal published when text selection has started."""
 
-        self._css_update_count = -1
-        """Track updates to CSS."""
+        self._pending_styles: WeakSet[DOMNode] = WeakSet()
 
         self._layout_widgets: dict[DOMNode, set[Widget]] = {}
         """Widgets whose layout may have changed."""
@@ -721,9 +721,9 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
             top_widget, top_region = next(widgets_under_coordinate)
         except StopIteration:
             raise errors.NoWidget(f"No hover widget under screen coordinate ({x}, {y})")
-        if not top_widget._has_hover_style:
+        if not top_widget._hover_dependency.own_hover:
             for widget, region in widgets_under_coordinate:
-                if widget._has_hover_style:
+                if widget._hover_dependency.own_hover:
                     return HoverWidgets((top_widget, top_region), (widget, region))
             return HoverWidgets((top_widget, top_region), None)
         return HoverWidgets((top_widget, top_region), (top_widget, top_region))
@@ -1643,15 +1643,14 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         ResizeEvent = events.Resize
 
         try:
-            # Pending layout requests require layout beyond the visible-scroll
-            # traversal.
             if scroll and not any(self._layout_widgets.values()):
                 # Only scrolls changed: re-arrange just the scrolled
                 # containers when they can be scoped, else the viewport.
                 taken_scrolled = set(self._scrolled_widgets)
                 scoped = yield from self._compositor.reflow_subtrees_steps(
                     self, size, taken_scrolled,
-                    retain_geometry=self._layout_geometry_targets(), deadline=deadline)
+                    retain_geometry=self._layout_geometry_targets(), deadline=deadline,
+                    demand=ScrolledGeometry)
                 exposed_widgets = (
                     scoped.shown if scoped is not None else
                     self._compositor.reflow_visible(
@@ -1662,8 +1661,6 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
 
             else:
                 viewport_layout = self._use_viewport_layout()
-                # Requests whose boundaries keep their boxes re-arrange only
-                # those subtrees (with any scrolled containers).
                 # What this layout consumes; requests made between its steps
                 # stay for the next one.
                 taken_layout = {ancestor: set(requesters)
@@ -1673,6 +1670,9 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
                 scoped = None if boundaries is None else (
                     yield from self._compositor.reflow_subtrees_steps(
                         self, size, boundaries | taken_scrolled,
+                        layout_widgets={widget for ancestor, requesters in taken_layout.items()
+                                        for widget in requesters
+                                        if widget not in taken_layout or widget is ancestor},
                         retain_geometry=self._layout_geometry_targets(), deadline=deadline,
                     ))
                 if scoped is not None:
@@ -1768,7 +1768,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
             ancestor for ancestor in self._layout_widgets
             if not ancestor.geometry.auto_dimensions
         }
-        if not boundaries or self in boundaries:
+        if not boundaries or self in self._layout_widgets:
             return None
         return boundaries
 
@@ -1852,7 +1852,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         if self.is_attached:
 
             if event.refresh_styles:
-                self.update_node_styles(animate=False)
+                self.app.stylesheet.update(self, animate=False, nodes=self._pending_styles)
             if self._size != size:
                 self._refresh_layout(size)
             self.refresh()
@@ -2014,8 +2014,11 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         """Called by a timer from _handle_mouse_move to update the tooltip.
 
         Args:
-            widget: The widget under the mouse.
+            widget: The widget under the mouse when the callback was scheduled.
         """
+        # A stopped timer may already have queued its callback.
+        if widget is not self._tooltip_widget:
+            return
 
         try:
             tooltip = self.get_child_by_type(Tooltip)
@@ -2292,10 +2295,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
                     select_widget, select_offset = self.get_widget_and_offset_at(
                         event.x, event.y
                     )
-                    # Exclude scrollbars, so the user may navigate without clearing the selection
-                    if select_widget is None or not select_widget.has_class(
-                        "-textual-system"
-                    ):
+                    if select_widget is not None and select_widget.allow_select:
                         self.clear_selection()
 
                 self._mouse_down_offset = None

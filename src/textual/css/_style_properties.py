@@ -24,7 +24,7 @@ from typing import (
 import rich.errors
 import rich.repr
 from rich.style import Style
-from typing_extensions import TypeAlias
+from typing_extensions import Self, TypeAlias
 
 from textual._border import normalize_border_value
 from textual._cells import cell_len
@@ -78,7 +78,7 @@ class StyleProperty(Generic[PropertyGetType]):
     """The value read when the rule is unset."""
 
     @overload
-    def __get__(self, obj: None, objtype: type[StylesBase] | None = None) -> StyleProperty[PropertyGetType]: ...
+    def __get__(self, obj: None, objtype: type[StylesBase] | None = None) -> Self: ...
 
     @overload
     def __get__(self, obj: StylesBase, objtype: type[StylesBase] | None = None) -> PropertyGetType: ...
@@ -757,11 +757,14 @@ class StringEnumProperty(StyleProperty[EnumType], Generic[EnumType]):
                 ),
             )
         if obj.set_rule(self.name, value):
-            obj.refresh(
-                layout=self._layout,
-                children=self._refresh_children,
-                parent=self._refresh_parent,
-            )
+            self.refresh_node(obj)
+
+    def refresh_node(self, obj: StylesBase) -> None:
+        obj.refresh(
+            layout=self._layout,
+            children=self._refresh_children,
+            parent=self._refresh_parent,
+        )
 
 
 class DisplayProperty(StringEnumProperty):

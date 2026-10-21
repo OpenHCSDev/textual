@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator
 from typing import TYPE_CHECKING
 
@@ -11,7 +12,32 @@ from textual.message import Message
 
 if TYPE_CHECKING:
     from textual.dom import DOMNode
+    from textual.driver import Driver
     from textual.widget import Widget
+
+
+class TerminalColour(Message, bubble=False):
+    """An OSC 4, 10 or 11 colour reply decoded at the terminal boundary."""
+
+    _reply = re.compile(r"(10|11|4;\d+);rgb:([\da-fA-F]{1,4})/([\da-fA-F]{1,4})/([\da-fA-F]{1,4})")
+
+    def __init__(self, key: str, rgb: tuple[int, int, int]) -> None:
+        super().__init__()
+        self.key = key
+        self.rgb = rgb
+
+    def deliver_from_driver(self, driver: Driver) -> None:
+        driver.resolve_colour(self.key, self.rgb)
+
+    @classmethod
+    def from_osc(cls, payload: str) -> TerminalColour:
+        match = cls._reply.fullmatch(payload)
+        if match is None:
+            raise ValueError(f"Invalid terminal colour reply: {payload!r}")
+        key, red, green, blue = match.groups()
+        def channel(value: str) -> int:
+            return round(int(value, 16) * 255 / (16 ** len(value) - 1))
+        return cls(key, (channel(red), channel(green), channel(blue)))
 
 
 @rich.repr.auto
@@ -57,6 +83,9 @@ class Layout(Message, verbose=True):
     def __init__(self, widget: Widget) -> None:
         super().__init__()
         self.widget = widget
+        # An ancestor may request this child's layout from its own handler.
+        # That handler must not become the sender and stop the request bubbling.
+        self.set_sender(widget)
 
     def ancestors(self) -> Iterator[DOMNode]:
         """A changed outer box must be placed by its parent."""

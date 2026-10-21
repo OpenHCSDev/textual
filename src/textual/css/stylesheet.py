@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import os
 from collections import defaultdict
-from itertools import chain
+from dataclasses import dataclass
+from itertools import chain, zip_longest
 from operator import itemgetter
 from pathlib import Path, PurePath
-from typing import Final, Iterable, NamedTuple, Sequence, cast
+from typing import TYPE_CHECKING, Callable, Collection, Final, Iterable, NamedTuple, Sequence, cast
 from weakref import proxy
 
 import rich.repr
@@ -17,7 +18,7 @@ from rich.text import Text
 
 from textual.cache import FIFOCache, LRUCache
 from textual.css.errors import StylesheetError
-from textual.css.model import RuleSet, SelectorType
+from textual.css.model import HoverDependency, RuleSet, SelectorType
 from textual.css.parse import parse
 from textual.css.styles import RenderStyles, RulesMap, Styles
 from textual.css.tokenize import Token, tokenize_values
@@ -27,6 +28,9 @@ from textual.dom import DOMNode
 from textual.markup import parse_style_tokens
 from textual.style import Style
 from textual.widget import Widget
+
+if TYPE_CHECKING:
+    from textual.screen import Screen
 
 _DEFAULT_STYLES = Styles()
 
@@ -163,11 +167,44 @@ class CssSource(NamedTuple):
     scope: str = ""
 
 
+@dataclass(frozen=True)
+class CandidateRules:
+    """Declaration-only planning shared by widgets and virtual components."""
+
+    rules: tuple[RuleSet, ...]
+    pseudo_classes: frozenset[str]
+    classes: frozenset[str]
+    hover: HoverDependency
+
+    @classmethod
+    def compile(cls, all_rules, rules_map, selector_names: frozenset[str]) -> CandidateRules:
+        selected = {rule for name in selector_names for rule in rules_map.get(name, ())}
+        rules = tuple(rule for rule in reversed(all_rules) if rule in selected)
+        dependencies = [
+            group.hover_dependencies(selector_names)
+            for rule in rules_map.get(":hover", ()) for group in rule.selector_set
+        ]
+        return cls(
+            rules=rules,
+            pseudo_classes=frozenset().union(*(rule.pseudo_classes for rule in rules)),
+            classes=frozenset(
+                selector.name for rule in rules for group in rule.selector_set
+                for selector in group.selectors if selector.type == SelectorType.CLASS
+            ),
+            hover=HoverDependency(
+                own_hover=any(dependency.own_hover for dependency in dependencies),
+                ancestor_hover=any(dependency.ancestor_hover for dependency in dependencies),
+            ),
+        )
+
+
 @rich.repr.auto(angular=True)
 class Stylesheet:
     """A Stylesheet generated from Textual CSS."""
 
-    def __init__(self, *, variables: dict[str, str] | None = None) -> None:
+    def __init__(self, *, variables: dict[str, str] | None = None,
+                 screens: Callable[[], Iterable[Screen]] = tuple) -> None:
+        self._screens = screens
         self._rules: list[RuleSet] = []
         self._rules_map: dict[str, list[RuleSet]] | None = None
         self._variables = variables or {}
@@ -175,16 +212,13 @@ class Stylesheet:
         self.source: dict[CSSLocation, CssSource] = {}
         self._require_parse = False
         self._invalid_css: set[str] = set()
-        self._parse_cache: LRUCache[tuple, list[RuleSet]] = LRUCache(64)
         self._source_rules: dict[CSSLocation, tuple[CssSource, list[RuleSet]]] = {}
         self._style_parse_cache: LRUCache[str, Style] = LRUCache(1024 * 4)
         self._path_rules_cache: FIFOCache[tuple, RulesMap] = FIFOCache(4096)
         self._ids_in_rules: set[str] = set()
         self._classes_in_rules: set[str] = set()
         self._local_display_classes: dict[str, bool] = {}
-        self._candidate_rules: FIFOCache[
-            frozenset[str], tuple[list[RuleSet], frozenset[str], frozenset[str], tuple[RuleSet, ...]]
-        ] = FIFOCache(1024)
+        self._candidate_rules: FIFOCache[frozenset[str], CandidateRules] = FIFOCache(1024)
 
     def __rich_repr__(self) -> rich.repr.Result:
         yield list(self.source.keys())
@@ -204,8 +238,6 @@ class Stylesheet:
         """
         if self._require_parse:
             self.parse()
-            self._require_parse = False
-        assert self._rules is not None
         return self._rules
 
     @property
@@ -240,7 +272,7 @@ class Stylesheet:
         Returns:
             New stylesheet.
         """
-        stylesheet = Stylesheet(variables=self._variables.copy())
+        stylesheet = Stylesheet(variables=self._variables.copy(), screens=self._screens)
         stylesheet.source = self.source.copy()
         return stylesheet
 
@@ -251,9 +283,9 @@ class Stylesheet:
             variables: A mapping of name to variable.
         """
         self._variables = variables
+        self.invalidate({""})
         self.__variable_tokens = None
         self._invalid_css = set()
-        self._parse_cache.clear()
         self._source_rules.clear()
         self._style_parse_cache.clear()
         self._path_rules_cache.clear()
@@ -299,13 +331,8 @@ class Stylesheet:
         Returns:
             List of RuleSets.
         """
-        cache_key = (css, read_from, is_default_rules, tie_breaker, scope)
         try:
-            return self._parse_cache[cache_key]
-        except KeyError:
-            pass
-        try:
-            rules = list(
+            return list(
                 parse(
                     scope,
                     css,
@@ -320,9 +347,6 @@ class Stylesheet:
             raise
         except Exception as error:
             raise StylesheetError(f"failed to parse css; {error}") from None
-
-        self._parse_cache[cache_key] = rules
-        return rules
 
     def read(self, filename: str | PurePath) -> None:
         """Read Textual CSS file.
@@ -445,10 +469,9 @@ class Stylesheet:
                 raise StylesheetParseError(error_renderable)
             add_rules(css_rules)
             source_rules[read_from] = (source, css_rules)
-        # Retain only the current declaration for each registered source. Unlike
-        # the small historical parse LRU, this cannot thrash when an app mounts
-        # more widget types than the LRU can hold, nor accumulate edited versions.
-        self._source_rules = source_rules
+        # Retain only the current declaration and parsed rules for each source.
+        # Edits replace that result; unchanged sources reuse it directly.
+        self._publish_sources(source_rules)
         self._rules = rules
         self._ids_in_rules = {
             selector.name for rule in rules for group in rule.selector_set
@@ -471,35 +494,36 @@ class Stylesheet:
             StylesheetError: If the CSS could not be read.
             StylesheetParseError: If the CSS is invalid.
         """
-        # Do this in a fresh Stylesheet so if there are errors we don't break self.
-        stylesheet = Stylesheet(variables=self._variables)
+        # parse publishes only after every source succeeds; failed input leaves
+        # the current rules and their source declarations intact.
         self._path_rules_cache.clear()
-        self._local_display_classes.clear()
-        self._candidate_rules.clear()
-        for read_from, (css, is_defaults, tie_breaker, scope) in self.source.items():
-            stylesheet.add_source(
-                css,
-                read_from=read_from,
-                is_default_css=is_defaults,
-                tie_breaker=tie_breaker,
-                scope=scope,
-            )
-        try:
-            stylesheet.parse()
-        except Exception:
-            # If we don't update self's invalid CSS, we might end up reparsing this CSS
-            # before Textual quits application mode.
-            # See https://github.com/Textualize/textual/issues/3581.
-            self._invalid_css.update(stylesheet._invalid_css)
-            raise
-        else:
-            self._rules = stylesheet.rules
-            self._source_rules = stylesheet._source_rules
-            self._ids_in_rules = stylesheet._ids_in_rules
-            self._classes_in_rules = stylesheet._classes_in_rules
-            self._rules_map = None
-            self.source = stylesheet.source
-            self._require_parse = False
+        self._invalid_css.clear()
+        self.parse()
+
+    def _publish_sources(self, sources: dict[CSSLocation, tuple[CssSource, list[RuleSet]]]) -> None:
+        """Invalidate changed scopes once, including removed and reordered sources."""
+        scopes = set()
+        for before, after in zip_longest(self._source_rules.items(), sources.items()):
+            if (before is None or after is None or
+                    (before[0], before[1][0]) != (after[0], after[1][0])):
+                scopes.update(item[1][0].scope for item in (before, after) if item is not None)
+        self._source_rules = sources
+        self.invalidate(scopes)
+
+    def invalidate(self, scopes: set[str]) -> None:
+        """Queue affected nodes on their screens at the time a source changes."""
+        if not scopes:
+            return
+        for screen in self._screens():
+            ancestors = screen.css_path_nodes[:-1]
+            reached = "" in scopes or any(scopes.intersection(node._css_types) for node in ancestors)
+            stack = [(screen, reached)]
+            while stack:
+                node, reached = stack.pop()
+                reached = reached or bool(scopes.intersection(node._css_types))
+                if reached or any(scopes.intersection(child._css_types) for child in node._get_virtual_dom()):
+                    screen._pending_styles.add(node)
+                stack.extend((child, reached) for child in node.children)
 
     # pseudo classes which iterate over multiple nodes
     # These shouldn't be used in a cache key
@@ -537,7 +561,7 @@ class Stylesheet:
 
     def _get_candidate_rules(
         self, selector_names: set[str]
-    ) -> tuple[list[RuleSet], frozenset[str], frozenset[str], tuple[RuleSet, ...]]:
+    ) -> CandidateRules:
         """Share declaration planning for widgets and their virtual components.
 
         Parsing retires this bounded resource. Ancestry and live pseudo-classes
@@ -546,22 +570,10 @@ class Stylesheet:
         # Resolve pending parsing before consulting the rule index or cache.
         all_rules = self.rules
         rules_map = self.rules_map
-        selectors = frozenset(rules_map.keys() & selector_names)
+        selectors = frozenset(selector_names)
         candidates = self._candidate_rules.get(selectors)
         if candidates is None:
-            limit_rules = {rule for name in selectors for rule in rules_map[name]}
-            rules = list(filter(limit_rules.__contains__, reversed(all_rules)))
-            all_pseudo_classes = frozenset().union(
-                *(rule.pseudo_classes for rule in rules)
-            )
-            rule_classes = frozenset(
-                selector.name
-                for rule in rules
-                for group in rule.selector_set
-                for selector in group.selectors
-                if selector.type == SelectorType.CLASS
-            )
-            candidates = rules, all_pseudo_classes, rule_classes, tuple(rules)
+            candidates = CandidateRules.compile(all_rules, rules_map, selectors)
             self._candidate_rules[selectors] = candidates
         return candidates
 
@@ -605,11 +617,12 @@ class Stylesheet:
                 # must not force identical newly mounted rows to rematch all rules.
                 cache = {}
 
-            rules, all_pseudo_classes, rule_classes, rule_key = (
-                self._get_candidate_rules(node._selector_names)
-            )
+            candidates = self._get_candidate_rules(node._selector_names)
+            rules = rule_key = candidates.rules
+            all_pseudo_classes = candidates.pseudo_classes
+            rule_classes = candidates.classes
+            node._hover_dependency = candidates.hover
             rules_map = self.rules_map
-            node._has_hover_style = "hover" in all_pseudo_classes
             node._has_focus_within = "focus-within" in all_pseudo_classes
             node._has_order_style = not all_pseudo_classes.isdisjoint(
                 {"first-of-type", "last-of-type", "first-child", "last-child", "empty"}
@@ -760,15 +773,15 @@ class Stylesheet:
             # sibling/descendant can change without changing this path key.
             component_candidates = self._get_component_candidate_rules(component_classes)
             if all(
-                pseudo_classes.isdisjoint(self._EXCLUDE_PSEUDO_CLASSES_FROM_CACHE)
-                for _, (_, pseudo_classes, _, _) in component_candidates
+                candidate.pseudo_classes.isdisjoint(self._EXCLUDE_PSEUDO_CLASSES_FROM_CACHE)
+                for _, candidate in component_candidates
             ):
                 relevant_classes = frozenset().union(
-                    *(classes for _, (_, _, classes, _) in component_candidates)
+                    *(candidate.classes for _, candidate in component_candidates)
                 )
                 signature = (
-                    tuple((component, rule_key)
-                          for component, (_, _, _, rule_key) in component_candidates),
+                    tuple((component, candidate.rules)
+                          for component, candidate in component_candidates),
                     frozenset(component_classes),
                     self._css_path_key(node.css_path_nodes, relevant_classes),
                 )
@@ -909,18 +922,24 @@ class Stylesheet:
         self._local_display_classes[class_name] = mentioned
         return mentioned
 
-    def update(self, root: DOMNode, animate: bool = False) -> None:
+    def update(self, root: DOMNode, animate: bool = False, *, nodes: Collection[DOMNode] | None = None) -> None:
         """Update styles on node and its children.
 
         Args:
             root: Root note to update.
             animate: Enable CSS animation.
+            nodes: Pending nodes to update, or all descendants for an explicit reload.
         """
 
         # A whole stylesheet/theme reload also changes inputs outside matched
         # declarations (highlighting and component renderers). Keep that explicit
         # refresh distinct from ordinary class/pseudo-class rematching.
-        self.update_nodes(root.walk_children(with_self=True), animate=animate, refresh=True)
+        if nodes is not None and not nodes:
+            return
+        affected = [node for node in root.walk_children(with_self=True) if nodes is None or node in nodes]
+        self.update_nodes(affected, animate=animate, refresh=True)
+        for screen in self._screens():
+            screen._pending_styles.difference_update(affected)
 
     def update_app_focus(self, root: DOMNode) -> None:
         """Restyle only subtrees whose rules can depend on application focus.
@@ -996,6 +1015,18 @@ class Stylesheet:
             pending.extend((child, names) for child in node.children)
             if isinstance(node, Widget):
                 pending.extend((child, names) for child in node._get_virtual_dom())
+        self.update_nodes(affected, animate=True)
+
+    def update_hover(self, roots: Iterable[DOMNode]) -> None:
+        """Rematch hover owners and only ancestor-hover-dependent descendants.
+
+        Inherited paint is refreshed by Styles' existing descriptor/batch path;
+        inheritance does not require rematching a descendant's declarations.
+        """
+        affected = dict.fromkeys(
+            node for root in roots for node in root.walk_children(with_self=True)
+            if node is root or node._hover_dependency.ancestor_hover
+        )
         self.update_nodes(affected, animate=True)
 
     def update_nodes(

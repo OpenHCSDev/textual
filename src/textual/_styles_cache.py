@@ -7,20 +7,18 @@ from typing import TYPE_CHECKING, Callable, Iterable, Sequence
 import rich.repr
 from rich.segment import Segment
 from rich.style import Style as RichStyle
-from rich.terminal_theme import TerminalTheme
 
 from textual import log
 from textual._border import get_box, render_border_label, render_row
 from textual._opacity import _apply_opacity
 from textual._paint_state import PaintState
 from textual._segment_tools import apply_hatch, line_pad, line_trim, make_blank
+from textual.ansi_palette import AnsiPalette
 from textual.color import TRANSPARENT, Color
 from textual.constants import DEBUG
 from textual.content import Content
 from textual.filter import LineFilter
 from textual.geometry import Region, Size, Spacing
-from textual.renderables.text_opacity import TextOpacity
-from textual.renderables.tint import Tint
 from textual.strip import Strip
 from textual.style import Style
 
@@ -164,12 +162,12 @@ class StylesCache:
 
     def refresh_paint(self, widget: Widget) -> None:
         """Dirty only a widget whose current paint differs from its cached lines."""
-        if self.widget_paint_key(widget, widget.frame_paint, widget._resolved_paint_state()) != self._paint_key:
+        if self.widget_paint_key(widget, widget.frame_paint, widget._paint_state) != self._paint_key:
             widget.refresh()
 
     def render_widget(self, widget: Widget, crop: Region) -> list[Strip]:
         """Reuse retained lines; prepare their painter only on the first miss."""
-        state = widget._resolved_paint_state()
+        state = widget._paint_state
         if widget.BLANK:
             return [Strip.blank(crop.width, state.rich_style)] * crop.height
         paint = widget.frame_paint
@@ -292,7 +290,7 @@ class StylesCache:
         render_content_line: Callable[[int], Strip],
         border_title: tuple[Content, Color, Color, Style] | None,
         border_subtitle: tuple[Content, Color, Color, Style] | None,
-        ansi_theme: TerminalTheme,
+        ansi_theme: AnsiPalette,
         native_ansi: bool,
     ) -> Strip:
         """Render a styled line.
@@ -363,9 +361,7 @@ class StylesCache:
                 New list of segments
             """
             if styles.tint.a:
-                segments = Tint.process_segments(
-                    segments, styles.tint, ansi_theme, background
-                )
+                segments = ansi_theme.tint(segments, styles.tint, background)
             if opacity != 1.0:
                 segments = _apply_opacity(segments, base_background, opacity)
             return segments
@@ -469,9 +465,7 @@ class StylesCache:
                 line = Strip.blank(content_width, inner.rich_style)
 
             if (text_opacity := styles.text_opacity) != 1.0:
-                line = TextOpacity.process_segments(
-                    line, text_opacity, ansi_theme, native_ansi
-                )
+                line = ansi_theme.opacity(line, text_opacity, native_ansi)
             if pad_left or pad_right:
                 line = line_post(line_pad(line, pad_left, pad_right, inner.rich_style))
             else:

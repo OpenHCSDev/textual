@@ -86,6 +86,18 @@ class ColorSystem:
         """Overrides for specific variables."""
         self.ansi = ansi
         """Generate an ansi theme."""
+        self._generated_colors: dict[str, Color] = {}
+
+    def color(self, name: str) -> Color:
+        """Return a generated palette color without decoding its CSS view."""
+        return self._generated_colors[name]
+
+    def _color_variable(self, name: str, color: Color) -> str:
+        # Overrides are external input; decode them once at their owner.
+        if name in self.variables:
+            color = Color.parse(self.variables[name])
+        self._generated_colors[name] = color
+        return color.hex
 
     @property
     def shades(self) -> Iterable[str]:
@@ -109,6 +121,7 @@ class ColorSystem:
         Returns:
             A mapping of color name on to a CSS-style encoded color
         """
+        self._generated_colors.clear()
         if self.ansi:
             return self._generate_ansi()
         else:
@@ -128,22 +141,22 @@ class ColorSystem:
         success = self.success or secondary
         accent = self.accent or primary
 
-        background = "ansi_default" if self.background is None else self.background.hex
-        foreground = "ansi_default" if self.foreground is None else self.foreground.hex
+        background = self._color_variable("background", self.background or Color(0, 0, 0, ansi=-1))
+        foreground = self._color_variable("foreground", self.foreground or Color(0, 0, 0, ansi=-1))
 
         colors: dict[str, str] = {
-            "primary": primary.hex,
-            "secondary": secondary.hex,
-            "warning": warning.hex,
-            "error": error.hex,
-            "success": success.hex,
-            "accent": accent.hex,
+            "primary": self._color_variable("primary", primary),
+            "secondary": self._color_variable("secondary", secondary),
+            "warning": self._color_variable("warning", warning),
+            "error": self._color_variable("error", error),
+            "success": self._color_variable("success", success),
+            "accent": self._color_variable("accent", accent),
             "background": background,
             "foreground": foreground,
-            "primary-background": background,
-            "secondary-background": background,
-            "boost": "transparent",
-            "surface": "transparent",
+            "primary-background": self._color_variable("primary-background", self.color("background")),
+            "secondary-background": self._color_variable("secondary-background", self.color("background")),
+            "boost": self._color_variable("boost", TRANSPARENT),
+            "surface": self._color_variable("surface", TRANSPARENT),
             "text": "ansi_default",
             "text-muted": "ansi_default 50%",
             "text-disabled": "ansi_default 50%",
@@ -153,7 +166,7 @@ class ColorSystem:
             "text-error": error.hex,
             "text-success": success.hex,
             "text-accent": accent.hex,
-            "panel": "transparent",
+            "panel": self._color_variable("panel", TRANSPARENT),
             "primary-muted": f"{primary.hex} 50%",
             "secondary-muted": f"{secondary.hex} 50%",
             "warning-muted": f"{warning.hex} 50%",
@@ -239,8 +252,10 @@ class ColorSystem:
         ]
         for shade in range(1, NUMBER_OF_SHADES + 1):
             for color_name in SHADE_COLORS:
-                colors[f"{color_name}-lighten-{shade}"] = colors[color_name]
-                colors[f"{color_name}-darken-{shade}"] = colors[color_name]
+                colors[f"{color_name}-lighten-{shade}"] = self._color_variable(
+                    f"{color_name}-lighten-{shade}", self.color(color_name))
+                colors[f"{color_name}-darken-{shade}"] = self._color_variable(
+                    f"{color_name}-darken-{shade}", self.color(color_name))
 
         colors.update(self.variables)
         return colors
@@ -346,18 +361,18 @@ class ColorSystem:
             for shade_name, luminosity_delta in luminosity_range(spread):
                 key = f"{name}{shade_name}"
                 if color.ansi is not None:
-                    colors[key] = color.hex
+                    colors[key] = self._color_variable(key, color)
                 elif is_dark_shade:
                     dark_background = background.blend(color, 0.15, alpha=1.0)
                     if key not in self.variables:
                         shade_color = dark_background.blend(
                             WHITE, spread + luminosity_delta, alpha=1.0
                         ).clamped
-                        colors[key] = shade_color.hex
+                        colors[key] = self._color_variable(key, shade_color)
                     else:
-                        colors[key] = self.variables[key]
+                        colors[key] = self._color_variable(key, color)
                 else:
-                    colors[key] = get(key, color.lighten(luminosity_delta).hex)
+                    colors[key] = self._color_variable(key, color.lighten(luminosity_delta))
 
         if foreground.ansi is None:
             colors["text"] = get("text", "auto 87%")
@@ -423,11 +438,11 @@ class ColorSystem:
         # The scrollbar colors
         colors["scrollbar"] = get(
             "scrollbar",
-            (Color.parse(colors["background-darken-1"]) + primary.with_alpha(0.4)).hex,
+            (self.color("background-darken-1") + primary.with_alpha(0.4)).hex,
         )
         colors["scrollbar-hover"] = get(
             "scrollbar-hover",
-            (Color.parse(colors["background-darken-1"]) + primary.with_alpha(0.5)).hex,
+            (self.color("background-darken-1") + primary.with_alpha(0.5)).hex,
         )
         # colors["scrollbar-active"] = get("scrollbar-active", colors["panel-lighten-2"])
         colors["scrollbar-active"] = get("scrollbar-active", primary.hex)
@@ -476,7 +491,7 @@ class ColorSystem:
         colors["input-cursor-text-style"] = get("input-cursor-text-style", "none")
         colors["input-selection-background"] = get(
             "input-selection-background",
-            Color.parse(colors["primary-lighten-1"]).with_alpha(0.4).hex,
+            self.color("primary-lighten-1").with_alpha(0.4).hex,
         )
         colors["input-selection-foreground"] = get(
             "input-selection-foreground", foreground.hex
@@ -545,7 +560,7 @@ def show_design(light: ColorSystem, dark: ColorSystem) -> Table:
     def make_shades(system: ColorSystem):
         colors = system.generate()
         for name in system.shades:
-            background = Color.parse(colors[name]).with_alpha(1.0)
+            background = system.color(name).with_alpha(1.0)
             foreground = background + background.get_contrast_text(0.9)
 
             text = Text(f"${name}")

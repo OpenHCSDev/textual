@@ -72,8 +72,6 @@ from textual.cache import FIFOCache, LRUCache
 from textual.color import Color
 from textual.compose import compose, compose_async
 from textual.content import Content, ContentType
-from textual.css.match import match
-from textual.css.parse import parse_selectors
 from textual.css.query import NoMatches, WrongType
 from textual.css.scalar import ScalarOffset
 from textual.dom import DOMNode, NoScreen
@@ -313,10 +311,11 @@ class Widget(DOMNode):
     _container_selection_dependency: ClassVar[HeightDependency] = NATIVE_CONTAINER_SELECTION
     _native_box_measurement: ClassVar[bool] = True
     _native_measurement_layout_hooks: ClassVar[bool] = True
+    _paint_only_render: ClassVar[bool] = False
 
     def _render_styles_sensitive(self) -> bool:
-        """Unknown rendering can turn any style input into measured content."""
-        return True
+        """Only a declared fixed-shape renderer can ignore paint-style changes."""
+        return not type(self)._paint_only_render
 
     def _style_geometry_updated(self, geometry: bool) -> bool:
         geometry = super()._style_geometry_updated(
@@ -328,17 +327,13 @@ class Widget(DOMNode):
         return geometry
 
     def _measurement_updated(self) -> None:
-        """Retire measurements at their original source mutation."""
         self._layout_updates += 1
         self.clear_cached_dimensions()
         self._layout_cache.clear()
         self._clear_arrangement_cache()
 
     def _invalidate_layout(self) -> None:
-        """Retire authored layout inputs before requesting a frame.
-
-        Capture invalidation spans ancestors; measurement stops at fixed size.
-        """
+        """Retire measurements through the first fixed-size ancestor."""
         self._invalidate_subtree_geometry()
         self._measurement_updated()
         for ancestor in self.walk_ancestors():
@@ -676,11 +671,6 @@ class Widget(DOMNode):
     @offset.setter
     def offset(self, offset: tuple[int, int]) -> None:
         self.geometry.set_placement_offset(ScalarOffset.from_offset(offset))
-
-    @property
-    def opacity(self) -> float:
-        """Total opacity of widget."""
-        return self._resolved_paint_state().opacity
 
     @property
     def is_anchored(self) -> bool:
@@ -1267,7 +1257,7 @@ class Widget(DOMNode):
         # cached placements. Inactive parents may never arrange again.
         self._clear_arrangement_cache()
         self.layout.clear_cache()
-        self._invalidate_layout()
+        self.refresh(layout=True)
 
     def _get_virtual_dom(self) -> Iterable[Widget]:
         """Get widgets not part of the DOM.
@@ -3741,6 +3731,10 @@ class Widget(DOMNode):
             inherit_css=inherit_css,
             inherit_bindings=inherit_bindings,
         )
+        if "_paint_only_render" not in cls.__dict__ and any(
+            method in cls.__dict__ for method in ("render", "_render", "_render_bar")
+        ):
+            cls._paint_only_render = False
         # Bind method contracts once per concrete class, never probe capabilities
         # on every measurement. Undeclared overrides select the safe full context.
         cls._content_height_dependency = getattr(cls.get_content_height, "_height_dependency", CONTEXT_HEIGHT)
@@ -3950,6 +3944,7 @@ class Widget(DOMNode):
         return PaintStyles.of(self.styles)
 
     def refresh_paint(self) -> None:
+        self._update_paint_state()
         self._styles_cache.refresh_paint(self)
 
     def watch_has_focus(self, _has_focus: bool) -> None:
@@ -3958,6 +3953,7 @@ class Widget(DOMNode):
             self.app.stylesheet.update_widget_focus(self)
         except NoActiveAppError:
             pass
+        self.refresh_paint()
 
     def watch_disabled(self, disabled: bool) -> None:
         """Update the styles of the widget and its children when disabled is toggled."""
@@ -4244,16 +4240,10 @@ class Widget(DOMNode):
             An awaitable object that waits for the direct children to be removed.
         """
 
-        if callable(selector) and issubclass(selector, Widget):
-            selector = selector.__name__
-
         children_to_remove: Iterable[Widget]
 
-        if isinstance(selector, str):
-            parsed_selectors = parse_selectors(selector)
-            children_to_remove = [
-                child for child in self.children if match(parsed_selectors, child)
-            ]
+        if isinstance(selector, (str, type)):
+            children_to_remove = self.query_children(selector)
         else:
             children_to_remove = selector
         await_remove = AwaitRemove.prune(*children_to_remove, parent=self)
@@ -4559,6 +4549,10 @@ class Widget(DOMNode):
     async def broker_event(self, event_name: str, event: events.Event) -> bool:
         return await self.app._broker_event(event_name, event, default_namespace=self)
 
+    def _display_changed(self) -> None:
+        self._invalidate_layout()
+        super()._display_changed()
+
     def _request_layout(self, required: bool = True) -> None:
         self._layout_required |= required
 
@@ -4635,12 +4629,7 @@ class Widget(DOMNode):
 
     def _on_leave(self, event: events.Leave) -> None:
         if event.node is self:
-            self.mouse_hover = False
             self.hover_style = Style()
-
-    def _on_enter(self, event: events.Enter) -> None:
-        if event.node is self:
-            self.mouse_hover = True
 
     def _on_focus(self, event: events.Focus) -> None:
         self.has_focus = True

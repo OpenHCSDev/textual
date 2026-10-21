@@ -214,7 +214,7 @@ class BoxGeometry:
         if min_width is not None:
             content_width = max(content_width, min_width, 0)
         if max_width is not None and not (
-            container.width == 0 and not self.max_width.is_cells
+            container.width == 0 and self.max_width.unit.resolves_against_container
             and node._parent is not None and node._parent.geometry.is_auto_width
         ):
             content_width = min(content_width, max_width)
@@ -238,7 +238,7 @@ class BoxGeometry:
         if min_height is not None:
             content_height = max(content_height, min_height, 0)
         if max_height is not None and not (
-            container.height == 0 and not self.max_height.is_cells
+            container.height == 0 and self.max_height.unit.resolves_against_container
             and node._parent is not None and node._parent.geometry.is_auto_height
         ):
             content_height = min(content_height, max_height)

@@ -23,6 +23,7 @@ from types import MappingProxyType
 from typing import (
     TYPE_CHECKING,
     Callable,
+    ClassVar,
     Collection,
     Generator,
     Generic,
@@ -72,6 +73,8 @@ CompositorMap: TypeAlias = "dict[Widget, MapGeometry]"
 class GeometryDemand(ABC):
     """Which original placements this traversal needs, not another geometry store."""
 
+    capture_subtrees: ClassVar[bool] = True
+
     @staticmethod
     def retained_paths(root: Widget, retain_geometry: Iterable[Widget],
                        visible_only: bool) -> set[Widget]:
@@ -95,10 +98,15 @@ class GeometryDemand(ABC):
                     retained_paths.update(path)
         return retained_paths
 
-    @staticmethod
-    def cache_subtree(widget: Widget, capacity: int, capturing_source: bool) -> bool:
-        return bool(capacity and widget._is_mounted and (
+    @classmethod
+    def cache_subtree(cls, widget: Widget, capacity: int, capturing_source: bool) -> bool:
+        return cls.capture_subtrees and bool(capacity and widget._is_mounted and (
             widget.CACHE_SUBTREE_GEOMETRY or (capturing_source and widget.is_container)))
+
+    @staticmethod
+    def restore_members(source, geometry, widgets, invisible_widgets):
+        widgets.update(source.members())
+        invisible_widgets.update(source.members(invisible=True))
 
     @staticmethod
     @abstractmethod
@@ -113,12 +121,20 @@ class ViewportGeometry(GeometryDemand):
                 if visible_only else arrangement.placements)
 
 
+class ScrolledGeometry(ViewportGeometry):
+    """Scrolling exposes placements without changing offscreen visibility."""
+
+    capture_subtrees = False
+
+    @staticmethod
+    def restore_members(source, geometry, widgets, invisible_widgets):
+        widgets.update(geometry)
+
+
 class RequiredGeometry(GeometryDemand):
     """Queries consume arranged positions, not whole retained paint captures."""
 
-    @staticmethod
-    def cache_subtree(widget, capacity, capturing_source):
-        return False
+    capture_subtrees = False
 
     @staticmethod
     def select(arrangement, region, retained, visible_only):
@@ -403,6 +419,7 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
         self, geometry: CompositorMap, widgets: set[Widget], invisible_widgets: set[Widget],
         key: SubtreeGeometryKey, clip: SceneClip, clips: dict[Widget, SceneClip],
         root: Widget, *, visible_only: bool, retained: set[Widget], bounds: Region,
+        demand: type[GeometryDemand],
         deadline: StepDeadline | None,
     ) -> Generator[None, None, None]:
         """Project this arrangement into `geometry`, pausing between entries once `deadline` passes."""
@@ -410,8 +427,7 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
                                      visible_only=visible_only, retained=retained, bounds=bounds,
                                      ancestry_root=root,
                                      ancestors=tuple(root.walk_ancestors()), deadline=deadline)
-        widgets.update(self.members())
-        invisible_widgets.update(self.members(invisible=True))
+        demand.restore_members(self, geometry, widgets, invisible_widgets)
 
     def project_into(self, geometry: CompositorMap, key: SubtreeGeometryKey,
                      clip: SceneClip, clips: dict[Widget, SceneClip], root: Widget,
@@ -1119,6 +1135,7 @@ class Compositor:
     def reflow_subtrees_steps(
         self, parent: Widget, size: Size, roots: Iterable[Widget], *,
         retain_geometry: Iterable[Widget] = (), deadline: StepDeadline | None = None,
+        layout_widgets: Iterable[Widget] = (), demand: type[GeometryDemand] = ViewportGeometry,
     ) -> Generator[None, None, SubtreeReflow | None]:
         """`reflow_subtrees`, pausing whenever `deadline` passes between widgets.
 
@@ -1137,7 +1154,9 @@ class Compositor:
             return None
         retain = tuple(retain_geometry)
         scene = dict(previous)
-        widgets = set(self.widgets)
+        widgets: set[Widget] = set()
+        changed = {child for widget in layout_widgets
+                   for child in widget.walk_children(with_self=True)}
         shown: set[Widget] = set()
         hidden: set[Widget] = set()
         placed: dict[Widget, MapGeometry] = {}
@@ -1158,17 +1177,13 @@ class Compositor:
                     retain_geometry=tuple(
                         target for target in retain if root in target.ancestors
                     ),
-                    deadline=deadline,
+                    deadline=deadline, demand=demand,
                 )
                 # The root goes too: re-added with its subtree, it keeps the
                 # arranged order, where its scrollbars (same order key) come
                 # first and so in front, as in a full arrangement.
                 for widget in (*old, root):
                     del scene[widget]
-                widgets.difference_update([
-                    widget for widget in widgets
-                    if widget is not root and root in widget.ancestors
-                ])
                 scene.update(arranged)
                 widgets.update(members)
                 placed.update(arranged)
@@ -1187,7 +1202,8 @@ class Compositor:
         self._full_map_invalidated = True
         self._visible_map = scene
         self._invalidate_render_projection()
-        self.widgets = widgets
+        self.widgets.difference_update(changed | discarded)
+        self.widgets.update(widgets)
         self._damage_geometry(previous, scene, parent)
         return SubtreeReflow(hidden=hidden, shown=shown, placed=placed)
 
@@ -1618,7 +1634,7 @@ class Compositor:
                 yield from resource.restore_into(
                     map, widgets, invisible_widgets, key, clip, clips, widget._render_widget,
                     visible_only=visible_only and not enclosing_complete,
-                    retained=retained_paths, bounds=root_geometry.region, deadline=deadline)
+                    retained=retained_paths, bounds=root_geometry.region, deadline=deadline, demand=demand)
 
         # Add top level (root) widget
         discarded = self._discarded_between_steps
@@ -1795,7 +1811,7 @@ class Compositor:
             return widget, Offset(max(0, x), max(0, y))
 
         with self._using_geometry(widget, self._published_map):
-            line = widget.render_line(y, widget._resolved_paint_state())
+            line = widget.render_line(y, widget._paint_state)
 
         return widget, line.get_content_offset(x)
 

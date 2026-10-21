@@ -75,8 +75,9 @@ class WorkerManager:
         if exclusive and worker.group:
             self.cancel_group(worker.node, worker.group)
         self._workers.add(worker)
+        worker._add_done_callback(self._remove_worker)
         if start:
-            worker._start(self._app, self._remove_worker)
+            worker._start(self._app)
 
     def _new_worker(
         self,
@@ -129,11 +130,11 @@ class WorkerManager:
     def start_all(self) -> None:
         """Start all the workers."""
         for worker in self._workers:
-            worker._start(self._app, self._remove_worker)
+            worker._start(self._app)
 
     def cancel_all(self) -> None:
         """Cancel all workers."""
-        for worker in self._workers:
+        for worker in list(self._workers):
             worker.cancel()
 
     def cancel_group(self, node: DOMNode, group: str) -> list[Worker]:

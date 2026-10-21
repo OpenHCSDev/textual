@@ -27,14 +27,22 @@ class ScalarParseError(ScalarError):
 class Unit(Enum):
     """Enumeration of the various units inherited from CSS."""
 
-    CELLS = 1
-    FRACTION = 2
-    PERCENT = 3
-    WIDTH = 4
-    HEIGHT = 5
-    VIEW_WIDTH = 6
-    VIEW_HEIGHT = 7
-    AUTO = 8
+    CELLS = 1, False
+    FRACTION = 2, True
+    PERCENT = 3, True
+    WIDTH = 4, True
+    HEIGHT = 5, True
+    VIEW_WIDTH = 6, False
+    VIEW_HEIGHT = 7, False
+    AUTO = 8, False
+
+    resolves_against_container: bool
+
+    def __new__(cls, value: int, resolves_against_container: bool) -> Unit:
+        unit = object.__new__(cls)
+        unit._value_ = value
+        unit.resolves_against_container = resolves_against_container
+        return unit
 
 
 UNIT_SYMBOL = {

@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 from rich.style import Style
 
+from textual._paint_state import PaintState
 from textual.color import Color
 from textual.css.styles import Styles
 from textual.dom import DOMNode
@@ -38,6 +39,9 @@ def native_paint(node):
 
 def test_inherited_paint_matches_native_math_across_mutations_and_moves():
     root, parent, leaf, alternative = Widget(), Widget(), Widget(), Widget()
+    anchor = DOMNode()
+    root._attach(anchor)
+    alternative._attach(anchor)
     parent._parent = root
     leaf._parent = parent
     root.styles.background = "red 50%"
@@ -73,10 +77,12 @@ def test_paint_projection_does_not_own_ancestor_widgets():
 
 def test_unchanged_paint_does_not_rewalk_ancestors_and_raw_rules_invalidate():
     root, parent, leaf = Widget(), Widget(), Widget()
+    anchor = DOMNode()
+    root._attach(anchor)
     parent._parent = root
     leaf._parent = parent
     leaf.rich_style
-    with patch.object(parent, "_resolved_paint_state", wraps=parent._resolved_paint_state) as resolve:
+    with patch.object(PaintState, "resolve", wraps=PaintState.resolve) as resolve:
         for _ in range(20):
             leaf.rich_style
             leaf.visual_style
@@ -98,8 +104,11 @@ def test_unchanged_paint_does_not_rewalk_ancestors_and_raw_rules_invalidate():
         assert leaf.opacity == native_paint(leaf)[3]
 
 
-def test_custom_ancestry_does_not_use_native_mutation_epoch():
+def test_custom_ancestry_view_does_not_override_parent_owned_paint():
     first, second = Widget(), Widget()
+    anchor = DOMNode()
+    first._attach(anchor)
+    second._attach(anchor)
     first.styles.background = "red"
     second.styles.background = "blue"
 
@@ -111,19 +120,25 @@ def test_custom_ancestry_does_not_use_native_mutation_epoch():
             return [self, self.ancestor]
 
     custom, child = Custom(), Widget()
+    custom._parent = first
     child._parent = custom
     before = child.rich_style
     custom.ancestor = second
+    assert custom.rich_style == before
+    assert child.rich_style == before
+    custom._parent = second
     assert custom.rich_style == native_paint(custom)[5]
     assert child.rich_style != before
 
 
 def test_style_views_and_unchanged_rules_preserve_paint_until_original_mutation():
     root, leaf = Widget(), Widget()
+    anchor = DOMNode()
+    root._attach(anchor)
     leaf._parent = root
     root.styles.color = "red"
     before = leaf.rich_style
-    paint_epoch = leaf._paint_epoch
+    paint = leaf._paint_state
     rules_key = root.styles._cache_key
 
     # Parsing and serializing declarations do not modify a widget. Merging
@@ -137,7 +152,7 @@ def test_style_views_and_unchanged_rules_preserve_paint_until_original_mutation(
     root.styles.base.reset()
     assert root.styles._cache_key == rules_key
     assert leaf.rich_style == before
-    assert leaf._paint_epoch == paint_epoch
+    assert leaf._paint_state is paint
 
     # Genuine bulk writes and removals are visible immediately, including
     # reads inside the existing synchronous refresh batch.
@@ -158,32 +173,36 @@ def test_style_views_and_unchanged_rules_preserve_paint_until_original_mutation(
 
 def test_layout_dependency_changes_preserve_retained_paint_values():
     root, parent, leaf = Widget(), Widget(), Widget()
+    anchor = DOMNode()
+    root._attach(anchor)
     parent._parent = root
     leaf._parent = parent
     root.styles.color = "red"
-    original = leaf._resolved_paint_state()
+    original = leaf._paint_state
     visual = leaf.visual_style
 
     # A tab's visibility changes dependency epochs without changing pixels.
     for visible in (False, True):
         parent.display = visible
-        current = leaf._resolved_paint_state()
-        assert current is not original
-        assert current != original
-        assert original.same_paint(current)
-        assert leaf.visual_style is visual
+        current = leaf._paint_state
+        assert current is original
+        assert current == original
+        assert leaf.visual_style == visual
 
     # Real inherited paint changes remain invalidating, including opacity.
     parent.styles.opacity = .5
-    assert not original.same_paint(leaf._resolved_paint_state())
+    assert original != leaf._paint_state
     parent.styles.opacity = 1
     parent.styles.color = "blue"
-    assert not original.same_paint(leaf._resolved_paint_state())
-    assert leaf.visual_style is not visual
+    assert original != leaf._paint_state
+    assert leaf.visual_style != visual
 
 
-def test_custom_lazy_ancestry_retains_original_uncacheable_paint_contract():
+def test_custom_lazy_ancestry_view_does_not_override_parent_owned_paint():
     first, second = Widget(), Widget()
+    anchor = DOMNode()
+    first._attach(anchor)
+    second._attach(anchor)
     first.styles.background = "red"
     second.styles.background = "blue"
 
@@ -196,8 +215,12 @@ def test_custom_lazy_ancestry_retains_original_uncacheable_paint_contract():
             yield self.ancestor
 
     custom, child = CustomWalk(), Widget()
+    custom._attach(first)
     child._attach(custom)
     before = child.rich_style
     custom.ancestor = second
+    assert custom.rich_style == before
+    assert child.rich_style == before
+    custom._attach(second)
     assert custom.rich_style == native_paint(custom)[5]
     assert child.rich_style != before

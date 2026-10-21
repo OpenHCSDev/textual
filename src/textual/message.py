@@ -17,6 +17,7 @@ from textual.case import camel_to_snake
 if TYPE_CHECKING:
     from asyncio import Future, Task
     from textual.dom import DOMNode
+    from textual.driver import Driver
     from textual.message_pump import MessagePump
 
 
@@ -65,6 +66,10 @@ class Message:
 
     def _discard(self) -> None:
         """Release resources owned by an abandoned or completed delivery."""
+
+    def deliver_from_driver(self, driver: Driver) -> None:
+        """Ordinary terminal input is delivered on the application's loop."""
+        driver.send_message(self)
 
     def __init_subclass__(
         cls,

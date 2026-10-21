@@ -132,3 +132,77 @@ EMPTY_PAINT = PaintState(
     Color(0, 0, 0, 0), Color(255, 255, 255, 0), 1.0,
     NULL_STYLE, 1.0, Color(0, 0, 0, 0), Color(0, 0, 0, 0),
 )
+
+
+class PaintNode:
+    """A node owns inherited paint; renderers only consume its prepared value."""
+
+    _paint_state = EMPTY_PAINT
+
+    def _parent_changed(self) -> None:
+        self._update_paint_state()
+
+    def _update_paint_state(self) -> None:
+        parent = self._parent
+        state = (EMPTY_PAINT if parent is None and not self.is_dom_root
+                 else PaintState.resolve(EMPTY_PAINT if parent is None else parent._paint_state, self.paint_layer))
+        if state != self._paint_state:
+            self._paint_state = state
+            for child in tuple(self._child_pumps):
+                child._parent_changed()
+
+    @property
+    def opacity(self) -> float:
+        """Total inherited opacity, derived from this node's paint value."""
+        return self._paint_state.opacity
+
+    @property
+    def paint_layer(self) -> PaintLayer:
+        return self.styles
+
+    @property
+    def text_style(self) -> Style:
+        """Inherited text attributes."""
+        return self._paint_state.text_style
+
+    @property
+    def selection_style(self) -> Style:
+        return self.screen.get_component_rich_style(
+            "screen--selection", default=NULL_STYLE)
+
+    @property
+    def rich_style(self) -> Style:
+        return self._paint_state.rich_style
+
+    def get_visual_style(self, *component_classes: str, partial: bool = False) -> VisualStyle:
+        """Resolve component declarations against this node's prepared paint."""
+        return self._paint_state.component_style(self, *component_classes, partial=partial)
+
+    def _get_style(self, style: VisualStyle | str) -> VisualStyle:
+        return self._paint_state.get_style(self, style)
+
+    def _parse_visual_style(self, style: str) -> VisualStyle:
+        return VisualStyle.parse(style)
+
+    @property
+    def link_style(self) -> Style:
+        return self._paint_state.link_style(self.styles)
+
+    @property
+    def link_style_hover(self) -> Style:
+        return self._paint_state.link_style(self.styles, hover=True)
+
+    @property
+    def visual_style(self) -> VisualStyle:
+        return self._paint_state.visual_style
+
+    @property
+    def background_colors(self) -> tuple[Color, Color]:
+        return self._paint_state.base_background, self._paint_state.layered_background
+
+    @property
+    def colors(self) -> tuple[Color, Color, Color, Color]:
+        parent = self._parent
+        inherited = EMPTY_PAINT if parent is None else parent._paint_state
+        state = self._paint_state
+        return inherited.background, inherited.foreground, state.background, state.foreground
