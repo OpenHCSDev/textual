@@ -9,6 +9,7 @@ The `Screen` class is a special widget which represents the content in the termi
 from __future__ import annotations
 
 import asyncio
+from weakref import WeakSet
 from contextlib import contextmanager
 from functools import partial
 from operator import attrgetter
@@ -34,11 +35,11 @@ import rich.repr
 from rich.console import RenderableType
 from rich.style import Style
 
-from textual import constants, errors, events, messages
+from textual import constants, errors, events, messages, on
 from textual._arrange import arrange
 from textual._auto_scroll import get_auto_scroll_regions
 from textual._callback import invoke
-from textual._compositor import Compositor, MapGeometry, StepDeadline, run_steps
+from textual._compositor import ScrolledGeometry, Compositor, MapGeometry, StepDeadline, run_steps
 from textual._context import active_message_pump
 from textual._path import (
     CSSPathType,
@@ -173,7 +174,6 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
 
     DEFAULT_CSS = """
     Screen {
-        layout: vertical;
         overflow-y: auto;
         background: $background;        
         
@@ -226,7 +226,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
     VERTICAL_BREAKPOINTS: ClassVar[list[tuple[int, str]]] | None = None
     """Vertical breakpoints, will override [App.VERTICAL_BREAKPOINTS][textual.app.App.VERTICAL_BREAKPOINTS] if not `None`."""
 
-    focused: Reactive[Widget | None] = Reactive(None)
+    focused: Reactive[Widget | None] = Reactive(None, repaint=False)
     """The focused [widget][textual.widget.Widget] or `None` for no focus.
     To set focus, do not update this value directly. Use [set_focus][textual.screen.Screen.set_focus] instead."""
     stack_updates: Reactive[int] = Reactive(0, repaint=False)
@@ -324,8 +324,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         )
         """A signal published when text selection has started."""
 
-        self._css_update_count = -1
-        """Track updates to CSS."""
+        self._pending_styles: WeakSet[DOMNode] = WeakSet()
 
         self._layout_widgets: dict[DOMNode, set[Widget]] = {}
         """Widgets whose layout may have changed."""
@@ -386,7 +385,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         """
         screens: list[Screen] = []
         screen = self
-        while screen.styles.background.a < 1 and (screen := screen._screen_below) is not None:
+        while screen.paint_layer.background_color.a < 1 and (screen := screen._screen_below) is not None:
             screens.append(screen)
         return screens
 
@@ -416,7 +415,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
     @property
     def size(self) -> Size:
         """The size of the screen."""
-        return self.app.size - self.styles.gutter.totals
+        return self.app.size - self.geometry.box_gutter.totals
 
     def _watch_focused(self):
         self.refresh_bindings()
@@ -665,7 +664,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         Returns:
             Background renderable.
         """
-        background = self.styles.background
+        background = self.paint_layer.background_color
         if seen_through := self._screens_seen_through:
             # If background is translucent, render the screen below
             return BackgroundScreen(seen_through[0], background)
@@ -722,9 +721,9 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
             top_widget, top_region = next(widgets_under_coordinate)
         except StopIteration:
             raise errors.NoWidget(f"No hover widget under screen coordinate ({x}, {y})")
-        if not top_widget._has_hover_style:
+        if not top_widget._hover_dependency.own_hover:
             for widget, region in widgets_under_coordinate:
-                if widget._has_hover_style:
+                if widget._hover_dependency.own_hover:
                     return HoverWidgets((top_widget, top_region), (widget, region))
             return HoverWidgets((top_widget, top_region), None)
         return HoverWidgets((top_widget, top_region), (top_widget, top_region))
@@ -1311,39 +1310,40 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
             if not self._frame_holds:
                 self.refresh()
 
-    def _compositor_refresh(self) -> None:
+    def _compositor_refresh(
+        self, deadline: StepDeadline | None = None,
+    ) -> Generator[None, None, None]:
         """Publish the compositor's damage through the foreground screen."""
         app = self.app
         if app._batch_count or self._frame_holds:
             return
-        if self is app.screen and app.is_inline:
-            inline_height = app._get_inline_height()
-        foreground = self is app.screen
-        if foreground:
-            # Only the screens this frame draws take part in it: a screen
-            # under an opaque one keeps its damage until it is shown.
-            drawn_behind = self._screens_seen_through
-            background_geometry = {
-                screen: screen._compositor._layout_map for screen in drawn_behind
-            }
+        if self is app.screen:
             if app.is_inline:
+                inline_height = app._get_inline_height()
                 clear = (
                     app._previous_inline_height is not None
                     and inline_height < app._previous_inline_height
                 )
-                update = self._compositor.render_inline(
+                update = yield from self._compositor.render_inline(
                     app.size.with_height(inline_height), clear=clear,
+                    deadline=deadline, dirty_widgets=self._dirty_widgets,
                 )
-                if update is not None:
-                    app._previous_inline_height = inline_height
             else:
-                update = self._compositor.render_update()
+                update = yield from self._compositor.render_update(
+                    deadline=deadline, dirty_widgets=self._dirty_widgets)
+            if self is not app.screen or app._batch_count or self._frame_holds:
+                return
+            # Composition is atomic after the budget pause. These are the
+            # backdrops just painted, not snapshots from before that pause.
+            drawn_behind = self._screens_seen_through
             if update is not None:
+                if app.is_inline:
+                    app._previous_inline_height = inline_height
                 # BackgroundScreen can render inside the foreground's renderer;
                 # the same output update publishes the foreground's damage.
                 ready = set(self._compositor._dirty_regions)
                 for screen in drawn_behind:
-                    update.bind_publication(screen._compositor, background_geometry[screen], ready)
+                    update.bind_publication(screen._compositor, screen._compositor._layout_map, ready)
                 app._display(self, update)
                 if update.admitted:
                     self._on_frame_published()
@@ -1353,7 +1353,10 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
             if drawn_behind:
                 self._release_paint()
             self._dirty_widgets.clear()
-        elif self._compositor._dirty_regions and self.is_current:
+        else:
+            self._compositor.update_widgets(self._dirty_widgets)
+            if not self._compositor._dirty_regions or not self.is_current:
+                return
             damage = set(self._compositor._dirty_regions)
             # The top screen draws this one behind itself, so it writes this
             # damage. Hand it the regions without consuming them.
@@ -1399,14 +1402,12 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
                     if self._start_stepped_layout(scroll=scroll_required) is not None:
                         return
 
-            if self._dirty_widgets:
-                self._compositor.update_widgets(self._dirty_widgets)
             if (layout_required or scroll_required
                     or self._dirty_widgets or self._compositor._dirty_regions):
                 # Preparation has source/follow effects even if layout left no
                 # damage. Acquire once, after all synchronous layout effects,
                 # rather than rendering held damage twice in the same timer.
-                self._compositor_refresh()
+                run_steps(self._compositor_refresh())
 
             if self._recompose_required:
                 self._recompose_required = False
@@ -1642,15 +1643,14 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         ResizeEvent = events.Resize
 
         try:
-            # Pending layout requests require layout beyond the visible-scroll
-            # traversal.
             if scroll and not any(self._layout_widgets.values()):
                 # Only scrolls changed: re-arrange just the scrolled
                 # containers when they can be scoped, else the viewport.
                 taken_scrolled = set(self._scrolled_widgets)
                 scoped = yield from self._compositor.reflow_subtrees_steps(
                     self, size, taken_scrolled,
-                    retain_geometry=self._layout_geometry_targets(), deadline=deadline)
+                    retain_geometry=self._layout_geometry_targets(), deadline=deadline,
+                    demand=ScrolledGeometry)
                 exposed_widgets = (
                     scoped.shown if scoped is not None else
                     self._compositor.reflow_visible(
@@ -1661,8 +1661,6 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
 
             else:
                 viewport_layout = self._use_viewport_layout()
-                # Requests whose boundaries keep their boxes re-arrange only
-                # those subtrees (with any scrolled containers).
                 # What this layout consumes; requests made between its steps
                 # stay for the next one.
                 taken_layout = {ancestor: set(requesters)
@@ -1672,6 +1670,9 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
                 scoped = None if boundaries is None else (
                     yield from self._compositor.reflow_subtrees_steps(
                         self, size, boundaries | taken_scrolled,
+                        layout_widgets={widget for ancestor, requesters in taken_layout.items()
+                                        for widget in requesters
+                                        if widget not in taken_layout or widget is ancestor},
                         retain_geometry=self._layout_geometry_targets(), deadline=deadline,
                     ))
                 if scoped is not None:
@@ -1708,43 +1709,14 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
             self.app._handle_exception(error)
             return
 
-        if deadline is not None and self.is_current:
-            # The damaged rows render within the steps too, so publishing
-            # them reads rendered rows. A layout and render that fit a step
-            # publish in it; a longer one publishes in a step of its own.
-            yield from self._render_damage_steps(deadline)
         if self.is_current:
-            # Repaints requested between the steps publish with this frame
-            # (publishing clears the requests).
-            self._compositor.update_widgets(self._dirty_widgets)
-            self._compositor_refresh()
+            yield from self._compositor_refresh(deadline)
 
         if self.app._dom_ready:
             self.screen_layout_refresh_signal.publish(self.screen)
         else:
             self.app.post_message(events.Ready())
             self.app._dom_ready = True
-
-    def _render_damage_steps(self, deadline: StepDeadline) -> Generator[None, None, None]:
-        """Render the damaged visible rows of each widget, pausing between widgets once `deadline` passes.
-
-        Each widget keeps its rendered rows (its styles cache), so the paint
-        that follows reads them instead of rendering. Nothing is published.
-        """
-        compositor = self._compositor
-        for widget, (region, visible) in tuple(compositor.visible_widgets.items()):
-            damaged = [overlap for damage in compositor._dirty_regions
-                       if (overlap := visible.intersection(damage))]
-            if not damaged:
-                continue
-            if deadline.passed():
-                yield
-                if not widget.is_attached:
-                    continue
-            # One render for the rows the damage spans (rows are cached whole).
-            top = min(overlap.y for overlap in damaged)
-            bottom = max(overlap.bottom for overlap in damaged)
-            widget.render_lines(Region(0, top - region.y, region.width, bottom - top))
 
     async def _on_update(self, message: messages.Update) -> None:
         message.stop()
@@ -1758,6 +1730,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
             self._dirty_widgets.add(widget)
             self.check_idle()
 
+    @on(messages.Layout)
     async def _on_layout(self, message: messages.Layout) -> None:
         message.stop()
         message.prevent_default()
@@ -1766,15 +1739,14 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         widget: DOMNode = message.widget
         if widget._pruning or widget._closed:
             return
-        for ancestor in message.widget.walk_ancestors():
+        for ancestor in message.ancestors():
             if not isinstance(ancestor, Widget):
                 break
-            if ancestor not in self._layout_widgets:
-                self._layout_widgets[ancestor] = set()
-            if widget not in self._layout_widgets:
-                self._layout_widgets[ancestor].add(widget)
+            requesters = self._layout_widgets.setdefault(ancestor, set())
+            if widget not in requesters:
+                requesters.add(widget)
                 layout_required = True
-            if not ancestor.styles.auto_dimensions:
+            if not ancestor.geometry.auto_dimensions:
                 break
             widget = ancestor
 
@@ -1794,9 +1766,9 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         # keys not sized by their content.
         boundaries = {
             ancestor for ancestor in self._layout_widgets
-            if not ancestor.styles.auto_dimensions
+            if not ancestor.geometry.auto_dimensions
         }
-        if not boundaries or self in boundaries:
+        if not boundaries or self in self._layout_widgets:
             return None
         return boundaries
 
@@ -1845,14 +1817,14 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         Returns:
             Height for inline mode.
         """
-        height_scalar = self.styles.height
+        height_scalar = self.geometry.height
         if height_scalar is None or height_scalar.is_auto:
             inline_height = self.get_content_height(size, size, size.width)
         else:
             inline_height = int(height_scalar.resolve(size, size))
-        inline_height += self.styles.gutter.height
-        min_height = self.styles.min_height
-        max_height = self.styles.max_height
+        inline_height += self.geometry.box_gutter.height
+        min_height = self.geometry.min_height
+        max_height = self.geometry.max_height
         if min_height is not None:
             inline_height = max(inline_height, int(min_height.resolve(size, size)))
         if max_height is not None:
@@ -1880,7 +1852,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         if self.is_attached:
 
             if event.refresh_styles:
-                self.update_node_styles(animate=False)
+                self.app.stylesheet.update(self, animate=False, nodes=self._pending_styles)
             if self._size != size:
                 self._refresh_layout(size)
             self.refresh()
@@ -1904,7 +1876,6 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
             if auto_focus and self.focused is None:
                 for widget in self.query(auto_focus):
                     if widget.focusable:
-                        widget.has_focus = True
                         self.set_focus(widget)
                         break
 
@@ -1967,11 +1938,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         self.dismiss_hints()
         self._screen_resized(event.size)
 
-        horizontal_breakpoints = (
-            self.app.HORIZONTAL_BREAKPOINTS
-            if self.HORIZONTAL_BREAKPOINTS is None
-            else self.HORIZONTAL_BREAKPOINTS
-        ) or []
+        horizontal_breakpoints = self.horizontal_breakpoints
 
         vertical_breakpoints = (
             self.app.VERTICAL_BREAKPOINTS
@@ -1986,34 +1953,37 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
                 for _, breakpoint in (horizontal_breakpoints + vertical_breakpoints)
             }
 
-            for breakpoint in self._get_breakpoint_classes(
-                width, horizontal_breakpoints
+            for dimension, declarations in (
+                (width, horizontal_breakpoints), (height, vertical_breakpoints)
             ):
-                breakpoints[breakpoint] = True
-
-            for breakpoint in self._get_breakpoint_classes(
-                height, vertical_breakpoints
-            ):
-                breakpoints[breakpoint] = True
+                if (active := self._get_breakpoint(dimension, declarations)) is not None:
+                    breakpoints[active[1]] = True
 
             self.update_classes(breakpoints, animate=False)
 
-    def _get_breakpoint_classes(
+    @property
+    def horizontal_breakpoints(self) -> list[tuple[int, str]]:
+        """Horizontal sizing declarations, using the screen override if supplied."""
+        return (
+            self.app.HORIZONTAL_BREAKPOINTS
+            if self.HORIZONTAL_BREAKPOINTS is None
+            else self.HORIZONTAL_BREAKPOINTS
+        ) or []
+
+    @property
+    def horizontal_breakpoint(self) -> int | None:
+        """The active viewport-width minimum, independent of its CSS class."""
+        active = self._get_breakpoint(self.app.size.width, self.horizontal_breakpoints)
+        return None if active is None else active[0]
+
+    def _get_breakpoint(
         self, dimension: int, breakpoints: list[tuple[int, str]]
-    ) -> set[str]:
-        """Get breakpoint classes for given dimension.
-
-        Args:
-            dimension: Size in cells.
-            breakpoints: Associated breakpoints.
-
-        Returns:
-            A set containing a breakpoint, or an empty set if none apply.
-        """
-        for breakpoint, class_name in sorted(breakpoints, reverse=True):
-            if dimension >= breakpoint:
-                return {class_name}
-        return set()
+    ) -> tuple[int, str] | None:
+        """Resolve a sizing declaration; CSS and native geometry share this rule."""
+        for breakpoint in sorted(breakpoints, reverse=True):
+            if dimension >= breakpoint[0]:
+                return breakpoint
+        return None
 
     def _update_tooltip(self, widget: Widget) -> None:
         """Update the content of the tooltip."""
@@ -2044,8 +2014,11 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         """Called by a timer from _handle_mouse_move to update the tooltip.
 
         Args:
-            widget: The widget under the mouse.
+            widget: The widget under the mouse when the callback was scheduled.
         """
+        # A stopped timer may already have queued its callback.
+        if widget is not self._tooltip_widget:
+            return
 
         try:
             tooltip = self.get_child_by_type(Tooltip)
@@ -2322,10 +2295,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
                     select_widget, select_offset = self.get_widget_and_offset_at(
                         event.x, event.y
                     )
-                    # Exclude scrollbars, so the user may navigate without clearing the selection
-                    if select_widget is None or not select_widget.has_class(
-                        "-textual-system"
-                    ):
+                    if select_widget is not None and select_widget.allow_select:
                         self.clear_selection()
 
                 self._mouse_down_offset = None
@@ -2560,7 +2530,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         if widget not in self._compositor.visible_widgets:
             return False
         # If the widget is one that overlays the screen...
-        if widget.styles.overlay == "screen":
+        if widget.geometry.overlay == "screen":
             # ...simply check if it's within the screen's region.
             return widget.region in self.region
         # Failing that fall back to normal checking.
@@ -2578,7 +2548,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         if widget not in self._compositor.visible_widgets:
             return False
         # If the widget is one that overlays the screen...
-        if widget.styles.overlay == "screen":
+        if widget.geometry.overlay == "screen":
             # ...simply check if it's within the screen's region.
             return widget.region in self.region
         # Failing that fall back to normal checking.
@@ -2607,7 +2577,6 @@ class ModalScreen(Screen[ScreenResultType]):
 
     DEFAULT_CSS = """
     ModalScreen {
-        layout: vertical;
         overflow-y: auto;
         background: $background 60%;
         &:ansi {

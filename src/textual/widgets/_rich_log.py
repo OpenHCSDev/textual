@@ -18,6 +18,7 @@ from textual.events import Resize
 from textual.geometry import Size
 from textual.reactive import var
 from textual.scroll_view import ScrollView
+from textual._paint_state import PaintState
 from textual.strip import Strip
 
 if TYPE_CHECKING:
@@ -298,23 +299,23 @@ class RichLog(ScrollView, can_focus=True):
         self.refresh()
         return self
 
-    def render_line(self, y: int) -> Strip:
+    def render_line(self, y: int, paint: PaintState) -> Strip:
         scroll_x, scroll_y = self.scroll_offset
         line = self._render_line(
-            scroll_y + y, scroll_x, self.scrollable_content_region.width
+            scroll_y + y, scroll_x, self.scrollable_content_region.width, paint
         )
-        strip = line.apply_style(self.rich_style)
+        strip = line.apply_style(paint.rich_style)
         return strip
 
-    def _render_line(self, y: int, scroll_x: int, width: int) -> Strip:
+    def _render_line(self, y: int, scroll_x: int, width: int, paint: PaintState) -> Strip:
         if y >= len(self.lines):
-            return Strip.blank(width, self.rich_style)
+            return Strip.blank(width, paint.rich_style)
 
         key = (y + self._start_line, scroll_x, width, self._widest_line_width)
         if key in self._line_cache:
             return self._line_cache[key]
 
-        line = self.lines[y].crop_extend(scroll_x, scroll_x + width, self.rich_style)
+        line = self.lines[y].crop_extend(scroll_x, scroll_x + width, paint.rich_style)
 
         self._line_cache[key] = line
         return line

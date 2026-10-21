@@ -1,70 +1,208 @@
-"""Immutable inherited paint values, resolved once per style/topology revision."""
-
+"""Inherited paint and the declaration inputs that produce it."""
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import NamedTuple
-
 from rich.style import NULL_STYLE, Style
+from textual.color import Color, TRANSPARENT
+from textual.style import Style as VisualStyle
 
-from textual.color import Color
+
+class PaintLayer:
+    """One local colour layer, independent of how its inputs are declared."""
+
+    paint_foreground: Color | None = None
+    paint_background: Color | None = None
+    background_tint = TRANSPARENT
+    text_style = NULL_STYLE
+    text_opacity = layer_opacity = 1.0
+    auto_color = False
+
+    @property
+    def paint_layer(self) -> PaintLayer:
+        return self
+
+    @property
+    def background_color(self) -> Color:
+        color = self.paint_background
+        return TRANSPARENT if color is None else color
 
 
 class PaintState(NamedTuple):
-    parent: PaintState | None
-    style_key: int
     background: Color
     foreground: Color
+    text_opacity: float
     text_style: Style
     opacity: float
     base_background: Color
     layered_background: Color
-    cacheable: bool = True
 
-    def same_paint(self, other: PaintState) -> bool:
-        """Compare pixels, independently of the resolver's dependency lineage.
+    @property
+    def rich_style(self) -> Style:
+        background, color = self.background, self.foreground
+        return self.text_style + Style.from_color(
+            (background + color).rich_color if (background.a or color.a) else None,
+            background.rich_color if background.a else None,
+        )
 
-        Ancestor visibility or layout edits require fresh dependency resolution,
-        but retained paint remains valid when its resulting values are unchanged.
-        """
-        return (
-            self.background,
-            self.foreground,
-            self.text_style,
-            self.opacity,
-            self.base_background,
-            self.layered_background,
-        ) == (
-            other.background,
-            other.foreground,
-            other.text_style,
-            other.opacity,
-            other.base_background,
-            other.layered_background,
+    @property
+    def visual_style(self) -> VisualStyle:
+        return replace(VisualStyle.from_rich_style(self.text_style),
+                       background=self.background, foreground=self.foreground)
+
+    def component_style(self, node, *names: str, partial: bool = False) -> VisualStyle:
+        """Apply component declarations to this render's already inherited paint."""
+        background = TRANSPARENT if partial else self.background
+        foreground = (Color(255, 255, 255, 0) if partial
+                      else self.foreground.multiply_alpha(self.text_opacity))
+        text_style = NULL_STYLE if partial else self.text_style
+        opacity = 1.0 if partial else self.opacity
+        for name in names:
+            layer = node.get_component_styles(name)
+            opacity *= layer.layer_opacity
+            local_background = layer.paint_background
+            if local_background is not None:
+                tinted = local_background.tint(layer.background_tint)
+                text_background = background + tinted
+                background = (background.blend(tinted, 1 - tinted.a).multiply_alpha(opacity)
+                              if partial else background + tinted.multiply_alpha(opacity))
+            else:
+                text_background = background
+            if (color := layer.paint_foreground) is not None:
+                foreground = color.multiply_alpha(layer.text_opacity)
+            text_style += layer.text_style
+            if layer.auto_color:
+                foreground = text_background.get_contrast_text(foreground.a)
+        return replace(VisualStyle.from_rich_style(text_style),
+                       background=background, foreground=foreground)
+
+    def get_style(self, node, style: VisualStyle | str) -> VisualStyle:
+        """Decode Content's inline/component style using this render's paint."""
+        if isinstance(style, VisualStyle):
+            return style
+        if style.startswith("."):
+            owner = node.find_component_owner(style[1:])
+            return (VisualStyle() if owner is None
+                    else self.component_style(owner, style[1:], partial=True))
+        try:
+            return node._parse_visual_style(style)
+        except Exception:
+            return VisualStyle()
+
+    def link_style(self, styles, *, hover: bool = False) -> Style:
+        """Resolve link paint against the original layered background."""
+        if hover:
+            background, color = styles.link_background_hover, styles.link_color_hover
+            auto, text = styles.auto_link_color_hover, styles.link_style_hover
+        else:
+            background, color = styles.link_background, styles.link_color
+            auto, text = styles.auto_link_color, styles.link_style
+        painted_background = self.layered_background + background
+        painted_color = painted_background + (
+            painted_background.get_contrast_text(color.a) if auto else color)
+        return text + Style.from_color(
+            painted_color.rich_color,
+            painted_background.rich_color if hover or background.a else None,
+        )
+
+    @classmethod
+    def resolve(cls, parent: PaintState, layer: PaintLayer) -> PaintState:
+        """Apply one declaration layer, preserving native alpha order."""
+        opacity = parent.opacity * layer.layer_opacity
+        local_background = layer.paint_background
+        tinted = layer.background_color.tint(layer.background_tint)
+        background = text_background = parent.background
+        if local_background is not None:
+            text_background = background + tinted
+            background += tinted.multiply_alpha(opacity)
+        local_foreground = layer.paint_foreground
+        foreground = parent.foreground if local_foreground is None else local_foreground
+        if layer.auto_color:
+            foreground = text_background.get_contrast_text(foreground.a)
+        return cls(
+            background, foreground,
+            parent.text_opacity if local_foreground is None else layer.text_opacity,
+            parent.text_style + layer.text_style, opacity,
+            parent.layered_background,
+            parent.layered_background + tinted.multiply_alpha(opacity),
         )
 
 
 EMPTY_PAINT = PaintState(
-    None, -1, Color(0, 0, 0, 0), Color(255, 255, 255, 0),
+    Color(0, 0, 0, 0), Color(255, 255, 255, 0), 1.0,
     NULL_STYLE, 1.0, Color(0, 0, 0, 0), Color(0, 0, 0, 0),
 )
 
 
-def resolve_paint(parent: PaintState, styles) -> PaintState:
-    """Apply one declaration layer, preserving Textual's native alpha order."""
-    opacity = parent.opacity * styles.opacity
-    tinted = styles.background.tint(styles.background_tint)
-    background = parent.background
-    text_background = background
-    if styles.has_rule("background"):
-        text_background = background + tinted
-        background += tinted.multiply_alpha(opacity)
-    foreground = styles.color if styles.has_rule("color") else parent.foreground
-    if styles.has_rule("auto_color") and styles.auto_color:
-        foreground = text_background.get_contrast_text(foreground.a)
-    return PaintState(
-        parent, styles._cache_key, background, foreground,
-        parent.text_style + styles.text_style, opacity,
-        parent.layered_background,
-        parent.layered_background + tinted.multiply_alpha(opacity),
-        parent.cacheable,
-    )
+class PaintNode:
+    """A node owns inherited paint; renderers only consume its prepared value."""
+
+    _paint_state = EMPTY_PAINT
+
+    def _parent_changed(self) -> None:
+        self._update_paint_state()
+
+    def _update_paint_state(self) -> None:
+        parent = self._parent
+        state = (EMPTY_PAINT if parent is None and not self.is_dom_root
+                 else PaintState.resolve(EMPTY_PAINT if parent is None else parent._paint_state, self.paint_layer))
+        if state != self._paint_state:
+            self._paint_state = state
+            for child in tuple(self._child_pumps):
+                child._parent_changed()
+
+    @property
+    def opacity(self) -> float:
+        """Total inherited opacity, derived from this node's paint value."""
+        return self._paint_state.opacity
+
+    @property
+    def paint_layer(self) -> PaintLayer:
+        return self.styles
+
+    @property
+    def text_style(self) -> Style:
+        """Inherited text attributes."""
+        return self._paint_state.text_style
+
+    @property
+    def selection_style(self) -> Style:
+        return self.screen.get_component_rich_style(
+            "screen--selection", default=NULL_STYLE)
+
+    @property
+    def rich_style(self) -> Style:
+        return self._paint_state.rich_style
+
+    def get_visual_style(self, *component_classes: str, partial: bool = False) -> VisualStyle:
+        """Resolve component declarations against this node's prepared paint."""
+        return self._paint_state.component_style(self, *component_classes, partial=partial)
+
+    def _get_style(self, style: VisualStyle | str) -> VisualStyle:
+        return self._paint_state.get_style(self, style)
+
+    def _parse_visual_style(self, style: str) -> VisualStyle:
+        return VisualStyle.parse(style)
+
+    @property
+    def link_style(self) -> Style:
+        return self._paint_state.link_style(self.styles)
+
+    @property
+    def link_style_hover(self) -> Style:
+        return self._paint_state.link_style(self.styles, hover=True)
+
+    @property
+    def visual_style(self) -> VisualStyle:
+        return self._paint_state.visual_style
+
+    @property
+    def background_colors(self) -> tuple[Color, Color]:
+        return self._paint_state.base_background, self._paint_state.layered_background
+
+    @property
+    def colors(self) -> tuple[Color, Color, Color, Color]:
+        parent = self._parent
+        inherited = EMPTY_PAINT if parent is None else parent._paint_state
+        state = self._paint_state
+        return inherited.background, inherited.foreground, state.background, state.foreground

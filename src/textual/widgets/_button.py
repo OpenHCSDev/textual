@@ -21,7 +21,8 @@ from textual.css._error_tools import friendly_list
 from textual.geometry import Size
 from textual.message import Message
 from textual.reactive import reactive
-from textual.widget import PrimaryActivation, Widget
+from textual._activation import PrimaryActivation
+from textual.widget import Widget
 
 ButtonVariant = Literal["default", "primary", "success", "warning", "error"]
 """The names of the valid button variants.
@@ -359,7 +360,7 @@ class Button(PrimaryActivation, Widget, can_focus=True):
         super().__init__(name=name, id=id, classes=classes, disabled=disabled)
 
         if label is None:
-            label = self.css_identifier_styled
+            label = ""
 
         self.variant = variant
         self.flat = flat
@@ -409,7 +410,7 @@ class Button(PrimaryActivation, Widget, can_focus=True):
         return self.label
 
     def post_render(
-        self, renderable: RenderableType, base_style: Style
+        self, renderable: RenderableType, base_style: Style, link_style: Style | None
     ) -> ConsoleRenderable:
         return cast(ConsoleRenderable, renderable)
 

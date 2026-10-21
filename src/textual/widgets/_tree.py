@@ -19,6 +19,7 @@ from textual.geometry import Region, Size, clamp
 from textual.message import Message
 from textual.reactive import reactive, var
 from textual.scroll_view import ScrollView
+from textual._paint_state import PaintState
 from textual.strip import Strip
 
 if TYPE_CHECKING:
@@ -1302,10 +1303,10 @@ class Tree(Generic[TreeDataType], ScrollView, can_focus=True):
         self._pseudo_class_state = self.get_pseudo_class_state()
         return super().render_lines(crop)
 
-    def render_line(self, y: int) -> Strip:
+    def render_line(self, y: int, paint: PaintState) -> Strip:
         width = self.size.width
         scroll_x, scroll_y = self.scroll_offset
-        style = self.rich_style
+        style = paint.rich_style
         return self._render_line(
             y + scroll_y,
             scroll_x,

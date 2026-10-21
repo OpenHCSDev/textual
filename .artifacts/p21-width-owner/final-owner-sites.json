@@ -1,0 +1,637 @@
+{
+  "revision": "working",
+  "modules": {
+    "src/textual/_paint_state.py": 1,
+    "src/textual/dom.py": 1,
+    "src/textual/_styles_cache.py": 1,
+    "src/textual/_measurement.py": 1,
+    "src/textual/widget.py": 1
+  },
+  "omissions": [],
+  "sites": [
+    [
+      "src/textual/_paint_state.py",
+      9,
+      "ClassDef",
+      "class PaintLayer:"
+    ],
+    [
+      "src/textual/_paint_state.py",
+      32,
+      "ClassDef",
+      "class PaintState(NamedTuple):"
+    ],
+    [
+      "src/textual/_paint_state.py",
+      77,
+      "Assign",
+      "EMPTY_PAINT = PaintState(None, -1, Color(0, 0, 0, 0), Color(255, 255, 255, 0), NULL_STYLE, 1.0, Color(0, 0, 0, 0), Color(0, 0, 0, 0))"
+    ],
+    [
+      "src/textual/_paint_state.py",
+      19,
+      "Assign",
+      "paint_cacheable = False"
+    ],
+    [
+      "src/textual/_paint_state.py",
+      22,
+      "FunctionDef",
+      "def paint_key(self) -> object:"
+    ],
+    [
+      "src/textual/_paint_state.py",
+      33,
+      "AnnAssign",
+      "parent: PaintState | None"
+    ],
+    [
+      "src/textual/_paint_state.py",
+      51,
+      "FunctionDef",
+      "def same_paint(self, other: PaintState) -> bool:"
+    ],
+    [
+      "src/textual/_paint_state.py",
+      55,
+      "FunctionDef",
+      "def resolve(cls, parent: PaintState, layer: PaintLayer, source_key: object) -> PaintState:"
+    ],
+    [
+      "src/textual/_paint_state.py",
+      77,
+      "Call",
+      "PaintState(None, -1, Color(0, 0, 0, 0), Color(255, 255, 255, 0), NULL_STYLE, 1.0, Color(0, 0, 0, 0), Color(0, 0, 0, 0))"
+    ],
+    [
+      "src/textual/_paint_state.py",
+      24,
+      "Return",
+      "return tuple((getattr(self, name) for name in PaintLayer.__annotations__))"
+    ],
+    [
+      "src/textual/_paint_state.py",
+      68,
+      "Return",
+      "return cls(parent, source_key, background, foreground, parent.text_style + layer.text_style, opacity, parent.layered_background, parent.layered_background + tinted.multiply_alpha(opacity), parent.cacheable and layer.paint_cacheable)"
+    ],
+    [
+      "src/textual/_paint_state.py",
+      24,
+      "Call",
+      "tuple((getattr(self, name) for name in PaintLayer.__annotations__))"
+    ],
+    [
+      "src/textual/_paint_state.py",
+      68,
+      "Call",
+      "cls(parent, source_key, background, foreground, parent.text_style + layer.text_style, opacity, parent.layered_background, parent.layered_background + tinted.multiply_alpha(opacity), parent.cacheable and layer.paint_cacheable)"
+    ],
+    [
+      "src/textual/_paint_state.py",
+      24,
+      "comprehension",
+      " for name in PaintLayer.__annotations__"
+    ],
+    [
+      "src/textual/_paint_state.py",
+      73,
+      "Attribute",
+      "layer.paint_cacheable"
+    ],
+    [
+      "src/textual/_paint_state.py",
+      24,
+      "Attribute",
+      "PaintLayer.__annotations__"
+    ],
+    [
+      "src/textual/dom.py",
+      40,
+      "ImportFrom",
+      "from textual._paint_state import EMPTY_PAINT, PaintLayer, PaintState"
+    ],
+    [
+      "src/textual/dom.py",
+      711,
+      "FunctionDef",
+      "def is_empty(self) -> bool:"
+    ],
+    [
+      "src/textual/dom.py",
+      1395,
+      "FunctionDef",
+      "def _resolved_paint_state(self) -> PaintState:"
+    ],
+    [
+      "src/textual/dom.py",
+      1430,
+      "FunctionDef",
+      "def paint_layer(self) -> PaintLayer:"
+    ],
+    [
+      "src/textual/dom.py",
+      1393,
+      "Return",
+      "return self._resolved_paint_state().text_style"
+    ],
+    [
+      "src/textual/dom.py",
+      1406,
+      "Assign",
+      "key = (layer.paint_key, layer.paint_cacheable)"
+    ],
+    [
+      "src/textual/dom.py",
+      1413,
+      "Assign",
+      "inherited = parent._resolved_paint_state() if isinstance(parent, DOMNode) else EMPTY_PAINT"
+    ],
+    [
+      "src/textual/dom.py",
+      1445,
+      "Return",
+      "return self._resolved_paint_state().rich_style"
+    ],
+    [
+      "src/textual/dom.py",
+      1461,
+      "Assign",
+      "cacheable = self._resolved_paint_state().cacheable"
+    ],
+    [
+      "src/textual/dom.py",
+      1586,
+      "Assign",
+      "resolved = self._resolved_paint_state()"
+    ],
+    [
+      "src/textual/dom.py",
+      1625,
+      "Assign",
+      "state = self._resolved_paint_state()"
+    ],
+    [
+      "src/textual/dom.py",
+      335,
+      "Return",
+      "return self.layout.get_content_height(self, container, viewport, width)"
+    ],
+    [
+      "src/textual/dom.py",
+      1393,
+      "Attribute",
+      "self._resolved_paint_state().text_style"
+    ],
+    [
+      "src/textual/dom.py",
+      1417,
+      "Assign",
+      "state = self._paint_state = PaintState.resolve(inherited, layer, key)"
+    ],
+    [
+      "src/textual/dom.py",
+      1445,
+      "Attribute",
+      "self._resolved_paint_state().rich_style"
+    ],
+    [
+      "src/textual/dom.py",
+      1461,
+      "Attribute",
+      "self._resolved_paint_state().cacheable"
+    ],
+    [
+      "src/textual/dom.py",
+      1470,
+      "FunctionDef",
+      "def iter_styles() -> Iterable[PaintLayer]:"
+    ],
+    [
+      "src/textual/dom.py",
+      1586,
+      "Call",
+      "self._resolved_paint_state()"
+    ],
+    [
+      "src/textual/dom.py",
+      1625,
+      "Call",
+      "self._resolved_paint_state()"
+    ],
+    [
+      "src/textual/dom.py",
+      335,
+      "Call",
+      "self.layout.get_content_height(self, container, viewport, width)"
+    ],
+    [
+      "src/textual/dom.py",
+      1393,
+      "Call",
+      "self._resolved_paint_state()"
+    ],
+    [
+      "src/textual/dom.py",
+      1403,
+      "Assign",
+      "state = PaintState.resolve(state, layer, (layer.paint_key, layer.paint_cacheable))"
+    ],
+    [
+      "src/textual/dom.py",
+      1406,
+      "Attribute",
+      "layer.paint_key"
+    ],
+    [
+      "src/textual/dom.py",
+      1406,
+      "Attribute",
+      "layer.paint_cacheable"
+    ],
+    [
+      "src/textual/dom.py",
+      1414,
+      "Call",
+      "parent._resolved_paint_state()"
+    ],
+    [
+      "src/textual/dom.py",
+      1417,
+      "Call",
+      "PaintState.resolve(inherited, layer, key)"
+    ],
+    [
+      "src/textual/dom.py",
+      1445,
+      "Call",
+      "self._resolved_paint_state()"
+    ],
+    [
+      "src/textual/dom.py",
+      1461,
+      "Call",
+      "self._resolved_paint_state()"
+    ],
+    [
+      "src/textual/dom.py",
+      1586,
+      "Attribute",
+      "self._resolved_paint_state"
+    ],
+    [
+      "src/textual/dom.py",
+      1625,
+      "Attribute",
+      "self._resolved_paint_state"
+    ],
+    [
+      "src/textual/dom.py",
+      335,
+      "Attribute",
+      "self.layout.get_content_height"
+    ],
+    [
+      "src/textual/dom.py",
+      1393,
+      "Attribute",
+      "self._resolved_paint_state"
+    ],
+    [
+      "src/textual/dom.py",
+      1403,
+      "Call",
+      "PaintState.resolve(state, layer, (layer.paint_key, layer.paint_cacheable))"
+    ],
+    [
+      "src/textual/dom.py",
+      1414,
+      "Attribute",
+      "parent._resolved_paint_state"
+    ],
+    [
+      "src/textual/dom.py",
+      1417,
+      "Attribute",
+      "PaintState.resolve"
+    ],
+    [
+      "src/textual/dom.py",
+      1445,
+      "Attribute",
+      "self._resolved_paint_state"
+    ],
+    [
+      "src/textual/dom.py",
+      1461,
+      "Attribute",
+      "self._resolved_paint_state"
+    ],
+    [
+      "src/textual/dom.py",
+      1403,
+      "Attribute",
+      "PaintState.resolve"
+    ],
+    [
+      "src/textual/dom.py",
+      1403,
+      "Attribute",
+      "layer.paint_key"
+    ],
+    [
+      "src/textual/dom.py",
+      1403,
+      "Attribute",
+      "layer.paint_cacheable"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      10,
+      "ImportFrom",
+      "from rich.terminal_theme import TerminalTheme"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      16,
+      "ImportFrom",
+      "from textual._paint_state import PaintState"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      163,
+      "FunctionDef",
+      "def widget_paint_key(widget: Widget, paint: FramePaint, state: PaintState) -> tuple:"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      172,
+      "FunctionDef",
+      "def render_widget(self, widget: Widget, crop: Region) -> list[Strip]:"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      127,
+      "AnnAssign",
+      "self._paint_key: tuple | None = None"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      169,
+      "If",
+      "if self.widget_paint_key(widget, widget.frame_paint, widget._resolved_paint_state()) != self._paint_key:"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      184,
+      "Assign",
+      "state = widget._resolved_paint_state()"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      188,
+      "Assign",
+      "key = self.widget_paint_key(widget, paint, state)"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      189,
+      "If",
+      "if key != self._paint_key:"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      127,
+      "Attribute",
+      "self._paint_key"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      169,
+      "Compare",
+      "self.widget_paint_key(widget, widget.frame_paint, widget._resolved_paint_state()) != self._paint_key"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      184,
+      "Call",
+      "widget._resolved_paint_state()"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      188,
+      "Call",
+      "self.widget_paint_key(widget, paint, state)"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      189,
+      "Compare",
+      "key != self._paint_key"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      191,
+      "Assign",
+      "self._paint_key = key"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      169,
+      "Call",
+      "self.widget_paint_key(widget, widget.frame_paint, widget._resolved_paint_state())"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      169,
+      "Attribute",
+      "self._paint_key"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      184,
+      "Attribute",
+      "widget._resolved_paint_state"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      188,
+      "Attribute",
+      "self.widget_paint_key"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      189,
+      "Attribute",
+      "self._paint_key"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      191,
+      "Attribute",
+      "self._paint_key"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      169,
+      "Attribute",
+      "self.widget_paint_key"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      169,
+      "Call",
+      "widget._resolved_paint_state()"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      169,
+      "Attribute",
+      "widget._resolved_paint_state"
+    ],
+    [
+      "src/textual/_styles_cache.py",
+      325,
+      "Call",
+      "log.warning(f'Strip contains invalid empty Segments: {strip!r}.')"
+    ],
+    [
+      "src/textual/_measurement.py",
+      17,
+      "FunctionDef",
+      "def measurement_key(self, widget: Widget, container: Size, viewport: Size, width: int) -> object:"
+    ],
+    [
+      "src/textual/_measurement.py",
+      117,
+      "FunctionDef",
+      "def measurement_key(self, widget: Widget, container: Size, viewport: Size, width: int) -> object:"
+    ],
+    [
+      "src/textual/_measurement.py",
+      132,
+      "FunctionDef",
+      "def measurement_key(self, widget: Widget, container: Size, viewport: Size, width: int) -> object:"
+    ],
+    [
+      "src/textual/_measurement.py",
+      118,
+      "Return",
+      "return (widget._geometry_revision, widget.layout._content_height_dependency.measurement_key(widget, container, viewport, width)) if widget.is_container else width"
+    ],
+    [
+      "src/textual/_measurement.py",
+      119,
+      "Call",
+      "widget.layout._content_height_dependency.measurement_key(widget, container, viewport, width)"
+    ],
+    [
+      "src/textual/_measurement.py",
+      119,
+      "Attribute",
+      "widget.layout._content_height_dependency.measurement_key"
+    ],
+    [
+      "src/textual/widget.py",
+      454,
+      "AnnAssign",
+      "_PSEUDO_CLASSES: ClassVar[dict[str, Callable[[Widget], bool]]] = {'hover': lambda widget: widget.mouse_hover, 'focus': lambda widget: widget.has_focus, 'blur': lambda widget: not widget.has_focus, 'can-focus': lambda widget: widget.allow_focus(), 'disabled': lambda widget: widget.is_disabled, 'enabled': lambda widget: not widget.is_disabled, 'dark': lambda widget: widget.app.current_theme.dark, 'light': lambda widget: not widget.app.current_theme.dark, 'focus-within': lambda widget: widget.has_focus_within, 'inline': lambda widget: widget.app.is_inline, 'ansi': lambda widget: widget.app.native_ansi_color, 'nocolor': lambda widget: widget.app.no_color, 'first-of-type': lambda widget: widget.first_of_type, 'last-of-type': lambda widget: widget.last_of_type, 'first-child': lambda widget: widget.first_child, 'last-child': lambda widget: widget.last_child, 'odd': lambda widget: widget.is_odd, 'even': lambda widget: widget.is_even, 'empty': lambda widget: widget.is_empty}"
+    ],
+    [
+      "src/textual/widget.py",
+      737,
+      "FunctionDef",
+      "def _render_widget(self) -> Widget:"
+    ],
+    [
+      "src/textual/widget.py",
+      1861,
+      "FunctionDef",
+      "def get_content_height(self, container: Size, viewport: Size, width: int) -> int:"
+    ],
+    [
+      "src/textual/widget.py",
+      678,
+      "Return",
+      "return self._resolved_paint_state().opacity"
+    ],
+    [
+      "src/textual/widget.py",
+      1874,
+      "Assign",
+      "cache_key = self._content_height_dependency.measurement_key(self, container, viewport, width)"
+    ],
+    [
+      "src/textual/widget.py",
+      3747,
+      "Assign",
+      "cls._content_height_dependency = getattr(cls.get_content_height, '_height_dependency', CONTEXT_HEIGHT)"
+    ],
+    [
+      "src/textual/widget.py",
+      678,
+      "Attribute",
+      "self._resolved_paint_state().opacity"
+    ],
+    [
+      "src/textual/widget.py",
+      1874,
+      "Call",
+      "self._content_height_dependency.measurement_key(self, container, viewport, width)"
+    ],
+    [
+      "src/textual/widget.py",
+      3747,
+      "Call",
+      "getattr(cls.get_content_height, '_height_dependency', CONTEXT_HEIGHT)"
+    ],
+    [
+      "src/textual/widget.py",
+      4133,
+      "Assign",
+      "strips = self._styles_cache.render_widget(self, crop)"
+    ],
+    [
+      "src/textual/widget.py",
+      473,
+      "Attribute",
+      "widget.is_empty"
+    ],
+    [
+      "src/textual/widget.py",
+      678,
+      "Call",
+      "self._resolved_paint_state()"
+    ],
+    [
+      "src/textual/widget.py",
+      1874,
+      "Attribute",
+      "self._content_height_dependency.measurement_key"
+    ],
+    [
+      "src/textual/widget.py",
+      3747,
+      "Attribute",
+      "cls.get_content_height"
+    ],
+    [
+      "src/textual/widget.py",
+      4133,
+      "Call",
+      "self._styles_cache.render_widget(self, crop)"
+    ],
+    [
+      "src/textual/widget.py",
+      678,
+      "Attribute",
+      "self._resolved_paint_state"
+    ],
+    [
+      "src/textual/widget.py",
+      4133,
+      "Attribute",
+      "self._styles_cache.render_widget"
+    ]
+  ]
+}

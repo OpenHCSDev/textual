@@ -7,13 +7,16 @@ from typing import TYPE_CHECKING, Callable, TypeVar
 
 from textual.css.scalar import Scalar, Unit
 from textual.css.styles import RenderStyles
-from textual.geometry import Spacing
+from textual.geometry import Size, Spacing
 
 if TYPE_CHECKING:
     from textual.widget import Widget
 
 
 class HeightDependency(ABC):
+    def measurement_key(self, widget: Widget, container: Size, viewport: Size, width: int) -> object:
+        return container, viewport, width
+
     @abstractmethod
     def depends(self, widget: Widget, *, greedy: bool = True) -> bool:
         """Whether incoming height changes this operation in its actual box mode.
@@ -111,6 +114,11 @@ class NativeWidgetMeasurementHeight(HeightDependency):
 
 
 class NativeWidgetHeight(NativeWidgetMeasurementHeight):
+    def measurement_key(self, widget: Widget, container: Size, viewport: Size, width: int) -> object:
+        return ((widget._geometry_revision,
+                 widget.layout._content_height_dependency.measurement_key(widget, container, viewport, width))
+                if widget.is_container else width)
+
     def layout_dependency(self, widget: Widget) -> HeightDependency:
         return widget.layout._content_height_dependency
 
@@ -121,6 +129,9 @@ class NativeWidgetWidth(NativeWidgetMeasurementHeight):
 
 
 class NativeLayoutHeight(HeightDependency):
+    def measurement_key(self, widget: Widget, container: Size, viewport: Size, width: int) -> object:
+        return width, viewport, container.height if self.depends(widget) else 0
+
     def depends(self, widget: Widget, *, greedy: bool = True) -> bool:
         # Conservatively require a declaration for the arranger too. Even the
         # fixed-zero branch need not opt unknown/custom layout hooks into reuse.
@@ -160,12 +171,12 @@ class FlowHeight(HeightDependency):
         )
 
     def depends(self, widget: Widget, *, greedy: bool = True) -> bool:
-        styles = widget.styles
+        styles = widget.geometry
         if (not widget._native_measurement_layout_hooks
                 or styles.align_horizontal != "left" or styles.align_vertical != "top"):
             return True
         for child in widget.displayed_children:
-            child_styles = child.styles
+            child_styles = child.geometry
             if child_styles.is_docked or child_styles.is_split or child_styles.overlay == "screen":
                 return True
             # Match native auto-parent stretch semantics, which treat all
@@ -204,7 +215,7 @@ class GridHeight(FlowHeight):
     box_depends = HeightDependency.box_depends
 
     def depends(self, widget: Widget, *, greedy: bool = True) -> bool:
-        styles = widget.styles
+        styles = widget.geometry
         rows, columns = styles.grid_rows or (), styles.grid_columns or ()
         # Default rows become fractional at nonzero height for non-auto parents.
         if (not rows and not styles.is_auto_height
@@ -214,7 +225,7 @@ class GridHeight(FlowHeight):
         auto_rows = not rows or any(row.is_auto for row in rows)
         auto_columns = any(column.is_auto for column in columns)
         for child in widget.displayed_children:
-            child_styles = child.styles
+            child_styles = child.geometry
             # Auto cells pass the outer size directly to content measurement
             # and extrema. Final boxes/offsets receive the already-resolved cell
             # size, so fractional child boxes are safe once tracks are proven.
@@ -273,7 +284,7 @@ def height_dependency(policy: HeightDependency) -> Callable[[Function], Function
 
 def _local_box_inputs(widget: Widget) -> tuple[bool, bool, bool, bool, bool]:
     """Resolve local scalar dependencies once per owning style generation."""
-    styles = widget.styles
+    styles = widget.geometry
     if type(styles) is not RenderStyles:
         return True, False, False, False, False
     # Retain the actual source so replacement cannot reuse an unrelated epoch.
@@ -343,7 +354,7 @@ def box_depends_on_available_height(widget: Widget, *, greedy: bool) -> bool:
         return True
     # Fractional width becomes auto only in optimal sizing. Normal placement
     # resolves the supplied fraction without calling get_content_width.
-    if (content_width and (not greedy or widget.styles.width.is_auto)
+    if (content_width and (not greedy or widget.geometry.width.is_auto)
             and widget._content_width_dependency.depends(widget)):
         return True
     if content_height:
@@ -352,9 +363,9 @@ def box_depends_on_available_height(widget: Widget, *, greedy: bool) -> bool:
 
 
 def _arrangement_wrapper_uses_height(widget: Widget) -> bool:
-    styles = widget.styles
+    styles = widget.geometry
     if (not widget._native_measurement_layout_hooks
             or styles.align_horizontal != "left" or styles.align_vertical != "top"):
         return True
-    return any(child.styles.is_docked or child.styles.is_split
-               or child.styles.overlay == "screen" for child in widget.displayed_children)
+    return any(child.geometry.is_docked or child.geometry.is_split
+               or child.geometry.overlay == "screen" for child in widget.displayed_children)

@@ -35,14 +35,14 @@ async def test_native_line_measurements_survive_paint_and_retire_on_extent():
         assert lines._layout_updates > originals[lines]
         assert lines.get_content_width(Size(10, 10), Size(60, 18)) == lines.virtual_size.width
         assert lines.get_content_height(Size(10, 10), Size(60, 18), 10) == lines.virtual_size.height
-        # A live replacement renderer restores the conservative child contract.
+        # A replacement bar renderer still paints within the reserved extent.
         class CustomBar(ScrollBarRender):
             pass
         bar = editor.vertical_scrollbar
         bar.renderer = CustomBar
         before = editor._layout_updates, bar._layout_updates
         group.styles.scrollbar_color = "blue"
-        assert editor._layout_updates > before[0] and bar._layout_updates > before[1]
+        assert (editor._layout_updates, bar._layout_updates) == before
 
 
 async def test_custom_extent_and_method_supply_stays_conservative():
@@ -67,22 +67,31 @@ async def test_custom_extent_and_method_supply_stays_conservative():
         assert widget._layout_updates > before
 
 
-def test_scrollbar_custom_declarations_and_live_method_replacement():
+def test_scrollbar_paint_contract_follows_class_declaration():
     from textual.scrollbar import ScrollBar, ScrollBarCorner
 
-    class CustomBar(ScrollBar):
+    class InheritedBar(ScrollBar):
         pass
 
-    class CustomCorner(ScrollBarCorner):
+    class ReplacedBar(ScrollBar):
+        def render(self):
+            return "custom source"
+
+    class ReplacedBarBody(ScrollBar):
+        def _render_bar(self, style):
+            return "custom source"
+
+    class InheritedCorner(ScrollBarCorner):
         pass
 
-    assert CustomBar()._render_styles_sensitive()
-    assert CustomCorner()._render_styles_sensitive()
-    bar = ScrollBar()
-    assert not bar._render_styles_sensitive()
-    bar.render = lambda: "custom source"
-    assert bar._render_styles_sensitive()
-    corner = ScrollBarCorner()
-    assert not corner._render_styles_sensitive()
-    corner.render = lambda: "custom source"
-    assert corner._render_styles_sensitive()
+    class ReplacedCorner(ScrollBarCorner):
+        def render(self):
+            return "custom source"
+
+    assert not ScrollBar()._render_styles_sensitive()
+    assert not InheritedBar()._render_styles_sensitive()
+    assert ReplacedBar()._render_styles_sensitive()
+    assert ReplacedBarBody()._render_styles_sensitive()
+    assert not ScrollBarCorner()._render_styles_sensitive()
+    assert not InheritedCorner()._render_styles_sensitive()
+    assert ReplacedCorner()._render_styles_sensitive()

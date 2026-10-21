@@ -58,7 +58,6 @@ from rich.console import Console, ConsoleDimensions, ConsoleOptions, RenderableT
 from rich.control import Control
 from rich.protocol import is_renderable
 from rich.segment import Segment, Segments
-from rich.terminal_theme import TerminalTheme
 
 from textual import (
     Logger,
@@ -75,13 +74,13 @@ from textual._animator import DEFAULT_EASING, Animatable, Animator, EasingFuncti
 from textual._ansi_sequences import SYNC_END, SYNC_START
 from textual._ansi_theme import ALABASTER, MONOKAI
 from textual._callback import invoke
+from textual._clipboard import ClipboardContent
 from textual._compat import cached_property
-from textual._compositor import CompositorUpdate
+from textual._compositor import CompositorUpdate, run_steps
 from textual._context import NoActiveAppError, active_app, active_message_pump
 from textual._context import message_hook as message_hook_context_var
 from textual._dispatch_key import dispatch_key
 from textual._event_broker import NoHandler, extract_handler_actions
-from textual._clipboard import ClipboardContent
 from textual._files import generate_datetime_filename
 from textual._path import (
     CSSPathType,
@@ -91,6 +90,7 @@ from textual._path import (
 from textual._types import AnimationLevel
 from textual._wait import wait_for_idle
 from textual.actions import ActionParseResult, SkipAction
+from textual.ansi_palette import AnsiPalette, MappedAnsiPalette
 from textual.await_complete import AwaitComplete
 from textual.await_remove import AwaitRemove
 from textual.binding import Binding, BindingsMap, BindingType, Keymap
@@ -101,11 +101,12 @@ from textual.css.errors import StylesheetError
 from textual.css.query import NoMatches
 from textual.css.stylesheet import RulesMap, Stylesheet
 from textual.dom import DOMNode, NoScreen
+from textual.design import ColorSystem
 from textual.driver import Driver
 from textual.errors import NoWidget
 from textual.features import FeatureFlag, parse_features
 from textual.file_monitor import FileMonitor
-from textual.filter import ANSIToTruecolor, DimFilter, Monochrome, NoColor
+from textual.filter import DimFilter, Monochrome, NoColor
 from textual.geometry import Offset, Region, Size
 from textual.keys import (
     REPLACED_KEYS,
@@ -352,8 +353,7 @@ class App(Generic[ReturnType], DOMNode):
         }
 
         /* When a widget is maximized */
-        Screen.-maximized-view {                    
-            layout: vertical !important;
+        Screen.-maximized-view {
             hatch: right $panel;
             overflow-y: auto !important;
             align: center middle;
@@ -579,11 +579,11 @@ class App(Generic[ReturnType], DOMNode):
     theme: Reactive[str] = Reactive(constants.DEFAULT_THEME)
     """The name of the currently active theme."""
 
-    ansi_theme_dark = Reactive(MONOKAI, init=False)
-    """Maps ANSI colors to hex colors using a Rich TerminalTheme object while using a dark theme."""
+    ansi_theme_dark: Reactive[AnsiPalette] = Reactive(lambda: MappedAnsiPalette(MONOKAI), init=False)
+    """Owns ANSI rendering and RGB-only operations for dark themes."""
 
-    ansi_theme_light = Reactive(ALABASTER, init=False)
-    """Maps ANSI colors to hex colors using a Rich TerminalTheme object while using a light theme."""
+    ansi_theme_light: Reactive[AnsiPalette] = Reactive(lambda: MappedAnsiPalette(ALABASTER), init=False)
+    """Owns ANSI rendering and RGB-only operations for light themes."""
 
     ansi_color: Reactive[bool | None] = Reactive(None)
     """Allow ANSI colors in UI?"""
@@ -628,9 +628,8 @@ class App(Generic[ReturnType], DOMNode):
             self.register_theme(theme)
 
         self.set_reactive(App.ansi_color, ansi_color)
-        self._filters: list[LineFilter] = [
-            ANSIToTruecolor(self.ansi_theme, enabled=not self.native_ansi_color)
-        ]
+        self._filters: list[LineFilter] = [self.ansi_theme]
+        self.ansi_theme.enabled = not self.native_ansi_color
         environ = dict(os.environ)
         self.no_color = environ.pop("NO_COLOR", None) is not None
         if self.no_color:
@@ -741,7 +740,10 @@ class App(Generic[ReturnType], DOMNode):
 
         # Note that the theme must be set *before* self.get_css_variables() is called
         # to ensure that the variables are retrieved from the currently active theme.
-        self.stylesheet = Stylesheet(variables=self.get_css_variables())
+        self.stylesheet = Stylesheet(
+            variables=self.get_css_variables(),
+            screens=lambda: (screen for stack in self._screen_stacks.values() for screen in stack),
+        )
 
         css_path = css_path or self.CSS_PATH
         css_paths = [
@@ -870,9 +872,6 @@ class App(Generic[ReturnType], DOMNode):
         """A pending resize event, sent on idle."""
 
         self._size: Size | None = None
-
-        self._css_update_count: int = 0
-        """Incremented when CSS is invalidated."""
 
         self.clipboard_content = ClipboardContent("")
         """Contents of local clipboard."""
@@ -1158,7 +1157,7 @@ class App(Generic[ReturnType], DOMNode):
                 ansi_color = theme.ansi
 
         for filter in self._filters:
-            if isinstance(filter, ANSIToTruecolor):
+            if isinstance(filter, AnsiPalette):
                 filter.enabled = not ansi_color
 
     def animate(
@@ -1471,7 +1470,8 @@ class App(Generic[ReturnType], DOMNode):
         theme = self.current_theme
         # Build the Textual color system from the theme.
         # This will contain $secondary, $primary, $background, etc.
-        variables = theme.to_color_system().generate()
+        self.color_system: ColorSystem = theme.to_color_system()
+        variables = self.color_system.generate()
         # Apply the additional variables from the theme
         variables = {**variables, **(theme.variables)}
         theme_variables = self.get_theme_variable_defaults()
@@ -1560,29 +1560,22 @@ class App(Generic[ReturnType], DOMNode):
         self.update_classes(classes, update=False)
 
         self._refresh_truecolor_filter(self.ansi_theme)
-        self._invalidate_css()
         self.call_next(partial(self.refresh_css, animate=False))
         self.call_next(self.theme_changed_signal.publish, theme)
 
-    def _invalidate_css(self) -> None:
-        """Invalidate CSS, so it will be refreshed."""
-        self._css_update_count += 1
-
-    def watch_ansi_theme_dark(self, theme: TerminalTheme) -> None:
+    def watch_ansi_theme_dark(self, theme: AnsiPalette) -> None:
         if self.current_theme.dark:
             self._refresh_truecolor_filter(theme)
-            self._invalidate_css()
             self.call_next(self.refresh_css)
 
-    def watch_ansi_theme_light(self, theme: TerminalTheme) -> None:
+    def watch_ansi_theme_light(self, theme: AnsiPalette) -> None:
         if not self.current_theme.dark:
             self._refresh_truecolor_filter(theme)
-            self._invalidate_css()
             self.call_next(self.refresh_css)
 
     @property
-    def ansi_theme(self) -> TerminalTheme:
-        """The ANSI TerminalTheme currently being used.
+    def ansi_theme(self) -> AnsiPalette:
+        """The current native ANSI or mapped RGB rendering palette.
 
         Defines how colors defined as ANSI (e.g. `magenta`) inside Rich renderables
         are mapped to hex codes.
@@ -1601,7 +1594,7 @@ class App(Generic[ReturnType], DOMNode):
         ansi = self.current_theme.ansi if self.ansi_color is None else self.ansi_color
         return ansi
 
-    def _refresh_truecolor_filter(self, theme: TerminalTheme) -> None:
+    def _refresh_truecolor_filter(self, theme: AnsiPalette) -> None:
         """Update the ANSI to Truecolor filter, if available, with a new theme mapping.
 
         Args:
@@ -1610,8 +1603,9 @@ class App(Generic[ReturnType], DOMNode):
         filters = self._filters
         ansi_color = self.native_ansi_color
         for index, filter in enumerate(filters):
-            if isinstance(filter, ANSIToTruecolor):
-                filters[index] = ANSIToTruecolor(theme, enabled=not ansi_color)
+            if isinstance(filter, AnsiPalette):
+                theme.enabled = not ansi_color
+                filters[index] = theme
                 return
 
     def get_color_system(self) -> str:
@@ -1923,6 +1917,7 @@ class App(Generic[ReturnType], DOMNode):
                 to use app title.
             simplify: Simplify the segments by combining contiguous segments with the same style.
         """
+        export_theme = self.ansi_theme.export_theme()
         assert self._driver is not None, "App must be running"
         width, height = self.size
 
@@ -1936,9 +1931,9 @@ class App(Generic[ReturnType], DOMNode):
             legacy_windows=False,
             safe_box=False,
         )
-        screen_render = self.screen._compositor.render_update(full=True, simplify=simplify)
-        console.print(screen_render)
-        return console.export_svg(title=title or self.title, theme=self.ansi_theme)
+        console.print(run_steps(
+            self.screen._compositor.render_update(full=True, simplify=simplify)))
+        return console.export_svg(title=title or self.title, theme=export_theme)
 
     def save_screenshot(
         self,
@@ -2568,9 +2563,11 @@ class App(Generic[ReturnType], DOMNode):
             animate: Enable animation?
         """
         if isinstance(node, App):
+            self.stylesheet.invalidate({""})
             if self._screen_stack:
                 for screen in self._drawn_screens:
                     screen.update_node_styles(animate=animate)
+                    screen._pending_styles.clear()
         else:
             descendants = node.walk_children(with_self=True)
             self.stylesheet.update_nodes(descendants, animate=animate)
@@ -2663,9 +2660,6 @@ class App(Generic[ReturnType], DOMNode):
             screen, await_mount = self._get_screen(new_screen)
             stack.append(screen)
             self._load_screen_css(screen)
-            if screen._css_update_count != self._css_update_count:
-                self.refresh_css()
-
             screen.post_message(events.ScreenResume())
         else:
             # Mode is not defined
@@ -2712,9 +2706,6 @@ class App(Generic[ReturnType], DOMNode):
             await_mount = AwaitMount(self.screen, [])
 
         self._current_mode = mode
-        if self.screen._css_update_count != self._css_update_count:
-            self.refresh_css()
-
         self.mode_change_signal.publish(mode)
         self.screen_change_signal.publish(self.screen)
 
@@ -3217,33 +3208,28 @@ class App(Generic[ReturnType], DOMNode):
         Args:
             widget: Widget under mouse, or None for no widgets.
         """
-        if widget is None:
-            if self.mouse_over is not None:
-                try:
-                    self.mouse_over.post_message(events.Leave(self.mouse_over))
-                finally:
-                    self.mouse_over = None
-        else:
-            if self.mouse_over is not widget:
-                try:
-                    if self.mouse_over is not None:
-                        self.mouse_over.post_message(events.Leave(self.mouse_over))
-                    if widget is not None:
-                        widget.post_message(events.Enter(widget))
-                finally:
-                    self.mouse_over = widget
+        previous_mouse_over = self.mouse_over
+        if previous_mouse_over is not widget:
+            try:
+                if previous_mouse_over is not None:
+                    previous_mouse_over.post_message(events.Leave(previous_mouse_over))
+                if widget is not None:
+                    widget.post_message(events.Enter(widget))
+            finally:
+                self.mouse_over = widget
 
         current_hover_over = self.hover_over
-        if current_hover_over is not None:
-            current_hover_over.mouse_hover = False
-
-        if hover_widget is not None:
-            hover_widget.mouse_hover = True
-            if hover_widget._has_hover_style:
-                hover_widget.update_node_styles()
-        if current_hover_over is not None and current_hover_over._has_hover_style:
-            current_hover_over.update_node_styles()
-        self.hover_over = hover_widget
+        if previous_mouse_over is not widget or current_hover_over is not hover_widget:
+            for node in dict.fromkeys(
+                node for node in (previous_mouse_over, widget, current_hover_over, hover_widget)
+                if node is not None
+            ):
+                node.mouse_hover = node is widget or node is hover_widget
+        if current_hover_over is not hover_widget:
+            self.hover_over = hover_widget
+            self.stylesheet.update_hover(
+                node for node in (current_hover_over, hover_widget) if node is not None
+            )
         if self._screen_stack:
             self.screen._clear_tooltip_unless_over(self.mouse_over)
 
@@ -3325,10 +3311,11 @@ class App(Generic[ReturnType], DOMNode):
 
         self._close_messages_no_wait()
 
-    def _handle_exception(self, error: Exception) -> None:
-        """Called with an unhandled exception.
+    def _handle_exception(self, error: Exception) -> bool:
+        """Report an exception and return whether processing may continue.
 
-        Always results in the app exiting.
+        The default handler is fatal and returns False. Applications may
+        handle a runtime error and return True; startup is not retried.
 
         Args:
             error: An exception instance.
@@ -3346,6 +3333,7 @@ class App(Generic[ReturnType], DOMNode):
         else:
             # Use default exception rendering
             self._fatal_error()
+        return False
 
     def _fatal_error(self) -> None:
         """Exits the app after an unhandled exception."""
@@ -3896,7 +3884,6 @@ class App(Generic[ReturnType], DOMNode):
         try:
             if self.screen.is_mounted:
                 self.screen._refresh_layout(self.size)
-                self.screen._css_update_count = self._css_update_count
         except ScreenError:
             pass
         # The other screens in the stack will need to know about some style
@@ -3905,7 +3892,6 @@ class App(Generic[ReturnType], DOMNode):
         for screen in self.screen_stack:
             if screen != self.screen:
                 stylesheet.update(screen, animate=animate)
-                screen._css_update_count = self._css_update_count
 
     def _display(self, screen: Screen, renderable: RenderableType | None) -> None:
         """Display a renderable within a sync.

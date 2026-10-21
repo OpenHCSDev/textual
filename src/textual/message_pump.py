@@ -35,7 +35,7 @@ from textual._compat import cached_property
 from textual._context import NoActiveAppError, active_app, active_message_pump
 from textual._context import message_hook as message_hook_context_var
 from textual._context import prevent_message_types_stack
-from textual._on import OnNoWidget
+from textual._on import MessageHandler, OnNoWidget
 from textual._queue import Queue
 from textual._time import time
 from textual.constants import SLOW_THRESHOLD
@@ -51,7 +51,6 @@ if TYPE_CHECKING:
 
     from textual.app import App
     from textual.await_complete import AwaitComplete
-    from textual.css.model import SelectorSet
     from textual.dom import DOMNode
     from textual.screen import Screen
 
@@ -60,8 +59,10 @@ MessageType = TypeVar("MessageType", bound="Message")
 Callback: TypeAlias = "Callable[..., Any] | Callable[..., Awaitable[Any]]"
 
 
-def _parent_retired(_reference) -> None:
-    MessagePump._tree_revision += 1
+def _parent_retired(_reference, child) -> None:
+    ParentLinks._tree_revision += 1
+    if (node := child()) is not None:
+        node._parent_changed()
 
 
 class CallbackError(Exception):
@@ -76,9 +77,7 @@ _MessagePumpMetaSub = TypeVar("_MessagePumpMetaSub", bound="_MessagePumpMeta")
 
 
 class _MessagePumpMeta(type):
-    """Metaclass for message pump. This exists to populate a Message inner class of a Widget with the
-    parent classes' name.
-    """
+    """Build message pump classes and their declared dispatch routes."""
 
     def __new__(
         cls: Type[_MessagePumpMetaSub],
@@ -87,20 +86,6 @@ class _MessagePumpMeta(type):
         class_dict: dict[str, Any],
         **kwargs: Any,
     ) -> _MessagePumpMetaSub:
-        handlers: dict[
-            type[Message], list[tuple[Callable, dict[str, tuple[SelectorSet, ...]]]]
-        ] = class_dict.get("_decorated_handlers", {})
-
-        class_dict["_decorated_handlers"] = handlers
-
-        for value in class_dict.values():
-            if callable(value) and hasattr(value, "_textual_on"):
-                textual_on: list[
-                    tuple[type[Message], dict[str, tuple[SelectorSet, ...]]]
-                ] = getattr(value, "_textual_on")
-                for message_type, selectors in textual_on:
-                    handlers.setdefault(message_type, []).append((value, selectors))
-
         # Look for reactives with public AND private compute methods.
         prefix = "compute_"
         prefix_len = len(prefix)
@@ -117,14 +102,62 @@ class _MessagePumpMeta(type):
                     )
 
         class_obj = super().__new__(cls, name, bases, class_dict, **kwargs)
+        class_obj._compile_dispatch()
         return class_obj
 
+    def _compile_dispatch(cls) -> None:
+        """Declare C3 handler routes once; event delivery only binds their methods."""
+        scopes = []
+        for owner in cls.__mro__:
+            declarations = owner.__dict__
+            decorated = {}
+            for value in declarations.values():
+                if isinstance(value, MessageHandler):
+                    for message_type, selectors in value.declarations:
+                        decorated.setdefault(message_type, []).append((value, selectors))
+            # A class mapping is live: replacing a named handler during a
+            # decorated yield must affect this same dispatch, not the next class.
+            scopes.append((owner, decorated, declarations))
+        cls._dispatch_declarations = tuple(scopes)
 
-class MessagePump(metaclass=_MessagePumpMeta):
+
+class ParentLinks:
+    """Own the weak topology and its revision for every message-pump node."""
+
+    _tree_revision = _parent_revision = 0
+    _parent_link = None
+
+    @property
+    def _parent(self) -> MessagePump | None:
+        return None if self._parent_link is None else self._parent_link()
+
+    @_parent.setter
+    def _parent(self, parent: MessagePump | None) -> None:
+        previous = self._parent_link
+        if previous is not None and previous() is parent:
+            return
+        if previous is not None and (old := previous()) is not None:
+            old._child_pumps.discard(self)
+        self._parent_link = None if parent is None else ref(
+            parent, partial(_parent_retired, child=ref(self)))
+        if parent is not None:
+            parent._child_pumps.add(self)
+        if previous is not None or parent is not None:
+            ParentLinks._tree_revision += 1
+            self._parent_revision = ParentLinks._tree_revision
+            self._parent_changed()
+
+    @cached_property
+    def _child_pumps(self) -> WeakSet[MessagePump]:
+        """Reverse weak parent links, including unmounted and virtual nodes."""
+        return WeakSet()
+
+    def _parent_changed(self) -> None:
+        """Publish a changed or retired parent to inherited resources."""
+
+
+class MessagePump(ParentLinks, metaclass=_MessagePumpMeta):
     """Base class which supplies a message pump."""
-
-    _tree_revision = 0
-    _parent_revision = 0
 
     def __init__(self, parent: MessagePump | None = None) -> None:
         self._parent = parent
@@ -201,21 +234,6 @@ class MessagePump(metaclass=_MessagePumpMeta):
         if signals is not None:
             for signal in tuple(signals):
                 signal.unsubscribe(cast("DOMNode", self))
-
-    @property
-    def _parent(self) -> MessagePump | None:
-        """The current parent message pump (if set)."""
-        return None if self.__parent is None else self.__parent()
-
-    @_parent.setter
-    def _parent(self, parent: MessagePump | None) -> None:
-        previous = self.__dict__.get("_MessagePump__parent")
-        if previous is not None and previous() is parent:
-            return
-        self.__parent = None if parent is None else ref(parent, _parent_retired)
-        if previous is not None or parent is not None:
-            MessagePump._tree_revision += 1
-            self._parent_revision = MessagePump._tree_revision
 
     @cached_property
     def _message_queue(self) -> Queue[Message | None]:
@@ -795,8 +813,8 @@ class MessagePump(metaclass=_MessagePumpMeta):
             except Exception as error:
                 self._mounted_event.set()
                 self._is_mounted = True
-                self.app._handle_exception(error)
-                break
+                if not self.app._handle_exception(error):
+                    break
             finally:
                 message._complete_dispatch(self)
                 message._discard()
@@ -826,8 +844,8 @@ class MessagePump(metaclass=_MessagePumpMeta):
                             try:
                                 await invoke(method, event)
                             except Exception as error:
-                                self.app._handle_exception(error)
-                                break
+                                if not self.app._handle_exception(error):
+                                    break
                     await self._flush_next_callbacks()
 
             if not self._closed and not self._message_queue.empty():
@@ -854,8 +872,8 @@ class MessagePump(metaclass=_MessagePumpMeta):
                     with self.prevent(*callback._prevent):
                         await invoke(callback.callback)
                 except Exception as error:
-                    self.app._handle_exception(error)
-                    break
+                    if not self.app._handle_exception(error):
+                        break
         finally:
             for callback in callbacks:
                 callback._discard()
@@ -899,32 +917,13 @@ class MessagePump(metaclass=_MessagePumpMeta):
     def _get_dispatch_methods(
         self, method_name: str, message: Message
     ) -> Iterable[tuple[type, Callable[[Message], Awaitable]]]:
-        """Gets handlers from the MRO
-
-        Args:
-            method_name: Handler method name.
-            message: Message object.
-        """
+        """Bind declared routes, retaining live selector and default-action checks."""
         methods_dispatched: set[Callable] | None = None
-        message_types = message.__class__.__mro__
-        message_mro: list[type[Message]] | None = None
-        private_method_name = f"_{method_name}"
-        for cls in self.__class__.__mro__:
+        for cls, decorated_handlers, named in self._dispatch_declarations:
             if message._no_default_action:
                 break
-            declarations = cls.__dict__
-            # Try decorated handlers first
-            decorated_handlers = cast(
-                "dict[type[Message], list[tuple[Callable, dict[str, tuple[SelectorSet, ...]]]]] | None",
-                declarations.get("_decorated_handlers"),
-            )
-
             if decorated_handlers:
-                if message_mro is None:
-                    message_mro = [
-                        _type for _type in message_types if issubclass(_type, Message)
-                    ]
-                for message_class in message_mro:
+                for message_class in message._dispatch_types:
                     handlers = decorated_handlers.get(message_class, ())
 
                     for method, selectors in handlers:
@@ -957,13 +956,9 @@ class MessagePump(metaclass=_MessagePumpMeta):
                                 yield cls, method.__get__(self, cls)
                                 methods_dispatched.add(method)
 
-            # Fall back to the naming convention
-            # But avoid calling the handler if it was decorated
-            method = declarations.get(private_method_name) or declarations.get(
-                method_name
-            )
-            if method is not None and not getattr(method, "_textual_on", None):
-                yield cls, method.__get__(self, cls)
+            conventional = named.get("_" + method_name) or named.get(method_name)
+            if conventional is not None and not isinstance(conventional, MessageHandler):
+                yield cls, conventional.__get__(self, cls)
 
     async def on_event(self, event: events.Event) -> None:
         """Called to process an event.

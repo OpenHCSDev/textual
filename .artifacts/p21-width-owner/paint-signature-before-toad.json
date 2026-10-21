@@ -1,0 +1,111 @@
+{
+  "revision": "working",
+  "modules": {
+    "src/toad/frame_presentation.py": 1
+  },
+  "omissions": [],
+  "sites": [
+    [
+      "src/toad/frame_presentation.py",
+      12,
+      "ImportFrom",
+      "from textual._paint_state import PaintLayer"
+    ],
+    [
+      "src/toad/frame_presentation.py",
+      25,
+      "ClassDef",
+      "class WidgetPaint(PaintLayer):"
+    ],
+    [
+      "src/toad/frame_presentation.py",
+      41,
+      "ClassDef",
+      "class ToneLayer(PaintLayer):"
+    ],
+    [
+      "src/toad/frame_presentation.py",
+      135,
+      "ClassDef",
+      "class SuspendedFrame(FrameState):"
+    ],
+    [
+      "src/toad/frame_presentation.py",
+      33,
+      "Assign",
+      "paint_key = None"
+    ],
+    [
+      "src/toad/frame_presentation.py",
+      34,
+      "Assign",
+      "paint_cacheable = False"
+    ],
+    [
+      "src/toad/frame_presentation.py",
+      37,
+      "FunctionDef",
+      "def paint_layer(self) -> PaintLayer:"
+    ],
+    [
+      "src/toad/frame_presentation.py",
+      48,
+      "Assign",
+      "__slots__ = ('styles', 'paint_background', 'paint_key', 'paint_cacheable')"
+    ],
+    [
+      "src/toad/frame_presentation.py",
+      73,
+      "FunctionDef",
+      "def paint_layer(self) -> PaintLayer:"
+    ],
+    [
+      "src/toad/frame_presentation.py",
+      52,
+      "Assign",
+      "self.paint_cacheable = cacheable"
+    ],
+    [
+      "src/toad/frame_presentation.py",
+      55,
+      "Assign",
+      "self.paint_key = hash((styles.paint_key, self.paint_background))"
+    ],
+    [
+      "src/toad/frame_presentation.py",
+      112,
+      "Assign",
+      "frame.state = SuspendedFrame(self)"
+    ],
+    [
+      "src/toad/frame_presentation.py",
+      52,
+      "Attribute",
+      "self.paint_cacheable"
+    ],
+    [
+      "src/toad/frame_presentation.py",
+      55,
+      "Attribute",
+      "self.paint_key"
+    ],
+    [
+      "src/toad/frame_presentation.py",
+      55,
+      "Call",
+      "hash((styles.paint_key, self.paint_background))"
+    ],
+    [
+      "src/toad/frame_presentation.py",
+      112,
+      "Call",
+      "SuspendedFrame(self)"
+    ],
+    [
+      "src/toad/frame_presentation.py",
+      55,
+      "Attribute",
+      "styles.paint_key"
+    ]
+  ]
+}

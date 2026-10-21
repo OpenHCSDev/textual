@@ -10,9 +10,9 @@ from __future__ import annotations
 import asyncio
 import enum
 import inspect
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from contextvars import ContextVar
-from threading import Event
+from threading import Event, Lock
 from time import monotonic
 from typing import (
     TYPE_CHECKING,
@@ -20,6 +20,7 @@ from typing import (
     Callable,
     Coroutine,
     Generic,
+    Generator,
     Iterator,
     TypeVar,
     Union,
@@ -54,6 +55,7 @@ class WorkerFailed(WorkerError):
     def __init__(self, error: BaseException) -> None:
         self.error = error
         super().__init__(f"Worker raised exception: {error!r}")
+        self.__cause__ = error
 
 
 class DeadlockError(WorkerError):
@@ -168,6 +170,16 @@ class Worker(Generic[ResultType]):
         """
         self._node = node
         self._work = work
+        self._work_lock = Lock()
+        self._work_lifetime = ExitStack()
+        self._completion = ExitStack()
+        # Python's accepted resource kinds declare different disposal contracts.
+        # Functions allocate their coroutine only when run; custom awaitables
+        # have no disposal protocol until their iterator is entered.
+        if isinstance(work, (Coroutine, Generator)):
+            self._work_lifetime.callback(work.close)
+        elif isinstance(work, asyncio.Future):
+            self._work_lifetime.callback(work.cancel)
         self.name = name
         self.group = group
         if description is None:
@@ -345,7 +357,18 @@ class Worker(Generic[ResultType]):
 
         loop = asyncio.get_running_loop()
         assert loop is not None
-        return await loop.run_in_executor(None, runner, self._work)
+        def run_owned_work() -> ResultType:
+            # Ownership moves to the running thread, not its cancellable outer
+            # asyncio future. A queued thread which lost cancellation's race
+            # must not execute work already disposed by the Worker.
+            with self._work_lock:
+                if self.is_cancelled:
+                    raise asyncio.CancelledError
+                lifetime = self._work_lifetime.pop_all()
+            with lifetime:
+                return runner(self._work)
+
+        return await loop.run_in_executor(None, run_owned_work)
 
     async def _run_async(self) -> ResultType:
         """Run an async worker.
@@ -410,16 +433,33 @@ class Worker(Generic[ResultType]):
                 self.state = WorkerState.SUCCESS
                 app.log.worker(self)
 
-    def _start(
-        self, app: App, done_callback: Callable[[Worker], None] | None = None
-    ) -> None:
+    def _add_done_callback(self, callback: Callable[[Worker], None]) -> None:
+        """Registration belongs to admission, including workers not yet started."""
+        if self.is_finished:
+            callback(self)
+        else:
+            self._completion.callback(callback, self)
+
+    def _finish(self) -> None:
+        # A deferred worker or a task cancelled before entering _run has no
+        # running handler to record its terminal outcome.
+        if self._task is None or self._task.cancelled():
+            self._error = asyncio.CancelledError()
+            self.state = WorkerState.CANCELLED
+        with self._work_lock:
+            lifetime = self._work_lifetime.pop_all()
+        try:
+            lifetime.close()
+        finally:
+            self._completion.close()
+
+    def _start(self, app: App) -> None:
         """Start the worker.
 
         Args:
             app: An app instance.
-            done_callback: A callback to call when the task is done.
         """
-        if self._task is not None:
+        if self._task is not None or self.is_cancelled:
             return
         self.state = WorkerState.RUNNING
         self._task = asyncio.create_task(self._run(app))
@@ -432,15 +472,16 @@ class Worker(Generic[ResultType]):
             Args:
                 The worker's task.
             """
-            if done_callback is not None:
-                done_callback(self)
+            self._finish()
 
         self._task.add_done_callback(task_done_callback)
 
     def cancel(self) -> None:
         """Cancel the task."""
         self.cancelled_event.set()
-        if self._task is not None:
+        if self._task is None:
+            self._finish()
+        else:
             self._task.cancel()
 
     async def wait(self) -> ResultType:

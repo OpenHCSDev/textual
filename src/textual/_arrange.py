@@ -30,8 +30,8 @@ def _build_layers(widgets: Iterable[Widget]) -> Mapping[str, Sequence[Widget]]:
     return layers
 
 
-_get_dock = attrgetter("styles.is_docked")
-_get_split = attrgetter("styles.is_split")
+_get_dock = attrgetter("geometry.is_docked")
+_get_split = attrgetter("geometry.is_split")
 _get_display = attrgetter("display")
 
 
@@ -54,7 +54,7 @@ def arrange(
     """
     placements: list[WidgetPlacement] = []
     scroll_spacing = NULL_SPACING
-    styles = widget.styles
+    styles = widget.geometry
 
     # Widgets which will be displayed
     display_widgets = list(filter(_get_display, children))
@@ -149,7 +149,7 @@ def _arrange_dock_widgets(
     append_placement = placements.append
 
     for dock_widget in dock_widgets:
-        edge = dock_widget.styles.dock
+        edge = dock_widget.geometry.dock
 
         box_model = dock_widget._get_box_model(
             size, viewport, size.width, size.height, greedy=greedy
@@ -175,15 +175,7 @@ def _arrange_dock_widgets(
             raise AssertionError("invalid value for dock edge")  # pragma: no-cover
 
         dock_region = dock_region.shrink(margin)
-        styles = dock_widget.styles
-        offset = (
-            styles.offset.resolve(
-                size,
-                viewport,
-            )
-            if styles.has_rule("offset")
-            else NULL_OFFSET
-        )
+        offset = dock_widget.geometry.resolve_offset(size, viewport)
         append_placement(
             _WidgetPlacement(
                 dock_region.translate(region_offset),
@@ -223,7 +215,7 @@ def _arrange_split_widgets(
     null_offset = NULL_OFFSET
 
     for split_widget in split_widgets:
-        split = split_widget.styles.split
+        split = split_widget.geometry.split
         box_model = split_widget._get_box_model(
             size, viewport, size.width, size.height
         )

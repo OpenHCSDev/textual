@@ -1,0 +1,1269 @@
+{
+  "revision": "working",
+  "modules": {
+    "src/toad/frame_presentation.py": 1,
+    "src/toad/widgets/side_bar.py": 1,
+    "src/toad/widgets/input_delivery.py": 1,
+    "src/toad/widgets/prompt.py": 1,
+    "src/toad/widgets/comms_sidebar.py": 1,
+    "src/toad/widgets/model_switcher.py": 1,
+    "src/toad/widgets/project_panel.py": 1,
+    "src/toad/widgets/goal_bar.py": 1,
+    "src/toad/widgets/session_sort.py": 1,
+    "src/toad/widgets/session_tabs.py": 1,
+    "src/toad/widgets/transcript_history.py": 1,
+    "src/toad/widgets/sidebar_tree.py": 1,
+    "src/toad/widgets/question.py": 1
+  },
+  "omissions": [],
+  "sites": [
+    [
+      "src/toad/frame_presentation.py",
+      12,
+      "ImportFrom",
+      "from textual._paint_state import PaintLayer"
+    ],
+    [
+      "src/toad/frame_presentation.py",
+      25,
+      "ClassDef",
+      "class WidgetPaint(PaintLayer):"
+    ],
+    [
+      "src/toad/frame_presentation.py",
+      39,
+      "ClassDef",
+      "class ToneLayer(PaintLayer):"
+    ],
+    [
+      "src/toad/frame_presentation.py",
+      133,
+      "ClassDef",
+      "class SuspendedFrame(FrameState):"
+    ],
+    [
+      "src/toad/frame_presentation.py",
+      35,
+      "FunctionDef",
+      "def paint_layer(self) -> PaintLayer:"
+    ],
+    [
+      "src/toad/frame_presentation.py",
+      46,
+      "Assign",
+      "__slots__ = ('styles', 'paint_background', 'paint_key', 'paint_cacheable')"
+    ],
+    [
+      "src/toad/frame_presentation.py",
+      71,
+      "FunctionDef",
+      "def paint_layer(self) -> PaintLayer:"
+    ],
+    [
+      "src/toad/frame_presentation.py",
+      50,
+      "Assign",
+      "self.paint_cacheable = cacheable"
+    ],
+    [
+      "src/toad/frame_presentation.py",
+      53,
+      "Assign",
+      "self.paint_key = hash((styles.paint_key, self.paint_background))"
+    ],
+    [
+      "src/toad/frame_presentation.py",
+      110,
+      "Assign",
+      "frame.state = SuspendedFrame(self)"
+    ],
+    [
+      "src/toad/frame_presentation.py",
+      50,
+      "Attribute",
+      "self.paint_cacheable"
+    ],
+    [
+      "src/toad/frame_presentation.py",
+      53,
+      "Attribute",
+      "self.paint_key"
+    ],
+    [
+      "src/toad/frame_presentation.py",
+      53,
+      "Call",
+      "hash((styles.paint_key, self.paint_background))"
+    ],
+    [
+      "src/toad/frame_presentation.py",
+      110,
+      "Call",
+      "SuspendedFrame(self)"
+    ],
+    [
+      "src/toad/frame_presentation.py",
+      53,
+      "Attribute",
+      "styles.paint_key"
+    ],
+    [
+      "src/toad/widgets/side_bar.py",
+      20,
+      "ImportFrom",
+      "from textual._activation import PrimaryActivation"
+    ],
+    [
+      "src/toad/widgets/side_bar.py",
+      147,
+      "ClassDef",
+      "class SideBarToggle(PrimaryActivation, widgets.Static):"
+    ],
+    [
+      "src/toad/widgets/side_bar.py",
+      218,
+      "ClassDef",
+      "class HeaderButton(PrimaryActivation, widgets.Static, can_focus=True):"
+    ],
+    [
+      "src/toad/widgets/side_bar.py",
+      444,
+      "ClassDef",
+      "class SidebarAction(PrimaryActivation, widgets.Static, can_focus=True):"
+    ],
+    [
+      "src/toad/widgets/side_bar.py",
+      811,
+      "For",
+      "for bar in (app.workspace_chrome.channels, *app.workspace_sessions.source.sidebars()):"
+    ],
+    [
+      "src/toad/widgets/side_bar.py",
+      811,
+      "Attribute",
+      "app.workspace_chrome.channels"
+    ],
+    [
+      "src/toad/widgets/input_delivery.py",
+      14,
+      "ImportFrom",
+      "from textual._activation import PrimaryActivation"
+    ],
+    [
+      "src/toad/widgets/input_delivery.py",
+      21,
+      "ClassDef",
+      "class DetailAction(PrimaryActivation, Static, can_focus=True):"
+    ],
+    [
+      "src/toad/widgets/input_delivery.py",
+      126,
+      "Assign",
+      "self._busy = False"
+    ],
+    [
+      "src/toad/widgets/input_delivery.py",
+      210,
+      "Assign",
+      "load.disabled = self._busy"
+    ],
+    [
+      "src/toad/widgets/input_delivery.py",
+      213,
+      "Assign",
+      "clear.disabled = self._busy"
+    ],
+    [
+      "src/toad/widgets/input_delivery.py",
+      235,
+      "If",
+      "if self._busy:"
+    ],
+    [
+      "src/toad/widgets/input_delivery.py",
+      237,
+      "Assign",
+      "self._busy = True"
+    ],
+    [
+      "src/toad/widgets/input_delivery.py",
+      126,
+      "Attribute",
+      "self._busy"
+    ],
+    [
+      "src/toad/widgets/input_delivery.py",
+      210,
+      "Attribute",
+      "self._busy"
+    ],
+    [
+      "src/toad/widgets/input_delivery.py",
+      213,
+      "Attribute",
+      "self._busy"
+    ],
+    [
+      "src/toad/widgets/input_delivery.py",
+      235,
+      "Attribute",
+      "self._busy"
+    ],
+    [
+      "src/toad/widgets/input_delivery.py",
+      237,
+      "Attribute",
+      "self._busy"
+    ],
+    [
+      "src/toad/widgets/input_delivery.py",
+      245,
+      "Assign",
+      "self._busy = False"
+    ],
+    [
+      "src/toad/widgets/input_delivery.py",
+      245,
+      "Attribute",
+      "self._busy"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      22,
+      "ImportFrom",
+      "from textual._activation import PrimaryActivation"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      65,
+      "ClassDef",
+      "class AgentInfo(PrimaryActivation, Label):"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      71,
+      "ClassDef",
+      "class SendNow(PrimaryActivation, Label, can_focus=True):"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      86,
+      "ClassDef",
+      "class ModeInfo(PrimaryActivation, Label):"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      101,
+      "ClassDef",
+      "class QueueSummary(PrimaryActivation, ChangingText, Label, can_focus=True):"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      192,
+      "Assign",
+      "working_directory = var('')"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      205,
+      "FunctionDef",
+      "def agent_busy(self) -> bool:"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      501,
+      "Assign",
+      "working_directory = var('')"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      531,
+      "FunctionDef",
+      "def agent_busy(self) -> bool:"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      725,
+      "FunctionDef",
+      "def watch_working_directory(self, working_directory: str) -> None:"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      206,
+      "Return",
+      "return self.turns.owner.busy if self.turns is not None else False"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      237,
+      "Assign",
+      "spans = tuple((Span(*atom.span, style) for atom in danger.analyze(str(self.project_path), self.working_directory, content.plain) if (style := atom.level.highlight(styles))))"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      427,
+      "Assign",
+      "tab_complete, suggestions = await self.path_complete(Path(prompt.working_directory), shlex_tokens[-1], exclude_type=exclude_node_type)"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      532,
+      "Return",
+      "return self.turns.owner.busy if self.turns is not None else False"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      723,
+      "Return",
+      "return self.working_directory if self.shell_mode else str(self.project_path)"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      726,
+      "If",
+      "if not working_directory:"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      728,
+      "Assign",
+      "out_of_bounds = self.shell_mode and (not Path(working_directory).is_relative_to(self.project_path))"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      729,
+      "If",
+      "if out_of_bounds and (not self.has_class('-working-directory-out-of-bounds')):"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      237,
+      "Call",
+      "tuple((Span(*atom.span, style) for atom in danger.analyze(str(self.project_path), self.working_directory, content.plain) if (style := atom.level.highlight(styles))))"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      435,
+      "Assign",
+      "path_component = Path(prompt.working_directory) / shlex_tokens[-1]"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      720,
+      "Call",
+      "self.watch_working_directory(self.working_directory)"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      737,
+      "Call",
+      "self.set_class(out_of_bounds, '-working-directory-out-of-bounds')"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      743,
+      "Call",
+      "self.app.terminal_attention.release(self)"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      206,
+      "Attribute",
+      "self.turns.owner.busy"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      353,
+      "Assign",
+      "last_token_path = Path(prompt.working_directory) / last_token"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      427,
+      "Call",
+      "self.path_complete(Path(prompt.working_directory), shlex_tokens[-1], exclude_type=exclude_node_type)"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      532,
+      "Attribute",
+      "self.turns.owner.busy"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      720,
+      "Attribute",
+      "self.watch_working_directory"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      720,
+      "Attribute",
+      "self.working_directory"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      723,
+      "Attribute",
+      "self.working_directory"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      743,
+      "Attribute",
+      "self.app.terminal_attention.release"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      748,
+      "Call",
+      "self.app.terminal_attention.release(self)"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      751,
+      "Call",
+      "self.app.terminal_attention.require(self)"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      239,
+      "comprehension",
+      " for atom in danger.analyze(str(self.project_path), self.working_directory, content.plain) if (style := atom.level.highlight(styles))"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      328,
+      "Call",
+      "self.notify(str(error), title='Paste failed', severity='error')"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      428,
+      "Call",
+      "Path(prompt.working_directory)"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      435,
+      "Call",
+      "Path(prompt.working_directory)"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      728,
+      "Call",
+      "Path(working_directory).is_relative_to(self.project_path)"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      729,
+      "Call",
+      "self.has_class('-working-directory-out-of-bounds')"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      743,
+      "Attribute",
+      "self.app.terminal_attention"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      748,
+      "Attribute",
+      "self.app.terminal_attention.release"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      751,
+      "Attribute",
+      "self.app.terminal_attention.require"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      239,
+      "Call",
+      "danger.analyze(str(self.project_path), self.working_directory, content.plain)"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      353,
+      "Call",
+      "Path(prompt.working_directory)"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      428,
+      "Attribute",
+      "prompt.working_directory"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      435,
+      "Attribute",
+      "prompt.working_directory"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      728,
+      "Attribute",
+      "Path(working_directory).is_relative_to"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      748,
+      "Attribute",
+      "self.app.terminal_attention"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      751,
+      "Attribute",
+      "self.app.terminal_attention"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      840,
+      "Call",
+      "self.TEXT_AREA_CLASS(simple_input=self.simple_input, turns=self.turns).data_bind(multi_line=Prompt.multi_line, shell_mode=Prompt.shell_mode, project_path=Prompt.project_path, working_directory=Prompt.working_directory, slash_commands=Prompt.slash_commands)"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      240,
+      "Attribute",
+      "self.working_directory"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      353,
+      "Attribute",
+      "prompt.working_directory"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      728,
+      "Call",
+      "Path(working_directory)"
+    ],
+    [
+      "src/toad/widgets/prompt.py",
+      844,
+      "Attribute",
+      "Prompt.working_directory"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      25,
+      "ImportFrom",
+      "from agent_comms.ui_model.sidebar import ChannelRowModel, SidebarModel, ThreadRowModel"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      32,
+      "ImportFrom",
+      "from textual._activation import PrimaryActivation"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      60,
+      "ClassDef",
+      "class ChannelUnread(PrimaryActivation, ChangingText):"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      185,
+      "ClassDef",
+      "class CommsRow(PrimaryActivation, CoreEventReceiver, ThreadStatusRow):"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      414,
+      "ClassDef",
+      "class SidebarModelView(CoreEventReceiver):"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      508,
+      "ClassDef",
+      "class CommsSidebar(SidebarModelView, SidebarVisibilityObserver, TargetTree):"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      100,
+      "FunctionDef",
+      "def present(self, channel: ChannelRowModel) -> None:"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      422,
+      "AnnAssign",
+      "model: SidebarModel | None = None"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      437,
+      "FunctionDef",
+      "def sync(self, *, channels: frozenset[str] | None, threads: frozenset[str] | None,"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      468,
+      "FunctionDef",
+      "def channels_changed(self, changes: Changes[str]) -> None:"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      476,
+      "FunctionDef",
+      "def threads_changed(self, changes: Changes[str]) -> None:"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      588,
+      "FunctionDef",
+      "def sync(self, *, channels: frozenset[str] | None, threads: frozenset[str] | None,"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      88,
+      "AnnAssign",
+      "self.channel: ChannelRowModel | None = None"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      142,
+      "Assign",
+      "threads = self.sidebar.model.threads.rows"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      143,
+      "Assign",
+      "wanted = tuple((name for name in channel.members if name in threads and (self.expanded or name in self.rows)))"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      162,
+      "Assign",
+      "threads = self.sidebar.model.threads.rows"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      163,
+      "Assign",
+      "shown = [(name, view) for name in names if (view := self.rows.get(name)) is not None and name in threads]"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      165,
+      "If",
+      "if any((view.shows_other_incarnation(threads[name]) for name, view in shown)):"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      593,
+      "Assign",
+      "rows = model.channels.rows"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      594,
+      "If",
+      "if threads is None or threads:"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      654,
+      "Assign",
+      "ordered = (self.new_session, *(self.groups[key] for key in self.model.channels.rows if key in self.groups))"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      664,
+      "Assign",
+      "threads = self.model.threads.rows"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      135,
+      "Call",
+      "view.show(sidebar.model.threads.rows[name], pinned=name in channel.pinned_members)"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      142,
+      "Attribute",
+      "self.sidebar.model.threads.rows"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      143,
+      "Call",
+      "tuple((name for name in channel.members if name in threads and (self.expanded or name in self.rows)))"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      150,
+      "Call",
+      "self.reconcile_rows(wanted, lambda name: ThreadRow(ThreadTarget(name), name), update, replace=lambda name, view: view.shows_other_incarnation(threads[name]))"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      162,
+      "Attribute",
+      "self.sidebar.model.threads.rows"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      165,
+      "Call",
+      "any((view.shows_other_incarnation(threads[name]) for name, view in shown))"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      462,
+      "Call",
+      "self.model.channels.subscribe(self.channels_changed)"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      463,
+      "Call",
+      "self.model.threads.subscribe(self.threads_changed)"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      593,
+      "Attribute",
+      "model.channels.rows"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      637,
+      "Assign",
+      "missing = [key for key in self.model.channels.rows if key not in self.groups]"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      664,
+      "Attribute",
+      "self.model.threads.rows"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      671,
+      "If",
+      "if name not in threads and screen._agent_session_id in threads:"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      673,
+      "If",
+      "if name in threads and name not in views:"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      142,
+      "Attribute",
+      "self.sidebar.model.threads"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      162,
+      "Attribute",
+      "self.sidebar.model.threads"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      163,
+      "comprehension",
+      " for name in names if (view := self.rows.get(name)) is not None and name in threads"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      448,
+      "Call",
+      "self.model.channels.unsubscribe(self.channels_changed)"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      449,
+      "Call",
+      "self.model.threads.unsubscribe(self.threads_changed)"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      462,
+      "Attribute",
+      "self.model.channels.subscribe"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      462,
+      "Attribute",
+      "self.channels_changed"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      463,
+      "Attribute",
+      "self.model.threads.subscribe"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      463,
+      "Attribute",
+      "self.threads_changed"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      470,
+      "Call",
+      "self.sync(channels=frozenset((*changes.added, *changes.changed)), threads=frozenset(), reorder=bool(changes.added or changes.removed or changes.order is not None))"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      478,
+      "Call",
+      "self.sync(channels=frozenset(), threads=frozenset((*changes.added, *changes.removed, *changes.changed)))"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      490,
+      "Call",
+      "self.sync(channels=None, threads=None, reorder=True)"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      502,
+      "Call",
+      "self.sync(channels=frozenset(), threads=None)"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      593,
+      "Attribute",
+      "model.channels"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      594,
+      "Compare",
+      "threads is None"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      607,
+      "If",
+      "if channels is None or key in channels:"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      641,
+      "Assign",
+      "rows = self.model.channels.rows if self.model is not None else {}"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      664,
+      "Attribute",
+      "self.model.threads"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      135,
+      "Attribute",
+      "sidebar.model.threads.rows"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      143,
+      "comprehension",
+      " for name in channel.members if name in threads and (self.expanded or name in self.rows)"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      165,
+      "Call",
+      "view.shows_other_incarnation(threads[name])"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      448,
+      "Attribute",
+      "self.model.channels.unsubscribe"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      448,
+      "Attribute",
+      "self.channels_changed"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      449,
+      "Attribute",
+      "self.model.threads.unsubscribe"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      449,
+      "Attribute",
+      "self.threads_changed"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      462,
+      "Attribute",
+      "self.model.channels"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      463,
+      "Attribute",
+      "self.model.threads"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      611,
+      "If",
+      "if threads is None:"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      637,
+      "comprehension",
+      " for key in self.model.channels.rows if key not in self.groups"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      671,
+      "Compare",
+      "name not in threads"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      671,
+      "Compare",
+      "screen._agent_session_id in threads"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      673,
+      "Compare",
+      "name in threads"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      135,
+      "Attribute",
+      "sidebar.model.threads"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      152,
+      "Call",
+      "view.shows_other_incarnation(threads[name])"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      164,
+      "Compare",
+      "name in threads"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      448,
+      "Attribute",
+      "self.model.channels"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      449,
+      "Attribute",
+      "self.model.threads"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      607,
+      "Compare",
+      "channels is None"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      607,
+      "Compare",
+      "key in channels"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      611,
+      "Compare",
+      "threads is None"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      613,
+      "If",
+      "if threads:"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      637,
+      "Attribute",
+      "self.model.channels.rows"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      641,
+      "Attribute",
+      "self.model.channels.rows"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      654,
+      "comprehension",
+      " for key in self.model.channels.rows if key in self.groups"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      144,
+      "Compare",
+      "name in threads"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      637,
+      "Attribute",
+      "self.model.channels"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      641,
+      "Attribute",
+      "self.model.channels"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      654,
+      "Attribute",
+      "self.model.channels.rows"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      614,
+      "Call",
+      "group.repaint_members(threads)"
+    ],
+    [
+      "src/toad/widgets/comms_sidebar.py",
+      654,
+      "Attribute",
+      "self.model.channels"
+    ],
+    [
+      "src/toad/widgets/model_switcher.py",
+      18,
+      "ImportFrom",
+      "from textual._activation import PrimaryActivation"
+    ],
+    [
+      "src/toad/widgets/model_switcher.py",
+      30,
+      "ClassDef",
+      "class ConnectProvider(PrimaryActivation, CoreEventReceiver, Static, can_focus=True):"
+    ],
+    [
+      "src/toad/widgets/project_panel.py",
+      13,
+      "ImportFrom",
+      "from textual._activation import PrimaryActivation"
+    ],
+    [
+      "src/toad/widgets/project_panel.py",
+      20,
+      "ClassDef",
+      "class ProjectSearchButton(PrimaryActivation, Static, can_focus=True):"
+    ],
+    [
+      "src/toad/widgets/goal_bar.py",
+      17,
+      "ImportFrom",
+      "from textual._activation import PrimaryActivation"
+    ],
+    [
+      "src/toad/widgets/goal_bar.py",
+      27,
+      "ClassDef",
+      "class GoalControl(PrimaryActivation, CoreEventReceiver, Static, can_focus=True):"
+    ],
+    [
+      "src/toad/widgets/goal_bar.py",
+      128,
+      "Assign",
+      "loading = throbber.busy and throbber.display and throbber.visible"
+    ],
+    [
+      "src/toad/widgets/goal_bar.py",
+      210,
+      "Assign",
+      "loading_edge = throbber is not None and throbber.busy and throbber.display and throbber.visible and throbber.region.contains(event.screen_x, event.screen_y)"
+    ],
+    [
+      "src/toad/widgets/goal_bar.py",
+      109,
+      "Call",
+      "self.watch(self._throbber, 'busy', self._queue_separator_update)"
+    ],
+    [
+      "src/toad/widgets/goal_bar.py",
+      129,
+      "Attribute",
+      "throbber.busy"
+    ],
+    [
+      "src/toad/widgets/goal_bar.py",
+      211,
+      "Attribute",
+      "throbber.busy"
+    ],
+    [
+      "src/toad/widgets/session_sort.py",
+      20,
+      "ImportFrom",
+      "from textual._activation import PrimaryActivation"
+    ],
+    [
+      "src/toad/widgets/session_sort.py",
+      97,
+      "ClassDef",
+      "class SortControl[Order: DisplayOrder](PrimaryActivation, Static, can_focus=True):"
+    ],
+    [
+      "src/toad/widgets/session_sort.py",
+      199,
+      "Return",
+      "return await self.app.preparation.run_thread(access.write, observed.selection, order.store_channel_order, observed.service.channels, self.channel)"
+    ],
+    [
+      "src/toad/widgets/session_sort.py",
+      213,
+      "Call",
+      "super().__init__(ChannelSortForm, 'channels')"
+    ],
+    [
+      "src/toad/widgets/session_sort.py",
+      199,
+      "Call",
+      "self.app.preparation.run_thread(access.write, observed.selection, order.store_channel_order, observed.service.channels, self.channel)"
+    ],
+    [
+      "src/toad/widgets/session_sort.py",
+      200,
+      "Attribute",
+      "observed.service.channels"
+    ],
+    [
+      "src/toad/widgets/session_tabs.py",
+      22,
+      "ImportFrom",
+      "from textual._activation import PrimaryActivation"
+    ],
+    [
+      "src/toad/widgets/session_tabs.py",
+      36,
+      "ClassDef",
+      "class SessionLabel(WidgetView, PrimaryActivation, ViewLabel, widgets.Label):"
+    ],
+    [
+      "src/toad/widgets/session_tabs.py",
+      93,
+      "ClassDef",
+      "class SessionTabClose(WidgetView, PrimaryActivation, widgets.Static, can_focus=True):"
+    ],
+    [
+      "src/toad/widgets/session_tabs.py",
+      57,
+      "Assign",
+      "content = self.activity_content(tab.title, tab.label(), tab.busy, prefix=Content())"
+    ],
+    [
+      "src/toad/widgets/session_tabs.py",
+      57,
+      "Call",
+      "self.activity_content(tab.title, tab.label(), tab.busy, prefix=Content())"
+    ],
+    [
+      "src/toad/widgets/session_tabs.py",
+      57,
+      "Attribute",
+      "tab.busy"
+    ],
+    [
+      "src/toad/widgets/transcript_history.py",
+      32,
+      "ImportFrom",
+      "from textual._activation import PrimaryActivation"
+    ],
+    [
+      "src/toad/widgets/transcript_history.py",
+      57,
+      "ImportFrom",
+      "from toad.widgets.message_notifications import HistoryNotifications"
+    ],
+    [
+      "src/toad/widgets/transcript_history.py",
+      75,
+      "ClassDef",
+      "class HistoryEdge(PrimaryActivation, Static, can_focus=True):"
+    ],
+    [
+      "src/toad/widgets/transcript_history.py",
+      94,
+      "ClassDef",
+      "class JumpToLatest(PrimaryActivation, Static, can_focus=True):"
+    ],
+    [
+      "src/toad/widgets/transcript_history.py",
+      1153,
+      "Call",
+      "self.add_class('filtered-history-results')"
+    ],
+    [
+      "src/toad/widgets/transcript_history.py",
+      1056,
+      "Call",
+      "edge.prepared.advance_empty(prepared, older)"
+    ],
+    [
+      "src/toad/widgets/transcript_history.py",
+      1056,
+      "Attribute",
+      "edge.prepared.advance_empty"
+    ],
+    [
+      "src/toad/widgets/sidebar_tree.py",
+      17,
+      "ImportFrom",
+      "from textual._activation import PrimaryActivation"
+    ],
+    [
+      "src/toad/widgets/sidebar_tree.py",
+      24,
+      "ClassDef",
+      "class SidebarDisclosure(PrimaryActivation, Static, can_focus=True):"
+    ],
+    [
+      "src/toad/widgets/question.py",
+      13,
+      "ImportFrom",
+      "from textual._activation import PrimaryActivation"
+    ],
+    [
+      "src/toad/widgets/question.py",
+      40,
+      "ClassDef",
+      "class Option(PrimaryActivation, containers.HorizontalGroup):"
+    ]
+  ]
+}

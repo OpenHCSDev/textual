@@ -14,6 +14,7 @@ from textual import events
 from textual.binding import Binding
 from textual.content import Content, ContentText
 from textual.messages import Message
+from textual._paint_state import PaintState
 from textual.strip import Strip
 from textual.widgets._option_list import (
     Option,
@@ -503,7 +504,7 @@ class SelectionList(Generic[SelectionType], OptionList):
             + " "
         )
 
-    def render_line(self, y: int) -> Strip:
+    def render_line(self, y: int, paint: PaintState) -> Strip:
         """Render a line in the display.
 
         Args:
@@ -516,7 +517,7 @@ class SelectionList(Generic[SelectionType], OptionList):
         # TODO: This is rather crufty and hard to fathom. Candidate for a rewrite.
 
         # First off, get the underlying prompt from OptionList.
-        line = super().render_line(y)
+        line = super().render_line(y, paint)
 
         # We know the prompt we're going to display, what we're going to do
         # is place a CheckBox-a-like button next to it. So to start with
@@ -538,7 +539,7 @@ class SelectionList(Generic[SelectionType], OptionList):
 
         # # # Get the underlying style used for the prompt.
         # TODO: This is not a reliable way of getting the base style
-        underlying_style = next(iter(line)).style or self.rich_style
+        underlying_style = next(iter(line)).style or paint.rich_style
         assert underlying_style is not None
 
         # Get the style for the button.
