@@ -131,6 +131,6 @@ class Static(Widget, inherit_bindings=False):
             # unset) dimension; a fixed-size Static repaints without a layout.
             layout = not unchanged and any(
                 scalar is None or scalar.is_auto
-                for scalar in (self.styles.width, self.styles.height)
+                for scalar in (self.geometry.width, self.geometry.height)
             )
         self.refresh(layout=layout)

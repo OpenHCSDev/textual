@@ -12,6 +12,7 @@ from typing import ClassVar
 from textual.binding import Binding, BindingType
 from textual.layout import Layout
 from textual.layouts.grid import GridLayout
+from textual.layouts.horizontal import HorizontalLayout
 from textual.reactive import reactive
 from textual.widget import Widget
 
@@ -23,7 +24,6 @@ class Container(Widget):
     Container {
         width: 1fr;
         height: 1fr;
-        layout: vertical;
         overflow: hidden hidden;
     }
     """
@@ -40,7 +40,6 @@ class ScrollableContainer(Widget, can_focus=True):
     ScrollableContainer {
         width: 1fr;
         height: 1fr;
-        layout: vertical;
         overflow: auto auto;
     }
     """
@@ -125,7 +124,6 @@ class Vertical(Widget):
     Vertical {
         width: 1fr;
         height: 1fr;
-        layout: vertical;
         overflow: hidden hidden;
     }
     """
@@ -138,7 +136,6 @@ class VerticalGroup(Widget):
     VerticalGroup {
         width: 1fr;
         height: auto;
-        layout: vertical;
         overflow: hidden hidden;
     }
     """
@@ -149,7 +146,6 @@ class VerticalScroll(ScrollableContainer):
 
     DEFAULT_CSS = """
     VerticalScroll {
-        layout: vertical;
         overflow-x: hidden;
         overflow-y: auto;
     }
@@ -159,11 +155,12 @@ class VerticalScroll(ScrollableContainer):
 class Horizontal(Widget):
     """An expanding container with horizontal layout and no scrollbars."""
 
+    DEFAULT_LAYOUT = HorizontalLayout
+
     DEFAULT_CSS = """
     Horizontal {
         width: 1fr;
         height: 1fr;
-        layout: horizontal;
         overflow: hidden hidden;
     }
     """
@@ -172,11 +169,12 @@ class Horizontal(Widget):
 class HorizontalGroup(Widget):
     """A non-expanding container with horizontal layout and no scrollbars."""
 
+    DEFAULT_LAYOUT = HorizontalLayout
+
     DEFAULT_CSS = """
     HorizontalGroup {
         width: 1fr;
         height: auto;
-        layout: horizontal;
         overflow: hidden hidden;
     }
     """
@@ -185,9 +183,10 @@ class HorizontalGroup(Widget):
 class HorizontalScroll(ScrollableContainer):
     """A container with horizontal layout and an automatic scrollbar on the X axis."""
 
+    DEFAULT_LAYOUT = HorizontalLayout
+
     DEFAULT_CSS = """
     HorizontalScroll {
-        layout: horizontal;
         overflow-y: hidden;
         overflow-x: auto;
     }
@@ -245,11 +244,12 @@ class CenterMiddle(Widget):
 class Grid(Widget):
     """A container with grid layout."""
 
+    DEFAULT_LAYOUT = GridLayout
+
     DEFAULT_CSS = """
     Grid {
         width: 1fr;
         height: 1fr;
-        layout: grid;
     }
     """
 
@@ -257,11 +257,12 @@ class Grid(Widget):
 class ItemGrid(Widget):
     """A container with grid layout and automatic columns."""
 
+    DEFAULT_LAYOUT = GridLayout
+
     DEFAULT_CSS = """
     ItemGrid {
         width: 1fr;
         height: auto;
-        layout: grid;
     }
     """
 

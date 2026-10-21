@@ -1,0 +1,7 @@
+{
+  "messages.py:Layout.ancestors": true,
+  "messages.py:Layout.can_replace": true,
+  "messages.py:LayoutChildren.ancestors": true,
+  "screen.py:Screen._on_layout": true,
+  "widget.py:Widget.refresh": true
+}

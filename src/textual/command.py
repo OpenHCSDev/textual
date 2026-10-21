@@ -810,7 +810,7 @@ class CommandPalette(SystemModalScreen[None]):
         This method is used to allow clicking on the 'background' as a
         method of dismissing the palette.
         """
-        if self.get_widget_at(event.screen_x, event.screen_y)[0] is self:
+        if event.widget is self:
             self._cancel_gather_commands()
             self.app.post_message(CommandPalette.Closed(option_selected=False))
             self.dismiss()

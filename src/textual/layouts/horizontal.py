@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from textual._resolve import resolve_box_models
 from textual._measurement import FLOW_HEIGHT, height_dependency
-from textual.geometry import NULL_OFFSET, Region, Size
+from textual.geometry import Region, Size
 from textual.layout import ArrangeResult, Layout, WidgetPlacement
 
 if TYPE_CHECKING:
@@ -28,7 +28,7 @@ class HorizontalLayout(Layout):
         add_placement = placements.append
         viewport = parent.layout_viewport
 
-        child_styles = [child.styles for child in children]
+        child_styles = [child.geometry for child in children]
         box_margins: list[Spacing] = [
             styles.margin for styles in child_styles if styles.overlay != "screen"
         ]
@@ -72,7 +72,7 @@ class HorizontalLayout(Layout):
             (
                 box_model.margin.left
                 for box_model, child in zip(box_models, children)
-                if child.styles.overlay != "screen"
+                if child.geometry.overlay != "screen"
             ),
             0,
         )
@@ -83,15 +83,10 @@ class HorizontalLayout(Layout):
         for widget, (content_width, content_height, box_margin), margin in zip(
             children, box_models, margins
         ):
-            styles = widget.styles
+            styles = widget.geometry
             overlay = styles.overlay == "screen"
-            offset = (
-                styles.offset.resolve(
-                    _Size(content_width.__floor__(), content_height.__floor__()),
-                    viewport,
-                )
-                if styles.has_rule("offset")
-                else NULL_OFFSET
+            offset = styles.resolve_offset(
+                _Size(content_width.__floor__(), content_height.__floor__()), viewport
             )
             offset_y = box_margin.top
             next_x = x + content_width
@@ -102,7 +97,7 @@ class HorizontalLayout(Layout):
                 (next_x - x.__floor__()).__floor__(),
                 content_height.__floor__(),
             )
-            absolute = styles.has_rule("position") and styles.position == "absolute"
+            absolute = styles.position == "absolute"
             add_placement(
                 _WidgetPlacement(
                     region,

@@ -15,6 +15,7 @@ from textual.geometry import clamp
 from textual.reactive import reactive
 from textual.renderables.bar import Bar as BarRenderable
 from textual.widget import Widget
+from textual.layouts.horizontal import HorizontalLayout
 from textual.widgets import Label
 
 UNUSED = UnusedParameter()
@@ -197,11 +198,12 @@ class ETAStatus(Label):
 class ProgressBar(Widget, can_focus=False):
     """A progress bar widget."""
 
+    DEFAULT_LAYOUT = HorizontalLayout
+
     DEFAULT_CSS = """
     ProgressBar {
         width: auto;
         height: 1;
-        layout: horizontal;
     }
     """
 

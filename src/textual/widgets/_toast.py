@@ -155,7 +155,6 @@ class ToastRack(Container, inherit_css=False):
         dock: bottom;
         align: right bottom;
         visibility: hidden;
-        layout: vertical;
         overflow-y: scroll;
         margin-bottom: 1;         
     }

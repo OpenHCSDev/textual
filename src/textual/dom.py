@@ -29,32 +29,29 @@ from typing import (
 
 import rich.repr
 from rich.highlighter import ReprHighlighter
-from rich.style import NULL_STYLE as RICH_NULL_STYLE
-from rich.style import Style
 from rich.text import Text
 from rich.tree import Tree
 
 from textual._context import active_message_pump
 from textual._compat import cached_property
 from textual._node_list import NodeList
-from textual._paint_state import EMPTY_PAINT, PaintState, resolve_paint
+from textual._paint_state import PaintNode
 from textual._types import WatchCallbackType
 from textual.binding import Binding, BindingsMap, BindingType
 from textual.cache import LRUCache
-from textual.color import BLACK, WHITE, Color
 from textual.css._error_tools import friendly_list
 from textual.css.constants import VALID_DISPLAY, VALID_VISIBILITY
 from textual.css.errors import DeclarationError, StyleValueError
-from textual.css.match import match
-from textual.css.parse import is_id_selector, parse_declarations, parse_selectors
-from textual.css.query import InvalidQueryFormat, NoMatches, TooManyMatches, WrongType
+from textual.css.parse import is_id_selector, parse_declarations
+from textual.css.query import NoMatches, TooManyMatches, WrongType
+from textual.css.model import HoverDependency
 from textual.css.styles import RenderStyles, Styles
+from textual.box_model import BoxGeometry
 from textual.geometry import Size
 from textual.css.tokenize import IDENTIFIER
-from textual.css.tokenizer import TokenError
 from textual.message_pump import MessagePump
 from textual.reactive import Reactive, ReactiveError, _Mutated, _watch
-from textual.style import NULL_STYLE, Style as VisualStyle
+from textual.style import NULL_STYLE
 from textual.timer import Timer
 from textual.walk import walk_breadth_first, walk_breadth_search_id, walk_depth_first
 from textual.worker_manager import WorkerManager
@@ -67,8 +64,6 @@ if TYPE_CHECKING:
     from textual.app import App
     from textual.css.query import DOMQuery, QueryType
     from textual.css.types import CSSLocation
-    from textual.css.styles import StylesBase
-    from textual.message import Message
     from textual.reactive import _StoredReactiveAccess
     from textual.screen import Screen
     from textual.widget import Widget
@@ -86,7 +81,7 @@ WalkMethod: TypeAlias = Literal["depth", "breadth"]
 ReactiveType = TypeVar("ReactiveType")
 
 
-QueryOneCacheKey: TypeAlias = "tuple[int, str, Type[Widget] | None]"
+QueryOneCacheKey: TypeAlias = "tuple[int, str | Type[Widget], Type[Widget] | None]"
 """The key used to cache query_one results."""
 
 
@@ -140,7 +135,7 @@ class _ClassesDescriptor:
 
 
 @rich.repr.auto
-class DOMNode(MessagePump):
+class DOMNode(PaintNode, MessagePump):
     """The base class for object that can be in the Textual DOM (App and Widget)"""
 
     _subtree_style_revision = 0
@@ -183,6 +178,7 @@ class DOMNode(MessagePump):
         Descendants are visited only when a changed rule may reach their
         retained measurements (StyleProperty.reaches_descendants).
         """
+        self._update_paint_state()
         self._subtree_style_revision = revision
         if descendants:
             geometry = self._update_inherited_geometry(geometry)
@@ -243,7 +239,6 @@ class DOMNode(MessagePump):
     _reactives: ClassVar[dict[str, Reactive]]
     _reactive_accessors: ClassVar[dict[str, _StoredReactiveAccess]]
 
-    _decorated_handlers: dict[type[Message], list[tuple[Callable, str | None]]]
 
     # Names of potential computed reactives
     _computes: ClassVar[frozenset[str]]
@@ -257,9 +252,9 @@ class DOMNode(MessagePump):
         if not self.is_container:
             return False
         for child in self.children:
-            if child.styles.expand == "optimal":
+            if child.geometry.width_policy == "optimal":
                 continue
-            styles = child.styles
+            styles = child.geometry
             if not child.display:
                 continue
             width = styles.width
@@ -285,7 +280,7 @@ class DOMNode(MessagePump):
         else:
             result = False
             for child in self.children:
-                styles = child.styles
+                styles = child.geometry
                 native = native and (
                     type(child).display is DOMNode.display
                     and type(styles) is RenderStyles
@@ -325,7 +320,7 @@ class DOMNode(MessagePump):
         """Native container paint, shared independently of scene custody."""
         from textual.renderables.blank import Blank
 
-        if self.styles.layout and self.styles.keyline[0] != "none":
+        if self.geometry.child_layout and self.geometry.keyline[0] != "none":
             return self.layout.render_keyline(self)
         return Blank(self.background_colors[1])
 
@@ -457,9 +452,6 @@ class DOMNode(MessagePump):
         self.styles: RenderStyles = RenderStyles(
             self, self._css_styles, self._inline_styles
         )
-        self._visual_style: VisualStyle | None = None
-        self._visual_paint_state = EMPTY_PAINT
-        self._visual_style_cache: dict[tuple, VisualStyle] = {}
         self._first_of_type = (-1, False)
         self._last_of_type = (-1, False)
         self._first_child = (-1, False)
@@ -468,7 +460,7 @@ class DOMNode(MessagePump):
         self._auto_refresh: float | None = None
         self._auto_refresh_timer: Timer | None = None
         self._css_types = self._selector_type_names()
-        self._has_hover_style: bool = False
+        self._hover_dependency = HoverDependency()
         self._has_focus_within: bool = False
         self._has_order_style: bool = False
         """The node has an ordered dependent pseudo-style (`:odd`, `:even`, `:first-of-type`, `:last-of-type`, `:first-child`, `:last-child`)"""
@@ -879,6 +871,15 @@ class DOMNode(MessagePump):
             for name, reactive in reactives.items()
         }
 
+    def find_component_owner(self, name: str) -> DOMNode | None:
+        """Find a declared component within this node's native style scope."""
+        for node in self.walk_ancestors(with_self=True):
+            if not node._component_style_scope:
+                return None
+            if name in node._component_styles:
+                return node
+        raise KeyError(f"No matching component class found for '.{name}'")
+
     def get_component_styles(self, *names: str) -> RenderStyles:
         """Get a "component" styles object (must be defined in COMPONENT_CLASSES classvar).
 
@@ -934,17 +935,11 @@ class DOMNode(MessagePump):
             An iterable of DOMNode classes.
         """
         classes: list[type[DOMNode]] = []
-        _class = base
-        while True:
-            classes.append(_class)
-            if not _class._inherit_css:
-                break
-            for _base in _class.__bases__:
-                if issubclass(_base, DOMNode):
-                    _class = _base
+        for ancestor in base.__mro__:
+            if issubclass(ancestor, DOMNode):
+                classes.append(ancestor)
+                if not ancestor._inherit_css:
                     break
-            else:
-                break
         return classes
 
     @classmethod
@@ -1244,19 +1239,16 @@ class DOMNode(MessagePump):
         if blocked == (not allowed):
             return
         was_displayed = self.display
-        if allowed:
-            assert constraints is not None
-            constraints.discard(reason)
-            if not constraints:
-                self._display_constraints = None
-        else:
-            if constraints is None:
-                constraints = self._display_constraints = set()
-            constraints.add(reason)
-        if self._parent is not None:
-            self._nodes.updated()
+        constraints = constraints or set()
+        constraints.symmetric_difference_update((reason,))
+        self._display_constraints = constraints or None
         if self.display != was_displayed:
-            self.refresh(layout=True)
+            self._display_changed()
+
+    def _display_changed(self) -> None:
+        display_rule = type(self.styles).display
+        display_rule.publish(self.styles, self.styles.display)
+        display_rule.refresh_node(self.styles)
 
     @property
     def visible(self) -> bool:
@@ -1383,224 +1375,9 @@ class DOMNode(MessagePump):
         return tree
 
     @property
-    def text_style(self) -> Style:
-        """Get the text style object.
-
-        A widget's style is influenced by its parent. for instance if a parent is bold, then
-        the child will also be bold.
-
-        Returns:
-            A Rich Style.
-        """
-        return self._resolved_paint_state().text_style
-
-    def _resolved_paint_state(self) -> PaintState:
-        if (type(self).ancestors_with_self is not DOMNode.ancestors_with_self
-                or type(self).walk_ancestors is not DOMNode.walk_ancestors):
-            # Custom ancestry may change independently of native topology or
-            # style mutations, including when inherited by a native child.
-            state = EMPTY_PAINT._replace(cacheable=False)
-            for node in reversed(self.ancestors_with_self):
-                state = resolve_paint(state, node.styles)
-            return state
-        epoch = (Styles._revision, MessagePump._tree_revision)
-        state = self.__dict__.get("_paint_state")
-        if (
-            state is not None
-            and state.cacheable
-            and self.__dict__.get("_paint_epoch") == epoch
-        ):
-            return state
-        parent = self._parent
-        inherited = (
-            parent._resolved_paint_state() if isinstance(parent, DOMNode) else EMPTY_PAINT
-        )
-        if (
-            state is None
-            or state.parent is not inherited
-            or state.style_key != self.styles._cache_key
-        ):
-            state = self._paint_state = resolve_paint(inherited, self.styles)
-        self._paint_epoch = epoch
-        return state
-
-    @property
-    def selection_style(self) -> Style:
-        """The style of selected text."""
-        style = self.screen.get_component_rich_style(
-            "screen--selection", default=RICH_NULL_STYLE
-        )
-        return style
-
-    @property
-    def rich_style(self) -> Style:
-        """Get a Rich Style object for this DOMNode.
-
-        Returns:
-            A Rich style.
-        """
-        state = self._resolved_paint_state()
-        background, color = state.background, state.foreground
-        return state.text_style + Style.from_color(
-            (background + color).rich_color if (background.a or color.a) else None,
-            background.rich_color if background.a else None,
-        )
-
-    def get_visual_style(
-        self, *component_classes: str, partial: bool = False
-    ) -> VisualStyle:
-        """Get the visual style for the widget, including any component styles.
-
-        Args:
-            component_classes: Optional component styles.
-            partial: Return a partial style (not combined with parent).
-
-        Returns:
-            A Visual style instance.
-
-        """
-        cache_key = (self._pseudo_classes_cache_key, component_classes, partial)
-        if (visual_style := self._visual_style_cache.get(cache_key, None)) is None:
-            background = Color(0, 0, 0, 0)
-            color = Color(255, 255, 255, 0)
-
-            style = Style()
-            opacity = 1.0
-
-            def iter_styles() -> Iterable[StylesBase]:
-                """Iterate over the styles from the DOM and additional components styles."""
-                if partial:
-                    node = self
-                else:
-                    for node in reversed(self.ancestors_with_self):
-                        yield node.styles
-                for name in component_classes:
-                    yield node.get_component_styles(name)
-
-            for styles in iter_styles():
-                has_rule = styles.has_rule
-                opacity *= styles.opacity
-                if has_rule("background"):
-                    text_background = background + styles.background.tint(
-                        styles.background_tint
-                    )
-                    if partial:
-                        background_tint = styles.background.tint(styles.background_tint)
-                        background = background.blend(
-                            background_tint, 1 - background_tint.a
-                        ).multiply_alpha(opacity)
-                    else:
-                        background += (
-                            styles.background.tint(styles.background_tint)
-                        ).multiply_alpha(opacity)
-                else:
-                    text_background = background
-                if has_rule("color"):
-                    color = styles.color.multiply_alpha(styles.text_opacity)
-                style += styles.text_style
-                if has_rule("auto_color") and styles.auto_color:
-                    color = text_background.get_contrast_text(color.a)
-
-            visual_style = replace(
-                VisualStyle.from_rich_style(style),
-                background=background,
-                foreground=color,
-            )
-            self._visual_style_cache[cache_key] = visual_style
-
-        return visual_style
-
-    def _get_style(self, style: VisualStyle | str) -> VisualStyle:
-        """A get_style method for use in Content.
-
-        Args:
-            style: A style prefixed with a dot.
-
-        Returns:
-            A visual style if one is fund, otherwise `None`.
-        """
-        if isinstance(style, VisualStyle):
-            return style
-
-        if style.startswith("."):
-            style_name = style[1:]
-            for node in self.walk_ancestors(with_self=True):
-                if not node._component_style_scope:
-                    break
-                try:
-                    return node.get_visual_style(style_name, partial=True)
-                except KeyError:
-                    continue
-            else:
-                raise KeyError(f"No matching component class found for '{style}'")
-            return NULL_STYLE
-        try:
-            return self._parse_visual_style(style)
-        except Exception:
-            return NULL_STYLE
-
-    def _parse_visual_style(self, style: str) -> VisualStyle:
-        """Parse inline styles through this node's presentation owner."""
-        return VisualStyle.parse(style)
-
-    @property
-    def link_style(self) -> Style:
-        """Style of links.
-
-        Returns:
-            Rich style.
-        """
-        styles = self.styles
-        _, background = self.background_colors
-        link_background = background + styles.link_background
-        link_color = link_background + (
-            link_background.get_contrast_text(styles.link_color.a)
-            if styles.auto_link_color
-            else styles.link_color
-        )
-        style = styles.link_style + Style.from_color(
-            link_color.rich_color,
-            link_background.rich_color if styles.link_background.a else None,
-        )
-        return style
-
-    @property
-    def link_style_hover(self) -> Style:
-        """Style of links underneath the mouse cursor.
-
-        Returns:
-            Rich Style.
-        """
-        styles = self.styles
-        _, background = self.background_colors
-        hover_background = background + styles.link_background_hover
-        hover_color = hover_background + (
-            hover_background.get_contrast_text(styles.link_color_hover.a)
-            if styles.auto_link_color_hover
-            else styles.link_color_hover
-        )
-        style = styles.link_style_hover + Style.from_color(
-            hover_color.rich_color,
-            hover_background.rich_color,
-        )
-        return style
-
-    @property
-    def visual_style(self) -> VisualStyle:
-        """The widget's current style."""
-        resolved = self._resolved_paint_state()
-        if (
-            self._visual_style is None
-            or not resolved.same_paint(self._visual_paint_state)
-        ):
-            background, color, style = resolved.background, resolved.foreground, resolved.text_style
-            self._visual_style = replace(
-                VisualStyle.from_rich_style(style),
-                background=background,
-                foreground=color,
-            )
-        self._visual_paint_state = resolved
-        return self._visual_style
+    def geometry(self) -> BoxGeometry:
+        """The original sizing/placement source; declared widgets override this."""
+        return self.styles
 
     def check_consume_key(self, key: str, character: str | None) -> bool:
         """Check if the widget may consume the given key.
@@ -1619,83 +1396,6 @@ class DOMNode(MessagePump):
             `True` if the widget may capture the key in its `Key` event handler, or `False` if it won't.
         """
         return False
-
-    def _get_title_style_information(
-        self, background: Color
-    ) -> tuple[Color, Color, VisualStyle]:
-        """Get a Visual Style object for titles.
-
-        Args:
-            background: The background color.
-
-        Returns:
-            A Rich style.
-        """
-
-        styles = self.styles
-        if styles.auto_border_title_color:
-            color = background.get_contrast_text(styles.border_title_color.a)
-        else:
-            color = styles.border_title_color
-        return (
-            color,
-            styles.border_title_background,
-            VisualStyle.from_rich_style(styles.border_title_style),
-        )
-
-    def _get_subtitle_style_information(
-        self, background: Color
-    ) -> tuple[Color, Color, VisualStyle]:
-        """Get a Rich Style object for subtitles.
-
-        Args:
-            background: The background color.
-
-        Returns:
-            A Rich style.
-        """
-        styles = self.styles
-        if styles.auto_border_subtitle_color:
-            color = background.get_contrast_text(styles.border_subtitle_color.a)
-        else:
-            color = styles.border_subtitle_color
-        return (
-            color,
-            styles.border_subtitle_background,
-            VisualStyle.from_rich_style(styles.border_subtitle_style),
-        )
-
-    @property
-    def background_colors(self) -> tuple[Color, Color]:
-        """Background colors adjusted for opacity.
-
-        Returns:
-            `(<background color>, <color>)`
-        """
-        state = self._resolved_paint_state()
-        return state.base_background, state.layered_background
-
-    @property
-    def colors(self) -> tuple[Color, Color, Color, Color]:
-        """The widget's background and foreground colors, and the parent's background and foreground colors.
-
-        Returns:
-            `(<parent background>, <parent color>, <background>, <color>)`
-        """
-        base_background = background = WHITE
-        base_color = color = BLACK
-        for node in reversed(self.ancestors_with_self):
-            styles = node.styles
-            base_background = background
-            background += styles.background.tint(styles.background_tint)
-            if styles.has_rule("color"):
-                base_color = color
-                if styles.auto_color:
-                    color = background.get_contrast_text(color.a)
-                else:
-                    color = styles.color
-
-        return (base_background, base_color, background, color)
 
     def walk_ancestors(self, *, with_self: bool = False) -> Iterator[DOMNode]:
         """Yield the current parent path, nearest first, as it is consumed.
@@ -1890,9 +1590,9 @@ class DOMNode(MessagePump):
 
         node = self._get_dom_base()
         if isinstance(selector, str) or selector is None:
-            return DOMQuery[Widget](node, filter=selector)
+            return DOMQuery[Widget](node, filter=selector, of_type=DOMNode)
         else:
-            return DOMQuery[QueryType](node, filter=selector.__name__)
+            return DOMQuery[QueryType](node, of_type=selector)
 
     if TYPE_CHECKING:
 
@@ -1922,9 +1622,9 @@ class DOMNode(MessagePump):
 
         node = self._get_dom_base()
         if isinstance(selector, str) or selector is None:
-            return DOMQuery[Widget](node, deep=False, filter=selector)
+            return DOMQuery[Widget](node, deep=False, filter=selector, of_type=DOMNode)
         else:
-            return DOMQuery[QueryType](node, deep=False, filter=selector.__name__)
+            return DOMQuery[QueryType](node, deep=False, of_type=selector)
 
     if TYPE_CHECKING:
 
@@ -1961,38 +1661,25 @@ class DOMNode(MessagePump):
 
         base_node = self._get_dom_base()
 
-        if isinstance(selector, str):
-            query_selector = selector
-        else:
-            query_selector = selector.__name__
-
-        if is_id_selector(query_selector):
-            cache_key = (base_node._nodes._updates, query_selector, expect_type)
+        if isinstance(selector, str) and is_id_selector(selector):
+            cache_key = (base_node._nodes._updates, selector, expect_type)
             cached_result = base_node._query_one_cache.get(cache_key)
             if cached_result is not None:
                 return cached_result
             if (
-                node := walk_breadth_search_id(
-                    base_node, query_selector[1:], with_root=False
-                )
+                node := walk_breadth_search_id(base_node, selector[1:], with_root=False)
             ) is not None:
                 if expect_type is not None and not isinstance(node, expect_type):
                     raise WrongType(
-                        f"Node matching {query_selector!r} is the wrong type; expected type {expect_type.__name__!r}, found {node}"
+                        f"Node matching {selector!r} is the wrong type; expected type {expect_type.__name__!r}, found {node}"
                     )
                 base_node._query_one_cache[cache_key] = node
                 return node
-            raise NoMatches(f"No nodes match {query_selector!r} on {base_node!r}")
+            raise NoMatches(f"No nodes match {selector!r} on {base_node!r}")
 
-        try:
-            selector_set = parse_selectors(query_selector)
-        except TokenError:
-            raise InvalidQueryFormat(
-                f"Unable to parse {query_selector!r} as a query; check for syntax errors"
-            ) from None
-
-        if all(selectors.is_simple for selectors in selector_set):
-            cache_key = (base_node._nodes._updates, query_selector, expect_type)
+        query = self.query(selector)
+        if query.is_simple:
+            cache_key = (base_node._nodes._updates, selector, expect_type)
             cached_result = base_node._query_one_cache.get(cache_key)
             if cached_result is not None:
                 return cached_result
@@ -2000,17 +1687,17 @@ class DOMNode(MessagePump):
             cache_key = None
 
         for node in walk_breadth_first(base_node, with_root=False):
-            if not match(selector_set, node):
+            if not query._matches(node):
                 continue
             if expect_type is not None and not isinstance(node, expect_type):
                 raise WrongType(
-                    f"Node matching {query_selector!r} is the wrong type; expected type {expect_type.__name__!r}, found {node}"
+                    f"Node matching {selector!r} is the wrong type; expected type {expect_type.__name__!r}, found {node}"
                 )
             if cache_key is not None:
                 base_node._query_one_cache[cache_key] = node
             return node
 
-        raise NoMatches(f"No nodes match {query_selector!r} on {base_node!r}")
+        raise NoMatches(f"No nodes match {selector!r} on {base_node!r}")
 
     if TYPE_CHECKING:
 
@@ -2089,45 +1776,23 @@ class DOMNode(MessagePump):
 
         base_node = self._get_dom_base()
 
-        if isinstance(selector, str):
-            query_selector = selector
-        else:
-            query_selector = selector.__name__
-
-        try:
-            selector_set = parse_selectors(query_selector)
-        except TokenError:
-            raise InvalidQueryFormat(
-                f"Unable to parse {query_selector!r} as a query; check for syntax errors"
-            ) from None
-
-        if all(selectors.is_simple for selectors in selector_set):
-            cache_key = (base_node._nodes._updates, query_selector, expect_type)
-            cached_result = base_node._query_one_cache.get(cache_key)
-            if cached_result is not None:
-                return cached_result
-        else:
-            cache_key = None
-
-        children = walk_breadth_first(base_node, with_root=False)
-        iter_children = iter(children)
+        query = self.query(selector)
+        iter_children = iter(walk_breadth_first(base_node, with_root=False))
         for node in iter_children:
-            if not match(selector_set, node):
+            if not query._matches(node):
                 continue
             if expect_type is not None and not isinstance(node, expect_type):
                 raise WrongType(
-                    f"Node matching {query_selector!r} is the wrong type; expected type {expect_type.__name__!r}, found {node}"
+                    f"Node matching {selector!r} is the wrong type; expected type {expect_type.__name__!r}, found {node}"
                 )
             for later_node in iter_children:
-                if match(selector_set, later_node):
+                if query._matches(later_node):
                     raise TooManyMatches(
-                        "Call to query_one resulted in more than one matched node"
+                        "Call to query_exactly_one resulted in more than one matched node"
                     )
-            if cache_key is not None:
-                base_node._query_one_cache[cache_key] = node
             return node
 
-        raise NoMatches(f"No nodes match {query_selector!r} on {base_node!r}")
+        raise NoMatches(f"No nodes match {selector!r} on {base_node!r}")
 
     if TYPE_CHECKING:
 
@@ -2161,19 +1826,9 @@ class DOMNode(MessagePump):
             A DOMNode or subclass if `expect_type` is provided.
         """
         base_node = self._get_dom_base()
-        if isinstance(selector, str):
-            query_selector = selector
-        else:
-            query_selector = selector.__name__
-
-        try:
-            selector_set = parse_selectors(query_selector)
-        except TokenError:
-            raise InvalidQueryFormat(
-                f"Unable to parse {query_selector!r} as a query; check for syntax errors"
-            ) from None
+        query = self.query(selector)
         for node in base_node.walk_ancestors():
-            if not match(selector_set, node):
+            if not query._matches(node):
                 continue
             if expect_type is not None and not isinstance(node, expect_type):
                 continue

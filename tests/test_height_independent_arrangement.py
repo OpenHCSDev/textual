@@ -122,7 +122,7 @@ async def test_grid_auto_track_extrema_keep_outer_height_dependency(field, value
     async with app.run_test() as pilot:
         child = Static("wrapped text " * 10)
         parent = VerticalGroup(child)
-        parent.styles.layout = "grid"
+        parent.set_styles("layout: grid;")
         parent.styles.grid_columns = "auto"
         setattr(child.styles, field, value)
         await app.mount(parent)
@@ -150,7 +150,7 @@ async def test_grid_reuses_only_when_outer_measurement_is_not_called(unused_axis
         child.styles.width = "1fr"
         child.styles.height = "auto" if unused_axis == "width" else 2
         parent = VerticalGroup(child)
-        parent.styles.layout = "grid"
+        parent.set_styles("layout: grid;")
         parent.styles.height = "auto"
         parent.styles.grid_columns = "1fr"
         parent.styles.grid_rows = "auto" if unused_axis == "width" else "2"
@@ -299,7 +299,7 @@ async def test_grid_context_rules_retain_native_arrangements(field, value):
     app = App()
     async with app.run_test() as pilot:
         parent = VerticalGroup(Static("text"))
-        parent.styles.layout = "grid"
+        parent.set_styles("layout: grid;")
         setattr(parent.styles, field, value)
         await app.mount(parent)
         await pilot.pause()
@@ -327,7 +327,7 @@ async def test_unknown_layout_hooks_and_scalars_remain_context_sensitive():
         layout.styles.set_rule("layout", UnknownLayout())
         hook = UnknownHook(Static("text"))
         scalar = VerticalGroup(Static("text"))
-        scalar.styles.layout = "grid"
+        scalar.set_styles("layout: grid;")
         scalar.styles.set_rule("grid_rows", (UnknownScalar(1, Unit.CELLS, Unit.HEIGHT),))
         await app.mount(layout, hook, scalar)
         await pilot.pause()

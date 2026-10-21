@@ -104,7 +104,7 @@ class ScrollView(ScrollableContainer):
         # The line surface authors its virtual extent. Commit native bounds
         # without feeding layout measurements or reactive validation into it.
         return super()._size_updated(
-            size, self.virtual_size, size - self.styles.gutter.totals, layout=False
+            size, self.virtual_size, size - self.geometry.box_gutter.totals, layout=False
         )
 
     def _scroll_update(self, virtual_size: Size) -> None:

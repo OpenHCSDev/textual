@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import weakref
+from functools import partial
+
+from textual._ansi_theme import DEFAULT_TERMINAL_THEME
 
 from rich.segment import Segment
 
-from textual._styles_cache import StylesCache
+from textual._styles_cache import PaintStyles, StylesCache
 from textual.color import Color
 from textual.css.styles import Styles
-from textual.geometry import Region, Size
+from textual.geometry import Region, Size, Spacing
 from textual.strip import Strip
 
 
@@ -21,14 +24,24 @@ def test_color_memo_does_not_retain_retired_paint_cache():
     """A shared color calculation must not own an otherwise retired scene."""
     cache = StylesCache()
     cache.render(
-        Styles(),
         Size(3, 1),
-        Color.parse("blue"),
-        Color.parse("green"),
-        lambda y: Strip([Segment("foo")]),
+        lambda cache=cache: partial(
+            cache.render_line,
+            PaintStyles.of(Styles()),
+            size=Size(3, 1),
+            content_size=Size(3, 1),
+            padding=Spacing(0, 0, 0, 0),
+            base_background=Color.parse("blue"),
+            background=Color.parse("green"),
+            render_content_line=lambda y: Strip([Segment("foo")]),
+            border_title=None,
+            border_subtitle=None,
+            opacity=1.0,
+            ansi_theme=DEFAULT_TERMINAL_THEME,
+            native_ansi=False,
+        ),
         [],
-        None,
-        None,
+        Color.parse("green"),
     )
     reference = weakref.ref(cache)
     del cache
@@ -54,15 +67,24 @@ def test_clear_retires_simple_padding_strip():
 
     def render(background):
         return cache.render(
-            styles,
             Size(5, 3),
-            Color.parse("black"),
-            background,
-            lambda y: Strip([Segment("foo")]),
+            lambda: partial(
+                cache.render_line,
+                PaintStyles.of(styles),
+                size=Size(5, 3),
+                content_size=Size(3, 1),
+                padding=styles.padding,
+                base_background=Color.parse("black"),
+                background=background,
+                render_content_line=lambda y: Strip([Segment("foo")]),
+                border_title=None,
+                border_subtitle=None,
+                opacity=1.0,
+                ansi_theme=DEFAULT_TERMINAL_THEME,
+                native_ansi=False,
+            ),
             [],
-            None,
-            None,
-            content_size=Size(3, 1),
+            background,
         )
 
     blue = render(Color.parse("blue"))
@@ -91,15 +113,24 @@ def test_border():
     styles.border = ("heavy", "white")
     cache = StylesCache()
     lines = cache.render(
-        styles,
         Size(5, 5),
-        Color.parse("blue"),
-        Color.parse("green"),
-        content.__getitem__,
+        lambda: partial(
+            cache.render_line,
+            PaintStyles.of(styles),
+            size=Size(5, 5),
+            content_size=Size(3, 3),
+            padding=styles.padding,
+            base_background=Color.parse("blue"),
+            background=Color.parse("green"),
+            render_content_line=content.__getitem__,
+            border_title=None,
+            border_subtitle=None,
+            opacity=1.0,
+            ansi_theme=DEFAULT_TERMINAL_THEME,
+            native_ansi=False,
+        ),
         [],
-        None,
-        None,
-        content_size=Size(3, 3),
+        Color.parse("green"),
     )
 
     text_content = _extract_content(lines)
@@ -125,15 +156,24 @@ def test_padding():
     styles.padding = 1
     cache = StylesCache()
     lines = cache.render(
-        styles,
         Size(5, 5),
-        Color.parse("blue"),
-        Color.parse("green"),
-        content.__getitem__,
+        lambda: partial(
+            cache.render_line,
+            PaintStyles.of(styles),
+            size=Size(5, 5),
+            content_size=Size(3, 3),
+            padding=styles.padding,
+            base_background=Color.parse("blue"),
+            background=Color.parse("green"),
+            render_content_line=content.__getitem__,
+            border_title=None,
+            border_subtitle=None,
+            opacity=1.0,
+            ansi_theme=DEFAULT_TERMINAL_THEME,
+            native_ansi=False,
+        ),
         [],
-        None,
-        None,
-        content_size=Size(3, 3),
+        Color.parse("green"),
     )
 
     text_content = _extract_content(lines)
@@ -160,15 +200,24 @@ def test_padding_border():
     styles.border = ("heavy", "white")
     cache = StylesCache()
     lines = cache.render(
-        styles,
         Size(7, 7),
-        Color.parse("blue"),
-        Color.parse("green"),
-        content.__getitem__,
+        lambda: partial(
+            cache.render_line,
+            PaintStyles.of(styles),
+            size=Size(7, 7),
+            content_size=Size(3, 3),
+            padding=styles.padding,
+            base_background=Color.parse("blue"),
+            background=Color.parse("green"),
+            render_content_line=content.__getitem__,
+            border_title=None,
+            border_subtitle=None,
+            opacity=1.0,
+            ansi_theme=DEFAULT_TERMINAL_THEME,
+            native_ansi=False,
+        ),
         [],
-        None,
-        None,
-        content_size=Size(3, 3),
+        Color.parse("green"),
     )
 
     text_content = _extract_content(lines)
@@ -196,15 +245,24 @@ def test_outline():
     styles.outline = ("heavy", "white")
     cache = StylesCache()
     lines = cache.render(
-        styles,
         Size(3, 3),
-        Color.parse("blue"),
-        Color.parse("green"),
-        content.__getitem__,
+        lambda: partial(
+            cache.render_line,
+            PaintStyles.of(styles),
+            size=Size(3, 3),
+            content_size=Size(3, 3),
+            padding=styles.padding,
+            base_background=Color.parse("blue"),
+            background=Color.parse("green"),
+            render_content_line=content.__getitem__,
+            border_title=None,
+            border_subtitle=None,
+            opacity=1.0,
+            ansi_theme=DEFAULT_TERMINAL_THEME,
+            native_ansi=False,
+        ),
         [],
-        None,
-        None,
-        content_size=Size(3, 3),
+        Color.parse("green"),
     )
 
     text_content = _extract_content(lines)
@@ -227,16 +285,25 @@ def test_crop():
     styles.border = ("heavy", "white")
     cache = StylesCache()
     lines = cache.render(
-        styles,
         Size(7, 7),
-        Color.parse("blue"),
-        Color.parse("green"),
-        content.__getitem__,
+        lambda: partial(
+            cache.render_line,
+            PaintStyles.of(styles),
+            size=Size(7, 7),
+            content_size=Size(3, 3),
+            padding=styles.padding,
+            base_background=Color.parse("blue"),
+            background=Color.parse("green"),
+            render_content_line=content.__getitem__,
+            border_title=None,
+            border_subtitle=None,
+            opacity=1.0,
+            ansi_theme=DEFAULT_TERMINAL_THEME,
+            native_ansi=False,
+        ),
         [],
-        None,
-        None,
-        content_size=Size(3, 3),
-        crop=Region(2, 2, 3, 3),
+        Color.parse("green"),
+        Region(2, 2, 3, 3),
     )
     text_content = _extract_content(lines)
     expected_text = [
@@ -266,15 +333,24 @@ def test_dirty_cache() -> None:
     styles.border = ("heavy", "white")
     cache = StylesCache()
     lines = cache.render(
-        styles,
         Size(7, 7),
-        Color.parse("blue"),
-        Color.parse("green"),
-        get_content_line,
+        lambda: partial(
+            cache.render_line,
+            PaintStyles.of(styles),
+            size=Size(7, 7),
+            content_size=Size(3, 3),
+            padding=styles.padding,
+            base_background=Color.parse("blue"),
+            background=Color.parse("green"),
+            render_content_line=get_content_line,
+            border_title=None,
+            border_subtitle=None,
+            opacity=1.0,
+            ansi_theme=DEFAULT_TERMINAL_THEME,
+            native_ansi=False,
+        ),
         [],
-        None,
-        None,
-        content_size=Size(3, 3),
+        Color.parse("green"),
     )
     assert rendered_lines == [0, 1, 2]
     del rendered_lines[:]
@@ -294,15 +370,24 @@ def test_dirty_cache() -> None:
 
     # Re-render styles, check that content was not requested
     lines = cache.render(
-        styles,
         Size(7, 7),
-        Color.parse("blue"),
-        Color.parse("green"),
-        get_content_line,
+        lambda: partial(
+            cache.render_line,
+            PaintStyles.of(styles),
+            size=Size(7, 7),
+            content_size=Size(3, 3),
+            padding=styles.padding,
+            base_background=Color.parse("blue"),
+            background=Color.parse("green"),
+            render_content_line=get_content_line,
+            border_title=None,
+            border_subtitle=None,
+            opacity=1.0,
+            ansi_theme=DEFAULT_TERMINAL_THEME,
+            native_ansi=False,
+        ),
         [],
-        None,
-        None,
-        content_size=Size(3, 3),
+        Color.parse("green"),
     )
     assert rendered_lines == []
     del rendered_lines[:]
@@ -313,15 +398,24 @@ def test_dirty_cache() -> None:
     cache.set_dirty(Region(0, 2, 7, 2))
 
     lines = cache.render(
-        styles,
         Size(7, 7),
-        Color.parse("blue"),
-        Color.parse("green"),
-        get_content_line,
+        lambda: partial(
+            cache.render_line,
+            PaintStyles.of(styles),
+            size=Size(7, 7),
+            content_size=Size(3, 3),
+            padding=styles.padding,
+            base_background=Color.parse("blue"),
+            background=Color.parse("green"),
+            render_content_line=get_content_line,
+            border_title=None,
+            border_subtitle=None,
+            opacity=1.0,
+            ansi_theme=DEFAULT_TERMINAL_THEME,
+            native_ansi=False,
+        ),
         [],
-        None,
-        None,
-        content_size=Size(3, 3),
+        Color.parse("green"),
     )
     assert rendered_lines == [0, 1]
     text_content = _extract_content(lines)

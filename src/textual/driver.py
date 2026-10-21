@@ -3,16 +3,29 @@ from __future__ import annotations
 import asyncio
 import threading
 from abc import ABC, abstractmethod
+from concurrent.futures import Future
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, BinaryIO, Callable, Iterator, Literal, TextIO
 
 from textual import events, log, messages
-from textual.events import MouseUp
 from textual.drivers._writer_thread import _FlushSignal
+from textual.events import MouseUp
 
 if TYPE_CHECKING:
     from textual.app import App
+
+
+class TerminalGaveNoPalette(RuntimeError):
+    """The terminal did not answer the colour query before its deadline."""
+
+
+@dataclass(frozen=True)
+class TerminalColours:
+    foreground: tuple[int, int, int]
+    background: tuple[int, int, int]
+    ansi: tuple[tuple[int, int, int], ...]
 
 
 class Driver(ABC):
@@ -41,6 +54,8 @@ class Driver(ABC):
         self._loop = asyncio.get_running_loop()
         self._down_buttons: list[int] = []
         self._last_move_event: events.MouseMove | None = None
+        self._colour_queries: dict[str, Future[tuple[int, int, int]]] = {}
+        self._colour_query_lock = threading.Lock()
         self._auto_restart = True
         """Should the application auto-restart (where appropriate)?"""
         self.cursor_origin: tuple[int, int] | None = None
@@ -130,7 +145,50 @@ class Driver(ABC):
                     )
             self._last_move_event = message
 
-        self.send_message(message)
+        message.deliver_from_driver(self)
+
+    def resolve_colour(self, key: str, rgb: tuple[int, int, int]) -> None:
+        """Complete a query on the input thread without waiting for the app."""
+        with self._colour_query_lock:
+            reply = self._colour_queries.get(key)
+            if reply is not None and not reply.done():
+                reply.set_result(rgb)
+
+    async def query_colours(self, *, timeout: float) -> TerminalColours:
+        """Query default foreground/background and ANSI 0–15 via the input thread.
+
+        Call after application mode starts, from outside the input thread.
+        Replies are transient here; the caller owns the returned palette.
+        """
+        keys = ("10", "11", *(f"4;{index}" for index in range(16)))
+        replies: dict[str, Future[tuple[int, int, int]]] = {
+            key: Future() for key in keys
+        }
+        with self._colour_query_lock:
+            if self._colour_queries:
+                raise RuntimeError("A terminal colour query is already running")
+            self._colour_queries = replies
+        try:
+            self.write("".join(f"\x1b]{key};?\x1b\\" for key in keys))
+            self.flush()
+            _, missing = await asyncio.wait(
+                [asyncio.wrap_future(reply) for reply in replies.values()],
+                timeout=timeout,
+            )
+            if missing:
+                raise TerminalGaveNoPalette(
+                    "terminal gave no palette: unanswered "
+                    + ", ".join(
+                        key for key, reply in replies.items() if not reply.done()
+                    )
+                )
+            foreground, background, *ansi = (
+                reply.result() for reply in replies.values()
+            )
+            return TerminalColours(foreground, background, tuple(ansi))
+        finally:
+            with self._colour_query_lock:
+                self._colour_queries = {}
 
     @abstractmethod
     def write(self, data: str) -> None:

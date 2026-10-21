@@ -7,20 +7,18 @@ from typing import TYPE_CHECKING, Callable, Iterable, Sequence
 import rich.repr
 from rich.segment import Segment
 from rich.style import Style as RichStyle
-from rich.terminal_theme import TerminalTheme
 
 from textual import log
-from textual._ansi_theme import DEFAULT_TERMINAL_THEME
 from textual._border import get_box, render_border_label, render_row
 from textual._opacity import _apply_opacity
+from textual._paint_state import PaintState
 from textual._segment_tools import apply_hatch, line_pad, line_trim, make_blank
+from textual.ansi_palette import AnsiPalette
 from textual.color import TRANSPARENT, Color
 from textual.constants import DEBUG
 from textual.content import Content
 from textual.filter import LineFilter
 from textual.geometry import Region, Size, Spacing
-from textual.renderables.text_opacity import TextOpacity
-from textual.renderables.tint import Tint
 from textual.strip import Strip
 from textual.style import Style
 
@@ -33,17 +31,10 @@ if TYPE_CHECKING:
 RenderLineCallback: TypeAlias = Callable[[int], Strip]
 
 
-@rich.repr.auto(angular=True)
+class FramePaint:
+    """Inputs consumed by the existing line painter, not a second style store."""
 
-@dataclass(frozen=True, slots=True)
-class PaintStyles:
-    """One render's reads of a widget's styles, shared by all of its lines.
-
-    Every line of a render paints with the same styles; reading the CSS
-    properties once per render rather than once per line.
-    """
-
-    gutter: Spacing
+    paint_gutter: Spacing
     border: tuple
     outline: tuple
     hatch: tuple | None
@@ -51,18 +42,55 @@ class PaintStyles:
     text_opacity: float
     border_title_align: str
     border_subtitle_align: str
-    plain: bool
-    """No border, outline, padding, hatch, tint or text opacity: a line is its content line."""
+
+    @property
+    def plain(self) -> bool:
+        return (not any(self.paint_gutter) and not any(edge for edge, _ in self.outline)
+                and self.hatch is None and not self.tint.a and self.text_opacity == 1.0)
+
+    @property
+    def frame_key(self) -> tuple:
+        return (self.paint_gutter, self.border, self.outline, self.hatch, self.tint,
+                self.text_opacity, self.border_title_align, self.border_subtitle_align)
+
+
+@rich.repr.auto(angular=True)
+@dataclass(frozen=True, slots=True)
+class PaintStyles(FramePaint):
+    """One render's reads of a widget's styles, shared by all of its lines.
+
+    Every line of a render paints with the same styles; reading the CSS
+    properties once per render rather than once per line.
+    """
+
+    paint_gutter: Spacing
+    border: tuple
+    outline: tuple
+    hatch: tuple | None
+    tint: Color
+    text_opacity: float
+    border_title_align: str
+    border_subtitle_align: str
 
     @classmethod
     def of(cls, styles: StylesBase) -> PaintStyles:
         hatch = styles.hatch if styles.has_rule("hatch") and styles.hatch != "none" else None
         gutter, border, outline = styles.gutter, styles.border, styles.outline
         tint, text_opacity = styles.tint, styles.text_opacity
-        plain = (not any(gutter) and not any(edge for edge, _ in outline) and hatch is None
-                 and not tint.a and text_opacity == 1.0)
         return cls(gutter, border, outline, hatch, tint, text_opacity,
-                   styles.border_title_align, styles.border_subtitle_align, plain)
+                   styles.border_title_align, styles.border_subtitle_align)
+
+def border_label(
+    label: Content | None, background: Color, auto_color: bool, color: Color,
+    label_background: Color, style: RichStyle,
+) -> tuple[Content, Color, Color, Style] | None:
+    """A border title or subtitle with its paint, contrasting when its color is auto."""
+    if label is None:
+        return None
+    if auto_color:
+        color = background.get_contrast_text(color.a)
+    return label, color, label_background, Style.from_rich_style(style)
+
 
 class StylesCache:
     """Responsible for rendering CSS Styles and keeping a cache of rendered lines.
@@ -93,6 +121,7 @@ class StylesCache:
         self._cache: dict[int, Strip] = {}
         self._dirty_lines: set[int] = set()
         self._size = Size(0, 0)
+        self._paint_key: tuple | None = None
         self._simple_strip: Strip | None = None
         """A simple strip consisting of left border + background + right border, which may be reused in a render."""
 
@@ -127,53 +156,56 @@ class StylesCache:
         self._dirty_lines.clear()
         self._simple_strip = None
 
+    @staticmethod
+    def widget_paint_key(widget: Widget, paint: FramePaint, state: PaintState) -> tuple:
+        return paint.frame_key, tuple(state), widget.geometry.padding
+
+    def refresh_paint(self, widget: Widget) -> None:
+        """Dirty only a widget whose current paint differs from its cached lines."""
+        if self.widget_paint_key(widget, widget.frame_paint, widget._paint_state) != self._paint_key:
+            widget.refresh()
+
     def render_widget(self, widget: Widget, crop: Region) -> list[Strip]:
-        """Render the content for a widget.
+        """Reuse retained lines; prepare their painter only on the first miss."""
+        state = widget._paint_state
+        if widget.BLANK:
+            return [Strip.blank(crop.width, state.rich_style)] * crop.height
+        paint = widget.frame_paint
+        key = self.widget_paint_key(widget, paint, state)
+        if key != self._paint_key:
+            widget._release_paint()
+            self._paint_key = key
+        size = widget.region.size
+        background = state.layered_background
 
-        Args:
-            widget: A widget.
-            region: A region of the widget to render.
+        def prepare() -> RenderLineCallback:
+            self._simple_strip = None
+            base_background = state.base_background
+            content_size = widget.content_region.size
+            padding = widget.geometry.padding
+            render_content = lambda y: widget.render_line(y, state)
+            opacity = state.opacity
+            if (paint.plain and opacity == 1.0 and not any(padding)
+                    and content_size == size):
+                inner = self.get_inner_outer(base_background, background)[0].rich_style
+                return lambda y: (
+                    render_content(y) if y < content_size.height else Strip.blank(size.width, inner)
+                ).adjust_cell_length(size.width, inner)
+            app, styles = widget.app, widget.styles
+            title = border_label(
+                widget._border_title, base_background, styles.auto_border_title_color,
+                styles.border_title_color, styles.border_title_background,
+                styles.border_title_style)
+            subtitle = border_label(
+                widget._border_subtitle, base_background, styles.auto_border_subtitle_color,
+                styles.border_subtitle_color, styles.border_subtitle_background,
+                styles.border_subtitle_style)
+            ansi_theme, native_ansi = app.ansi_theme, app.native_ansi_color
+            return lambda y: self.render_line(
+                paint, state, y, size, content_size, padding,
+                render_content, title, subtitle, ansi_theme, native_ansi)
 
-        Returns:
-            Rendered lines.
-        """
-        border_title = widget._border_title
-        border_subtitle = widget._border_subtitle
-        self._simple_strip = None
-
-        base_background, background = widget.background_colors
-        styles = widget.styles
-        app = widget.app
-        strips = self.render(
-            styles,
-            widget.region.size,
-            base_background,
-            background,
-            widget.render_line,
-            widget.get_line_filters(),
-            (
-                None
-                if border_title is None
-                else (
-                    border_title,
-                    *widget._get_title_style_information(base_background),
-                )
-            ),
-            (
-                None
-                if border_subtitle is None
-                else (
-                    border_subtitle,
-                    *widget._get_subtitle_style_information(base_background),
-                )
-            ),
-            content_size=widget.content_region.size,
-            padding=styles.padding,
-            crop=crop,
-            opacity=widget.opacity,
-            ansi_theme=app.ansi_theme,
-            native_ansi=app.native_ansi_color,
-        )
+        strips = self.render(size, prepare, widget.get_line_filters(), background, crop)
 
         if widget.auto_links:
             hover_style = widget.hover_style
@@ -182,7 +214,7 @@ class StylesCache:
                 and hover_style._meta
                 and "@click" in hover_style.meta
             ):
-                link_style_hover = widget.link_style_hover
+                link_style_hover = state.link_style(widget.styles, hover=True)
                 if link_style_hover:
                     strips = [
                         strip.style_links(hover_style.link_id, link_style_hover)
@@ -193,92 +225,28 @@ class StylesCache:
 
     def render(
         self,
-        styles: StylesBase,
         size: Size,
-        base_background: Color,
-        background: Color,
-        render_content_line: RenderLineCallback,
+        prepare: Callable[[], RenderLineCallback],
         filters: Sequence[LineFilter],
-        border_title: tuple[Content, Color, Color, Style] | None,
-        border_subtitle: tuple[Content, Color, Color, Style] | None,
-        content_size: Size | None = None,
-        padding: Spacing | None = None,
+        background: Color,
         crop: Region | None = None,
-        opacity: float = 1.0,
-        ansi_theme: TerminalTheme = DEFAULT_TERMINAL_THEME,
-        native_ansi: bool = False,
     ) -> list[Strip]:
-        """Render a widget content plus CSS styles.
-
-        Args:
-            styles: CSS Styles object.
-            size: Size of widget.
-            base_background: Background color beneath widget.
-            background: Background color of widget.
-            render_content_line: Callback to render content line.
-            console: The console in use by the app.
-            border_title: Optional tuple of (title, color, background, style).
-            border_subtitle: Optional tuple of (subtitle, color, background, style).
-            content_size: Size of content or None to assume full size.
-            padding: Override padding from Styles, or None to use styles.padding.
-            crop: Region to crop to.
-            filters: Additional post-processing for the segments.
-            opacity: Widget opacity.
-            ansi_theme: Theme for ANSI colors.
-            native_ansi: Use native ANSI colors?
-
-        Returns:
-            Rendered lines.
-        """
-        if content_size is None:
-            content_size = size
-        if padding is None:
-            padding = styles.padding
+        """Render missing lines with one lazily prepared painter, then filter hits too."""
         if crop is None:
             crop = size.region
-
         width, _height = size
         if size != self._size:
             self.clear()
             self._size = size
         strips: list[Strip] = []
         add_strip = strips.append
-
         is_dirty = self._dirty_lines.__contains__
-        render_line = self.render_line
-        painted = PaintStyles.of(styles)
-        # A plain widget's line is its content line at the widget's width.
-        # Returning that strip itself (rather than a copy of its segments)
-        # keeps what it has already computed, such as its terminal sequence.
-        plain = (painted.plain and opacity == 1.0 and not any(padding)
-                 and content_size == size)
-        if plain:
-            inner_style = self.get_inner_outer(base_background, background)[0].rich_style
-            content_height = content_size.height
-
+        render_line = None
         for y in crop.line_range:
             if is_dirty(y) or y not in self._cache:
-                if plain:
-                    strip = (
-                        render_content_line(y) if y < content_height
-                        else Strip.blank(width, inner_style)
-                    ).adjust_cell_length(width, inner_style)
-                else:
-                    strip = render_line(
-                        painted,
-                        y,
-                        size,
-                        content_size,
-                        padding,
-                        base_background,
-                        background,
-                        render_content_line,
-                        border_title,
-                        border_subtitle,
-                        opacity,
-                        ansi_theme,
-                        native_ansi,
-                    )
+                if render_line is None:
+                    render_line = prepare()
+                strip = render_line(y)
                 self._cache[y] = strip
             else:
                 strip = self._cache[y]
@@ -313,18 +281,16 @@ class StylesCache:
 
     def render_line(
         self,
-        styles: PaintStyles,
+        styles: FramePaint,
+        paint: PaintState,
         y: int,
         size: Size,
         content_size: Size,
         padding: Spacing,
-        base_background: Color,
-        background: Color,
         render_content_line: Callable[[int], Strip],
         border_title: tuple[Content, Color, Color, Style] | None,
         border_subtitle: tuple[Content, Color, Color, Style] | None,
-        opacity: float,
-        ansi_theme: TerminalTheme,
+        ansi_theme: AnsiPalette,
         native_ansi: bool,
     ) -> Strip:
         """Render a styled line.
@@ -349,7 +315,9 @@ class StylesCache:
             A line of segments.
         """
 
-        gutter = styles.gutter
+        base_background, background = paint.base_background, paint.layered_background
+        opacity = paint.opacity
+        gutter = styles.paint_gutter
         width, height = size
         content_width, content_height = content_size
 
@@ -393,9 +361,7 @@ class StylesCache:
                 New list of segments
             """
             if styles.tint.a:
-                segments = Tint.process_segments(
-                    segments, styles.tint, ansi_theme, background
-                )
+                segments = ansi_theme.tint(segments, styles.tint, background)
             if opacity != 1.0:
                 segments = _apply_opacity(segments, base_background, opacity)
             return segments
@@ -499,9 +465,7 @@ class StylesCache:
                 line = Strip.blank(content_width, inner.rich_style)
 
             if (text_opacity := styles.text_opacity) != 1.0:
-                line = TextOpacity.process_segments(
-                    line, text_opacity, ansi_theme, native_ansi
-                )
+                line = ansi_theme.opacity(line, text_opacity, native_ansi)
             if pad_left or pad_right:
                 line = line_post(line_pad(line, pad_left, pad_right, inner.rich_style))
             else:
