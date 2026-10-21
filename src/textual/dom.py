@@ -1828,24 +1828,35 @@ class DOMNode(PaintNode, MessagePump):
         self,
         selector: str | TypeForm[AncestorType],
         expect_type: type[QueryType] | None = None,
-    ) -> DOMNode:
-        """Get an ancestor which matches a query.
+    ) -> DOMNode | AncestorType:
+        """Get an ancestor which matches a query or nominal capability.
 
         Args:
-            selector: A TCSS selector.
+            selector: A TCSS selector or ancestor class, including abstract mixins.
             expect_type: Expected type, or `None` for any DOMNode.
 
         Raises:
-            InvalidQueryFormat: If the selector is invalid.
+            InvalidQueryFormat: If the CSS selector is invalid.
+            TypeError: If the selector is neither a CSS string nor a class.
             NoMatches: If there are no matching ancestors.
 
         Returns:
             A DOMNode or subclass if `expect_type` is provided.
         """
         base_node = self._get_dom_base()
-        query = self.query(selector)
+        if isinstance(selector, str):
+            matches = self.query(selector)._matches
+        else:
+            if not isinstance(selector, type):
+                raise TypeError("Ancestor selectors must be CSS strings or classes")
+            ancestor_type = selector
+
+            def matches_class(node: DOMNode) -> bool:
+                return isinstance(node, ancestor_type)
+
+            matches = matches_class
         for node in base_node.walk_ancestors():
-            if not query._matches(node):
+            if not matches(node):
                 continue
             if expect_type is not None and not isinstance(node, expect_type):
                 continue
