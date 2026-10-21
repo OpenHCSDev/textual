@@ -440,6 +440,11 @@ class Worker(Generic[ResultType]):
             self._completion.callback(callback, self)
 
     def _finish(self) -> None:
+        # A deferred worker or a task cancelled before entering _run has no
+        # running handler to record its terminal outcome.
+        if self._task is None or self._task.cancelled():
+            self._error = asyncio.CancelledError()
+            self.state = WorkerState.CANCELLED
         with self._work_lock:
             lifetime = self._work_lifetime.pop_all()
         try:
@@ -466,9 +471,6 @@ class Worker(Generic[ResultType]):
             Args:
                 The worker's task.
             """
-            if _task.cancelled():
-                self._error = asyncio.CancelledError()
-                self.state = WorkerState.CANCELLED
             self._finish()
 
         self._task.add_done_callback(task_done_callback)
@@ -477,8 +479,6 @@ class Worker(Generic[ResultType]):
         """Cancel the task."""
         self.cancelled_event.set()
         if self._task is None:
-            self._error = asyncio.CancelledError()
-            self.state = WorkerState.CANCELLED
             self._finish()
         else:
             self._task.cancel()
