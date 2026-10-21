@@ -171,7 +171,9 @@ def parse_rule_set(
         token = next(tokens)
 
     if selectors:
-        if scope and selectors[0].name != scope:
+        rule_selectors.append(selectors[:])
+    for selectors in rule_selectors:
+        if scope and (selectors[0].name != scope or selectors[0].type != SelectorType.TYPE):
             scope_selector, scope_specificity = get_selector(
                 scope, (SelectorType.TYPE, (0, 0, 0))
             )
@@ -184,7 +186,6 @@ def parse_rule_set(
                     specificity=scope_specificity,
                 ),
             )
-        rule_selectors.append(selectors[:])
 
     declaration = Declaration(token, "")
     errors: list[tuple[Token, str | HelpText]] = []

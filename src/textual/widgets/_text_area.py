@@ -51,6 +51,7 @@ from textual.events import Message, MouseEvent
 from textual.geometry import Offset, Region, Size, Spacing, clamp
 from textual.reactive import Reactive, reactive
 from textual.scroll_view import ScrollView
+from textual._paint_state import PaintState
 from textual.strip import Strip
 
 _OPENING_BRACKETS = {"{": "}", "[": "]", "(": ")"}
@@ -1411,7 +1412,7 @@ TextArea {
         return Text(line_string, end="", no_wrap=True)
 
 
-    def render_line(self, y: int) -> Strip:
+    def render_line(self, y: int, paint: PaintState) -> Strip:
         """Render a single line of the TextArea. Called by Textual.
 
         Args:
@@ -1426,7 +1427,7 @@ TextArea {
                 self.content_size.width
             )
             if y < len(placeholder_lines):
-                style = self.get_visual_style("text-area--placeholder")
+                style = paint.component_style(self, "text-area--placeholder")
                 content = placeholder_lines[y].stylize(style)
                 if self._draw_cursor and y == 0:
                     theme = self._theme
@@ -1436,7 +1437,7 @@ TextArea {
                             ContentStyle.from_rich_style(cursor_style), 0, 1
                         )
                 return Strip(
-                    content.render_segments(self.visual_style), content.cell_length
+                    content.render_segments(paint.visual_style), content.cell_length
                 )
 
         scroll_x, scroll_y = self.scroll_offset
@@ -1464,11 +1465,11 @@ TextArea {
         )
         if (cached_line := self._line_cache.get(cache_key)) is not None:
             return cached_line
-        line = self._render_line(y)
+        line = self._render_line(y, paint)
         self._line_cache[cache_key] = line
         return line
 
-    def _render_line(self, y: int) -> Strip:
+    def _render_line(self, y: int, paint: PaintState) -> Strip:
         """Render a single line of the TextArea. Called by Textual.
 
         Args:
@@ -1481,7 +1482,7 @@ TextArea {
         base_style = (
             theme.base_style
             if theme and theme.base_style is not None
-            else self.rich_style
+            else paint.rich_style
         )
 
         wrapped_document = self.wrapped_document

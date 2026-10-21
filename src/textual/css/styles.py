@@ -15,6 +15,8 @@ from typing_extensions import TypedDict
 from textual._animator import DEFAULT_EASING, Animatable, BoundAnimator, EasingFunction
 from textual._types import AnimationLevel, CallbackType
 from textual.color import Color
+from textual.box_model import DEFAULT_LAYER, BoxGeometry
+from textual._paint_state import PaintLayer
 from textual.css._style_properties import (
     AlignProperty,
     BooleanProperty,
@@ -82,7 +84,7 @@ from textual.css.types import (
     TextWrap,
     Visibility,
 )
-from textual.geometry import Offset, Spacing
+from textual.geometry import Spacing
 
 if TYPE_CHECKING:
     from textual.css.types import CSSLocation
@@ -225,7 +227,7 @@ RULE_NAMES_SET = frozenset(RULE_NAMES)
 _rule_getter = attrgetter(*RULE_NAMES)
 
 
-class StylesBase:
+class StylesBase(BoxGeometry, PaintLayer):
     """A common base class for Styles and RenderStyles"""
 
     ANIMATABLE = {
@@ -262,7 +264,7 @@ class StylesBase:
         "line_pad",
     }
 
-    display = DisplayProperty(VALID_DISPLAY, "block", layout=True, display=True)
+    display = DisplayProperty(VALID_DISPLAY, "block", layout=True, refresh_parent=True, display=True)
     """Set the display of the widget, defining how it's rendered.
 
     Valid values are "block" or "none".
@@ -611,63 +613,56 @@ class StylesBase:
             yield (key, getattr(self, key))
 
     @property
+    def paint_foreground(self) -> Color | None:
+        return self.color if self.has_rule("color") else None
+
+    @property
+    def paint_background(self) -> Color | None:
+        return self.background if self.has_rule("background") else None
+
+    @property
+    def layer_opacity(self) -> float:
+        return self.opacity
+
+    @property
     def gutter(self) -> Spacing:
-        """Get space around widget.
-
-        Returns:
-            Space around widget content.
-        """
-        return self.padding + self.border.spacing
+        """The public CSS gutter; geometry resolves the shared calculation."""
+        return self.box_gutter
 
     @property
-    def auto_dimensions(self) -> bool:
-        """Check if width or height are set to 'auto'."""
-        has_rule = self.has_rule
-        return (has_rule("width") and self.width.is_auto) or (  # type: ignore
-            has_rule("height") and self.height.is_auto  # type: ignore
-        )
+    def width_policy(self) -> str:
+        return self.expand
 
     @property
-    def is_relative_width(self, _relative_units={Unit.FRACTION, Unit.PERCENT}) -> bool:
-        """Does the node have a relative width?"""
-        width = self.width
-        return width is not None and width.unit in _relative_units
+    def scrollbar_policy(self) -> str:
+        return self.scrollbar_gutter
 
     @property
-    def is_relative_height(self, _relative_units={Unit.FRACTION, Unit.PERCENT}) -> bool:
-        """Does the node have a relative width?"""
-        height = self.height
-        return height is not None and height.unit in _relative_units
+    def vertical_scrollbar_size(self) -> int:
+        return self.scrollbar_size_vertical
 
     @property
-    def is_auto_width(self, _auto=Unit.AUTO) -> bool:
-        """Does the node have automatic width?"""
-        width = self.width
-        return width is not None and width.unit == _auto
+    def horizontal_scrollbar_size(self) -> int:
+        return self.scrollbar_size_horizontal
 
     @property
-    def is_auto_height(self, _auto=Unit.AUTO) -> bool:
-        """Does the node have automatic height?"""
-        height = self.height
-        return height is not None and height.unit == _auto
+    def child_layout(self) -> Layout | None:
+        return self.layout
 
     @property
-    def is_dynamic_height(
-        self, _dynamic_units={Unit.AUTO, Unit.FRACTION, Unit.PERCENT}
-    ) -> bool:
-        """Does the node have a dynamic (not fixed) height?"""
-        height = self.height
-        return height is not None and height.unit in _dynamic_units
+    def placement_offset(self) -> ScalarOffset | None:
+        return self.offset if self.has_rule("offset") else None
+
+    def set_placement_offset(self, offset: ScalarOffset) -> None:
+        self.offset = offset
 
     @property
-    def is_docked(self) -> bool:
-        """Is the node docked?"""
-        return self.dock != "none"
+    def layer_name(self) -> str:
+        return self.layer or DEFAULT_LAYER
 
     @property
-    def is_split(self) -> bool:
-        """Is the node split?"""
-        return self.split != "none"
+    def layer_order(self) -> tuple[str, ...] | None:
+        return self.layers if self.has_rule("layers") else None
 
     def has_rule(self, rule_name: str) -> bool:
         """Check if a rule is set on this Styles object.
@@ -812,62 +807,6 @@ class StylesBase:
             return self.transitions.get(key, None)
         else:
             return None
-
-    def _align_width(self, width: int, parent_width: int) -> int:
-        """Align the width dimension.
-
-        Args:
-            width: Width of the content.
-            parent_width: Width of the parent container.
-
-        Returns:
-            An offset to add to the X coordinate.
-        """
-        offset_x = 0
-        align_horizontal = self.align_horizontal
-        if align_horizontal != "left":
-            if align_horizontal == "center":
-                offset_x = (parent_width - width) // 2
-            else:
-                offset_x = parent_width - width
-
-        return offset_x
-
-    def _align_height(self, height: int, parent_height: int) -> int:
-        """Align the height dimensions
-
-        Args:
-            height: Height of the content.
-            parent_height: Height of the parent container.
-
-        Returns:
-            An offset to add to the Y coordinate.
-        """
-        offset_y = 0
-        align_vertical = self.align_vertical
-        if align_vertical != "top":
-            if align_vertical == "middle":
-                offset_y = (parent_height - height) // 2
-            else:
-                offset_y = parent_height - height
-        return offset_y
-
-    def _align_size(self, child: tuple[int, int], parent: tuple[int, int]) -> Offset:
-        """Align a size according to alignment rules.
-
-        Args:
-            child: The size of the child (width, height)
-            parent: The size of the parent (width, height)
-
-        Returns:
-            Offset required to align the child.
-        """
-        width, height = child
-        parent_width, parent_height = parent
-        return Offset(
-            self._align_width(width, parent_width),
-            self._align_height(height, parent_height),
-        )
 
     @property
     def partial_rich_style(self) -> Style:
@@ -1490,6 +1429,11 @@ class RenderStyles(StylesBase):
         return self._node()
 
     @property
+    def flow_geometry(self) -> BoxGeometry:
+        # Stream deliberately accepts CSS declarations, not inline overrides.
+        return self._base_styles
+
+    @property
     def base(self) -> Styles:
         """Quick access to base (css) style."""
         return self._base_styles
@@ -1506,7 +1450,7 @@ class RenderStyles(StylesBase):
         return self.node.rich_style
 
     @property
-    def gutter(self) -> Spacing:
+    def box_gutter(self) -> Spacing:
         """Get space around widget (padding + border)
 
         Returns:
@@ -1517,7 +1461,7 @@ class RenderStyles(StylesBase):
             cache_key, gutter = self._gutter
             if cache_key == self._cache_key:
                 return gutter
-        gutter = self.padding + self.border.spacing
+        gutter = super().box_gutter
         self._gutter = (self._cache_key, gutter)
         return gutter
 

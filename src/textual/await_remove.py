@@ -76,8 +76,6 @@ class AwaitRemove(AwaitCompletion):
                 else:
                     if screen._running and screen.is_current:
                         app._update_mouse_over(screen)
-                finally:
-                    parent.refresh(layout=True)
 
         removal = cls(
             [task for node in nodes if (task := node._task) is not None], post_remove

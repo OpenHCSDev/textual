@@ -253,6 +253,21 @@ class XTermParser(Parser[Message]):
                     continue
                 else:
                     sequence += new_character
+                    if sequence == "\x1b]" and not bracketed_paste:
+                        payload = ""
+                        while True:
+                            try:
+                                payload += yield read1(constants.ESCAPE_DELAY)
+                            except (ParseTimeout, ParseEOF):
+                                break
+                            if payload.endswith(("\x07", "\x1b\\")):
+                                payload = payload.removesuffix("\x07").removesuffix(
+                                    "\x1b\\"
+                                )
+                                if payload.startswith(("10;", "11;", "4;")):
+                                    on_token(messages.TerminalColour.from_osc(payload))
+                                break
+                        break
                     if len(sequence) > _MAX_SEQUENCE_SEARCH_THRESHOLD:
                         reissue_sequence_as_keys(sequence)
                         break

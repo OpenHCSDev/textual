@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Callable, TypeVar
+from functools import update_wrapper
+from typing import Callable, TypeVar, cast
 
 from textual.css.model import SelectorSet
 from textual.css.parse import parse_selectors
@@ -19,6 +20,21 @@ class OnDecoratorError(Exception):
 
 class OnNoWidget(Exception):
     """A selector was applied to an attribute that isn't a widget."""
+
+
+class MessageHandler:
+    """A method's declared message routes; binding remains the method's work."""
+
+    def __init__(self, method: Callable) -> None:
+        self.method = method
+        self.declarations: list[tuple[type[Message], dict[str, tuple[SelectorSet, ...]]]] = []
+        update_wrapper(self, method)
+
+    def __get__(self, instance, owner=None):
+        return self.method.__get__(instance, owner)
+
+    def __call__(self, *args, **kwargs):
+        return self.method(*args, **kwargs)
 
 
 def on(
@@ -82,12 +98,9 @@ def on(
             ) from None
 
     def decorator(method: DecoratedType) -> DecoratedType:
-        """Store message and selector in function attribute, return callable unaltered."""
-
-        if not hasattr(method, "_textual_on"):
-            setattr(method, "_textual_on", [])
-        getattr(method, "_textual_on").append((message_type, parsed_selectors))
-
-        return method
+        """Compose routes on their declaration, not optional function attributes."""
+        handler = method if isinstance(method, MessageHandler) else MessageHandler(cast(Callable, method))
+        handler.declarations.append((message_type, parsed_selectors))
+        return cast(DecoratedType, handler)
 
     return decorator

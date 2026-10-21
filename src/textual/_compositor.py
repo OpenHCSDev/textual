@@ -23,6 +23,7 @@ from types import MappingProxyType
 from typing import (
     TYPE_CHECKING,
     Callable,
+    ClassVar,
     Collection,
     Generator,
     Generic,
@@ -36,7 +37,7 @@ from typing import (
 )
 
 import rich.repr
-from rich.console import Console, ConsoleOptions, RenderableType, RenderResult
+from rich.console import Console, ConsoleOptions, RenderResult
 from rich.control import Control
 from rich.segment import Segment
 from rich.style import Style
@@ -45,9 +46,10 @@ from textual import errors, events
 from textual._activation import Activation
 from textual._loop import loop_last
 from textual._spatial_map import SpatialMap
+from textual.box_model import DEFAULT_LAYER
 from textual.geometry import NULL_OFFSET, NULL_SPACING, Offset, Region, Size, Spacing
 from textual.map_geometry import MapGeometry
-from textual.layout import WidgetPlacement
+from textual.layout import DockArrangeResult, WidgetPlacement
 from textual.strip import Strip, StripRenderable
 from textual.widget import Widget
 
@@ -66,6 +68,78 @@ class ReflowResult(NamedTuple):
 
 # Maps a widget on to its geometry (information that describes its position in the composition)
 CompositorMap: TypeAlias = "dict[Widget, MapGeometry]"
+
+
+class GeometryDemand(ABC):
+    """Which original placements this traversal needs, not another geometry store."""
+
+    capture_subtrees: ClassVar[bool] = True
+
+    @staticmethod
+    def retained_paths(root: Widget, retain_geometry: Iterable[Widget],
+                       visible_only: bool) -> set[Widget]:
+        retained_paths: set[Widget] = set()
+        if visible_only:
+            # Requested targets need their outer placement even when offscreen.
+            # This places only their ancestor path, not unrelated descendants.
+            for target in retain_geometry:
+                path: list[Widget] = []
+                node = target
+                # Paths already added lead to this same root: add each
+                # shared ancestor once, not once per target.
+                while (
+                    isinstance(node, Widget)
+                    and node is not root
+                    and node not in retained_paths
+                ):
+                    path.append(node)
+                    node = node.parent
+                if node is root or node in retained_paths:
+                    retained_paths.update(path)
+        return retained_paths
+
+    @classmethod
+    def cache_subtree(cls, widget: Widget, capacity: int, capturing_source: bool) -> bool:
+        return cls.capture_subtrees and bool(capacity and widget._is_mounted and (
+            widget.CACHE_SUBTREE_GEOMETRY or (capturing_source and widget.is_container)))
+
+    @staticmethod
+    def restore_members(source, geometry, widgets, invisible_widgets):
+        widgets.update(source.members())
+        invisible_widgets.update(source.members(invisible=True))
+
+    @staticmethod
+    @abstractmethod
+    def select(arrangement: DockArrangeResult, region: Region,
+               retained: set[Widget], visible_only: bool): ...
+
+
+class ViewportGeometry(GeometryDemand):
+    @staticmethod
+    def select(arrangement, region, retained, visible_only):
+        return (arrangement.get_visible_placements(region, retain=retained)
+                if visible_only else arrangement.placements)
+
+
+class ScrolledGeometry(ViewportGeometry):
+    """Scrolling exposes placements without changing offscreen visibility."""
+
+    capture_subtrees = False
+
+    @staticmethod
+    def restore_members(source, geometry, widgets, invisible_widgets):
+        widgets.update(geometry)
+
+
+class RequiredGeometry(GeometryDemand):
+    """Queries consume arranged positions, not whole retained paint captures."""
+
+    capture_subtrees = False
+
+    @staticmethod
+    def select(arrangement, region, retained, visible_only):
+        return [(ordinal, placement) for ordinal, placement in arrangement.placements
+                if placement.widget in retained]
 
 
 class SubtreeGeometryKey(NamedTuple):
@@ -169,9 +243,9 @@ class NestedSceneClip(SceneClip):
 
 
 class StepDeadline:
-    """When a resumable arrangement pauses: once `ns` (perf_counter_ns) has passed.
+    """When resumable compositor work pauses: once `ns` has passed.
 
-    Whoever drives the arrangement sets the deadline before each step.
+    Whoever drives the work sets this perf-counter deadline before each step.
     """
 
     __slots__ = ("ns",)
@@ -187,12 +261,12 @@ StepResult = TypeVar("StepResult")
 
 
 def run_steps(steps: Generator[None, None, StepResult]) -> StepResult:
-    """Run an arrangement given no deadline: it finishes without pausing."""
+    """Run compositor work without a deadline: it finishes without pausing."""
     try:
         next(steps)
     except StopIteration as finished:
         return finished.value
-    raise RuntimeError("An arrangement without a deadline paused")
+    raise RuntimeError("Compositor work without a deadline paused")
 
 
 class SubtreeReflow(NamedTuple):
@@ -345,6 +419,7 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
         self, geometry: CompositorMap, widgets: set[Widget], invisible_widgets: set[Widget],
         key: SubtreeGeometryKey, clip: SceneClip, clips: dict[Widget, SceneClip],
         root: Widget, *, visible_only: bool, retained: set[Widget], bounds: Region,
+        demand: type[GeometryDemand],
         deadline: StepDeadline | None,
     ) -> Generator[None, None, None]:
         """Project this arrangement into `geometry`, pausing between entries once `deadline` passes."""
@@ -352,8 +427,7 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
                                      visible_only=visible_only, retained=retained, bounds=bounds,
                                      ancestry_root=root,
                                      ancestors=tuple(root.walk_ancestors()), deadline=deadline)
-        widgets.update(self.members())
-        invisible_widgets.update(self.members(invisible=True))
+        demand.restore_members(self, geometry, widgets, invisible_widgets)
 
     def project_into(self, geometry: CompositorMap, key: SubtreeGeometryKey,
                      clip: SceneClip, clips: dict[Widget, SceneClip], root: Widget,
@@ -820,7 +894,7 @@ class Compositor:
     def clear(self) -> None:
         """Remove all references to widgets (used when the screen closes)."""
         self.root = None
-        self._full_map.clear()
+        self._full_map = {}
         self._full_map_invalidated = True
         self._visible_map = None
         self._published_map = {}
@@ -856,24 +930,27 @@ class Compositor:
             for owner in widgets
             for member in (owner, owner._render_widget, *owner._get_virtual_dom())
         }
+        if not widgets:
+            return widgets
         if self._discarded_between_steps is not None:
             self._discarded_between_steps.update(widgets)
         for owner, resource in tuple(self._subtree_geometry.items()):
             if resource.references_retired(owner, widgets):
                 del self._subtree_geometry[owner]
-        changed = False
-        for mapping in (self._full_map, self._visible_map, self._published_map):
-            if mapping is None:
-                continue
-            for widget in widgets:
-                if (geometry := mapping.pop(widget, None)) is not None:
-                    changed = True
-                    self._damage(geometry.visible_region)
+        def retire(mapping: CompositorMap) -> CompositorMap:
+            for widget in widgets & mapping.keys():
+                self._damage(mapping[widget].visible_region)
+            return {widget: geometry for widget, geometry in mapping.items()
+                    if widget not in widgets}
+
+        self._full_map = retire(self._full_map)
+        if self._visible_map is not None:
+            self._visible_map = retire(self._visible_map)
+        self._published_map = retire(self._published_map)
         self.widgets.difference_update(widgets)
-        if changed:
-            self._full_map_invalidated = True
-            self._invalidate_render_projection()
-            self._published_widgets = None
+        self._full_map_invalidated = True
+        self._invalidate_render_projection()
+        self._published_widgets = None
         return widgets
 
     @classmethod
@@ -1058,6 +1135,7 @@ class Compositor:
     def reflow_subtrees_steps(
         self, parent: Widget, size: Size, roots: Iterable[Widget], *,
         retain_geometry: Iterable[Widget] = (), deadline: StepDeadline | None = None,
+        layout_widgets: Iterable[Widget] = (), demand: type[GeometryDemand] = ViewportGeometry,
     ) -> Generator[None, None, SubtreeReflow | None]:
         """`reflow_subtrees`, pausing whenever `deadline` passes between widgets.
 
@@ -1076,13 +1154,17 @@ class Compositor:
             return None
         retain = tuple(retain_geometry)
         scene = dict(previous)
-        widgets = set(self.widgets)
+        widgets: set[Widget] = set()
+        changed = {child for widget in layout_widgets
+                   for child in widget.walk_children(with_self=True)}
         shown: set[Widget] = set()
         hidden: set[Widget] = set()
         placed: dict[Widget, MapGeometry] = {}
         discarded = self._discarded_between_steps = set()
         try:
             for root in outermost:
+                if root in discarded:
+                    continue
                 old = [widget for widget, geometry in previous.items()
                        if root in geometry.ancestors]
                 # Screen-positioned descendants are not placed by their root alone.
@@ -1095,17 +1177,13 @@ class Compositor:
                     retain_geometry=tuple(
                         target for target in retain if root in target.ancestors
                     ),
-                    deadline=deadline,
+                    deadline=deadline, demand=demand,
                 )
                 # The root goes too: re-added with its subtree, it keeps the
                 # arranged order, where its scrollbars (same order key) come
                 # first and so in front, as in a full arrangement.
                 for widget in (*old, root):
                     del scene[widget]
-                widgets.difference_update([
-                    widget for widget in widgets
-                    if widget is not root and root in widget.ancestors
-                ])
                 scene.update(arranged)
                 widgets.update(members)
                 placed.update(arranged)
@@ -1121,18 +1199,19 @@ class Compositor:
         widgets.difference_update(discarded)
         shown.difference_update(discarded)
         hidden.difference_update(discarded)
-        self._invalidate_render_projection()
         self._full_map_invalidated = True
         self._visible_map = scene
         self._invalidate_render_projection()
-        self.widgets = widgets
+        self.widgets.difference_update(changed | discarded)
+        self.widgets.update(widgets)
         self._damage_geometry(previous, scene, parent)
         return SubtreeReflow(hidden=hidden, shown=shown, placed=placed)
 
     def _pause_before_commit(self, deadline: StepDeadline | None) -> Generator[None, None, None]:
-        """Give committing an arrangement (and what follows it) a step of its own
-        once `deadline` has passed. Until the commit, readers see the previous
-        scene, and lazy readers do not arrange."""
+        """Pause before atomic geometry or paint work once `deadline` passes.
+
+        While paused, lazy readers retain the published scene without arranging.
+        """
         if deadline is not None and deadline.passed():
             previous_arranging, self._arranging = self._arranging, True
             try:
@@ -1231,6 +1310,7 @@ class Compositor:
         self, root: Widget, size: Size, visible_only: bool = True,
         retain_geometry: Iterable[Widget] = (),
         *, root_geometry: MapGeometry | None = None,
+        demand: type[GeometryDemand] = ViewportGeometry,
     ) -> tuple[CompositorMap, set[Widget]]:
         """Arrange a widget's children based on its layout attribute.
 
@@ -1244,12 +1324,14 @@ class Compositor:
             Compositor map and set of widgets.
         """
         return run_steps(self._arrange_steps(
-            root, size, visible_only, retain_geometry, root_geometry=root_geometry))
+            root, size, visible_only, retain_geometry, root_geometry=root_geometry,
+            demand=demand))
 
     def _arrange_steps(
         self, root: Widget, size: Size, visible_only: bool = True,
         retain_geometry: Iterable[Widget] = (),
         *, root_geometry: MapGeometry | None = None, deadline: StepDeadline | None = None,
+        demand: type[GeometryDemand] = ViewportGeometry,
     ) -> Generator[None, None, tuple[CompositorMap, set[Widget]]]:
         """`_arrange_root` as steps: it pauses before a widget once `deadline` has passed.
 
@@ -1288,25 +1370,8 @@ class Compositor:
             None if root_layers is None
             else {name: index for index, name in enumerate(root_layers)}
         )
-        default_layers = {"default": 0}
-        retained_paths: set[Widget] = set()
-        if visible_only:
-            # Requested targets need their outer placement even when offscreen.
-            # This places only their ancestor path, not unrelated descendants.
-            for target in retain_geometry:
-                path: list[Widget] = []
-                node = target
-                # Paths already added lead to this same root: add each
-                # shared ancestor once, not once per target.
-                while (
-                    isinstance(node, Widget)
-                    and node is not root
-                    and node not in retained_paths
-                ):
-                    path.append(node)
-                    node = node.parent
-                if node is root or node in retained_paths:
-                    retained_paths.update(path)
+        default_layers = {DEFAULT_LAYER: 0}
+        retained_paths = demand.retained_paths(root, retain_geometry, visible_only)
 
         def arrange_widget(
             widget: Widget,
@@ -1347,7 +1412,7 @@ class Compositor:
                 invisible_widgets.add(widget)
 
             # Container region is minus border
-            container_region = region.shrink(styles.gutter)
+            container_region = region.shrink(widget.geometry.box_gutter)
             container_size = container_region.size
 
             # Widgets with scrollbars (containers or scroll view) require additional processing
@@ -1387,13 +1452,11 @@ class Compositor:
                         widget.set_reactive(Widget.scroll_target_y, new_scroll_y)
                         widget.vertical_scrollbar._reactive_position = new_scroll_y
 
-                    if visible_only and not complete:
-                        placements = arrange_result.get_visible_placements(
-                            sub_clip.region - child_region.offset + widget.scroll_offset,
-                            retain=retained_paths,
-                        )
-                    else:
-                        placements = arrange_result.placements
+                    placements = demand.select(
+                        arrange_result,
+                        sub_clip.region - child_region.offset + widget.scroll_offset,
+                        retained_paths, visible_only and not complete,
+                    )
                     total_region = total_region.union(arrange_result.total_region)
 
                     placement_scroll_offset = container_region.offset - widget.scroll_offset
@@ -1416,7 +1479,7 @@ class Compositor:
                     if widget._cover_widget is not None:
                         store_geometry(widget._cover_widget, _MapGeometry.from_widget(
                             widget._cover_widget,
-                            region.shrink(widget.styles.gutter),
+                            region.shrink(widget.geometry.box_gutter),
                             order,
                             clip.region,
                             region.size,
@@ -1461,7 +1524,7 @@ class Compositor:
                     if (
                         widget.show_vertical_scrollbar
                         or widget.show_horizontal_scrollbar
-                    ) and styles.scrollbar_visibility == "visible":
+                    ) and widget.geometry.scrollbar_visibility == "visible":
                         for chrome_widget, chrome_region in widget._arrange_scrollbars(
                             container_region
                         ):
@@ -1513,13 +1576,12 @@ class Compositor:
                 return
             if inherited_layers is None and (order_names := widget._get_layer_order((widget,))) is not None:
                 inherited_layers = {name: index for index, name in enumerate(order_names)}
-            retains_source = widget.CACHE_SUBTREE_GEOMETRY
-            if (not self.max_subtree_geometry_entries
-                    or not widget._is_mounted or not (retains_source or
-                        (capturing_source and widget.is_container))):
+            if not demand.cache_subtree(
+                    widget, self.max_subtree_geometry_entries, capturing_source):
                 yield from arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
                                complete, inherited_layers, source)  # noqa: F821 -- closure cleared after traversal
                 return
+            retains_source = widget.CACHE_SUBTREE_GEOMETRY
             resource_type = widget.subtree_geometry_resource()
             enclosing_complete = complete
             # The widget's geometry type chooses a complete or a placed
@@ -1572,7 +1634,7 @@ class Compositor:
                 yield from resource.restore_into(
                     map, widgets, invisible_widgets, key, clip, clips, widget._render_widget,
                     visible_only=visible_only and not enclosing_complete,
-                    retained=retained_paths, bounds=root_geometry.region, deadline=deadline)
+                    retained=retained_paths, bounds=root_geometry.region, deadline=deadline, demand=demand)
 
         # Add top level (root) widget
         discarded = self._discarded_between_steps
@@ -1619,7 +1681,7 @@ class Compositor:
             child_layer_order = first_layer_order + ordinal
             child_order = order + ((layers.get(child.layer, 0), z, child_layer_order),)
             yield (child, region, child_region,
-                   ((1, 0, 0),) if overlay else child_order, child_layer_order,
+                   ((1, 0, 0),) + child_order[-1:] if overlay else child_order, child_layer_order,
                    no_clip if overlay else sub_clip)
 
     @property
@@ -1749,7 +1811,7 @@ class Compositor:
             return widget, Offset(max(0, x), max(0, y))
 
         with self._using_geometry(widget, self._published_map):
-            line = widget.render_line(y)
+            line = widget.render_line(y, widget._paint_state)
 
         return widget, line.get_content_offset(x)
 
@@ -1784,7 +1846,10 @@ class Compositor:
         placements. Keep the committed scene's readers and add the complete
         demand together, instead of reflowing for each missing position.
         Captured descendants retain their strict original arrangement boundary.
-        Returns whether a viewport arrangement was performed.
+        The native traversal places only the requested paths, including its
+        ordinary visibility, loading, cover and container rules. Missing DOM
+        placements remain missing; callers retain the normal NoWidget result.
+        Returns whether a path arrangement was performed.
         """
         if self.root is None or not self._full_map_invalidated or self._arranging:
             return False
@@ -1800,9 +1865,18 @@ class Compositor:
                 missing.append(widget)
         if not missing:
             return False
-        self.size_exposed(self.reflow_visible(
-            self.root, self.size, retain_geometry=(*self._layout_map, *missing),
-        ))
+        previous = self._layout_map
+        acquired, widgets = self._arrange_root(
+            self.root, self.size, retain_geometry=missing, demand=RequiredGeometry,
+        )
+        # Replace the ordinary publication; borrowed maps remain immutable.
+        # Only requested paths were arranged. Existing placements do not move.
+        scene = previous | acquired
+        self._visible_map = scene
+        self.widgets.update(widgets)
+        self._invalidate_render_projection()
+        self._damage_geometry(previous, scene, self.root)
+        self.size_exposed(scene.keys() - previous.keys())
         return True
 
     def size_exposed(self, exposed: Collection[Widget]) -> None:
@@ -1830,7 +1904,7 @@ class Compositor:
         """
         if self._render_geometry is not None:
             root, geometry = self._render_geometry
-            # The original arrangement already admits its members, including
+            # The original arrangement already contains its members, including
             # cover and scrollbar resources. Only a missing query needs its
             # ancestry to distinguish an omitted descendant from another scene.
             placement = geometry.get(widget)
@@ -2071,17 +2145,18 @@ class Compositor:
         self,
         full: bool = False,
         simplify: bool = False,
-    ) -> RenderableType | None:
-        """Render an update renderable.
+        *,
+        deadline: StepDeadline | None = None,
+        dirty_widgets: Iterable[Widget] = (),
+    ) -> Generator[None, None, CompositorUpdate | None]:
+        """Return one bound full/partial update after a budget pause.
 
-        Args:
-            full: Perform a full update if `True`, otherwise a partial update.
-            simplify: Simplify segments.
-
-        Returns:
-            A renderable for the update, or `None` if no update was required.
+        Read pending widget damage after pausing. Composition never yields:
+        the returned cells and publication geometry belong to the same frame.
         """
 
+        yield from self._pause_before_commit(deadline)
+        self.update_widgets(dirty_widgets)
         screen_region = self.size.region
         if full:
             self._dirty_regions.add(screen_region)
@@ -2093,16 +2168,13 @@ class Compositor:
         self,
         size: Size,
         clear: bool = False,
-    ) -> RenderableType | None:
-        """Render an inline update.
-
-        Args:
-            size: Inline size.
-            clear: Also clear below the inline update (set when size decreases).
-
-        Returns:
-            A renderable.
-        """
+        *,
+        deadline: StepDeadline | None = None,
+        dirty_widgets: Iterable[Widget] = (),
+    ) -> Generator[None, None, InlineUpdate]:
+        """Pause, then compose inline cells atomically; clear below a shrinking size."""
+        yield from self._pause_before_commit(deadline)
+        self.update_widgets(dirty_widgets)
         arranged = self._layout_map
         strips = self.render_strips(size)
         update = InlineUpdate(strips, clear=clear)
@@ -2239,9 +2311,11 @@ class Compositor:
             Chops structure.
         """
         chops: list[dict[int, Strip | None]] = [{} for _ in cuts]
-        for y, x, _end in ChopsUpdate._span_cuts(spans, cuts, bounds.y):
-            chops[y - bounds.y][x] = None
-        remaining = {row: len(line) for row, line in enumerate(chops) if line}
+        remaining: dict[int, dict[int, int]] = {}
+        for y, x, end in ChopsUpdate._span_cuts(spans, cuts, bounds.y):
+            row = y - bounds.y
+            chops[row][x] = None
+            remaining.setdefault(row, {})[x] = end
         if not remaining:
             return cast("Sequence[Mapping[int, Strip]]", chops)
 
@@ -2257,19 +2331,20 @@ class Compositor:
             for y in region.line_range:
                 row = y - bounds.y
                 spans: set[tuple[int, int]] = set()
-                if row in remaining:
-                    start_x = None
-                    row_cuts = cuts[row]
-                    for index in range(bisect_left(row_cuts, first), bisect_left(row_cuts, last)):
-                        x = row_cuts[index]
-                        if x in chops[row] and chops[row][x] is None:
-                            if start_x is None:
-                                start_x = x
-                        elif start_x is not None:
-                            spans.add((start_x, x))
+                start_x = None
+                end_x = first
+                # _regions_to_spans supplies ordered damage; deleting painted
+                # cells preserves that order. Covered cuts are never revisited.
+                for x, end in remaining.get(row, {}).items():
+                    if first <= x < last:
+                        if start_x is not None and x != end_x:
+                            spans.add((start_x, end_x))
                             start_x = None
-                    if start_x is not None:
-                        spans.add((start_x, last))
+                        if start_x is None:
+                            start_x = x
+                        end_x = end
+                if start_x is not None:
+                    spans.add((start_x, end_x))
                 for span in tuple(runs):
                     if span not in spans:
                         start_y = runs.pop(span)
@@ -2294,7 +2369,8 @@ class Compositor:
             for y, strip in zip(render_region.line_range, strips):
                 row = y - bounds.y
                 chops_line = chops[row]
-                if not chops_line:
+                pending = remaining.get(row)
+                if pending is None:
                     continue
                 row_cuts = cuts[row]
                 final_cuts = row_cuts[bisect_left(row_cuts, first_cut):bisect_right(row_cuts, last_cut)]
@@ -2302,13 +2378,11 @@ class Compositor:
 
                 # Since we are painting front to back, the first segments for a cut "wins"
                 for cut, strip in zip(final_cuts, cut_strips):
-                    if cut in chops_line and chops_line[cut] is None:
+                    if cut in pending:
                         chops_line[cut] = strip
-                        count = remaining[row] - 1
-                        if count:
-                            remaining[row] = count
-                        else:
-                            del remaining[row]
+                        del pending[cut]
+                if not pending:
+                    del remaining[row]
             # These are the original pending chop rows, not widget readiness.
             # Once foreground paint has supplied every requested cut, no lower
             # widget can contribute. Do not scan its covered exposure again.

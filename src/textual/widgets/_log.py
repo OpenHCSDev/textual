@@ -15,6 +15,7 @@ from textual.geometry import Size
 from textual.reactive import var
 from textual.scroll_view import ScrollView
 from textual.selection import Selection
+from textual._paint_state import PaintState
 from textual.strip import Strip
 
 if TYPE_CHECKING:
@@ -278,7 +279,7 @@ class Log(ScrollView, can_focus=True):
         self._render_line_cache.clear()
         self.refresh()
 
-    def render_line(self, y: int) -> Strip:
+    def render_line(self, y: int, paint: PaintState) -> Strip:
         """Render a line of content.
 
         Args:
@@ -288,10 +289,10 @@ class Log(ScrollView, can_focus=True):
             A rendered line.
         """
         scroll_x, scroll_y = self.scroll_offset
-        strip = self._render_line(scroll_y + y, scroll_x, self.size.width)
+        strip = self._render_line(scroll_y + y, scroll_x, self.size.width, paint)
         return strip
 
-    def _render_line(self, y: int, scroll_x: int, width: int) -> Strip:
+    def _render_line(self, y: int, scroll_x: int, width: int, paint: PaintState) -> Strip:
         """Render a line into a cropped strip.
 
         Args:
@@ -302,7 +303,7 @@ class Log(ScrollView, can_focus=True):
         Returns:
             A Strip suitable for rendering.
         """
-        rich_style = self.rich_style
+        rich_style = paint.rich_style
         if y >= len(self._lines):
             return Strip.blank(width, rich_style)
 

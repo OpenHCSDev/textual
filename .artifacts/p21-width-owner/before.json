@@ -1,0 +1,13 @@
+{
+  "revision": "HEAD",
+  "modules": {
+    "src/textual/dom.py": 0,
+    "src/textual/widget.py": 0,
+    "src/textual/_styles_cache.py": 0,
+    "src/textual/_compositor.py": 0,
+    "src/textual/_measurement.py": 0,
+    "src/textual/layout.py": 0
+  },
+  "omissions": [],
+  "sites": []
+}

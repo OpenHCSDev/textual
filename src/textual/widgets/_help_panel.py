@@ -24,7 +24,6 @@ class HelpPanel(Widget):
         padding: 0 1;
         height: 1fr;
         padding-right: 1;
-        layout: vertical;
         height: 100%;
 
         &:ansi {

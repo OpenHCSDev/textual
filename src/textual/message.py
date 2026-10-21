@@ -17,7 +17,9 @@ from textual.case import camel_to_snake
 if TYPE_CHECKING:
     from asyncio import Future, Task
     from textual.dom import DOMNode
+    from textual.driver import Driver
     from textual.message_pump import MessagePump
+    from textual.widget import Widget
 
 
 @rich.repr.auto
@@ -45,6 +47,7 @@ class Message:
     namespace: ClassVar[str] = ""  # Namespace to disambiguate messages
     handler_name: ClassVar[str]
     """Name of the default message handler."""
+    _dispatch_types: ClassVar[tuple[type[Message], ...]] = ()
 
     def __init__(self) -> None:
         self.__post_init__()
@@ -65,6 +68,10 @@ class Message:
     def _discard(self) -> None:
         """Release resources owned by an abandoned or completed delivery."""
 
+    def deliver_from_driver(self, driver: Driver) -> None:
+        """Ordinary terminal input is delivered on the application's loop."""
+        driver.send_message(self)
+
     def __init_subclass__(
         cls,
         bubble: bool | None = True,
@@ -73,6 +80,7 @@ class Message:
         namespace: str | None = None,
     ) -> None:
         super().__init_subclass__()
+        cls._dispatch_types = tuple(base for base in cls.__mro__ if issubclass(base, Message))
         if bubble is not None:
             cls.bubble = bubble
         cls.verbose = verbose
@@ -122,6 +130,14 @@ class Message:
         """
         self._sender = sender
         return self
+
+    def can_dispatch_to(self, widget: Widget) -> bool:
+        """Whether this message may run handlers on the receiving widget.
+
+        Lifecycle messages remain deliverable while widgets retire. Input
+        messages specialize this policy using the receiver's current lifetime.
+        """
+        return True
 
     def can_replace(self, message: "Message") -> bool:
         """Check if another message may supersede this one.

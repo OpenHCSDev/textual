@@ -26,6 +26,7 @@ from textual.events import Mount
 from textual.highlight import highlight
 from textual.layout import Layout
 from textual.layouts.grid import GridLayout
+from textual.layouts.horizontal import HorizontalLayout
 from textual.message import Message
 from textual.reactive import reactive, var
 from textual.style import Style
@@ -649,11 +650,12 @@ class MarkdownTableCellContents(Static):
 class MarkdownTableContent(Widget):
     """Renders a Markdown table."""
 
+    DEFAULT_LAYOUT = GridLayout
+
     DEFAULT_CSS = """
     MarkdownTableContent {
         width: 1fr;
         height: auto;
-        layout: grid;
         grid-columns: auto;
         grid-rows: auto;
         grid-gutter: 1 1;
@@ -693,7 +695,7 @@ class MarkdownTableContent(Widget):
     def pre_layout(self, layout: Layout) -> None:
         assert isinstance(layout, GridLayout)
         layout.auto_minimum = True
-        layout.expand = not self.query_ancestor(MarkdownTable).styles.is_auto_width
+        layout.expand = not self.query_ancestor(MarkdownTable).geometry.is_auto_width
         layout.shrink = True
         layout.stretch_height = True
 
@@ -865,9 +867,10 @@ class MarkdownBullet(Widget):
 class MarkdownListItem(MarkdownBlock):
     """A list item Markdown block."""
 
+    DEFAULT_LAYOUT = HorizontalLayout
+
     DEFAULT_CSS = """
     MarkdownListItem {
-        layout: horizontal;
         margin-right: 1;
         height: auto;
     }
@@ -1015,7 +1018,6 @@ class Markdown(Widget):
     Markdown {
         height: auto;
         padding: 0 2 0 2;
-        layout: vertical;
         color: $foreground;
         overflow-y: hidden;
 

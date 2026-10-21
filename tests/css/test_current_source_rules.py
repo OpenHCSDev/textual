@@ -84,3 +84,73 @@ def test_failed_parse_does_not_publish_partial_current_source_cache():
         sheet.parse()
     assert sheet._rules is old_rules
     assert sheet._source_rules is old_cache
+
+
+async def test_scoped_updates_cover_each_selector_and_skip_unrelated_roots():
+    from textual.app import App
+    from textual.containers import Container
+    from textual.widgets import Static
+
+    class Scoped(Container):
+        pass
+
+    app = App()
+    async with app.run_test() as pilot:
+        inside = Scoped(Static("one", classes="one"), Static("two", classes="two"))
+        outside = Container(Static("outside", classes="one"))
+        await app.mount(inside, outside)
+        await pilot.pause()
+        sheet = app.stylesheet
+        sheet.update(outside)
+        app.screen._pending_styles.clear()
+        outside_color = outside.children[0].styles.color
+        location = ("scoped-update", "")
+        sheet.add_source(".one, .two { color: red; }", read_from=location, scope="Scoped")
+        sheet.parse()
+        pending = set(app.screen._pending_styles)
+        assert outside not in pending and outside.children[0] not in pending
+        with patch.object(sheet, "apply", wraps=sheet.apply) as apply:
+            sheet.update(outside, nodes=pending)
+            apply.assert_not_called()
+        sheet.update(app.screen, nodes=pending)
+        app.screen._pending_styles.difference_update(pending)
+        assert all(child.styles.color == Color.parse("red") for child in inside.children)
+        assert outside.children[0].styles.color == outside_color
+        with patch.object(sheet, "apply", wraps=sheet.apply) as apply:
+            sheet.reparse()
+            sheet.update(app.screen, nodes=app.screen._pending_styles)
+            apply.assert_not_called()
+        sheet.source.pop(location)
+        sheet.parse()
+        sheet.update(app.screen, nodes=app.screen._pending_styles)
+        assert all(child.styles.color != Color.parse("red") for child in inside.children)
+
+
+async def test_update_reorders_sources_and_reloads_variables():
+    from textual.app import App
+    from textual.widgets import Static
+
+    app = App()
+    async with app.run_test() as pilot:
+        node = Static("priority", classes="priority")
+        await app.mount(node)
+        await pilot.pause()
+        sheet = app.stylesheet
+        sheet.add_source(".priority { color: red; }", read_from=("first", ""))
+        sheet.add_source(".priority { color: blue; }", read_from=("second", ""))
+        sheet.parse()
+        sheet.update(node)
+        assert node.styles.color == Color.parse("blue")
+        sheet.source[("first", "")] = sheet.source.pop(("first", ""))
+        sheet.parse()
+        sheet.update(node)
+        assert node.styles.color == Color.parse("red")
+        sheet.set_variables({**sheet._variables, "shade": "green"})
+        sheet.add_source(".priority { color: $shade; }", read_from=("variable", ""))
+        sheet.parse()
+        sheet.update(node)
+        assert node.styles.color == Color.parse("green")
+        sheet.set_variables({**sheet._variables, "shade": "yellow"})
+        sheet.reparse()
+        sheet.update(node)
+        assert node.styles.color == Color.parse("yellow")

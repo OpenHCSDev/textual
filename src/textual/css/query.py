@@ -56,7 +56,7 @@ ExpectType = TypeVar("ExpectType")
 
 @rich.repr.auto(angular=True)
 class DOMQuery(Generic[QueryType]):
-    __slots__ = ["_node", "_nodes", "_filters", "_excludes", "_deep"]
+    __slots__ = ["_node", "_nodes", "_filters", "_excludes", "_deep", "_of_type"]
 
     def __init__(
         self,
@@ -66,6 +66,7 @@ class DOMQuery(Generic[QueryType]):
         exclude: str | None = None,
         deep: bool = True,
         parent: DOMQuery | None = None,
+        of_type: type[DOMNode] | None = None,
     ) -> None:
         """Initialize a query object.
 
@@ -79,11 +80,15 @@ class DOMQuery(Generic[QueryType]):
             exclude: Query to exclude children in the node.
             deep: Query should be deep, i.e. recursive.
             parent: The parent query, if this is the result of filtering another query.
+            of_type: Required Python type; defaults to Widget.
 
         Raises:
             InvalidQueryFormat: If the format of the query is invalid.
         """
+        from textual.widget import Widget
+
         _rich_traceback_omit = True
+        self._of_type = of_type if of_type is not None else Widget
         self._node = node
         self._nodes: list[QueryType] | None = None
         self._filters: list[tuple[SelectorSet, ...]] = (
@@ -112,24 +117,29 @@ class DOMQuery(Generic[QueryType]):
         return self._node
 
     @property
+    def is_simple(self) -> bool:
+        """Whether matching depends only on the candidate node."""
+        return all(
+            selector.is_simple
+            for group in (*self._filters, *self._excludes)
+            for selector in group
+        )
+
+    def _matches(self, node: DOMNode) -> bool:
+        return (
+            isinstance(node, self._of_type)
+            and all(match(group, node) for group in self._filters)
+            and not any(match(group, node) for group in self._excludes)
+        )
+
+    @property
     def nodes(self) -> list[QueryType]:
         """Lazily evaluate nodes."""
-        from textual.widget import Widget
-
         if self._nodes is None:
-            initial_nodes = list(
-                self._node.walk_children(Widget) if self._deep else self._node._nodes
+            initial_nodes = (
+                self._node.walk_children() if self._deep else self._node._nodes
             )
-            nodes = [
-                node
-                for node in initial_nodes
-                if all(match(selector_set, node) for selector_set in self._filters)
-            ]
-            nodes = [
-                node
-                for node in nodes
-                if not any(match(selector_set, node) for selector_set in self._excludes)
-            ]
+            nodes = [node for node in initial_nodes if self._matches(node)]
             self._nodes = cast("list[QueryType]", nodes)
         return self._nodes
 
@@ -159,6 +169,7 @@ class DOMQuery(Generic[QueryType]):
 
     def __rich_repr__(self) -> rich.repr.Result:
         try:
+            yield "of_type", self._of_type
             if self._filters:
                 yield (
                     "query",
@@ -193,6 +204,7 @@ class DOMQuery(Generic[QueryType]):
             filter=selector,
             deep=self._deep,
             parent=self,
+            of_type=self._of_type,
         )
 
     def exclude(self, selector: str) -> DOMQuery[QueryType]:
@@ -209,6 +221,7 @@ class DOMQuery(Generic[QueryType]):
             exclude=selector,
             deep=self._deep,
             parent=self,
+            of_type=self._of_type,
         )
 
     if TYPE_CHECKING:
