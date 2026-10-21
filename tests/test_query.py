@@ -1,3 +1,5 @@
+from abc import abstractmethod
+
 import pytest
 
 from textual.app import App, ComposeResult
@@ -157,6 +159,23 @@ async def test_query():
             _ = app.query(".float").first(View)
         with pytest.raises(WrongType):
             _ = app.query(".float").last(View)
+
+
+def test_query_ancestor_abstract_mixin():
+    class Scope:
+        @abstractmethod
+        def scope_value(self) -> str: ...
+
+    class ScopeWidget(Widget, Scope):
+        def scope_value(self) -> str:
+            return "scope"
+
+    parent = ScopeWidget()
+    child = Widget()
+    parent._add_child(child)
+
+    ancestor: Scope = child.query_ancestor(Scope)
+    assert ancestor is parent
 
 
 async def test_query_classes():

@@ -50,6 +50,8 @@ class WrongType(QueryError):
 
 QueryType = TypeVar("QueryType", bound="Widget")
 """Type variable used to type generic queries."""
+AncestorType = TypeVar("AncestorType")
+"""A nominal ancestor capability, not necessarily a concrete widget class."""
 ExpectType = TypeVar("ExpectType")
 """Type variable used to further restrict queries."""
 

@@ -57,12 +57,12 @@ from textual.walk import walk_breadth_first, walk_breadth_search_id, walk_depth_
 from textual.worker_manager import WorkerManager
 
 if TYPE_CHECKING:
-    from typing_extensions import Self, TypeAlias
+    from typing_extensions import Self, TypeAlias, TypeForm
     from _typeshed import SupportsRichComparison
 
     from rich.console import RenderableType
     from textual.app import App
-    from textual.css.query import DOMQuery, QueryType
+    from textual.css.query import AncestorType, DOMQuery, QueryType
     from textual.css.types import CSSLocation
     from textual.reactive import _StoredReactiveAccess
     from textual.screen import Screen
@@ -170,7 +170,9 @@ class DOMNode(PaintNode, MessagePump):
                 geometry = True
         return self._style_geometry_updated(geometry)
 
-    def _style_rules_updated(self, revision: int, geometry: bool, descendants: bool) -> None:
+    def _style_rules_updated(
+        self, revision: int, geometry: bool, descendants: bool
+    ) -> None:
         """Publish the rule owner's mutation to dependent ancestor subtrees.
 
         This is a projection of Styles' mutation epoch, including raw writes
@@ -194,7 +196,6 @@ class DOMNode(PaintNode, MessagePump):
 
     def _make_component_node(self, component: str) -> DOMNode:
         return DOMNode(classes=component)
-
 
     DEFAULT_CSS: ClassVar[str] = ""
     """Default TCSS."""
@@ -238,7 +239,6 @@ class DOMNode(PaintNode, MessagePump):
 
     _reactives: ClassVar[dict[str, Reactive]]
     _reactive_accessors: ClassVar[dict[str, _StoredReactiveAccess]]
-
 
     # Names of potential computed reactives
     _computes: ClassVar[frozenset[str]]
@@ -295,10 +295,16 @@ class DOMNode(PaintNode, MessagePump):
                     result = True
                     break
                 if height.is_auto:
-                    if type(child)._has_relative_children_height is Widget._has_relative_children_height:
+                    if (
+                        type(child)._has_relative_children_height
+                        is Widget._has_relative_children_height
+                    ):
                         relative, child_native = child._relative_children_height()
                     else:
-                        relative, child_native = child._has_relative_children_height, False
+                        relative, child_native = (
+                            child._has_relative_children_height,
+                            False,
+                        )
                     native = native and child_native
                     if relative:
                         result = True
@@ -324,7 +330,9 @@ class DOMNode(PaintNode, MessagePump):
             return self.layout.render_keyline(self)
         return Blank(self.background_colors[1])
 
-    def _measure_content_height(self, container: Size, viewport: Size, width: int) -> int:
+    def _measure_content_height(
+        self, container: Size, viewport: Size, width: int
+    ) -> int:
         """Intrinsic native height; the caller owns reuse and publication."""
         if not width:
             return 0
@@ -491,7 +499,11 @@ class DOMNode(PaintNode, MessagePump):
 
     @cached_property
     def _bindings(self) -> BindingsMap:
-        return BindingsMap() if self._merged_bindings is None else self._merged_bindings.copy()
+        return (
+            BindingsMap()
+            if self._merged_bindings is None
+            else self._merged_bindings.copy()
+        )
 
     @cached_property
     def _query_one_cache(self) -> LRUCache[QueryOneCacheKey, DOMNode]:
@@ -1076,8 +1088,11 @@ class DOMNode(PaintNode, MessagePump):
 
         try:
             node = next(
-                (ancestor for ancestor in self.walk_ancestors(with_self=True)
-                 if isinstance(ancestor, Screen)),
+                (
+                    ancestor
+                    for ancestor in self.walk_ancestors(with_self=True)
+                    if isinstance(ancestor, Screen)
+                ),
                 None,
             )
         except AttributeError:
@@ -1202,8 +1217,10 @@ class DOMNode(PaintNode, MessagePump):
             my_widget.display = False  # Hide my_widget
             ```
         """
-        return not self._display_constraints and self.styles.display != "none" and not (
-            self._closing or self._closed or self._pruning
+        return (
+            not self._display_constraints
+            and self.styles.display != "none"
+            and not (self._closing or self._closed or self._pruning)
         )
 
     @display.setter
@@ -1800,7 +1817,7 @@ class DOMNode(PaintNode, MessagePump):
         def query_ancestor(self, selector: str) -> DOMNode: ...
 
         @overload
-        def query_ancestor(self, selector: type[QueryType]) -> QueryType: ...
+        def query_ancestor(self, selector: TypeForm[AncestorType]) -> AncestorType: ...
 
         @overload
         def query_ancestor(
@@ -1809,7 +1826,7 @@ class DOMNode(PaintNode, MessagePump):
 
     def query_ancestor(
         self,
-        selector: str | type[QueryType],
+        selector: str | TypeForm[AncestorType],
         expect_type: type[QueryType] | None = None,
     ) -> DOMNode:
         """Get an ancestor which matches a query.
@@ -1855,7 +1872,9 @@ class DOMNode(PaintNode, MessagePump):
             self._inline_styles.refresh(layout=True)
 
         if update_styles:
-            self._inline_styles.replace_rules(self._inline_styles.get_rules(), **update_styles)
+            self._inline_styles.replace_rules(
+                self._inline_styles.get_rules(), **update_styles
+            )
         return self
 
     def has_class(self, *class_names: str) -> bool:
