@@ -4715,6 +4715,10 @@ class Widget(DOMNode):
     def _on_scroll_to_region(self, message: messages.ScrollToRegion) -> None:
         self.scroll_to_region(message.region, animate=True)
 
+    async def _dispatch_message(self, message: Message) -> None:
+        if message.can_dispatch_to(self):
+            await super()._dispatch_message(message)
+
     def _on_unmount(self) -> None:
         self._uncover()
 

@@ -4170,7 +4170,10 @@ class App(Generic[ReturnType], DOMNode):
         elif isinstance(event, events.InputEvent) and not event.is_forwarded:
             if not self.app_focus and isinstance(event, (events.Key, events.MouseDown)):
                 self.app_focus = True
-            if isinstance(event, events.MouseEvent):
+            if isinstance(event, events.Paste):
+                forward_target = self.focused or self.screen
+                forward_target._forward_event(event)
+            elif isinstance(event, events.MouseEvent):
                 # Record current mouse position on App
                 self.mouse_position = Offset(event.x, event.y)
                 self.mouse_position_high_resolution = (event.screen_x, event.screen_y)
@@ -4252,11 +4255,6 @@ class App(Generic[ReturnType], DOMNode):
             else:
                 self.screen._forward_event(event)
 
-        elif isinstance(event, events.Paste) and not event.is_forwarded:
-            if self.focused is not None:
-                self.focused._forward_event(event)
-            else:
-                self.screen._forward_event(event)
         else:
             await super().on_event(event)
 

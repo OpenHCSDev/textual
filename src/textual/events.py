@@ -254,7 +254,14 @@ class MouseRelease(Event, bubble=False):
 
 
 class InputEvent(Event):
-    """Base class for input events."""
+    """Input is deliverable only within its receiver's live, active DOM."""
+
+    def can_dispatch_to(self, widget: Widget) -> bool:
+        return (
+            widget.is_attached
+            and all(node.display for node in widget.walk_ancestors(with_self=True))
+            and widget.screen.is_active
+        )
 
 
 @rich.repr.auto
@@ -896,7 +903,7 @@ class DescendantBlur(Event, bubble=True, verbose=True):
 
 
 @rich.repr.auto
-class Paste(Event, bubble=True):
+class Paste(InputEvent, bubble=True):
     """Event containing text that was pasted into the Textual application.
     This event will only appear when running in a terminal emulator that supports
     bracketed paste mode. Textual will enable bracketed pastes when an app starts,
