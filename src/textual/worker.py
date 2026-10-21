@@ -20,6 +20,7 @@ from typing import (
     Callable,
     Coroutine,
     Generic,
+    Generator,
     Iterator,
     TypeVar,
     Union,
@@ -175,7 +176,7 @@ class Worker(Generic[ResultType]):
         # Python's accepted resource kinds declare different disposal contracts.
         # Functions allocate their coroutine only when run; custom awaitables
         # have no disposal protocol until their iterator is entered.
-        if inspect.iscoroutine(work):
+        if isinstance(work, (Coroutine, Generator)):
             self._work_lifetime.callback(work.close)
         elif isinstance(work, asyncio.Future):
             self._work_lifetime.callback(work.cancel)

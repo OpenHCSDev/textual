@@ -4,6 +4,8 @@ import gc
 import inspect
 import sys
 from threading import Event
+from types import coroutine as iterable_coroutine
+from collections.abc import Coroutine
 
 import pytest
 
@@ -11,12 +13,36 @@ from textual.app import App
 from textual.worker import WorkerCancelled, WorkerState
 
 
+class ProtocolCoroutine(Coroutine[None, None, None]):
+    """A non-native implementation of Python's public Coroutine contract."""
+
+    def __init__(self, coroutine):
+        self.coroutine = coroutine
+
+    def __await__(self):
+        return self.coroutine.__await__()
+
+    def send(self, value):
+        return self.coroutine.send(value)
+
+    def throw(self, *args):
+        return self.coroutine.throw(*args)
+
+    def close(self):
+        self.coroutine.close()
+
+
+def native_coroutine(coroutine):
+    return coroutine
+
+
 @pytest.mark.filterwarnings("error::RuntimeWarning")
+@pytest.mark.parametrize("factory", [native_coroutine, ProtocolCoroutine])
 @pytest.mark.parametrize("thread", [False, True])
 @pytest.mark.parametrize("start", [False, True])
 @pytest.mark.parametrize("eager", [False, pytest.param(True, marks=pytest.mark.skipif(
     sys.version_info < (3, 12), reason="Eager tasks require Python 3.12"))])
-async def test_cancel_before_start_disposes_accepted_coroutine(thread, start, eager):
+async def test_cancel_before_start_disposes_accepted_coroutine(factory, thread, start, eager):
     called = False
 
     async def work():
@@ -30,7 +56,7 @@ async def test_cancel_before_start_disposes_accepted_coroutine(thread, start, ea
         try:
             loop.set_task_factory(asyncio.eager_task_factory if eager else None)
             coroutine = work()
-            worker = app.run_worker(coroutine, thread=thread, start=start)
+            worker = app.run_worker(factory(coroutine), thread=thread, start=start)
             worker.cancel()
             with pytest.raises(WorkerCancelled):
                 await worker.wait()
@@ -45,6 +71,23 @@ async def test_cancel_before_start_disposes_accepted_coroutine(thread, start, ea
         finally:
             loop.set_task_factory(previous)
     gc.collect()
+
+
+@pytest.mark.parametrize("thread", [False, True])
+@pytest.mark.parametrize("start", [False, True])
+async def test_cancel_before_start_closes_iterable_coroutine(thread, start):
+    @iterable_coroutine
+    def work():
+        yield
+
+    app = App()
+    async with app.run_test():
+        coroutine = work()
+        worker = app.run_worker(coroutine, thread=thread, start=start)
+        worker.cancel()
+        with pytest.raises(WorkerCancelled):
+            await worker.wait()
+        assert inspect.getgeneratorstate(coroutine) == inspect.GEN_CLOSED
 
 
 @pytest.mark.parametrize("thread", [False, True])
