@@ -22,6 +22,7 @@ from time import perf_counter_ns
 from types import MappingProxyType
 from typing import (
     TYPE_CHECKING,
+    AbstractSet,
     Callable,
     ClassVar,
     Collection,
@@ -2147,7 +2148,7 @@ class Compositor:
         simplify: bool = False,
         *,
         deadline: StepDeadline | None = None,
-        dirty_widgets: Iterable[Widget] = (),
+        dirty_widgets: AbstractSet[Widget] = frozenset(),
     ) -> Generator[None, None, CompositorUpdate | None]:
         """Return one bound full/partial update after a budget pause.
 
@@ -2170,7 +2171,7 @@ class Compositor:
         clear: bool = False,
         *,
         deadline: StepDeadline | None = None,
-        dirty_widgets: Iterable[Widget] = (),
+        dirty_widgets: AbstractSet[Widget] = frozenset(),
     ) -> Generator[None, None, InlineUpdate]:
         """Pause, then compose inline cells atomically; clear below a shrinking size."""
         yield from self._pause_before_commit(deadline)
@@ -2393,7 +2394,7 @@ class Compositor:
     def __rich__(self) -> StripRenderable:
         return StripRenderable(self.render_strips())
 
-    def update_widgets(self, widgets: set[Widget]) -> None:
+    def update_widgets(self, widgets: AbstractSet[Widget]) -> None:
         """Update the given widgets in the composition.
 
         Args:
