@@ -1876,7 +1876,6 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
             if auto_focus and self.focused is None:
                 for widget in self.query(auto_focus):
                     if widget.focusable:
-                        widget.has_focus = True
                         self.set_focus(widget)
                         break
 
