@@ -722,11 +722,15 @@ class Widget(DOMNode):
         return (self.absolute_offset is not None
                 or self.geometry.constrain_x != "none" or self.geometry.constrain_y != "none")
 
-    def subtree_geometry_resource(self):
-        """Choose the native arrangement owner for this widget's scroll scope."""
+    def subtree_geometry_resource(self, *, visible_only: bool):
+        """Keep the compositor's requested viewport instead of capturing hidden rows.
+
+        Scroll input permissions and currently shown scrollbars do not change
+        the geometry a viewport layout requested.
+        """
         from textual._compositor import IntrinsicSubtreeGeometry, PlacedSubtreeGeometry
 
-        return PlacedSubtreeGeometry if self._allow_scroll else IntrinsicSubtreeGeometry
+        return PlacedSubtreeGeometry if visible_only else IntrinsicSubtreeGeometry
 
     @property
     def _render_widget(self) -> Widget:
