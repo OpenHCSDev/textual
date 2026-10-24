@@ -588,11 +588,16 @@ class Animator:
         else:
             app_animation_level = self.app.animation_level
             animation_time = self._get_time()
-            animation_keys = list(self._animations.keys())
-            for animation_key in animation_keys:
-                animation = self._animations[animation_key]
+            for animation_key, animation in tuple(self._animations.items()):
+                # A step sets the attribute, and its watchers may stop or
+                # replace any animation (a scroll watcher re-anchoring calls
+                # force_stop_animation). Whoever removed an entry settled it,
+                # so the tick steps and settles only entries it still holds.
+                if self._animations.get(animation_key) is not animation:
+                    continue
                 animation_complete = animation(animation_time, app_animation_level)
-                if animation_complete:
+                if (animation_complete
+                        and self._animations.get(animation_key) is animation):
                     del self._animations[animation_key]
                     if animation.on_complete is not None:
                         animation.on_complete()
