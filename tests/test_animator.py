@@ -290,3 +290,39 @@ def test_force_stop_animation():
 
     # The on_complete callback was scheduled.
     mock_app.call_later.assert_called_once_with(callback)
+
+
+class ReanchoringTest:
+    """A watcher on foo stops its own animation when it reaches the end, as a
+    scroll watcher re-anchoring at the bottom does."""
+
+    animator: Animator
+
+    def __init__(self) -> None:
+        self._foo = 0.0
+
+    @property
+    def foo(self) -> float:
+        return self._foo
+
+    @foo.setter
+    def foo(self, value: float) -> None:
+        self._foo = value
+        if value == 100.0:
+            self.animator.force_stop_animation(self, "foo", complete=False)
+
+
+def test_step_that_stops_its_own_animation_settles_once():
+    callback = Mock()
+    animator = MockAnimator(Mock())
+    animate_test = ReanchoringTest()
+    animate_test.animator = animator
+
+    animator.animate(animate_test, "foo", 100.0, duration=10, on_complete=callback)
+    animator._time = 10
+    animator()
+
+    assert animate_test.foo == 100.0
+    assert not animator.is_being_animated(animate_test, "foo")
+    # The watcher's stop settled it; the tick does not settle it again.
+    animator.app.call_later.assert_called_once_with(callback)
