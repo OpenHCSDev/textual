@@ -94,14 +94,14 @@ class HintSession(Widget, can_focus=True):
             event.prevent_default()
             self.prefix += event.character
             remaining = [label for label in self.labels
-                         if str(label.content).startswith(self.prefix)]
+                         if label.display and str(label.content).startswith(self.prefix)]
             if not remaining:
                 self.dismiss()
             elif len(remaining) == 1 and remaining[0].content == self.prefix:
                 self.dismiss(target=remaining[0].target)
             else:
                 for label in self.labels:
-                    label.display = str(label.content).startswith(self.prefix)
+                    label.display = label in remaining
 
     def on_paste(self, event: events.Paste):
         original = self.original_focus
@@ -138,5 +138,8 @@ class HintSession(Widget, can_focus=True):
     def reconcile_publication(self):
         if self.disabled:
             return
-        if any(not label.target.available() for label in self.labels):
+        for label in self.labels:
+            if label.display and not label.target.available():
+                label.display = False
+        if not any(label.display for label in self.labels):
             self.dismiss()
