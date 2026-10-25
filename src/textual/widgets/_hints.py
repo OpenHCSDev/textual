@@ -45,7 +45,7 @@ class HintLabel(Widget):
     hit_test_transparent = True
     ALLOW_SELECT = False
 
-    def __init__(self, session, text, target):
+    def __init__(self, session, text, target, offset):
         super().__init__()
         self.session = session
         self.text = text
@@ -55,8 +55,7 @@ class HintLabel(Widget):
         self.styles.layer = "_tooltips"
         self.styles.width = len(text)
         self.styles.height = 1
-        column = min(target.region.x, max(0, target.widget.screen.size.width - len(text)))
-        self.absolute_offset = Offset(column, target.region.y)
+        self.absolute_offset = offset
 
     def render(self) -> Content:
         typed = self.get_visual_style("hint-label--typed")
@@ -78,12 +77,39 @@ class HintSession(Widget, can_focus=True):
         width = 1
         while len(self.alphabet) ** width < len(targets):
             width += 1
-        self.labels = tuple(HintLabel(self, self.label(index, width), target)
-                            for index, target in enumerate(targets))
+        size = screen.size
+        placed: dict[int, list[tuple[int, int]]] = {}
+        labels = []
+        for index, target in enumerate(targets):
+            text = self.label(index, width)
+            offset = self.free_offset(placed, size, target.region.offset, len(text))
+            labels.append(HintLabel(self, text, target, offset))
+        self.labels = tuple(labels)
         self.styles.position = "absolute"
         self.styles.overlay = "screen"
         self.styles.width = 0
         self.styles.height = 0
+
+    @staticmethod
+    def free_offset(placed, size, origin, width):
+        """Nearest cell to origin where a label keeps one blank cell beside every placed label.
+
+        Labels are placed in target order; placed maps each row to the spans already taken
+        on it and is extended here. A full screen leaves the label on its target.
+        """
+        for distance in range(size.width + size.height):
+            for dy in sorted(range(-distance, distance + 1), key=abs):
+                y = origin.y + dy
+                if not 0 <= y < size.height:
+                    continue
+                dx = distance - abs(dy)
+                for x in dict.fromkeys((origin.x + dx, origin.x - dx)):
+                    if 0 <= x <= size.width - width and all(
+                        x > end or x + width < start for start, end in placed.get(y, ())
+                    ):
+                        placed.setdefault(y, []).append((x, x + width))
+                        return Offset(x, y)
+        return origin
 
     @classmethod
     def label(cls, index, width):
