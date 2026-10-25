@@ -1,10 +1,12 @@
 """One transient native hint interaction over published activation targets."""
 from __future__ import annotations
 
+from typing import ClassVar
+
 from textual import events
+from textual.content import Content
 from textual.geometry import Offset
 from textual.widget import Widget
-from textual.widgets._static import Static
 
 
 class HintHost:
@@ -28,21 +30,37 @@ class HintHost:
             session.reconcile_publication()
 
 
-class HintLabel(Static):
+class HintLabel(Widget):
+    """One target's key; the typed span is read from the session that owns the prefix."""
+
+    DEFAULT_CSS = """
+    HintLabel {
+        text-style: bold reverse;
+    }
+    HintLabel > .hint-label--typed {
+        text-style: bold not reverse;
+    }
+    """
+    COMPONENT_CLASSES: ClassVar[set[str]] = {"hint-label--typed"}
     hit_test_transparent = True
     ALLOW_SELECT = False
 
-    def __init__(self, text, target):
-        super().__init__(text, markup=False)
+    def __init__(self, session, text, target):
+        super().__init__()
+        self.session = session
+        self.text = text
         self.target = target
         self.styles.position = "absolute"
         self.styles.overlay = "screen"
         self.styles.layer = "_tooltips"
         self.styles.width = len(text)
         self.styles.height = 1
-        self.styles.text_style = "bold reverse"
         column = min(target.region.x, max(0, target.widget.screen.size.width - len(text)))
         self.absolute_offset = Offset(column, target.region.y)
+
+    def render(self) -> Content:
+        typed = self.get_visual_style("hint-label--typed")
+        return Content(self.text).stylize(typed, 0, len(self.session.prefix))
 
 
 class HintSession(Widget, can_focus=True):
@@ -60,7 +78,7 @@ class HintSession(Widget, can_focus=True):
         width = 1
         while len(self.alphabet) ** width < len(targets):
             width += 1
-        self.labels = tuple(HintLabel(self.label(index, width), target)
+        self.labels = tuple(HintLabel(self, self.label(index, width), target)
                             for index, target in enumerate(targets))
         self.styles.position = "absolute"
         self.styles.overlay = "screen"
@@ -94,14 +112,16 @@ class HintSession(Widget, can_focus=True):
             event.prevent_default()
             self.prefix += event.character
             remaining = [label for label in self.labels
-                         if label.display and str(label.content).startswith(self.prefix)]
+                         if label.display and label.text.startswith(self.prefix)]
             if not remaining:
                 self.dismiss()
-            elif len(remaining) == 1 and remaining[0].content == self.prefix:
+            elif len(remaining) == 1 and remaining[0].text == self.prefix:
                 self.dismiss(target=remaining[0].target)
             else:
                 for label in self.labels:
                     label.display = label in remaining
+                for label in remaining:
+                    label.refresh()
 
     def on_paste(self, event: events.Paste):
         original = self.original_focus
