@@ -1273,16 +1273,9 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
                     or self._compositor._dirty_regions):
                 self._update_timer.resume()
 
-        self._invoke_and_clear_callbacks()
-
-    def _after_refresh_pending(
-        self, screen, *, refresh_requested: dict[Screen, bool], refresh_pending: bool,
-    ) -> bool:
-        """Screen-owned work retains the original whole-frame admission."""
-        return MessagePump._after_refresh_pending(
-            self, screen, refresh_requested=refresh_requested,
-            refresh_pending=refresh_pending,
-        )
+        if not self.app._batch_count and not (self.is_current and self._refresh_pending):
+            # Nothing left to publish: no frame is coming for these callbacks.
+            self._release_callbacks()
 
     _frame_holds = 0
     """Callers holding this screen's frames (see `hold_frames`)."""
@@ -1413,9 +1406,6 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
                 self._recompose_required = False
                 self.call_next(self.recompose)
 
-        if self._callbacks:
-            self.call_next(self._invoke_and_clear_callbacks)
-
     def _timer_update_after_input(self) -> None:
         """The update the timer asked for before the loop had read input after a layout step."""
         if self._running:
@@ -1434,49 +1424,15 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
     def _input_read_after_layout_step(self) -> None:
         self._layout_step_unanswered = False
 
-    def _sender_refresh_pending(
-        self, sender: Widget, *, refresh_requested: dict[Screen, bool],
-    ) -> bool:
-        """Admit the original spatial sender, including its backdrop publication."""
-        owner = sender.screen
-        for screen in (self, owner) if owner is not self else (self,):
-            # An independently owned backdrop or inactive sender screen has
-            # its own answer, acquired once when this pass first consumes it.
-            if screen not in refresh_requested:
-                refresh_requested[screen] = screen._refresh_requested
-            if refresh_requested[screen]:
-                return True
-            if any(sender in widget.walk_ancestors(with_self=True)
-                   for widget in screen._dirty_widgets):
-                return True
-            if screen._compositor.pending_for(sender):
-                return True
-        return False
+    def _on_frame_published(self) -> None:
+        """Every callback waiting now was queued before this frame, so it is answered."""
+        super()._on_frame_published()
+        self._release_callbacks()
 
-    def _invoke_and_clear_callbacks(self) -> None:
-        """Admit painted senders back to their own original message pumps."""
-        if self.app._batch_count or not self._callbacks:
-            return
-        # No callback runs during this synchronous admission; each sender's
-        # existing callback handler owns execution.
-        # Preparation may change source/layout intent synchronously. Acquire
-        # the original virtual queries after those effects, once for this pass.
-        # Sender queueing doesn't dispatch callbacks here; their original pumps
-        # execute them after this admission returns. No answer outlives the pass.
-        refresh_requested = {self: self._refresh_requested}
-        refresh_pending = self._refresh_pending
-        index = 0
-        for _ in range(len(self._callbacks)):
-            if self.app._batch_count or index >= len(self._callbacks):
-                return
-            callback, sender = self._callbacks[index]
-            if self.is_current and sender._after_refresh_pending(
-                self, refresh_requested=refresh_requested,
-                refresh_pending=refresh_pending,
-            ):
-                index += 1
-                continue
-            self._callbacks.pop(index)
+    def _release_callbacks(self) -> None:
+        """Hand each waiting callback back to the pump that queued it, in order."""
+        callbacks, self._callbacks = self._callbacks, []
+        for callback, sender in callbacks:
             sender.call_later(callback)
 
     def _invoke_later(self, callback: CallbackType, sender: MessagePump) -> None:

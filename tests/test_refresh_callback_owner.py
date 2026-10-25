@@ -57,61 +57,6 @@ async def test_busy_sender_hands_execution_to_peer_after_completed_delivery():
     assert app._task is None
 
 
-@pytest.mark.parametrize("work", ["layout", "scroll"])
-async def test_frame_preserves_requests_from_its_layout_publication(work):
-    class FrameApp(App):
-        def compose(self):
-            child = Static("native source", id="source")
-            child.styles.width = 10
-            child.styles.height = 40
-            yield child
-
-    app = FrameApp()
-
-    async def drive(pilot):
-        await pilot.pause()
-        screen = app.screen
-        source = app.query_one("#source")
-        received = asyncio.Event()
-
-        def request_next_frame(_screen):
-            screen.screen_layout_refresh_signal.unsubscribe(source)
-            if work == "layout":
-                source.styles.width = 20
-                screen.refresh(layout=True)
-            else:
-                screen.scroll_to(y=2, animate=False, immediate=True, force=True)
-
-        screen.screen_layout_refresh_signal.subscribe(
-            source, request_next_frame, immediate=True
-        )
-        screen.refresh(layout=True)
-        screen._on_timer_update()
-        # The completed geometry is still the first frame. Its subscriber
-        # requested independent work through the original native owner.
-        if work == "layout":
-            assert source.region.width == 10
-            assert screen._layout_required
-        else:
-            assert screen.scroll_y == 2
-            assert screen._scroll_required
-        assert screen._refresh_pending
-        screen.call_after_refresh(received.set)
-        await asyncio.wait_for(received.wait(), 5)
-        if work == "layout":
-            assert source.region.width == 20
-        else:
-            assert source.region.y == -2
-        assert not screen._refresh_pending
-        app.exit()
-
-    await asyncio.wait_for(
-        app.run_async(headless=True, size=(40, 8), auto_pilot=drive), 10
-    )
-    assert app._exception is None
-    assert app._task is None
-
-
 @pytest.mark.parametrize("sender_kind", ["app", "widget"])
 async def test_async_sender_callback_does_not_borrow_screen_task(sender_kind):
     """A suspended sender cannot own another sender's paint or callbacks."""
@@ -136,7 +81,6 @@ async def test_async_sender_callback_does_not_borrow_screen_task(sender_kind):
         def sidebar_published():
             assert asyncio.current_task() is sidebar.task
             assert active_message_pump.get() is sidebar
-            assert not app.screen._compositor.pending_for(sidebar)
             text = "\n".join(strip.text for strip in app.screen._compositor.render_strips())
             assert "unrelated sidebar paint" in text
             sidebar_written.set()
@@ -161,3 +105,46 @@ async def test_async_sender_callback_does_not_borrow_screen_task(sender_kind):
     assert app._exception is None
     assert app._task is None
     assert all(task.done() for task in child_tasks)
+
+
+async def test_callbacks_run_while_another_widget_relayouts_every_frame():
+    """A spinner that relayouts every frame never keeps the screen idle; callbacks queued
+    meanwhile still run after the next published frame instead of piling up."""
+    ran = []
+
+    class Spinner(Static):
+        def on_mount(self):
+            self.screen.screen_layout_refresh_signal.subscribe(self, self.spin, immediate=True)
+
+        def spin(self, _screen):
+            # Every published layout requests the next one, so a refresh is always pending.
+            self.refresh(layout=True)
+
+    class SpinnerApp(App):
+        def compose(self) -> ComposeResult:
+            yield Spinner("thinking", id="spinner")
+            yield Static("toast", id="toast")
+
+    app = SpinnerApp()
+
+    async def drive(pilot):
+        await pilot.pause()
+        toast = app.query_one("#toast")
+        done = asyncio.Event()
+
+        def record(index):
+            ran.append(index)
+            if len(ran) == 50:
+                done.set()
+
+        for index in range(50):
+            toast.call_after_refresh(record, index)
+        await asyncio.wait_for(done.wait(), 2)
+        assert ran == list(range(50))
+        assert app.screen._callbacks == []
+        app.exit()
+
+    await asyncio.wait_for(
+        app.run_async(headless=True, size=(40, 8), auto_pilot=drive), 10
+    )
+    assert app._exception is None

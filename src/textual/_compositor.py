@@ -2019,47 +2019,6 @@ class Compositor:
                         ),
                     )
 
-    def _geometry_for_roots(
-        self, roots: Iterable[Widget], *, geometry: Mapping[Widget, MapGeometry] | None = None,
-    ) -> Iterator[tuple[Widget, MapGeometry, frozenset[Widget]]]:
-        """Read actual acquired membership, including native covers and chrome."""
-        roots = set(roots)
-        if not roots:
-            return
-        for widget, placement in (self._layout_map if geometry is None else geometry).items():
-            held = frozenset(roots.intersection((widget, *placement.ancestors)))
-            if held:
-                yield widget, placement, held
-
-    def deferred_regions(self, roots: Iterable[Widget]) -> tuple[Region, ...]:
-        """Keep both displayed and arranged footprints until a root can publish.
-
-        A mounted root without a placement holds its nearest placed ancestor:
-        an unknown destination cannot authorize painting through that subtree.
-        Overflowing descendants retain their own original clipped bounds.
-        """
-        roots = set(roots)
-        if not roots:
-            return ()
-        regions: set[Region] = set()
-        placed: set[Widget] = set()
-        for mapping in (self._published_map, self._layout_map):
-            for _, geometry, owners in self._geometry_for_roots(roots, geometry=mapping):
-                placed.update(owners)
-                if region := geometry.visible_region.intersection(self.size.region):
-                    regions.add(region)
-        for root in roots - placed:
-            if not root.is_attached:
-                continue
-            for ancestor in root.walk_ancestors():
-                if (geometry := self._layout_map.get(ancestor)) is not None:
-                    if region := geometry.visible_region.intersection(self.size.region):
-                        regions.add(region)
-                    break
-            else:
-                regions.add(self.size.region)
-        return tuple(regions)
-
     def _publication_geometry(self, arranged: CompositorMap, regions: set[Region]) -> CompositorMap:
         """Join only complete placement changes represented by these cells.
 
@@ -2134,13 +2093,6 @@ class Compositor:
                         remaining.add(part)
             result = remaining
         return result
-
-    def pending_for(self, widget: Widget) -> bool:
-        """Whether this sender still owns damage in the original committed scene."""
-        if not self._dirty_regions:
-            return False
-        regions = widget.screen._compositor.deferred_regions((widget,))
-        return any(damage.overlaps(region) for damage in self._dirty_regions for region in regions)
 
     def render_update(
         self,
