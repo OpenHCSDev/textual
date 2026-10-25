@@ -416,6 +416,14 @@ def test_wrap() -> None:
         assert line1.is_same(line2)
 
 
+
+def test_wrap_without_columns_keeps_one_row_per_line() -> None:
+    """Zero columns, or padding that eats them all, cannot divide a line."""
+    content = Content("Hello World\nagain")
+    assert len(content.wrap(0)) == 2
+    assert len(list(content._wrap_and_format(2, line_pad=1))) == 2
+    assert len(list(content._wrap_and_format(0, no_wrap=True))) == 2
+
 @pytest.mark.parametrize(
     "content, width, expected",
     [

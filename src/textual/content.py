@@ -683,7 +683,8 @@ class Content(Visual):
 
             if no_wrap:
                 if overflow == "fold":
-                    cuts = list(range(0, line.cell_length, width))[1:]
+                    # Zero columns cannot be divided: the line stays one row.
+                    cuts = list(range(0, line.cell_length, width))[1:] if width > 0 else []
                     for content in line.divide(cuts):
                         yield _FormattedLine(get_style, content, width, y=y, align=align)
                 else:
@@ -692,8 +693,11 @@ class Content(Visual):
                         get_style, line, width, y=y, align=align
                     )
             else:
-                offsets = divide_line(
-                    line.plain, width - line_pad * 2, fold=overflow == "fold"
+                wrap_width = width - line_pad * 2
+                offsets = (
+                    divide_line(line.plain, wrap_width, fold=overflow == "fold")
+                    if wrap_width > 0
+                    else []
                 )
                 ellipsis = overflow == "ellipsis"
                 for (last, content), offset in zip(
