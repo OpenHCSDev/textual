@@ -52,7 +52,6 @@ if TYPE_CHECKING:
     from textual.app import App
     from textual.await_complete import AwaitComplete
     from textual.dom import DOMNode
-    from textual.screen import Screen
 
 
 MessageType = TypeVar("MessageType", bound="Message")
@@ -526,18 +525,11 @@ class MessagePump(ParentLinks, metaclass=_MessagePumpMeta):
         self._timers.add(timer)
         return timer
 
-    def _after_refresh_pending(
-        self, screen: Screen, *,
-        refresh_requested: dict[Screen, bool], refresh_pending: bool,
-    ) -> bool:
-        """Non-spatial owners await the complete admitted screen publication."""
-        return refresh_pending
-
     def call_after_refresh(self, callback: Callback, *args: Any, **kwargs: Any) -> bool:
         """Schedule a callback after this owner's messages and publication complete.
 
-        Widget callbacks await their subtree; Screen and App callbacks await the
-        complete frame. After admission, this pump's existing callback handler
+        The callback runs once the screen publishes the frame after it was queued,
+        or at once when nothing is left to publish. After admission, this pump's existing callback handler
         executes the callable, including async work, on its own task. Positional
         and keyword arguments are passed to the callable.
 
