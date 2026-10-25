@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, ClassVar
 
 from textual.document._document import Location, Selection
 from textual._clipboard import ClipboardContent, LinewiseClipboard
+from textual.cursor_shape import BlinkingBar, CellCursor, CursorShape, SteadyBlock
 from textual.document._document_navigator import WordBoundary, PreviousWordBoundary, EndWordBoundary
 
 if TYPE_CHECKING:
@@ -24,6 +25,7 @@ class EditingMode:
     modal = False
     accepts_text = True
     label = ""
+    cursor_shape: ClassVar[CursorShape] = CellCursor()
 
     def handle_key(self, editor: TextArea, event: Key) -> bool:
         return False
@@ -49,6 +51,7 @@ class EditingMode:
 
 class VimMode(EditingMode, ABC):
     modal = True
+    cursor_shape = SteadyBlock()
 
     def handle_key(self, editor: TextArea, event: Key) -> bool:
         editor.history.checkpoint()
@@ -67,6 +70,7 @@ class VimMode(EditingMode, ABC):
 
 class VimInsert(VimMode):
     label = "INSERT"
+    cursor_shape = BlinkingBar()
 
     def resume(self, editor: TextArea) -> None:
         editor.history.begin_group()

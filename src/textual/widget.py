@@ -51,6 +51,7 @@ from textual import constants, errors, events, messages
 from textual._animator import DEFAULT_EASING, Animatable, BoundAnimator, EasingFunction
 from textual._arrange import DockArrangeResult, arrange
 from textual._context import NoActiveAppError
+from textual.cursor_shape import CellCursor, CursorShape
 from textual._dispatch_key import dispatch_key
 from textual._easing import DEFAULT_SCROLL_EASING
 from textual._extrema import Extrema
@@ -2163,6 +2164,11 @@ class Widget(DOMNode):
         the widget has no text cursor.
         """
         return None
+
+    @property
+    def cursor_shape(self) -> CursorShape:
+        """How the terminal shows this widget's text cursor while it has focus."""
+        return CellCursor()
 
     @property
     def content_region(self) -> Region:

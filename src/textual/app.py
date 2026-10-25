@@ -97,6 +97,7 @@ from textual.binding import Binding, BindingsMap, BindingType, Keymap
 from textual.command import CommandListItem, CommandPalette, Provider, SimpleProvider
 from textual.compose import compose_async
 from textual.content import Content
+from textual.cursor_shape import CellCursor, CursorShape
 from textual.css.errors import StylesheetError
 from textual.css.query import NoMatches
 from textual.css.stylesheet import RulesMap, Stylesheet
@@ -693,6 +694,8 @@ class App(Generic[ReturnType], DOMNode):
 
         self._previous_cursor_position = Offset(0, 0)
         """Where the last frame left the terminal cursor."""
+        self._terminal_cursor_shape: CursorShape = CellCursor()
+        """The cursor shape the last frame left on the terminal."""
 
         self._exception: Exception | None = None
         """The unhandled exception which is leading to the app shutting down,
@@ -1042,6 +1045,20 @@ class App(Generic[ReturnType], DOMNode):
                 if offset is not None:
                     return offset
         return self._previous_cursor_position
+
+    @property
+    def cursor_shape(self) -> CursorShape:
+        """How the terminal shows the focused widget's text cursor."""
+        focused = self.screen.focused
+        return CellCursor() if focused is None else focused.cursor_shape
+
+    def _cursor_shape_change(self) -> str:
+        """The sequence that brings the terminal cursor to `cursor_shape`; empty when it is already there."""
+        shape = self.cursor_shape
+        if shape == self._terminal_cursor_shape:
+            return ""
+        self._terminal_cursor_shape = shape
+        return shape.terminal_sequence()
 
     @property
     def clipboard(self) -> str:
@@ -3566,6 +3583,7 @@ class App(Generic[ReturnType], DOMNode):
                                 Control.move(0, -self.INLINE_PADDING).segment.text
                             )
 
+                    self._driver.write(CellCursor().terminal_sequence())
                     driver.stop_application_mode()
         except Exception as error:
             self._handle_exception(error)
@@ -3933,6 +3951,7 @@ class App(Generic[ReturnType], DOMNode):
                                 terminal_sequence += Control.move_to(
                                     *cursor_position
                                 ).segment.text
+                            terminal_sequence += self._cursor_shape_change()
                             self._previous_cursor_position = cursor_position
                         else:
                             segments = console.render(renderable)

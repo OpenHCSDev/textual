@@ -20,6 +20,7 @@ from textual.actions import SkipAction
 from textual.cache import LRUCache
 from textual.color import Color
 from textual.content import Content
+from textual.cursor_shape import CellCursor, CursorShape
 from textual.document._document import (
     Document,
     DocumentBase,
@@ -1383,13 +1384,14 @@ TextArea {
         """Draw the cursor?"""
         if self.read_only:
             # If we are in read only mode, we don't want the cursor to blink
-            return self.show_cursor and self.has_focus
-        draw_cursor = (
-            self.has_focus
-            and not self.cursor_blink
-            or (self.cursor_blink and self._cursor_visible)
-        )
-        return draw_cursor
+            cell_visible = self.show_cursor and self.has_focus
+        else:
+            cell_visible = (
+                self.has_focus
+                and not self.cursor_blink
+                or (self.cursor_blink and self._cursor_visible)
+            )
+        return self.editing_mode.cursor_shape.draws_cell(cell_visible)
 
     @property
     def _has_cursor(self) -> bool:
@@ -2241,6 +2243,15 @@ TextArea {
     def cursor_screen_offset(self) -> Offset:
         """The offset of the cursor relative to the screen."""
         return self.cursor_offset_in(self.content_region)
+
+    @property
+    def cursor_shape(self) -> CursorShape:
+        """The editing mode's shape while the cursor is usable and on screen."""
+        if self._has_cursor and self.scrollable_content_region.contains_point(
+            self.cursor_screen_offset
+        ):
+            return self.editing_mode.cursor_shape
+        return CellCursor()
 
     def cursor_offset_in(self, content_region: Region) -> Offset:
         cursor_x, cursor_y = self._cursor_offset
