@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from textual._activation import PrimaryActivation
+
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar, Generic, Hashable, Iterable, TypeVar
 
@@ -279,7 +281,7 @@ SelectOption: TypeAlias = "tuple[str, SelectType]"
 """The type used for options in the Select."""
 
 
-class Select(Generic[SelectType], Vertical, can_focus=True):
+class Select(PrimaryActivation, Generic[SelectType], Vertical, can_focus=True):
     """Widget to select from a list of possible options.
 
     A Select displays the current selection.
@@ -677,6 +679,10 @@ class Select(Generic[SelectType], Vertical, can_focus=True):
 
         self.focus()
         self.expanded = False
+
+    @property
+    def primary_activation(self):
+        return self.action_show_overlay
 
     def action_show_overlay(self) -> None:
         """Show the overlay."""

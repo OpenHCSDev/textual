@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from textual._activation import PrimaryActivation
+
 from typing import TYPE_CHECKING, ClassVar
 
 from rich.console import RenderableType
@@ -17,7 +19,7 @@ from textual.scrollbar import ScrollBarRender
 from textual.widget import Widget
 
 
-class Switch(Widget, can_focus=True):
+class Switch(PrimaryActivation, Widget, can_focus=True):
     """A switch widget that represents a boolean value.
 
     Can be toggled by clicking on it or through its [bindings][textual.widgets.Switch.BINDINGS].
@@ -203,6 +205,10 @@ class Switch(Widget, can_focus=True):
         """Toggle the state of the switch."""
         event.stop()
         self.toggle()
+
+    @property
+    def primary_activation(self):
+        return self.action_toggle_switch
 
     def action_toggle_switch(self) -> None:
         """Toggle the state of the switch."""

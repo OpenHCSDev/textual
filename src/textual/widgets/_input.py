@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from textual._activation import FocusActivation
+
 import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar, Iterable, NamedTuple
@@ -69,7 +71,7 @@ class Selection(NamedTuple):
         return self.start == self.end
 
 
-class Input(ScrollView):
+class Input(FocusActivation, ScrollView):
     """A text input widget."""
 
     BINDING_GROUP_TITLE = "Input"
