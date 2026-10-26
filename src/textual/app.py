@@ -5115,4 +5115,8 @@ class App(Generic[ReturnType], DOMNode):
                 return
             self._resize_event = None
             for screen in self._drawn_screens:
+                # Observers retain the original terminal receipt, including its
+                # pixel dimensions. The separate command is not replaceable by
+                # the widget Resize notifications its layout will publish.
                 screen.post_message(event)
+                screen.post_message(messages.ResizeScreen())
