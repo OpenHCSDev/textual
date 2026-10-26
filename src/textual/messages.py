@@ -58,7 +58,7 @@ class ExitApp(Message, verbose=True):
 class ResizeScreen(Message, bubble=False):
     """Apply the app's current viewport to a screen.
 
-    This requests layout; ``events.Resize`` reports committed widget geometry.
+    This requests layout; ``events.Resize`` reports sizes to observers.
     Keeping them distinct prevents layout output replacing a newer request.
     """
 

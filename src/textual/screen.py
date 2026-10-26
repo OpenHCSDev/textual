@@ -1790,6 +1790,29 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
 
     def _screen_resized(self, size: Size) -> None:
         """Called by App when the screen is resized."""
+        horizontal_breakpoints = self.horizontal_breakpoints
+
+        vertical_breakpoints = (
+            self.app.VERTICAL_BREAKPOINTS
+            if self.VERTICAL_BREAKPOINTS is None
+            else self.VERTICAL_BREAKPOINTS
+        ) or []
+
+        if horizontal_breakpoints or vertical_breakpoints:
+            width, height = self.app.size
+            breakpoints = {
+                breakpoint: False
+                for _, breakpoint in (horizontal_breakpoints + vertical_breakpoints)
+            }
+
+            for dimension, declarations in (
+                (width, horizontal_breakpoints), (height, vertical_breakpoints)
+            ):
+                if (active := self._get_breakpoint(dimension, declarations)) is not None:
+                    breakpoints[active[1]] = True
+
+            self.update_classes(breakpoints, animate=False)
+
         if self.stack_updates and self.is_attached:
             self._refresh_layout(size)
 
@@ -1810,7 +1833,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
             if event.refresh_styles:
                 self.app.stylesheet.update(self, animate=False, nodes=self._pending_styles)
             if self._size != size:
-                self._refresh_layout(size)
+                self._screen_resized(size)
             self.refresh()
             for screen in self._screens_seen_through:
                 # Uncovered along with this screen: it was not drawn, so it
@@ -1892,32 +1915,6 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
     def _on_resize_screen(self, message: messages.ResizeScreen) -> None:
         self.dismiss_hints()
         self._screen_resized(self.app.size)
-
-    async def _on_resize(self, event: events.Resize) -> None:
-        event.stop()
-
-        horizontal_breakpoints = self.horizontal_breakpoints
-
-        vertical_breakpoints = (
-            self.app.VERTICAL_BREAKPOINTS
-            if self.VERTICAL_BREAKPOINTS is None
-            else self.VERTICAL_BREAKPOINTS
-        ) or []
-
-        if horizontal_breakpoints or vertical_breakpoints:
-            width, height = event.size
-            breakpoints = {
-                breakpoint: False
-                for _, breakpoint in (horizontal_breakpoints + vertical_breakpoints)
-            }
-
-            for dimension, declarations in (
-                (width, horizontal_breakpoints), (height, vertical_breakpoints)
-            ):
-                if (active := self._get_breakpoint(dimension, declarations)) is not None:
-                    breakpoints[active[1]] = True
-
-            self.update_classes(breakpoints, animate=False)
 
     @property
     def horizontal_breakpoints(self) -> list[tuple[int, str]]:
