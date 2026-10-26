@@ -14,7 +14,7 @@ class CommandModeApp(App):
         editor = TextArea("abcHdef")
         editor.editing_mode = VimInsert()
         yield editor
-        yield Input("abcHdef")
+        yield Input("abcHdef", select_on_focus=False)
 
     def check_action(self, action, parameters):
         if action == "navigate":
