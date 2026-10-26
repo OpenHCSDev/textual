@@ -13,6 +13,7 @@ import tempfile
 from time import perf_counter
 
 from agent_comms.comms import wire
+from agent_comms.repo import Checkout
 from agent_comms.threads import Thread
 from sidebar_collapse_latency_pilot import FrameApp
 from textual.content import Content
@@ -29,9 +30,9 @@ async def main(output: Path):
                           XDG_STATE_HOME=str(root / "state"),
                           XDG_DATA_HOME=str(root / "data"), AGENT_COMMS_ROOT=str(root / "wire"))
         comms = wire(root / "wire")
-        comms.registry.declare(Thread(root.name, frozenset(), str(root)))
+        comms.registry.declare(Thread(root.name, frozenset(), Checkout(root)))
         for index in range(24):
-            comms.registry.declare(Thread(f"worker-{index:02}", frozenset(), str(root)))
+            comms.registry.declare(Thread(f"worker-{index:02}", frozenset(), Checkout(root)))
         app = FrameApp(project_dir=str(root))
         async with app.run_test(size=(120, 42)) as pilot:
             for _ in range(9):

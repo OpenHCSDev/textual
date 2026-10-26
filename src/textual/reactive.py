@@ -16,6 +16,7 @@ from typing import (
     Callable,
     ClassVar,
     Generic,
+    Never,
     Type,
     TypeVar,
     cast,
@@ -79,6 +80,19 @@ class Initialize(Generic[ReactiveType]):
 
     def __call__(self, obj: ReactableType) -> ReactiveType:
         return self.callback(obj)
+
+
+class Required(Initialize[ReactiveType]):
+    """A reactive value its owner must supply with ``set_reactive`` before reading."""
+
+    def __init__(self) -> None:
+        super().__init__(self._missing)
+
+    @staticmethod
+    def _missing(obj: Reactable) -> Never:
+        raise ReactiveError(
+            f"{type(obj).__qualname__} did not initialize a required reactive value"
+        )
 
 
 class WatcherCallback(events.Callback):
