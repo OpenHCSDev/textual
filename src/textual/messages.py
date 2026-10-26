@@ -55,6 +55,17 @@ class ExitApp(Message, verbose=True):
     """Exit the app."""
 
 
+class ResizeScreen(Message, bubble=False):
+    """Apply the app's current viewport to a screen.
+
+    This requests layout; ``events.Resize`` reports committed widget geometry.
+    Keeping them distinct prevents layout output replacing a newer request.
+    """
+
+    def can_replace(self, message: Message) -> bool:
+        return isinstance(message, ResizeScreen)
+
+
 @rich.repr.auto
 class Update(Message, verbose=True):
     """Sent by Textual to request the update of a widget."""

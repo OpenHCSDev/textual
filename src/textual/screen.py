@@ -1889,10 +1889,12 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
     Lower values trade reuse for memory without changing geometry or content.
     """
 
+    def _on_resize_screen(self, message: messages.ResizeScreen) -> None:
+        self.dismiss_hints()
+        self._screen_resized(self.app.size)
+
     async def _on_resize(self, event: events.Resize) -> None:
         event.stop()
-        self.dismiss_hints()
-        self._screen_resized(event.size)
 
         horizontal_breakpoints = self.horizontal_breakpoints
 

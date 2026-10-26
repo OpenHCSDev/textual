@@ -5115,4 +5115,4 @@ class App(Generic[ReturnType], DOMNode):
                 return
             self._resize_event = None
             for screen in self._drawn_screens:
-                screen.post_message(event)
+                screen.post_message(messages.ResizeScreen())
