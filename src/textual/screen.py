@@ -1601,8 +1601,6 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
             return
         self._compositor.update_widgets(self._dirty_widgets)
         self._update_timer.pause()
-        ResizeEvent = events.Resize
-
         try:
             if scroll and not any(self._layout_widgets.values()):
                 # Only scrolls changed: re-arrange just the scrolled
@@ -1612,13 +1610,14 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
                     self, size, taken_scrolled,
                     retain_geometry=self._layout_geometry_targets(), deadline=deadline,
                     demand=ScrolledGeometry)
-                exposed_widgets = (
-                    scoped.shown if scoped is not None else
+                if scoped is None:
                     self._compositor.reflow_visible(
                         self, size, retain_geometry=self._layout_geometry_targets())
-                )
+                    layers = self._compositor.layers
+                else:
+                    layers = scoped.placed.items()
                 self._scrolled_widgets.difference_update(taken_scrolled)
-                self._compositor.size_exposed(exposed_widgets)
+                self._compositor.update_sizes(layers, layout=False)
 
             else:
                 viewport_layout = self._use_viewport_layout()
@@ -1655,13 +1654,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
                 for widget in hidden:
                     widget.post_message(Hide())
 
-                for widget, geometry in layers:
-                    size_changed = widget._size_updated(
-                        geometry.region.size, geometry.virtual_size, geometry.container_size)
-                    if widget in shown or size_changed:
-                        widget.post_message(
-                            ResizeEvent(widget.outer_size, widget.virtual_size, widget.container_size)
-                        )
+                self._compositor.update_sizes(layers, shown=shown)
 
                 for widget in shown:
                     widget.post_message(Show())
