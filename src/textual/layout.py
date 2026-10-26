@@ -72,18 +72,21 @@ class DockArrangeResult:
         return self._spatial_map
 
     @cached_property
-    def placed_region(self) -> Region:
-        """The area covered by the flowing placements and their margins.
+    def flow_bounds(self) -> Region:
+        """The occupied flow bounds, without blank space before its origin.
 
-        Fixed and overlay placements do not extend it. Measuring an
-        arrangement reads this; the spatial map is built only to query a
-        partly visible area.
+        Fixed and overlay placements do not extend the flow. Keep its actual
+        bounds so an aligned short document can be distinguished from one
+        which fills its viewport, without constructing the spatial map.
         """
-        region = Region()
-        for _ordinal, placement in self.placements:
-            if not placement.fixed and not placement.overlay:
-                region = region.union(placement.region.grow(placement.margin))
-        return region
+        placements = tuple(placement for _ordinal, placement in self.placements
+                           if not placement.fixed and not placement.overlay)
+        return WidgetPlacement.get_bounds(placements) if placements else Region()
+
+    @property
+    def placed_region(self) -> Region:
+        """Origin-based virtual extent, derived from the same flowing bounds."""
+        return Region().union(self.flow_bounds)
 
     @property
     def total_region(self) -> Region:
