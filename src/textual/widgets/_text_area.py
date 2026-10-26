@@ -827,6 +827,10 @@ TextArea {
     def update_suggestion(self) -> None:
         """A hook to update the [`suggestion`][textual.widgets.TextArea.suggestion] attribute."""
 
+    @property
+    def allows_application_commands(self) -> bool:
+        return self.editing_mode.allows_application_commands
+
     def check_consume_key(self, key: str, character: str | None = None) -> bool:
         """Check if the widget may consume the given key.
 
@@ -849,7 +853,7 @@ TextArea {
             return True
         # Idle modal command entry permits application priority bindings. Local
         # editor commands still handle keys not claimed by such a binding.
-        if self.editing_mode.allows_application_commands:
+        if self.allows_application_commands:
             return False
         return character is not None and character.isprintable()
 

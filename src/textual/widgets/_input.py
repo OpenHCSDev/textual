@@ -496,6 +496,10 @@ class Input(ScrollView):
         """Flag to indicate if the cursor is at the end."""
         return self.cursor_position == len(self.value)
 
+    @property
+    def allows_application_commands(self) -> bool:
+        return False
+
     def check_consume_key(self, key: str, character: str | None) -> bool:
         """Check if the widget may consume the given key.
 
