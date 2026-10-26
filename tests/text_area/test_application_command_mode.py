@@ -47,7 +47,12 @@ async def test_ordinary_input_retains_printable_and_nonprintable_keys():
     app = CommandModeApp()
     async with app.run_test() as pilot:
         field = app.query_one(Input)
+        field.value = "abc"
+        field.cursor_position = 0
         field.focus()
         await pilot.press("H", "ctrl+shift+k")
-        assert "H" in field.value and app.navigations == 0
+        assert field.value == "Habc" and app.navigations == 0
         assert field.has_focus
+        app.screen.set_focus(None)
+        await pilot.press("H", "ctrl+shift+k")
+        assert app.navigations == 2
