@@ -847,7 +847,10 @@ TextArea {
         if self.tab_behavior == "indent" and key == "tab":
             # If tab_behavior is indent, then we consume the tab
             return True
-        # Otherwise we capture all printable keys
+        # Idle modal command entry permits application priority bindings. Local
+        # editor commands still handle keys not claimed by such a binding.
+        if self.editing_mode.allows_application_commands:
+            return False
         return character is not None and character.isprintable()
 
     def _build_highlight_map(self) -> None:
