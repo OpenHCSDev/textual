@@ -27,6 +27,11 @@ class EditingMode:
     label = ""
     cursor_shape: ClassVar[CursorShape] = CellCursor()
 
+    @property
+    def allows_application_commands(self) -> bool:
+        """Whether idle modal command entry permits application priority bindings."""
+        return False
+
     def handle_key(self, editor: TextArea, event: Key) -> bool:
         return False
 
@@ -88,6 +93,11 @@ class VimNormal(VimMode):
     accepts_text = False
     label = "NORMAL"
 
+    @property
+    def allows_application_commands(self) -> bool:
+        """An idle command mode can yield to application-level priority bindings."""
+        return self.count == 0
+
     def settled(self) -> EditingMode:
         return replace(self, count=0)
 
@@ -137,6 +147,10 @@ class VimNormal(VimMode):
 class VimVisual(VimNormal):
     label = "VISUAL"
 
+    @property
+    def allows_application_commands(self) -> bool:
+        return False
+
     def document_changed(self) -> EditingMode:
         return VimNormal()
 
@@ -165,6 +179,10 @@ class VimVisual(VimNormal):
 class VimOperator(VimNormal):
     operator: type[Operator]
     operator_count: int = 1
+
+    @property
+    def allows_application_commands(self) -> bool:
+        return False
 
     def settled(self) -> EditingMode:
         return VimNormal()
