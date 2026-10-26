@@ -1877,22 +1877,23 @@ class Compositor:
         self.widgets.update(widgets)
         self._invalidate_render_projection()
         self._damage_geometry(previous, scene, self.root)
-        self.size_exposed(scene.keys() - previous.keys())
+        self.update_sizes(acquired.items(), layout=False)
         return True
 
-    def size_exposed(self, exposed: Collection[Widget]) -> None:
-        """Tell the widgets a viewport arrangement newly placed what size they have.
+    def update_sizes(
+        self, placements: Iterable[tuple[Widget, MapGeometry]], *,
+        shown: Collection[Widget] = (), layout: bool = True,
+    ) -> None:
+        """Commit the original arranged sizes before consumers place their readers.
 
-        A later scroll reports only the widgets it adds to the map, so a
-        widget placed here without being told would keep its previous size.
+        A scroll can measure changed content in an already visible widget.
+        Exposure determines Show events, not which measured sizes are current.
         """
-        if not exposed:
-            return
-        for widget, geometry in self.layers:
-            if widget in exposed and widget._size_updated(
+        for widget, geometry in placements:
+            if widget._size_updated(
                 geometry.region.size, geometry.virtual_size,
-                geometry.container_size, layout=False,
-            ):
+                geometry.container_size, layout=layout,
+            ) or widget in shown:
                 widget.post_message(events.Resize(
                     widget.outer_size, widget.virtual_size, widget.container_size))
 
