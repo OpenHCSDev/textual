@@ -5,6 +5,8 @@ In particular it provides `Checkbox`, `RadioButton` and `RadioSet`.
 
 from __future__ import annotations
 
+from textual._activation import PrimaryActivation
+
 from typing import TYPE_CHECKING, ClassVar
 
 from rich.console import RenderableType
@@ -22,7 +24,7 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
 
-class ToggleButton(Static, can_focus=True):
+class ToggleButton(PrimaryActivation, Static, can_focus=True):
     """Base toggle button widget.
 
     Warning:
@@ -246,6 +248,10 @@ class ToggleButton(Static, can_focus=True):
         """
         self.value = not self.value
         return self
+
+    @property
+    def primary_activation(self):
+        return self.action_toggle_button
 
     def action_toggle_button(self) -> None:
         """Toggle the value of the widget when called as an action.

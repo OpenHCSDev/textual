@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from textual._activation import PrimaryActivation
+
 from textual import events
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -14,7 +16,7 @@ from textual.widgets import Static
 __all__ = ["Collapsible", "CollapsibleTitle"]
 
 
-class CollapsibleTitle(Static, can_focus=True):
+class CollapsibleTitle(PrimaryActivation, Static, can_focus=True):
     """Title and symbol for the Collapsible."""
 
     BINDING_GROUP_TITLE = "Collapsible"
@@ -77,6 +79,10 @@ class CollapsibleTitle(Static, can_focus=True):
         """Inform ancestor we want to toggle."""
         event.stop()
         self.post_message(self.Toggle())
+
+    @property
+    def primary_activation(self):
+        return self.action_toggle_collapsible
 
     def action_toggle_collapsible(self) -> None:
         """Toggle the state of the parent collapsible."""

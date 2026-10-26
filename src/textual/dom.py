@@ -1396,6 +1396,10 @@ class DOMNode(PaintNode, MessagePump):
         """The original sizing/placement source; declared widgets override this."""
         return self.styles
 
+    def primary_activation_targets(self, region):
+        """Targets explicitly owned here; ordinary nodes contribute no effect."""
+        return ()
+
     def check_consume_key(self, key: str, character: str | None) -> bool:
         """Check if the widget may consume the given key.
 

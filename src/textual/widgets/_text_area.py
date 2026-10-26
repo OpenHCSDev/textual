@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from textual._activation import FocusActivation
+
 import dataclasses
 import re
 from collections import defaultdict
@@ -133,7 +135,7 @@ class TextAreaState:
     editing_mode: EditingMode
 
 
-class TextArea(ScrollView):
+class TextArea(FocusActivation, ScrollView):
     editing_mode: reactive[EditingMode] = reactive(EditingMode, init=False, bindings=True)
     """The active native editing capability. Ordinary text entry is the default."""
     DEFAULT_CSS = """\

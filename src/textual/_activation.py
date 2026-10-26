@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from dataclasses import dataclass
+from itertools import islice
 from typing import TYPE_CHECKING, Callable
 
 from textual._callback import invoke
@@ -23,8 +24,6 @@ class Activation:
     @classmethod
     def from_paint(cls, widget: Widget, region: Region, strips: list[Strip]):
         """Decode exposed click metadata and primary declarations once."""
-        primary = next((owner for owner in widget.ancestors_with_self
-                        if isinstance(owner, PrimaryActivation)), None)
         for y, strip in zip(region.line_range, strips):
             x = region.x
             for segment in strip:
@@ -34,8 +33,10 @@ class Activation:
                     try:
                         handler = extract_handler_actions("click", segment.style.meta if segment.style else {})
                     except NoHandler:
-                        if primary is not None:
-                            yield PrimaryTarget(primary, exposed, primary.primary_activation)
+                        # The nearest declaring ancestor owns this exposed cell.
+                        yield from islice((target
+                            for owner in widget.ancestors_with_self
+                            for target in owner.primary_activation_targets(exposed)), 1)
                     else:
                         if handler.action is not None:
                             yield StyleTarget(widget, exposed, handler)
@@ -106,6 +107,17 @@ class StyleTarget(Activation):
 class PrimaryActivation:
     """A widget declares its existing primary effect; discovery is shared."""
 
+    def primary_activation_targets(self, region):
+        return (PrimaryTarget(self, region, self.primary_activation),)
+
     @property
     @abstractmethod
     def primary_activation(self) -> Callable: ...
+
+
+class FocusActivation(PrimaryActivation):
+    """Text entry is reached by focus, never by submitting or editing its value."""
+
+    @property
+    def primary_activation(self) -> Callable:
+        return self.focus
