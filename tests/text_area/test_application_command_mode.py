@@ -2,7 +2,7 @@
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.document._editing import VimInsert
-from textual.widgets import TextArea
+from textual.widgets import Input, TextArea
 
 
 class CommandModeApp(App):
@@ -14,10 +14,11 @@ class CommandModeApp(App):
         editor = TextArea("abcHdef")
         editor.editing_mode = VimInsert()
         yield editor
+        yield Input("abcHdef")
 
     def check_action(self, action, parameters):
         if action == "navigate":
-            return self.query_one(TextArea).editing_mode.allows_application_commands
+            return self.screen.allows_application_commands
         return super().check_action(action, parameters)
 
     def action_navigate(self):
@@ -40,3 +41,13 @@ async def test_idle_normal_allows_priority_without_stealing_editing():
         assert editor.cursor_location == (0, 4) and app.navigations == 2
         await pilot.press("i", "ctrl+shift+k")
         assert editor.text == "" and app.navigations == 2
+
+
+async def test_ordinary_input_retains_printable_and_nonprintable_keys():
+    app = CommandModeApp()
+    async with app.run_test() as pilot:
+        field = app.query_one(Input)
+        field.focus()
+        await pilot.press("H", "ctrl+shift+k")
+        assert "H" in field.value and app.navigations == 0
+        assert field.has_focus

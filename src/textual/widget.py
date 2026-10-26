@@ -293,6 +293,15 @@ class Widget(DOMNode):
     _component_style_scope = True
 
     @property
+    def allows_application_commands(self) -> bool:
+        """Whether focused modal application shortcuts may precede local bindings.
+
+        Text-entry widgets override this to retain their editing keys. This is
+        independent of key-specific consumption and menu command availability.
+        """
+        return True
+
+    @property
     def layout_viewport(self) -> Size:
         return self.app.viewport_size
 

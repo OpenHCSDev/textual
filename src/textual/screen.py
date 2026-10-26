@@ -461,6 +461,11 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
             maximized.add_class("-maximized")
 
     @property
+    def allows_application_commands(self) -> bool:
+        """Whether the focused widget permits modal application shortcuts."""
+        return self.focused is None or self.focused.allows_application_commands
+
+    @property
     def _binding_chain(self) -> list[tuple[DOMNode, BindingsMap]]:
         """Binding chain from this screen."""
 
