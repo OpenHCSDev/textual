@@ -1,8 +1,51 @@
 from __future__ import annotations
 
 import unicodedata
+import inspect
+import re
+from abc import ABC, abstractmethod
+from typing import Iterator
 from enum import Enum
 from functools import lru_cache
+
+
+class KeyTitle:
+    """Human text derived from the declaration rather than a second title roster."""
+
+    def __get__(self, instance: object, owner: type[KeyDeclaration]) -> str:
+        return owner.default_title()
+
+
+class KeyDeclaration(ABC):
+    """Shared metadata for application actions and native editor commands.
+
+    Each provider retains its existing family registry. This view discovers the
+    provider declarations through inheritance; no menu supplies their names.
+    """
+
+    title = KeyTitle()
+
+    @classmethod
+    def default_title(cls) -> str:
+        return re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", cls.__name__).capitalize()
+
+    @classmethod
+    def identity(cls) -> str:
+        return f"{cls.__module__}.{cls.__qualname__}"
+
+    @classmethod
+    def binding_id(cls, mode: type) -> str:
+        return f"{cls.identity()}:{mode.__module__}.{mode.__qualname__}"
+
+    @classmethod
+    def summary(cls) -> str:
+        return inspect.cleandoc(cls.__doc__ or "")
+
+    @classmethod
+    @abstractmethod
+    def declarations(cls) -> Iterator[type[KeyDeclaration]]:
+        for provider in cls.__subclasses__():
+            yield from provider.declarations()
 
 
 # Adapted from prompt toolkit https://github.com/prompt-toolkit/python-prompt-toolkit/blob/master/prompt_toolkit/keys.py

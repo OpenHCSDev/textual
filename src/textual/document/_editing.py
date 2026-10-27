@@ -1,7 +1,7 @@
 """Native editor modes and commands, sharing TextArea's document and history.
 
-Terminal key names are decoded here once. A command declares its keys and
-behavior; modes own how that behavior participates in an unfinished operation.
+Commands declare native bindings; modes own how their behavior participates
+in an unfinished operation. Dispatch uses the application's remapped table.
 """
 from __future__ import annotations
 
@@ -9,8 +9,10 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, ClassVar
 
+from textual.binding import Binding, ModeBinding
 from textual.document._document import Location, Selection
 from textual._clipboard import ClipboardContent, LinewiseClipboard
+from textual.keys import KeyDeclaration
 from textual.cursor_shape import BlinkingBar, CellCursor, CursorShape, SteadyBlock
 from textual.document._document_navigator import WordBoundary, PreviousWordBoundary, EndWordBoundary
 
@@ -32,7 +34,18 @@ class EditingMode:
         """Whether idle modal command entry permits application priority bindings."""
         return False
 
+    @classmethod
+    def fallback_bindings(cls, binding: Binding) -> tuple[Binding, ...]:
+        """Ordinary editor keys do not escape their focused owner."""
+        return ()
+
     def handle_key(self, editor: TextArea, event: Key) -> bool:
+        return False
+
+    def command_bindings(self) -> tuple[Binding, ...]:
+        return ()
+
+    def apply_command(self, editor: TextArea, command: type[EditorCommand]) -> bool:
         return False
 
     def settled(self) -> EditingMode:
@@ -57,6 +70,11 @@ class EditingMode:
 class VimMode(EditingMode, ABC):
     modal = True
     cursor_shape = SteadyBlock()
+
+    @classmethod
+    def fallback_bindings(cls, binding: Binding) -> tuple[Binding, ...]:
+        """Modal navigation also belongs to its screen's selected resource."""
+        return (binding,)
 
     def handle_key(self, editor: TextArea, event: Key) -> bool:
         editor.history.checkpoint()
@@ -101,13 +119,19 @@ class VimNormal(VimMode):
     def settled(self) -> EditingMode:
         return replace(self, count=0)
 
+    @property
+    def binding_mode(self) -> type[VimNormal]:
+        return VimNormal
+
+    def command_bindings(self) -> tuple[Binding, ...]:
+        return tuple(binding for command in EditorCommand.declarations()
+                     for binding in command.bindings(self.binding_mode))
+
     def _handle_key(self, editor: TextArea, event: Key) -> bool:
         if event.key.isdecimal() and (self.count or event.key != "0"):
             editor.editing_mode = replace(self, count=self.count * 10 + int(event.key))
             return True
-        command = EditorCommand.decode(event.key)
-        if command is not None:
-            self.command(editor, command)
+        if editor.edit_key(event.key):
             return True
         # Unknown normal-mode text must never reach TextArea's insertion path.
         if event.is_printable or event.key == "enter":
@@ -116,9 +140,10 @@ class VimNormal(VimMode):
         editor.editing_mode = self.settled()
         return False
 
-    def command(self, editor: TextArea, command: type[EditorCommand]) -> None:
+    def apply_command(self, editor: TextArea, command: type[EditorCommand]) -> bool:
         editor.editing_mode = self.settled()
         command.apply(editor, self, self.count or 1)
+        return True
 
     def move_to(self, editor: TextArea, location: Location) -> None:
         editor.move_cursor(location)
@@ -146,6 +171,10 @@ class VimNormal(VimMode):
 @dataclass(frozen=True)
 class VimVisual(VimNormal):
     label = "VISUAL"
+
+    @property
+    def binding_mode(self) -> type[VimVisual]:
+        return VimVisual
 
     @property
     def allows_application_commands(self) -> bool:
@@ -187,9 +216,10 @@ class VimOperator(VimNormal):
     def settled(self) -> EditingMode:
         return VimNormal()
 
-    def command(self, editor: TextArea, command: type[EditorCommand]) -> None:
+    def apply_command(self, editor: TextArea, command: type[EditorCommand]) -> bool:
         editor.editing_mode = VimNormal()
         command.pending(editor, self, self.operator_count * (self.count or 1))
+        return True
 
     def escape(self, editor: TextArea) -> None:
         editor.editing_mode = VimNormal()
@@ -225,18 +255,45 @@ class AwaitKey(VimMode):
         return True
 
 
-class EditorCommand:
+class EditorBinding(ModeBinding):
+    """The native synchronous command participates before text insertion."""
+
+    def edit(self, editor: TextArea) -> bool:
+        if not self.state(editor.app, editor):
+            return False
+        self.action(editor)
+        return True
+
+
+class EditorCommand(KeyDeclaration):
     keys: ClassVar[tuple[str, ...]] = ()
+    _declared: ClassVar[list[type[EditorCommand]]] = []
+
+    def __init_subclass__(cls, **kwargs) -> None:
+        super().__init_subclass__(**kwargs)
+        # An explicit key declaration includes an intentionally unbound command.
+        # Abstract intermediates inherit the empty root and declare no key set.
+        if "keys" in cls.__dict__:
+            EditorCommand._declared.append(cls)
 
     @classmethod
     def declarations(cls):
-        for declaration in cls.__subclasses__():
-            yield declaration
-            yield from declaration.declarations()
+        return (member for member in EditorCommand._declared if issubclass(member, cls))
 
     @classmethod
-    def decode(cls, key: str) -> type[EditorCommand] | None:
-        return next((command for command in cls.declarations() if key in command.keys), None)
+    def bindings(cls, mode: type[VimNormal]) -> tuple[Binding, ...]:
+        return tuple(EditorBinding(key, cls.invoke, cls.title, mode=mode,
+                                   id=cls.binding_id(mode), tooltip=cls.summary(), show=False,
+                                   available=cls.available)
+                     for key in cls.keys)
+
+    @staticmethod
+    def available(editor: TextArea) -> bool:
+        return not editor.read_only
+
+    @classmethod
+    def invoke(cls, editor: TextArea) -> None:
+        editor.editing_mode.apply_command(editor, cls)
 
     @classmethod
     def apply(cls, editor: TextArea, mode: VimNormal, count: int) -> None:

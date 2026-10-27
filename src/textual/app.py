@@ -4045,12 +4045,12 @@ class App(Generic[ReturnType], DOMNode):
 
         if focused is None:
             namespace_bindings = [
-                (self.screen, self.screen._bindings),
-                (self, self._bindings),
+                (self.screen, self.screen.binding_map()),
+                (self, self.binding_map()),
             ]
         else:
             namespace_bindings = [
-                (node, node._bindings) for node in focused.ancestors_with_self
+                (node, node.binding_map()) for node in focused.ancestors_with_self
             ]
 
         return namespace_bindings

@@ -38,6 +38,7 @@ from textual._node_list import NodeList
 from textual._paint_state import PaintNode
 from textual._types import WatchCallbackType
 from textual.binding import Binding, BindingsMap, BindingType
+from textual.document._editing import EditingMode
 from textual.cache import LRUCache
 from textual.css._error_tools import friendly_list
 from textual.css.constants import VALID_DISPLAY, VALID_VISIBILITY
@@ -140,6 +141,11 @@ class DOMNode(PaintNode, MessagePump):
 
     _subtree_style_revision = 0
     _geometry_revision = 0
+
+    @property
+    def key_mode(self) -> type[EditingMode]:
+        """Ordinary controls use their screen's declared keyboard scope."""
+        return self.screen.key_mode
 
     def _invalidate_subtree_geometry(self) -> None:
         for node in self.walk_ancestors(with_self=True):
@@ -504,6 +510,10 @@ class DOMNode(PaintNode, MessagePump):
             if self._merged_bindings is None
             else self._merged_bindings.copy()
         )
+
+    def binding_map(self) -> BindingsMap:
+        """A fresh projection for this node, before the application's keymap."""
+        return self._bindings.copy()
 
     @cached_property
     def _query_one_cache(self) -> LRUCache[QueryOneCacheKey, DOMNode]:

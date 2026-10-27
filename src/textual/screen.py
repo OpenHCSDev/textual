@@ -56,6 +56,7 @@ from textual.css.parse import parse_selectors
 from textual.css.query import NoMatches, QueryType
 from textual.css.styles import PointerShape
 from textual.dom import DOMNode
+from textual.document._editing import EditingMode
 from textual.errors import NoWidget
 from textual.geometry import Offset, Region, Size
 from textual.keys import key_to_character
@@ -148,6 +149,11 @@ class ResultCallback(Generic[ScreenResultType]):
 @rich.repr.auto
 class Screen(HintHost, Generic[ScreenResultType], Widget):
     """The base class for screens."""
+
+    @property
+    def key_mode(self) -> type[EditingMode]:
+        """Screens start with ordinary keys; an application scope can select a profile."""
+        return EditingMode
 
     AUTO_FOCUS: ClassVar[str | None] = None
     """A selector to determine what to focus automatically when the screen is activated.
@@ -460,6 +466,10 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         if maximized is not None:
             maximized.add_class("-maximized")
 
+    def binding_scopes(self) -> Iterable[tuple[DOMNode, BindingsMap]]:
+        """Additional semantic key owners, behind the focused native chain."""
+        return ()
+
     @property
     def allows_application_commands(self) -> bool:
         """Whether the focused widget permits modal application shortcuts."""
@@ -476,13 +486,19 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         namespace_bindings: list[tuple[DOMNode, BindingsMap]]
         if focused is None:
             namespace_bindings = [
-                (self, self._bindings.copy()),
-                (self.app, self.app._bindings.copy()),
+                (self, self.binding_map()),
+                (self.app, self.app.binding_map()),
             ]
         else:
             namespace_bindings = [
-                (node, node._bindings.copy()) for node in focused.ancestors_with_self
+                (node, node.binding_map()) for node in focused.ancestors_with_self
             ]
+
+        owners = {node for node, _ in namespace_bindings}
+        namespace_bindings.extend(
+            (node, bindings) for node, bindings in self.binding_scopes()
+            if node not in owners
+        )
 
         # Filter out bindings that could be captures by widgets (such as Input, TextArea)
         filter_namespaces: list[DOMNode] = []
