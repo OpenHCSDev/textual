@@ -144,9 +144,13 @@ class TextArea(FocusActivation, ScrollView):
         """Editor bindings follow the live editor state, including native transitions."""
         return type(self.editing_mode)
 
-    def binding_map(self) -> BindingsMap:
+    @property
+    def binding_mode(self) -> type[EditingMode]:
+        return self.editing_mode.binding_mode
+
+    def binding_map(self, mode: type[EditingMode]) -> BindingsMap:
         return BindingsMap.merge((
-            BindingsMap(self.editing_mode.command_bindings()), super().binding_map(),
+            BindingsMap(self.editing_mode.command_bindings()), super().binding_map(mode),
         ))
 
     def edit_key(self, key: str) -> bool:

@@ -26,8 +26,11 @@ class EditingMode:
 
     modal = False
     accepts_text = True
-    label = ""
     cursor_shape: ClassVar[CursorShape] = CellCursor()
+
+    @property
+    def label(self) -> str:
+        return ""
 
     @property
     def allows_application_commands(self) -> bool:
@@ -44,6 +47,16 @@ class EditingMode:
 
     def command_bindings(self) -> tuple[Binding, ...]:
         return ()
+
+    @classmethod
+    def editor_bindings(cls, command: type[EditorCommand]) -> tuple[Binding, ...]:
+        """Ordinary entry has no modal editor commands."""
+        return ()
+
+    @property
+    def binding_mode(self) -> type[EditingMode]:
+        """The stable mode identity, independent of an application's profile subclass."""
+        return EditingMode
 
     def apply_command(self, editor: TextArea, command: type[EditorCommand]) -> bool:
         return False
@@ -95,6 +108,10 @@ class VimInsert(VimMode):
     label = "INSERT"
     cursor_shape = BlinkingBar()
 
+    @property
+    def binding_mode(self) -> type[VimInsert]:
+        return VimInsert
+
     def resume(self, editor: TextArea) -> None:
         editor.history.begin_group()
 
@@ -125,7 +142,11 @@ class VimNormal(VimMode):
 
     def command_bindings(self) -> tuple[Binding, ...]:
         return tuple(binding for command in EditorCommand.declarations()
-                     for binding in command.bindings(self.binding_mode))
+                     for binding in command.bindings_for(self.binding_mode))
+
+    @classmethod
+    def editor_bindings(cls, command: type[EditorCommand]) -> tuple[Binding, ...]:
+        return command.native_bindings(cls)
 
     def _handle_key(self, editor: TextArea, event: Key) -> bool:
         if event.key.isdecimal() and (self.count or event.key != "0"):
@@ -236,6 +257,10 @@ class AwaitKey(VimMode):
     def label(self) -> str:
         return self.previous.label
 
+    @property
+    def binding_mode(self) -> type[EditingMode]:
+        return self.previous.binding_mode
+
     def settled(self) -> EditingMode:
         return self.previous.settled()
 
@@ -281,7 +306,11 @@ class EditorCommand(KeyDeclaration):
         return (member for member in EditorCommand._declared if issubclass(member, cls))
 
     @classmethod
-    def bindings(cls, mode: type[VimNormal]) -> tuple[Binding, ...]:
+    def bindings_for(cls, mode: type[EditingMode]) -> tuple[Binding, ...]:
+        return mode.editor_bindings(cls)
+
+    @classmethod
+    def native_bindings(cls, mode: type[EditingMode]) -> tuple[Binding, ...]:
         return tuple(EditorBinding(key, cls.invoke, cls.title, mode=mode,
                                    id=cls.binding_id(mode), tooltip=cls.summary(), show=False,
                                    available=cls.available)
@@ -498,7 +527,7 @@ class Yank(Operator):
 
 class Delete(Yank):
     keys = ("d",)
-    following_mode = VimNormal
+    following_mode: ClassVar[type[EditingMode]] = VimNormal
 
     @classmethod
     def deletion_start(cls, editor, selection):

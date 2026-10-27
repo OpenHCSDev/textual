@@ -4,9 +4,13 @@ import unicodedata
 import inspect
 import re
 from abc import ABC, abstractmethod
-from typing import Iterator
+from typing import TYPE_CHECKING, Callable, Iterator
 from enum import Enum
 from functools import lru_cache
+
+if TYPE_CHECKING:
+    from textual.binding import Binding
+    from textual.document._editing import EditingMode
 
 
 class KeyTitle:
@@ -35,7 +39,19 @@ class KeyDeclaration(ABC):
 
     @classmethod
     def binding_id(cls, mode: type) -> str:
-        return f"{cls.identity()}:{mode.__module__}.{mode.__qualname__}"
+        return cls.binding_id_for(cls, mode)
+
+    @staticmethod
+    def binding_id_for(declaration: type | Callable[..., object], mode: type) -> str:
+        """Class and native callable declarations use the same mode-qualified identity."""
+        return (f"{declaration.__module__}.{declaration.__qualname__}:"
+                f"{mode.__module__}.{mode.__qualname__}")
+
+    @classmethod
+    @abstractmethod
+    def bindings_for(cls, mode: type[EditingMode]) -> tuple[Binding, ...]:
+        """The declaration's defaults in one active editing mode."""
+        raise NotImplementedError
 
     @classmethod
     def summary(cls) -> str:

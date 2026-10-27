@@ -4041,16 +4041,17 @@ class App(Generic[ReturnType], DOMNode):
         Otherwise, combines all the bindings from the currently focused node up the DOM to the root App.
         """
         focused = self.focused
+        mode = self.screen.active_binding_mode
         namespace_bindings: list[tuple[DOMNode, BindingsMap]]
 
         if focused is None:
             namespace_bindings = [
-                (self.screen, self.screen.binding_map()),
-                (self, self.binding_map()),
+                (self.screen, self.screen.binding_map(mode)),
+                (self, self.binding_map(mode)),
             ]
         else:
             namespace_bindings = [
-                (node, node.binding_map()) for node in focused.ancestors_with_self
+                (node, node.binding_map(mode)) for node in focused.ancestors_with_self
             ]
 
         return namespace_bindings
