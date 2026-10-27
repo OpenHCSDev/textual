@@ -4754,7 +4754,7 @@ class Widget(DOMNode):
             raise SkipAction()
         self.scroll_right()
 
-    MODE_BINDINGS = (
+    MODE_BINDINGS: ClassVar[tuple[ModeBinding, ...]] = (
         ModeBinding("h", action_scroll_left, "Scroll left", mode=VimMode, show=False),
         ModeBinding("l", action_scroll_right, "Scroll right", mode=VimMode, show=False),
     )
