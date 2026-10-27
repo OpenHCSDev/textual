@@ -511,6 +511,10 @@ class DOMNode(PaintNode, MessagePump):
             else self._merged_bindings.copy()
         )
 
+    def binding_map(self) -> BindingsMap:
+        """A fresh projection for this node, before the application's keymap."""
+        return self._bindings.copy()
+
     @cached_property
     def _query_one_cache(self) -> LRUCache[QueryOneCacheKey, DOMNode]:
         return LRUCache(1024)

@@ -484,12 +484,12 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         namespace_bindings: list[tuple[DOMNode, BindingsMap]]
         if focused is None:
             namespace_bindings = [
-                (self, self._bindings.copy()),
-                (self.app, self.app._bindings.copy()),
+                (self, self.binding_map()),
+                (self.app, self.app.binding_map()),
             ]
         else:
             namespace_bindings = [
-                (node, node._bindings.copy()) for node in focused.ancestors_with_self
+                (node, node.binding_map()) for node in focused.ancestors_with_self
             ]
 
         owners = {node for node, _ in namespace_bindings}

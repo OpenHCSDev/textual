@@ -49,7 +49,7 @@ if TYPE_CHECKING:
 
 from textual import events, log
 from textual._cells import cell_len, cell_width_to_column_index
-from textual.binding import Binding
+from textual.binding import Binding, BindingsMap
 from textual.events import Message, MouseEvent
 from textual.geometry import Offset, Region, Size, Spacing, clamp
 from textual.reactive import Reactive, reactive
@@ -143,6 +143,19 @@ class TextArea(FocusActivation, ScrollView):
     def key_mode(self) -> type[EditingMode]:
         """Editor bindings follow the live editor state, including native transitions."""
         return type(self.editing_mode)
+
+    def binding_map(self) -> BindingsMap:
+        return BindingsMap.merge((
+            BindingsMap(self.editing_mode.command_bindings()), super().binding_map(),
+        ))
+
+    def edit_key(self, key: str) -> bool:
+        """Use the same remapped table that application dispatch and discovery read."""
+        for node, bindings in self.screen._binding_chain:
+            if node is self:
+                return any(binding.edit(self)
+                           for binding in bindings.key_to_bindings.get(key, ()))
+        return False
 
     DEFAULT_CSS = """\
 TextArea {

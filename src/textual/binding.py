@@ -25,9 +25,9 @@ import rich.repr
 from textual._callback import invoke
 from textual.actions import SkipAction
 from textual.keys import _character_to_key
-from textual.document._editing import EditingMode
 
 if TYPE_CHECKING:
+    from textual.document._editing import EditingMode
     from typing_extensions import TypeAlias
 
     from textual.app import App
@@ -147,6 +147,10 @@ class Binding:
             `True` if the key was handled.
         """
         return await app.run_action(self.action, node)
+
+    def edit(self, node: DOMNode) -> bool:
+        """Ordinary bindings run through application dispatch, after text handling."""
+        return False
 
     def fallback_bindings(self) -> tuple[Binding, ...]:
         """Ordinary keys stay on the focused native ancestor chain."""
