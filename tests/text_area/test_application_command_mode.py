@@ -84,3 +84,6 @@ async def test_remapped_editor_commands_keep_counts_operators_and_visual_scope()
         await pilot.press("f", "H")
         assert editor.cursor_location == (0, 2)
         assert app.navigations == 0
+        editor.read_only = True
+        await pilot.press("x", "d", "z")
+        assert editor.text == "abHdef"

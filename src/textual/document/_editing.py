@@ -283,8 +283,13 @@ class EditorCommand(KeyDeclaration):
     @classmethod
     def bindings(cls, mode: type[VimNormal]) -> tuple[Binding, ...]:
         return tuple(EditorBinding(key, cls.invoke, cls.title, mode=mode,
-                                   id=cls.binding_id(mode), tooltip=cls.summary(), show=False)
+                                   id=cls.binding_id(mode), tooltip=cls.summary(), show=False,
+                                   available=cls.available)
                      for key in cls.keys)
+
+    @staticmethod
+    def available(editor: TextArea) -> bool:
+        return not editor.read_only
 
     @classmethod
     def invoke(cls, editor: TextArea) -> None:
