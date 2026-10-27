@@ -38,6 +38,7 @@ from textual._node_list import NodeList
 from textual._paint_state import PaintNode
 from textual._types import WatchCallbackType
 from textual.binding import Binding, BindingsMap, BindingType
+from textual.document._editing import EditingMode
 from textual.cache import LRUCache
 from textual.css._error_tools import friendly_list
 from textual.css.constants import VALID_DISPLAY, VALID_VISIBILITY
@@ -140,6 +141,11 @@ class DOMNode(PaintNode, MessagePump):
 
     _subtree_style_revision = 0
     _geometry_revision = 0
+
+    @property
+    def key_mode(self) -> type[EditingMode]:
+        """Ordinary controls use their screen's declared keyboard scope."""
+        return self.screen.key_mode
 
     def _invalidate_subtree_geometry(self) -> None:
         for node in self.walk_ancestors(with_self=True):

@@ -15,6 +15,7 @@ from textual.cursor_shape import BlinkingBar, CellCursor, CursorShape, SteadyBlo
 from textual.document._document_navigator import WordBoundary, PreviousWordBoundary, EndWordBoundary
 
 if TYPE_CHECKING:
+    from textual.binding import Binding
     from textual.events import Key
     from textual.widgets import TextArea
 
@@ -31,6 +32,11 @@ class EditingMode:
     def allows_application_commands(self) -> bool:
         """Whether idle modal command entry permits application priority bindings."""
         return False
+
+    @classmethod
+    def fallback_bindings(cls, binding: Binding) -> tuple[Binding, ...]:
+        """Ordinary editor keys do not escape their focused owner."""
+        return ()
 
     def handle_key(self, editor: TextArea, event: Key) -> bool:
         return False
@@ -57,6 +63,11 @@ class EditingMode:
 class VimMode(EditingMode, ABC):
     modal = True
     cursor_shape = SteadyBlock()
+
+    @classmethod
+    def fallback_bindings(cls, binding: Binding) -> tuple[Binding, ...]:
+        """Modal navigation also belongs to its screen's selected resource."""
+        return (binding,)
 
     def handle_key(self, editor: TextArea, event: Key) -> bool:
         editor.history.checkpoint()
