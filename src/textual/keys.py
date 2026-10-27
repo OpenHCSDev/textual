@@ -4,7 +4,7 @@ import unicodedata
 import inspect
 import re
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Callable, Iterator
+from typing import TYPE_CHECKING, Callable, ClassVar, Iterator
 from enum import Enum
 from functools import lru_cache
 
@@ -28,6 +28,7 @@ class KeyDeclaration(ABC):
     """
 
     title = KeyTitle()
+    system: ClassVar[bool] = False
 
     @classmethod
     def default_title(cls) -> str:

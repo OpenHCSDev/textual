@@ -23,7 +23,7 @@ class HintHost:
         await self.mount(*session.labels, session)
         session.focus_on_host()
 
-    MODE_BINDINGS = (
+    MODE_BINDINGS: ClassVar[tuple[ModeBinding, ...]] = (
         ModeBinding("f,ctrl+f", action_show_hints, "Hints", mode=VimMode, show=False),
     )
 
