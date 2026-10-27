@@ -26,8 +26,11 @@ class EditingMode:
 
     modal = False
     accepts_text = True
-    label = ""
     cursor_shape: ClassVar[CursorShape] = CellCursor()
+
+    @property
+    def label(self) -> str:
+        return ""
 
     @property
     def allows_application_commands(self) -> bool:
@@ -524,7 +527,7 @@ class Yank(Operator):
 
 class Delete(Yank):
     keys = ("d",)
-    following_mode = VimNormal
+    following_mode: ClassVar[type[EditingMode]] = VimNormal
 
     @classmethod
     def deletion_start(cls, editor, selection):
