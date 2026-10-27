@@ -150,8 +150,10 @@ class ResultCallback(Generic[ScreenResultType]):
 class Screen(HintHost, Generic[ScreenResultType], Widget):
     """The base class for screens."""
 
-    key_mode = EditingMode
-    """Screens start with ordinary keys; an application scope can select a profile."""
+    @property
+    def key_mode(self) -> type[EditingMode]:
+        """Screens start with ordinary keys; an application scope can select a profile."""
+        return EditingMode
 
     AUTO_FOCUS: ClassVar[str | None] = None
     """A selector to determine what to focus automatically when the screen is activated.

@@ -1,7 +1,7 @@
 """Native editor modes and commands, sharing TextArea's document and history.
 
-Terminal key names are decoded here once. A command declares its keys and
-behavior; modes own how that behavior participates in an unfinished operation.
+Commands declare native bindings; modes own how their behavior participates
+in an unfinished operation. Dispatch uses the application's remapped table.
 """
 from __future__ import annotations
 
