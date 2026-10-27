@@ -24,7 +24,7 @@ import rich.repr
 
 from textual._callback import invoke
 from textual.actions import SkipAction
-from textual.keys import _character_to_key
+from textual.keys import KeyDeclaration, _character_to_key
 
 if TYPE_CHECKING:
     from textual.document._editing import EditingMode
@@ -243,6 +243,12 @@ class ModeBinding(CallBinding):
     """
 
     mode: type[EditingMode]
+
+    def for_mode(self, mode: type[EditingMode]) -> tuple[ModeBinding, ...]:
+        """Expose a native callable only in its declared capability's active modes."""
+        if self.mode not in mode.__mro__:
+            return ()
+        return (dataclasses.replace(self, id=KeyDeclaration.binding_id_for(self.action, mode)),)
 
     def state(self, app: App[object], node: DOMNode) -> bool | None:
         if self.mode not in node.key_mode.__mro__:

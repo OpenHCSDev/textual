@@ -147,6 +147,11 @@ class DOMNode(PaintNode, MessagePump):
         """Ordinary controls use their screen's declared keyboard scope."""
         return self.screen.key_mode
 
+    @property
+    def binding_mode(self) -> type[EditingMode]:
+        """The canonical editing mode used to project this node's bindings."""
+        return self.key_mode().binding_mode
+
     def _invalidate_subtree_geometry(self) -> None:
         for node in self.walk_ancestors(with_self=True):
             if not isinstance(node, DOMNode):
@@ -511,7 +516,7 @@ class DOMNode(PaintNode, MessagePump):
             else self._merged_bindings.copy()
         )
 
-    def binding_map(self) -> BindingsMap:
+    def binding_map(self, mode: type[EditingMode]) -> BindingsMap:
         """A fresh projection for this node, before the application's keymap."""
         return self._bindings.copy()
 
