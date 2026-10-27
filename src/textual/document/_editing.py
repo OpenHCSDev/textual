@@ -82,7 +82,7 @@ class EditingMode:
 
 class VimMode(EditingMode, ABC):
     modal = True
-    cursor_shape = SteadyBlock()
+    cursor_shape: ClassVar[CursorShape] = SteadyBlock()
 
     @classmethod
     def fallback_bindings(cls, binding: Binding) -> tuple[Binding, ...]:
@@ -103,6 +103,20 @@ class VimMode(EditingMode, ABC):
     def pasted(self) -> EditingMode:
         return VimInsert()
 
+    def command_bindings(self) -> tuple[Binding, ...]:
+        return tuple(binding for command in EditorCommand.declarations()
+                     for binding in self.declared_command_bindings(command))
+
+    def declared_command_bindings(self, command: type[EditorCommand]) -> tuple[Binding, ...]:
+        return command.bindings_for(self.binding_mode)
+
+    def apply_command(self, editor: TextArea, command: type[EditorCommand]) -> bool:
+        command.apply_mode(editor, self)
+        return True
+
+    def escape(self, editor: TextArea) -> None:
+        editor.editing_mode = self.settled()
+
 
 class VimInsert(VimMode):
     label = "INSERT"
@@ -116,10 +130,14 @@ class VimInsert(VimMode):
         editor.history.begin_group()
 
     def _handle_key(self, editor: TextArea, event: Key) -> bool:
-        if event.key != "escape":
-            return False
+        return editor.edit_key(event.key)
+
+    @classmethod
+    def editor_bindings(cls, command: type[EditorCommand]) -> tuple[Binding, ...]:
+        return command.insert_bindings(cls)
+
+    def escape(self, editor: TextArea) -> None:
         editor.editing_mode = VimNormal()
-        return True
 
 
 @dataclass(frozen=True)
@@ -139,10 +157,6 @@ class VimNormal(VimMode):
     @property
     def binding_mode(self) -> type[VimNormal]:
         return VimNormal
-
-    def command_bindings(self) -> tuple[Binding, ...]:
-        return tuple(binding for command in EditorCommand.declarations()
-                     for binding in command.bindings_for(self.binding_mode))
 
     @classmethod
     def editor_bindings(cls, command: type[EditorCommand]) -> tuple[Binding, ...]:
@@ -270,10 +284,13 @@ class AwaitKey(VimMode):
     def selection_range(self, editor: TextArea) -> Selection:
         return self.previous.selection_range(editor)
 
+    def declared_command_bindings(self, command: type[EditorCommand]) -> tuple[Binding, ...]:
+        return command.pending_bindings(self.binding_mode)
+
     def _handle_key(self, editor: TextArea, event: Key) -> bool:
-        editor.editing_mode = self.settled()
-        if event.key == "escape":
+        if editor.edit_key(event.key):
             return True
+        editor.editing_mode = self.settled()
         if not event.is_printable:
             return False
         self.command.character(editor, self.previous, event.character, self.count)
@@ -311,10 +328,22 @@ class EditorCommand(KeyDeclaration):
 
     @classmethod
     def native_bindings(cls, mode: type[EditingMode]) -> tuple[Binding, ...]:
-        return tuple(EditorBinding(key, cls.invoke, cls.title, mode=mode,
+        return cls.mode_bindings(mode, mode)
+
+    @classmethod
+    def mode_bindings(cls, mode: type[EditingMode], capability: type[EditingMode]) -> tuple[Binding, ...]:
+        return tuple(EditorBinding(key, cls.invoke, cls.title, mode=capability,
                                    id=cls.binding_id(mode), tooltip=cls.summary(), show=False,
                                    available=cls.available)
                      for key in cls.keys)
+
+    @classmethod
+    def insert_bindings(cls, mode: type[EditingMode]) -> tuple[Binding, ...]:
+        return ()
+
+    @classmethod
+    def pending_bindings(cls, mode: type[EditingMode]) -> tuple[Binding, ...]:
+        return ()
 
     @staticmethod
     def available(editor: TextArea) -> bool:
@@ -326,6 +355,11 @@ class EditorCommand(KeyDeclaration):
 
     @classmethod
     def apply(cls, editor: TextArea, mode: VimNormal, count: int) -> None:
+        cls.apply_mode(editor, mode)
+
+    @classmethod
+    def apply_mode(cls, editor: TextArea, mode: VimMode) -> None:
+        """A control shared by modal states; counted commands override ``apply``."""
         raise NotImplementedError
 
     @classmethod
@@ -586,8 +620,21 @@ class Visual(EditorCommand):
 class Escape(EditorCommand):
     keys = ("escape",)
 
+    @staticmethod
+    def available(editor: TextArea) -> bool:
+        """Leaving a mode never edits the read-only document."""
+        return True
+
     @classmethod
-    def apply(cls, editor, mode, count):
+    def insert_bindings(cls, mode: type[EditingMode]) -> tuple[Binding, ...]:
+        return cls.native_bindings(mode)
+
+    @classmethod
+    def pending_bindings(cls, mode: type[EditingMode]) -> tuple[Binding, ...]:
+        return cls.mode_bindings(mode, VimMode)
+
+    @classmethod
+    def apply_mode(cls, editor: TextArea, mode: VimMode) -> None:
         mode.escape(editor)
 
 

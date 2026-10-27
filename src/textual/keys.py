@@ -58,6 +58,11 @@ class KeyDeclaration(ABC):
         return inspect.cleandoc(cls.__doc__ or "")
 
     @classmethod
+    def permits_key_overlap(cls, other: type[KeyDeclaration]) -> bool:
+        """An explicitly declared alternative may share a key with another declaration."""
+        return False
+
+    @classmethod
     @abstractmethod
     def declarations(cls) -> Iterator[type[KeyDeclaration]]:
         for provider in cls.__subclasses__():
