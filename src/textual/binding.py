@@ -32,6 +32,7 @@ if TYPE_CHECKING:
 
     from textual.app import App
     from textual.dom import DOMNode
+    from textual.widgets import TextArea
 
 BindingType: TypeAlias = "Binding | tuple[str, str] | tuple[str, str, str]"
 """The possible types of a binding found in the `BINDINGS` class variable."""
@@ -148,7 +149,7 @@ class Binding:
         """
         return await app.run_action(self.action, node)
 
-    def edit(self, node: DOMNode) -> bool:
+    def edit(self, node: TextArea) -> bool:
         """Ordinary bindings run through application dispatch, after text handling."""
         return False
 

@@ -1,7 +1,7 @@
 """Real key dispatch: idle Normal permits app commands, editing retains its keys."""
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.document._editing import Left, VimInsert, VimNormal, VimVisual
+from textual.document._editing import AwaitKey, Escape, Left, VimInsert, VimNormal, VimVisual
 from textual.widgets import Input, TextArea
 
 
@@ -87,3 +87,34 @@ async def test_remapped_editor_commands_keep_counts_operators_and_visual_scope()
         editor.read_only = True
         await pilot.press("x", "d", "z")
         assert editor.text == "abHdef"
+
+
+async def test_escape_remaps_cover_insert_visual_and_pending_character_commands():
+    app = CommandModeApp()
+    async with app.run_test() as pilot:
+        editor = app.query_one(TextArea)
+        editor.focus()
+        app.set_keymap({Escape.binding_id(VimInsert): "f6",
+                        Escape.binding_id(VimNormal): "f7",
+                        Escape.binding_id(VimVisual): "f8"})
+        await pilot.press("escape")
+        assert isinstance(editor.editing_mode, VimInsert)
+        await pilot.press("f6")
+        assert isinstance(editor.editing_mode, VimNormal)
+        before = editor.cursor_location
+        await pilot.press("f")
+        assert isinstance(editor.editing_mode, AwaitKey)
+        await pilot.press("f7")
+        assert isinstance(editor.editing_mode, VimNormal)
+        assert editor.cursor_location == before
+        await pilot.press("f", "H")
+        assert editor.cursor_location == (0, 3)
+        await pilot.press("v", "escape")
+        assert isinstance(editor.editing_mode, VimVisual)
+        await pilot.press("f8")
+        assert type(editor.editing_mode) is VimNormal
+        editor.read_only = True
+        editor.editing_mode = VimInsert()
+        await pilot.press("f6")
+        assert type(editor.editing_mode) is VimNormal
+        assert editor.text == "abcHdef"
