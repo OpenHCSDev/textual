@@ -2209,8 +2209,8 @@ class Compositor:
         ) for y, chop in enumerate(chops[: size.height])]
         return render_strips
 
-    def activation_targets(self):
-        """Borrow only exposed published rows through the existing paint walk."""
+    def activation_targets(self, button=1):
+        """Borrow the selected click effect from exposed published rows."""
         targets = []
         seen = []
         widgets = self.published_widgets
@@ -2219,7 +2219,7 @@ class Compositor:
             return targets
 
         def collect(widget, region, strips):
-            for target in Activation.from_paint(widget, region, strips):
+            for target in Activation.from_paint(widget, region, strips, button):
                 if target.identity not in seen and target.available():
                     seen.append(target.identity)
                     targets.append(target)

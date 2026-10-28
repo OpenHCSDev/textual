@@ -1411,8 +1411,20 @@ class DOMNode(PaintNode, MessagePump):
         """The original sizing/placement source; declared widgets override this."""
         return self.styles
 
+    def activation_targets(self, region, meta, button=1):
+        """Resolve a published cell through this node's click capabilities."""
+        if button == 1:
+            return self.primary_activation_targets(region)
+        if button == 3:
+            return self.context_activation_targets(region)
+        return ()
+
     def primary_activation_targets(self, region):
         """Targets explicitly owned here; ordinary nodes contribute no effect."""
+        return ()
+
+    def context_activation_targets(self, region):
+        """Ordinary nodes contribute no contextual effect."""
         return ()
 
     def check_consume_key(self, key: str, character: str | None) -> bool:

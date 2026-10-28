@@ -1,6 +1,7 @@
 """One transient native hint interaction over published activation targets."""
 from __future__ import annotations
 
+from enum import IntEnum
 from typing import ClassVar
 
 from textual import events
@@ -11,20 +12,44 @@ from textual.geometry import Offset
 from textual.widget import Widget
 
 
+class HintClick(IntEnum):
+    """The two pointer intents offered by native hint sessions."""
+
+    LEFT = 1
+    RIGHT = 3
+
+    @property
+    def description(self) -> str:
+        return f"{self.name.title()}-click hints"
+
+    @property
+    def caption(self) -> str:
+        return f"{self.description} · Escape cancels"
+
+
 class HintHost:
     """Screen capability; mounted children are the only session inventory."""
 
     async def action_show_hints(self) -> None:
+        await self._show_hints(HintClick.LEFT)
+
+    async def action_show_context_hints(self) -> None:
+        await self._show_hints(HintClick.RIGHT)
+
+    async def _show_hints(self, click: HintClick) -> None:
         self.dismiss_hints()
-        targets = self._compositor.activation_targets()
+        targets = self._compositor.activation_targets(click)
         if not targets:
             return
-        session = HintSession(self, targets)
+        session = HintSession(self, targets, click)
         await self.mount(*session.labels, session)
         session.focus_on_host()
 
     MODE_BINDINGS: ClassVar[tuple[ModeBinding, ...]] = (
-        ModeBinding("f,ctrl+f", action_show_hints, "Hints", mode=VimMode, show=False),
+        ModeBinding("f", action_show_hints, HintClick.LEFT.description,
+                    mode=VimMode, show=False),
+        ModeBinding("ctrl+f", action_show_context_hints, HintClick.RIGHT.description,
+                    mode=VimMode, show=False),
     )
 
     def dismiss_hints(self, *, restore=True) -> None:
@@ -71,12 +96,18 @@ class HintLabel(Widget):
 class HintSession(Widget, can_focus=True):
     """Own label input and its short-lived paint; never copy navigation state."""
 
+    DEFAULT_CSS = """
+    HintSession {
+        text-style: bold reverse;
+    }
+    """
     alphabet = "asdfghjklqwertyuiopzxcvbnm"
     ALLOW_SELECT = False
     hit_test_transparent = True
 
-    def __init__(self, screen, targets):
+    def __init__(self, screen, targets, click: HintClick):
         super().__init__()
+        self.click = click
         self.original_focus = screen.focused
         targets = sorted(targets, key=lambda target: (target.region.y, target.region.x))
         self.prefix = ""
@@ -84,7 +115,9 @@ class HintSession(Widget, can_focus=True):
         while len(self.alphabet) ** width < len(targets):
             width += 1
         size = screen.size
-        placed: dict[int, list[tuple[int, int]]] = {}
+        placed: dict[int, list[tuple[int, int]]] = {
+            size.height - 1: [(0, min(size.width, len(click.caption)))]
+        }
         labels = []
         for index, target in enumerate(targets):
             text = self.label(index, width)
@@ -93,8 +126,13 @@ class HintSession(Widget, can_focus=True):
         self.labels = tuple(labels)
         self.styles.position = "absolute"
         self.styles.overlay = "screen"
-        self.styles.width = 0
-        self.styles.height = 0
+        self.styles.layer = "_tooltips"
+        self.styles.width = min(size.width, len(click.caption))
+        self.styles.height = 1
+        self.absolute_offset = Offset(0, size.height - 1)
+
+    def render(self) -> Content:
+        return Content(self.click.caption)
 
     @staticmethod
     def free_offset(placed, size, origin, width):
@@ -166,7 +204,7 @@ class HintSession(Widget, can_focus=True):
         if self.screen is not self.app.screen:
             return
         original = self.original_focus
-        if original is None or original.is_attached:
+        if original is None or (original.is_attached and original.screen is self.screen):
             self.screen.set_focus(original, scroll_visible=False)
 
     def dismiss(self, *, target=None, restore=True):
