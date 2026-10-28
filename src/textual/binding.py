@@ -12,7 +12,6 @@ from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
     Any,
-    Awaitable,
     Callable,
     Generic,
     Iterable,
@@ -222,8 +221,12 @@ class CallBinding(Binding):
             BINDINGS = [CallBinding("ctrl+s", save, "Save")]
     """
 
-    action: Callable[[Any], Awaitable[None] | None]  # type: ignore[assignment]
-    """Called with the declaring node when the key is pressed."""
+    action: Callable[[Any], object]  # type: ignore[assignment]
+    """Called with the declaring node when the key is pressed.
+
+    Invocation awaits an awaitable result and ignores a synchronous result,
+    including the Worker returned by a method decorated with ``@work``.
+    """
     available: Callable[[Any], bool | None] = _always
     """Called with the declaring node: `True` if the key works now, `None` to
     show it disabled, `False` to neither show nor run it."""

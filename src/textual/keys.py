@@ -4,7 +4,7 @@ import unicodedata
 import inspect
 import re
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Awaitable, Callable, ClassVar, Generic, Iterator, TypeVar
+from typing import TYPE_CHECKING, Callable, ClassVar, Generic, Iterator, TypeVar
 from enum import Enum
 from functools import lru_cache
 
@@ -102,7 +102,7 @@ class KeyDeclaration(KeyInvocation, Generic[NodeT]):
         return type(self).permits_key_overlap(other)
 
     @abstractmethod
-    def __call__(self, node: NodeT) -> Awaitable[None] | None: ...
+    def __call__(self, node: NodeT) -> object: ...
 
     @classmethod
     @abstractmethod
