@@ -7,6 +7,7 @@ import rich.repr
 from rich.segment import Segment
 
 from textual import _widget_navigation, events
+from textual._activation import Activation
 from textual._loop import loop_last
 from textual.binding import Binding, BindingType
 from textual.cache import LRUCache
@@ -89,6 +90,28 @@ class Option:
         yield "id", self._id, None
         yield "disabled", self.disabled, False
         yield "_divider", self._divider, False
+
+
+@dataclass(frozen=True)
+class OptionActivation(Activation):
+    """Select the same option, never whatever later occupies its old index."""
+
+    widget: OptionList
+    option: Option
+
+    @property
+    def identity(self):
+        return self.widget, self.option
+
+    def available(self) -> bool:
+        if not self.widget.option_enabled(self.option) or not super().available():
+            return False
+        style = self.widget.screen.get_style_at(self.region.x, self.region.y)
+        return self.widget.option_from_meta(style.meta) is self.option
+
+    async def activate(self) -> None:
+        if self.available():
+            self.widget.select_option(self.option)
 
 
 @dataclass
@@ -725,9 +748,32 @@ class OptionList(ScrollView, can_focus=True):
         Args:
             event: The click event.
         """
-        clicked_option: int | None = event.style.meta.get("option")
-        if clicked_option is not None and not self._options[clicked_option].disabled:
-            self.highlighted = clicked_option
+        option = self.option_from_meta(event.style.meta)
+        if option is not None:
+            self.select_option(option)
+
+    def option_from_meta(self, meta) -> Option | None:
+        """Decode the option marker shared by pointer and published-cell hints."""
+        if "option" in meta:
+            index = meta["option"]
+            if 0 <= index < self.option_count:
+                return self._options[index]
+        return None
+
+    def option_enabled(self, option: Option) -> bool:
+        """Membership and enabled state belong to the list, not its callers."""
+        return option in self._option_to_index and not option.disabled
+
+    def activation_targets(self, region, meta, button=1):
+        option = self.option_from_meta(meta)
+        if option is not None and self.option_enabled(option):
+            return (OptionActivation(self, region, option),)
+        return ()
+
+    def select_option(self, option: Option) -> None:
+        """Pointer and hint selection share highlight and the native action."""
+        if self.option_enabled(option):
+            self.highlighted = self._option_to_index[option]
             self.action_select()
 
     def _get_left_gutter_width(self) -> int:
@@ -744,7 +790,10 @@ class OptionList(ScrollView, can_focus=True):
         Args:
             event: The mouse movement event.
         """
-        self._mouse_hovering_over = event.style.meta.get("option")
+        option = self.option_from_meta(event.style.meta)
+        self._mouse_hovering_over = (
+            None if option is None else self._option_to_index[option]
+        )
 
     def _on_leave(self, _: events.Leave) -> None:
         """React to the mouse leaving the widget."""
