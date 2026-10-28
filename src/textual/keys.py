@@ -4,13 +4,49 @@ import unicodedata
 import inspect
 import re
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Callable, ClassVar, Iterator
+from typing import TYPE_CHECKING, Awaitable, Callable, ClassVar, Generic, Iterator, TypeVar
 from enum import Enum
 from functools import lru_cache
 
 if TYPE_CHECKING:
     from textual.binding import Binding
     from textual.document._editing import EditingMode
+    from textual.dom import DOMNode
+
+NodeT = TypeVar("NodeT", bound="DOMNode", contravariant=True)
+
+
+class KeyInvocation(ABC):
+    """The concrete command a binding invokes, independent of its active mode."""
+
+    @staticmethod
+    def qualified(declaration: type | Callable[..., object]) -> str:
+        return f"{declaration.__module__}.{declaration.__qualname__}"
+
+    @abstractmethod
+    def key_identity(self) -> str: ...
+
+    @abstractmethod
+    def key_title(self) -> str: ...
+
+    @abstractmethod
+    def key_summary(self) -> str: ...
+
+    @abstractmethod
+    def key_system(self) -> bool: ...
+
+    def binding_identity(self, mode: type[EditingMode]) -> str:
+        return self.in_mode(self.key_identity(), mode)
+
+    @staticmethod
+    def in_mode(identity: str, mode: type) -> str:
+        return f"{identity}:{KeyInvocation.qualified(mode)}"
+
+    def permits_invocation_overlap(self, other: KeyInvocation) -> bool:
+        return False
+
+    def overlaps_declaration(self, other: type[KeyDeclaration]) -> bool:
+        return False
 
 
 class KeyTitle:
@@ -20,7 +56,7 @@ class KeyTitle:
         return owner.default_title()
 
 
-class KeyDeclaration(ABC):
+class KeyDeclaration(KeyInvocation, Generic[NodeT]):
     """Shared metadata for application actions and native editor commands.
 
     Each provider retains its existing family registry. This view discovers the
@@ -36,7 +72,7 @@ class KeyDeclaration(ABC):
 
     @classmethod
     def identity(cls) -> str:
-        return f"{cls.__module__}.{cls.__qualname__}"
+        return cls.qualified(cls)
 
     @classmethod
     def binding_id(cls, mode: type) -> str:
@@ -45,8 +81,28 @@ class KeyDeclaration(ABC):
     @staticmethod
     def binding_id_for(declaration: type | Callable[..., object], mode: type) -> str:
         """Class and native callable declarations use the same mode-qualified identity."""
-        return (f"{declaration.__module__}.{declaration.__qualname__}:"
-                f"{mode.__module__}.{mode.__qualname__}")
+        return KeyInvocation.in_mode(KeyInvocation.qualified(declaration), mode)
+
+    def key_identity(self) -> str:
+        return type(self).identity()
+
+    def key_title(self) -> str:
+        return self.title
+
+    def key_summary(self) -> str:
+        return self.summary()
+
+    def key_system(self) -> bool:
+        return self.system
+
+    def permits_invocation_overlap(self, other: KeyInvocation) -> bool:
+        return other.overlaps_declaration(type(self))
+
+    def overlaps_declaration(self, other: type[KeyDeclaration]) -> bool:
+        return type(self).permits_key_overlap(other)
+
+    @abstractmethod
+    def __call__(self, node: NodeT) -> Awaitable[None] | None: ...
 
     @classmethod
     @abstractmethod

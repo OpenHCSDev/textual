@@ -14,17 +14,19 @@ from typing import (
     Any,
     Awaitable,
     Callable,
+    Generic,
     Iterable,
     Iterator,
     Mapping,
     NamedTuple,
+    TypeVar,
 )
 
 import rich.repr
 
 from textual._callback import invoke
 from textual.actions import SkipAction
-from textual.keys import KeyDeclaration, _character_to_key
+from textual.keys import KeyDeclaration, KeyInvocation, _character_to_key
 
 if TYPE_CHECKING:
     from textual.document._editing import EditingMode
@@ -110,6 +112,10 @@ class Binding:
 
     group: Group | None = None
     """Optional binding group (used to group related bindings in the footer)."""
+
+    def invocations(self) -> tuple[KeyInvocation, ...]:
+        """Named external actions expose no nominal invocation."""
+        return ()
 
     def parse_key(self) -> tuple[list[str], str]:
         """Parse a key into a list of modifiers, and the actual key.
@@ -236,7 +242,7 @@ class CallBinding(Binding):
 
 
 @dataclass(frozen=True, kw_only=True)
-class ModeBinding(CallBinding):
+class ModeBinding(CallBinding, KeyInvocation):
     """A native callable whose key belongs to a nominal editing capability.
 
     The declaring class keeps the method and its key together. Applications
@@ -245,11 +251,30 @@ class ModeBinding(CallBinding):
 
     mode: type[EditingMode]
 
+    @property
+    def invocation(self) -> KeyInvocation:
+        return self
+
+    def invocations(self) -> tuple[KeyInvocation, ...]:
+        return (self.invocation,)
+
+    def key_identity(self) -> str:
+        return self.qualified(self.action)
+
+    def key_title(self) -> str:
+        return self.description
+
+    def key_summary(self) -> str:
+        return self.tooltip
+
+    def key_system(self) -> bool:
+        return self.system
+
     def for_mode(self, mode: type[EditingMode]) -> tuple[ModeBinding, ...]:
         """Expose a native callable only in its declared capability's active modes."""
         if self.mode not in mode.__mro__:
             return ()
-        return (dataclasses.replace(self, id=KeyDeclaration.binding_id_for(self.action, mode)),)
+        return (dataclasses.replace(self, id=self.invocation.binding_identity(mode)),)
 
     def state(self, app: App[object], node: DOMNode) -> bool | None:
         if self.mode not in node.key_mode.__mro__:
@@ -258,6 +283,20 @@ class ModeBinding(CallBinding):
 
     def fallback_bindings(self) -> tuple[Binding, ...]:
         return self.mode.fallback_bindings(self)
+
+
+NodeT = TypeVar("NodeT", bound="DOMNode", contravariant=True)
+
+
+@dataclass(frozen=True, kw_only=True)
+class CommandBinding(ModeBinding, Generic[NodeT]):
+    """The callable is the command itself, including its invocation identity."""
+
+    action: KeyDeclaration[NodeT]
+
+    @property
+    def invocation(self) -> KeyInvocation:
+        return self.action
 
 
 class ActiveBinding(NamedTuple):
