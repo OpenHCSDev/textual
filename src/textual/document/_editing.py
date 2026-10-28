@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, ClassVar
 
-from textual.binding import Binding, ModeBinding
+from textual.binding import Binding, CommandBinding
 from textual.document._document import Location, Selection
 from textual._clipboard import ClipboardContent, LinewiseClipboard
 from textual.keys import KeyDeclaration
@@ -297,7 +297,7 @@ class AwaitKey(VimMode):
         return True
 
 
-class EditorBinding(ModeBinding):
+class EditorBinding(CommandBinding["TextArea"]):
     """The native synchronous command participates before text insertion."""
 
     def edit(self, editor: TextArea) -> bool:
@@ -307,7 +307,7 @@ class EditorBinding(ModeBinding):
         return True
 
 
-class EditorCommand(KeyDeclaration):
+class EditorCommand(KeyDeclaration["TextArea"]):
     keys: ClassVar[tuple[str, ...]] = ()
     _declared: ClassVar[list[type[EditorCommand]]] = []
 
@@ -332,7 +332,7 @@ class EditorCommand(KeyDeclaration):
 
     @classmethod
     def mode_bindings(cls, mode: type[EditingMode], capability: type[EditingMode]) -> tuple[Binding, ...]:
-        return tuple(EditorBinding(key, cls.invoke, cls.title, mode=capability,
+        return tuple(EditorBinding(key=key, action=cls(), description=cls.title, mode=capability,
                                    id=cls.binding_id(mode), tooltip=cls.summary(), show=False,
                                    available=cls.available)
                      for key in cls.keys)
@@ -352,6 +352,9 @@ class EditorCommand(KeyDeclaration):
     @classmethod
     def invoke(cls, editor: TextArea) -> None:
         editor.editing_mode.apply_command(editor, cls)
+
+    def __call__(self, editor: TextArea) -> None:
+        self.invoke(editor)
 
     @classmethod
     def apply(cls, editor: TextArea, mode: VimNormal, count: int) -> None:
