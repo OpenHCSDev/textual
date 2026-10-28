@@ -12,7 +12,6 @@ from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
     Any,
-    Awaitable,
     Callable,
     Generic,
     Iterable,
