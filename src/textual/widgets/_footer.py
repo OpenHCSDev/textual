@@ -40,6 +40,7 @@ class FooterBindingGroup:
 class FooterProjection:
     groups: tuple[FooterBindingGroup, ...]
     palette: FooterBinding | None
+    mode_label: str
     columns: int
 
 
@@ -281,6 +282,9 @@ class Footer(ScrollableContainer, can_focus=False, can_focus_children=False):
             else:
                 for item in part.bindings:
                     yield self._make_key(item)
+        mode_label = FooterLabel(projection.mode_label, classes="-mode")
+        mode_label.display = bool(projection.mode_label)
+        yield mode_label
         if projection.palette is not None:
             yield self._make_key(projection.palette, palette=True)
 
@@ -337,7 +341,10 @@ class Footer(ScrollableContainer, can_focus=False, can_focus_children=False):
             palette_display = FooterBinding(
                 binding, enabled, tooltip, self.app.get_key_display(binding)
             )
-        return FooterProjection(tuple(groups), palette_display, len(by_action))
+        mode_label = self.screen.active_key_mode_label
+        return FooterProjection(
+            tuple(groups), palette_display, mode_label, len(by_action) + bool(mode_label)
+        )
 
     async def _reconcile_bindings(self) -> None:
         revision = self._binding_revision
@@ -376,28 +383,35 @@ class Footer(ScrollableContainer, can_focus=False, can_focus_children=False):
         if not same_groups:
             await self.recompose()
             return
-        parents = iter(self.children)
-        for part in projection.groups:
-            if part.group is not None:
-                parent = next(parents)
-                assert isinstance(parent, KeyGroup)
-                await self._reconcile_keys(parent, part.bindings, grouped=True)
-                next(parents)  # The unchanged group's description label.
-            else:
-                # A flat footer is the common case; grouped/flat structural
-                # transitions retain ordinary recomposition above.
-                if len(projection.groups) != 1:
-                    await self.recompose()
+        if previous is None or (
+            previous.groups != projection.groups or previous.palette != projection.palette
+        ):
+            parents = iter(self.children)
+            for part in projection.groups:
+                if part.group is not None:
+                    parent = next(parents)
+                    assert isinstance(parent, KeyGroup)
+                    await self._reconcile_keys(parent, part.bindings, grouped=True)
+                    next(parents)  # The unchanged group's description label.
+                else:
+                    # A flat footer is the common case; grouped/flat structural
+                    # transitions retain ordinary recomposition above.
+                    if len(projection.groups) != 1:
+                        await self.recompose()
+                        return
+                    await self._reconcile_keys(self, part.bindings)
+                if not self.is_attached or self._closing or self._pruning:
                     return
-                await self._reconcile_keys(self, part.bindings)
-            if not self.is_attached or self._closing or self._pruning:
-                return
-        if projection.palette is not None:
-            self._update_key(
-                self.query_one(".-command-palette", FooterKey),
-                projection.palette,
-                palette=True,
-            )
+            if projection.palette is not None:
+                self._update_key(
+                    self.query_one(".-command-palette", FooterKey),
+                    projection.palette,
+                    palette=True,
+                )
+        mode_label = self.query_one(".-mode", FooterLabel)
+        if previous is None or previous.mode_label != projection.mode_label:
+            mode_label.update(projection.mode_label)
+            mode_label.display = bool(projection.mode_label)
         self.styles.grid_size_columns = projection.columns
         self._binding_projection = projection
 

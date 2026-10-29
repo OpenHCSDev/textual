@@ -10,6 +10,7 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import dataclass, field
 from inspect import iscoroutinefunction
+from functools import lru_cache
 from types import FunctionType
 from typing import (
     TYPE_CHECKING,
@@ -441,6 +442,12 @@ class BindingsMap:
 
         for binding in Binding.make_bindings(bindings or {}):
             self.key_to_bindings.setdefault(binding.key, []).append(binding)
+
+    @classmethod
+    @lru_cache(maxsize=None)
+    def editor_commands(cls, owner: type[EditingMode], mode: type[EditingMode]) -> BindingsMap:
+        """Command declarations depend on the mode types, never a mounted editor."""
+        return cls(owner.command_bindings(mode))
 
     def _add_binding(self, binding: Binding) -> None:
         """Add a new binding.

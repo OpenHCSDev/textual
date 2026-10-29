@@ -146,17 +146,23 @@ class TextArea(FocusActivation, ScrollView):
         return type(self.editing_mode)
 
     @property
+    def key_mode_label(self) -> str:
+        """Read the actual state, including parameterized pending modes."""
+        return self.editing_mode.label
+
+    @property
     def binding_mode(self) -> type[EditingMode]:
         return self.editing_mode.binding_mode
 
     def binding_map(self, mode: type[EditingMode]) -> BindingsMap:
         return BindingsMap.merge((
-            BindingsMap(self.editing_mode.command_bindings()), super().binding_map(mode),
+            BindingsMap.editor_commands(type(self.editing_mode), self.binding_mode),
+            super().binding_map(mode),
         ))
 
     @classmethod
     def editor_command_bindings(cls, mode: type[EditingMode]) -> tuple[Binding, ...]:
-        return mode().command_bindings()
+        return mode.command_bindings(mode)
 
     def apply_editor_binding(self, binding: MethodBinding, event: events.Key) -> bool:
         return self.editing_mode.apply_native_binding(self, binding, event)
