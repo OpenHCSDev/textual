@@ -29,6 +29,7 @@ from textual.document._document import (
     DocumentBase,
     EditResult,
     Location,
+    RangedEditResult,
     Selection,
     _utf8_encode,
 )
@@ -1167,6 +1168,10 @@ TextArea {
             # Use a regular plain-text document.
             document = Document(text)
 
+        self.set_document(document)
+
+    def set_document(self, document: DocumentBase) -> None:
+        """Adopt an existing document, keeping width-dependent view resources local."""
         self._set_document_view(WrappedDocument(document, tab_width=self.indent_width))
         self._rewrap_and_refresh_virtual_size()
 
@@ -1227,17 +1232,13 @@ TextArea {
             await previous_mode.close()
         self._languages = {language.name: language for language in state.languages}
         self.set_reactive(TextArea.language, state.language)
-        self.document = state.document
         self.history = state.history
         self._highlight_query = state.highlight_query
-        self.wrapped_document = WrappedDocument(self.document, tab_width=self.indent_width)
-        self.navigator = DocumentNavigator(self.wrapped_document)
-        self._build_highlight_map()
-        self._rewrap_and_refresh_virtual_size()
+        self.set_document(state.document)
+        self.apply_engine_selection(state.selection)
         self.editing_mode = state.editing_mode
         if previous_mode is state.editing_mode:
             self.editing_mode.attach(self)
-        self.selection = state.selection
         self.record_cursor_width()
         self.call_after_refresh(self.scroll_to, x=state.scroll_x, y=state.scroll_y,
                                 animate=False, immediate=True)
@@ -1689,11 +1690,6 @@ TextArea {
         start, end = sorted((start, end))
         return self.document.get_text_range(start, end)
 
-    def apply_engine_text(self, text: str) -> None:
-        """Transfer a complete external buffer without adding native undo entries."""
-        self.history.clear()
-        self._set_document(text, self.language)
-
     def invalidate_engine_regions(self, regions: Sequence[Selection]) -> None:
         """Invalidate only cached/visible rows intersecting engine-painted regions.
 
@@ -1712,30 +1708,14 @@ TextArea {
             if affected(offset):
                 self.refresh_lines(offset)
 
-    def apply_engine_lines(self, first: int, last: int, lines: tuple[str, ...]) -> None:
-        """Replace an end-exclusive line range; no backend wire sentinels enter here."""
-        document = self.document
-        count = document.line_count
-        end = (last, 0) if last < count else document.end
-        start = (first, 0) if first < count else document.end
-        text = document.newline.join(lines)
-        if last < count:
-            if lines:
-                text += document.newline
-        elif first > 0:
-            # Tail replacement consumes its preceding newline, restoring it
-            # only when replacement lines exist.
-            start = first - 1, len(document[first - 1])
-            if lines:
-                text = document.newline + text
+    def project_engine_edit(self, result: RangedEditResult) -> None:
+        """Update this view after the document owner has applied an engine edit."""
         previous_height = self.wrapped_document.height
-        result = document.replace_range(start, end, text)
-        self.wrapped_document.wrap_range(start, end, result.end_location)
-        final = max(last, first + len(lines), start[0])
+        self.wrapped_document.wrap_range(result.start, result.old_end, result.end_location)
+        final = max(result.old_end[0] + 1, result.end_location[0] + 1)
         if self.wrapped_document.height != previous_height:
-            # Reflow changes the meaning of every following display offset.
-            final = max(final, document.line_count)
-        self.invalidate_engine_regions((Selection((start[0], 0), (final, 0)),))
+            final = max(final, self.document.line_count)
+        self.invalidate_engine_regions((Selection((result.start[0], 0), (final, 0)),))
 
     def finish_engine_changes(self) -> None:
         """Finish one batch of projected ranges, never once per buffer event.
