@@ -34,7 +34,7 @@ from textual.document._document import (
 from textual.document._document_navigator import DocumentNavigator
 from textual.document._edit import Edit
 from textual.document._history import EditHistory
-from textual.document._editing import EditingMode, LineMotion, VimNormal
+from textual.document._editing import EditingMode
 from textual.document._syntax_aware_document import (
     SyntaxAwareDocument,
     SyntaxAwareDocumentError,
@@ -161,13 +161,22 @@ class TextArea(FocusActivation, ScrollView):
     def apply_editor_binding(self, binding: MethodBinding, event: events.Key) -> bool:
         return self.editing_mode.apply_native_binding(self, binding, event)
 
-    def apply_editor_command(self, command: KeyDeclaration[TextArea]) -> bool:
-        command(self)
-        return True
+    def before_engine_input(self, key: str) -> bool:
+        """Offer a declared application boundary without interpreting engine commands."""
+        return False
 
-    def move_line_motion(self, motion: type[LineMotion], mode: VimNormal, count: int) -> None:
-        """Offer an application's line boundary before the original modal geometry."""
-        mode.motion(self, motion, count)
+    async def prepare_key(self) -> None:
+        await self.editing_mode.prepare_input(self)
+
+    async def switch_editing_mode(self, mode: EditingMode) -> None:
+        """Transfer only after the previous engine has acknowledged its input."""
+        previous = self.editing_mode
+        await previous.flush(self)
+        await previous.close()
+        self.editing_mode = mode
+
+    async def _on_unmount(self) -> None:
+        await self.editing_mode.unmount(self)
 
     DEFAULT_CSS = """\
 TextArea {
@@ -800,7 +809,7 @@ TextArea {
 
     def _watch_editing_mode(self, previous: EditingMode, current: EditingMode) -> None:
         previous.suspend(self)
-        current.resume(self)
+        current.attach(self)
         self.show_editing_mode(current)
 
     def show_editing_mode(self, mode: EditingMode) -> None:
@@ -836,6 +845,7 @@ TextArea {
         if not self.is_mounted:
             return
 
+        self.editing_mode.selection_changed(self, selection)
         self.app.clear_selection()
 
         cursor_location = selection.end
@@ -1166,6 +1176,9 @@ TextArea {
         return scroll_offset_y, scroll_offset_y + self.size.height
 
     def load_text(self, text: str) -> None:
+        self.editing_mode.load_text(self, text)
+
+    def _load_text(self, text: str) -> None:
         """Load text into the TextArea.
 
         This will replace the text currently in the TextArea and clear the edit history.
@@ -1185,7 +1198,7 @@ TextArea {
         return TextAreaState(
             self.document, self.history, self.selection, self.scroll_x, self.scroll_y,
             self.language, tuple(self._languages.values()), self._highlight_query,
-            self.editing_mode.settled(),
+            self.editing_mode.capture(self),
         )
 
     def restore_editor_state(self, state: TextAreaState) -> None:
@@ -1656,7 +1669,11 @@ TextArea {
         start, end = sorted((start, end))
         return self.document.get_text_range(start, end)
 
-    def edit(self, edit: Edit) -> EditResult:
+    def edit(self, edit: Edit) -> EditResult | None:
+        """Submit an edit; asynchronous engines publish its acknowledged result."""
+        return self.editing_mode.edit(self, edit)
+
+    def _edit(self, edit: Edit) -> EditResult:
         """Perform an Edit.
 
         Args:
@@ -1692,6 +1709,9 @@ TextArea {
         return result
 
     def undo(self) -> None:
+        self.editing_mode.undo(self)
+
+    def _undo(self) -> None:
         """Undo the edits since the last checkpoint (the most recent batch of edits)."""
         if edits := self.history._pop_undo():
             self._undo_batch(edits)
@@ -1702,6 +1722,9 @@ TextArea {
         self.undo()
 
     def redo(self) -> None:
+        self.editing_mode.redo(self)
+
+    def _redo(self) -> None:
         """Redo the most recently undone batch of edits."""
         if edits := self.history._pop_redo():
             self._redo_batch(edits)
@@ -1813,7 +1836,7 @@ TextArea {
         if self.read_only:
             return
 
-        if self.editing_mode.handle_key(self, event):
+        if await self.editing_mode.handle_key(self, event):
             event.stop()
             event.prevent_default()
             return
@@ -1982,10 +2005,8 @@ TextArea {
         """When a paste occurs, insert the text from the paste event into the document."""
         if self.read_only:
             return
-        self.editing_mode = self.editing_mode.pasted()
-        if result := self._replace_via_keyboard(event.text, *self.selection):
-            self.move_cursor(result.end_location)
-            self.focus()
+        self.editing_mode.paste(self, event.text)
+        self.focus()
 
     def cell_width_to_column_index(self, cell_width: int, row_index: int) -> int:
         """Return the column that the cell width corresponds to on the given row.
@@ -2464,7 +2485,7 @@ TextArea {
         location: Location | None = None,
         *,
         maintain_selection_offset: bool = True,
-    ) -> EditResult:
+    ) -> EditResult | None:
         """Insert text into the document.
 
         Args:
@@ -2490,7 +2511,7 @@ TextArea {
         end: Location,
         *,
         maintain_selection_offset: bool = True,
-    ) -> EditResult:
+    ) -> EditResult | None:
         """Delete the text between two locations in the document.
 
         Args:
@@ -2513,7 +2534,7 @@ TextArea {
         end: Location,
         *,
         maintain_selection_offset: bool = True,
-    ) -> EditResult:
+    ) -> EditResult | None:
         """Replace text in the document with new text.
 
         Args:
@@ -2530,7 +2551,7 @@ TextArea {
         """
         return self.edit(Edit(insert, start, end, maintain_selection_offset))
 
-    def clear(self) -> EditResult:
+    def clear(self) -> EditResult | None:
         """Delete all text from the document.
 
         Returns:

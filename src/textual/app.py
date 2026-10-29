@@ -4265,6 +4265,7 @@ class App(Generic[ReturnType], DOMNode):
                     self.screen.minimize()
                     return
                 if self.focused:
+                    await self.focused.prepare_key()
                     try:
                         self.screen._clear_tooltip()
                     except NoScreen:

@@ -4588,6 +4588,9 @@ class Widget(DOMNode):
 
         await self.broker_event("click", event)
 
+    async def prepare_key(self) -> None:
+        """Allow an asynchronous editor to settle previous input before key lookup."""
+
     async def _on_key(self, event: events.Key) -> None:
         await self.handle_key(event)
 
