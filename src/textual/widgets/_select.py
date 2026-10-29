@@ -14,6 +14,7 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
 from textual.message import Message
+from textual.navigation import MovesCursor, NavigationCommand
 from textual.reactive import reactive, var
 from textual.timer import Timer
 from textual.widgets import Static
@@ -281,7 +282,7 @@ SelectOption: TypeAlias = "tuple[str, SelectType]"
 """The type used for options in the Select."""
 
 
-class Select(PrimaryActivation, Generic[SelectType], Vertical, can_focus=True):
+class Select(MovesCursor, PrimaryActivation, Generic[SelectType], Vertical, can_focus=True):
     """Widget to select from a list of possible options.
 
     A Select displays the current selection.
@@ -295,7 +296,7 @@ class Select(PrimaryActivation, Generic[SelectType], Vertical, can_focus=True):
     """Constant to flag that the widget has no selection."""
 
     BINDINGS = [
-        Binding("enter,down,space,up", "show_overlay", "Show menu", show=False),
+        Binding("enter,space", "show_overlay", "Show menu", show=False),
     ]
     """
     | Key(s) | Description |
@@ -683,6 +684,10 @@ class Select(PrimaryActivation, Generic[SelectType], Vertical, can_focus=True):
     @property
     def primary_activation(self):
         return self.action_show_overlay
+
+    def apply_navigation(self, command: NavigationCommand) -> None:
+        """A collapsed list admits navigation by opening its native overlay."""
+        self.action_show_overlay()
 
     def action_show_overlay(self) -> None:
         """Show the overlay."""

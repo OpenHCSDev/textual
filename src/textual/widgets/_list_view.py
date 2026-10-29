@@ -11,12 +11,13 @@ from textual.binding import Binding, BindingType
 from textual.containers import VerticalScroll
 from textual.events import Mount
 from textual.message import Message
+from textual.navigation import ListNavigation
 from textual.reactive import reactive
 from textual.widget import AwaitMount
 from textual.widgets._list_item import ListItem
 
 
-class ListView(VerticalScroll, can_focus=True, can_focus_children=False):
+class ListView(ListNavigation, VerticalScroll, can_focus=True, can_focus_children=False):
     """A vertical list view widget.
 
     Displays a vertical list of `ListItem`s which can be highlighted and
@@ -62,8 +63,6 @@ class ListView(VerticalScroll, can_focus=True, can_focus_children=False):
 
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("enter", "select_cursor", "Select", show=False),
-        Binding("up", "cursor_up", "Cursor up", show=False),
-        Binding("down", "cursor_down", "Cursor down", show=False),
     ]
     """
     | Key(s) | Description |
@@ -359,6 +358,16 @@ class ListView(VerticalScroll, can_focus=True, can_focus_children=False):
         if selected_child is None:
             return
         self.post_message(self.Selected(self, selected_child, self.index))
+
+    def action_first(self) -> None:
+        """Highlight the first enabled item."""
+        self.index = next((index for index, item in enumerate(self._nodes)
+                           if not item.disabled), None)
+
+    def action_last(self) -> None:
+        """Highlight the last enabled item."""
+        self.index = next((index for index in range(len(self._nodes) - 1, -1, -1)
+                           if not self._nodes[index].disabled), None)
 
     def action_cursor_down(self) -> None:
         """Highlight the next item in the list."""

@@ -14,6 +14,7 @@ from textual.cache import LRUCache
 from textual.css.styles import RulesMap
 from textual.geometry import Region, Size, Spacing, clamp
 from textual.message import Message
+from textual.navigation import ListNavigation
 from textual.reactive import reactive
 from textual.scroll_view import ScrollView
 from textual._paint_state import PaintState
@@ -129,18 +130,12 @@ class _LineCache:
         self.index_to_line.clear()
 
 
-class OptionList(ScrollView, can_focus=True):
+class OptionList(ListNavigation, ScrollView, can_focus=True):
     """A navigable list of options."""
 
     ALLOW_SELECT = False
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("down", "cursor_down", "Down", show=False),
-        Binding("end", "last", "Last", show=False),
         Binding("enter", "select", "Select", show=False),
-        Binding("home", "first", "First", show=False),
-        Binding("pagedown", "page_down", "Page Down", show=False),
-        Binding("pageup", "page_up", "Page Up", show=False),
-        Binding("up", "cursor_up", "Up", show=False),
     ]
     """
     | Key(s) | Description |
