@@ -834,7 +834,7 @@ TextArea {
             self.editing_mode.suspend(self)
             self.editing_mode = self.editing_mode.settled()
 
-    def apply_engine_selection(self, selection: Selection) -> None:
+    def paint_selection(self, selection: Selection) -> None:
         """Paint acknowledged cursor state without issuing another cursor request."""
         previous = self.selection
         start, end = selection
@@ -1235,7 +1235,7 @@ TextArea {
         self.history = state.history
         self._highlight_query = state.highlight_query
         self.set_document(state.document)
-        self.apply_engine_selection(state.selection)
+        self.paint_selection(state.selection)
         self.editing_mode = state.editing_mode
         if previous_mode is state.editing_mode:
             self.editing_mode.attach(self)
