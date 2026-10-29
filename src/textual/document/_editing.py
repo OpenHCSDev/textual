@@ -28,6 +28,15 @@ class EditingMode:
     modal = False
     accepts_text = True
     cursor_shape: ClassVar[CursorShape] = CellCursor()
+    command_map: BindingsMap
+
+    def __init__(self) -> None:
+        self.__post_init__()
+
+    def __post_init__(self) -> None:
+        # Dataclass modes enter here after their count / pending operands exist;
+        # ordinary entry modes use the same derivation through __init__.
+        object.__setattr__(self, "command_map", BindingsMap(self.command_bindings()))
 
     @property
     def label(self) -> str:
@@ -58,8 +67,7 @@ class EditingMode:
         finally:
             editor.editing_mode = editor.editing_mode.settled()
 
-    @classmethod
-    def command_bindings(cls, mode: type[EditingMode]) -> tuple[Binding, ...]:
+    def command_bindings(self) -> tuple[Binding, ...]:
         return ()
 
     @classmethod
@@ -117,15 +125,12 @@ class VimMode(EditingMode, ABC):
     def pasted(self) -> EditingMode:
         return VimInsert()
 
-    @classmethod
-    def command_bindings(cls, mode: type[EditingMode]) -> tuple[Binding, ...]:
+    def command_bindings(self) -> tuple[Binding, ...]:
         return tuple(binding for command in EditorCommand.declarations()
-                     for binding in cls.declared_command_bindings(command, mode))
+                     for binding in self.declared_command_bindings(command))
 
-    @classmethod
-    def declared_command_bindings(cls, command: type[EditorCommand],
-                                  mode: type[EditingMode]) -> tuple[Binding, ...]:
-        return command.bindings_for(mode)
+    def declared_command_bindings(self, command: type[EditorCommand]) -> tuple[Binding, ...]:
+        return command.bindings_for(self.binding_mode)
 
     def apply_command(self, editor: TextArea, command: type[EditorCommand]) -> bool:
         command.apply_mode(editor, self)
@@ -323,10 +328,8 @@ class AwaitKey(PendingMode, VimMode):
     def selection_range(self, editor: TextArea) -> Selection:
         return self.previous.selection_range(editor)
 
-    @classmethod
-    def declared_command_bindings(cls, command: type[EditorCommand],
-                                  mode: type[EditingMode]) -> tuple[Binding, ...]:
-        return command.pending_bindings(mode)
+    def declared_command_bindings(self, command: type[EditorCommand]) -> tuple[Binding, ...]:
+        return command.pending_bindings(self.binding_mode)
 
     def _handle_key(self, editor: TextArea, event: Key) -> bool:
         if editor.edit_key(event):
@@ -350,9 +353,6 @@ class EditorBinding(CommandBinding["TextArea"]):
 class EditorCommand(KeyDeclaration["TextArea"]):
     keys: ClassVar[tuple[str, ...]] = ()
 
-    def __init_subclass__(cls, **kwargs) -> None:
-        super().__init_subclass__(**kwargs)
-        BindingsMap.editor_commands.cache_clear()
     _declared: ClassVar[list[type[EditorCommand]]] = []
 
     def __init_subclass__(cls, **kwargs) -> None:

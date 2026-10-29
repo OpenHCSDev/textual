@@ -156,13 +156,13 @@ class TextArea(FocusActivation, ScrollView):
 
     def binding_map(self, mode: type[EditingMode]) -> BindingsMap:
         return BindingsMap.merge((
-            BindingsMap.editor_commands(type(self.editing_mode), self.binding_mode),
+            self.editing_mode.command_map,
             super().binding_map(mode),
         ))
 
     @classmethod
     def editor_command_bindings(cls, mode: type[EditingMode]) -> tuple[Binding, ...]:
-        return mode.command_bindings(mode)
+        return mode().command_bindings()
 
     def apply_editor_binding(self, binding: MethodBinding, event: events.Key) -> bool:
         return self.editing_mode.apply_native_binding(self, binding, event)

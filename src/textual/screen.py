@@ -513,17 +513,14 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
             if node not in owners
         )
 
-        # Filter out bindings that could be captures by widgets (such as Input, TextArea)
+        # Consume into a projection; node/mode declarations are not a scratch map.
         filter_namespaces: list[DOMNode] = []
-        for namespace, bindings_map in namespace_bindings:
-            for filter_namespace in filter_namespaces:
-                check_consume_key = filter_namespace.check_consume_key
-                for key in list(bindings_map.key_to_bindings):
-                    if check_consume_key(key, key_to_character(key)):
-                        # If the widget consumes the key (e.g. like an Input widget),
-                        # then remove the key from the bindings map.
-                        del bindings_map.key_to_bindings[key]
-
+        for index, (namespace, bindings_map) in enumerate(namespace_bindings):
+            namespace_bindings[index] = (namespace, BindingsMap.from_keys({
+                key: bindings for key, bindings in bindings_map.key_to_bindings.items()
+                if not any(node.check_consume_key(key, key_to_character(key))
+                           for node in filter_namespaces)
+            }))
             filter_namespaces.append(namespace)
 
         keymap = self.app._keymap
