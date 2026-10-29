@@ -34,7 +34,7 @@ from textual.document._document import (
 from textual.document._document_navigator import DocumentNavigator
 from textual.document._edit import Edit
 from textual.document._history import EditHistory
-from textual.document._editing import EditingMode
+from textual.document._editing import EditingMode, LineMotion, VimNormal
 from textual.document._syntax_aware_document import (
     SyntaxAwareDocument,
     SyntaxAwareDocumentError,
@@ -46,10 +46,11 @@ from textual.style import Style as ContentStyle
 
 if TYPE_CHECKING:
     from tree_sitter import Language, Query
+    from textual.keys import KeyDeclaration
 
 from textual import events, log
 from textual._cells import cell_len, cell_width_to_column_index
-from textual.binding import Binding, BindingsMap
+from textual.binding import Binding, BindingsMap, MethodBinding
 from textual.events import Message, MouseEvent
 from textual.geometry import Offset, Region, Size, Spacing, clamp
 from textual.reactive import Reactive, reactive
@@ -153,13 +154,20 @@ class TextArea(FocusActivation, ScrollView):
             BindingsMap(self.editing_mode.command_bindings()), super().binding_map(mode),
         ))
 
-    def edit_key(self, key: str) -> bool:
-        """Use the same remapped table that application dispatch and discovery read."""
-        for node, bindings in self.screen._binding_chain:
-            if node is self:
-                return any(binding.edit(self)
-                           for binding in bindings.key_to_bindings.get(key, ()))
-        return False
+    @classmethod
+    def editor_command_bindings(cls, mode: type[EditingMode]) -> tuple[Binding, ...]:
+        return mode().command_bindings()
+
+    def apply_editor_binding(self, binding: MethodBinding, event: events.Key) -> bool:
+        return self.editing_mode.apply_native_binding(self, binding, event)
+
+    def apply_editor_command(self, command: KeyDeclaration[TextArea]) -> bool:
+        command(self)
+        return True
+
+    def move_line_motion(self, motion: type[LineMotion], mode: VimNormal, count: int) -> None:
+        """Offer an application's line boundary before the original modal geometry."""
+        mode.motion(self, motion, count)
 
     DEFAULT_CSS = """\
 TextArea {
@@ -273,130 +281,6 @@ TextArea {
     """
 
     BINDINGS = [
-        # Cursor movement
-        Binding(
-            "up",
-            "cursor_up",
-            "Cursor up",
-            show=False,
-        ),
-        Binding(
-            "down",
-            "cursor_down",
-            "Cursor down",
-            show=False,
-        ),
-        Binding(
-            "left",
-            "cursor_left",
-            "Cursor left",
-            show=False,
-        ),
-        Binding(
-            "right",
-            "cursor_right",
-            "Cursor right",
-            show=False,
-        ),
-        Binding(
-            "ctrl+left",
-            "cursor_word_left",
-            "Cursor word left",
-            show=False,
-        ),
-        Binding(
-            "ctrl+right",
-            "cursor_word_right",
-            "Cursor word right",
-            show=False,
-        ),
-        Binding(
-            "home,ctrl+a",
-            "cursor_line_start",
-            "Cursor line start",
-            show=False,
-        ),
-        Binding(
-            "end,ctrl+e",
-            "cursor_line_end",
-            "Cursor line end",
-            show=False,
-        ),
-        Binding(
-            "pageup",
-            "cursor_page_up",
-            "Cursor page up",
-            show=False,
-        ),
-        Binding(
-            "pagedown",
-            "cursor_page_down",
-            "Cursor page down",
-            show=False,
-        ),
-        # Making selections (generally holding the shift key and moving cursor)
-        Binding(
-            "ctrl+shift+left",
-            "cursor_word_left(True)",
-            "Cursor left word select",
-            show=False,
-        ),
-        Binding(
-            "ctrl+shift+right",
-            "cursor_word_right(True)",
-            "Cursor right word select",
-            show=False,
-        ),
-        Binding(
-            "shift+home",
-            "cursor_line_start(True)",
-            "Cursor line start select",
-            show=False,
-        ),
-        Binding(
-            "shift+end",
-            "cursor_line_end(True)",
-            "Cursor line end select",
-            show=False,
-        ),
-        Binding(
-            "shift+up",
-            "cursor_up(True)",
-            "Cursor up select",
-            show=False,
-        ),
-        Binding(
-            "shift+down",
-            "cursor_down(True)",
-            "Cursor down select",
-            show=False,
-        ),
-        Binding(
-            "shift+left",
-            "cursor_left(True)",
-            "Cursor left select",
-            show=False,
-        ),
-        Binding(
-            "shift+right",
-            "cursor_right(True)",
-            "Cursor right select",
-            show=False,
-        ),
-        # Shortcut ways of making selections
-        # Binding("f5", "select_word", "select word", show=False),
-        Binding(
-            "f6",
-            "select_line",
-            "Select line",
-            show=False,
-        ),
-        Binding(
-            "f7",
-            "select_all",
-            "Select all",
-            show=False,
-        ),
         # Deletion
         Binding(
             "backspace",
@@ -2237,6 +2121,7 @@ TextArea {
             self.selection = Selection((index, 0), (index, len(line)))
             self.record_cursor_width()
 
+    @MethodBinding.declare("f6", mode=EditingMode)
     def action_select_line(self) -> None:
         """Select all the text on the current line."""
         cursor_row, _ = self.cursor_location
@@ -2251,6 +2136,7 @@ TextArea {
         self.selection = Selection(selection_start, selection_end)
         self.record_cursor_width()
 
+    @MethodBinding.declare("f7", mode=EditingMode)
     def action_select_all(self) -> None:
         """Select all the text in the document."""
         self.select_all()
@@ -2329,6 +2215,7 @@ TextArea {
         return self.cursor_at_last_line and self.cursor_at_end_of_line
 
     # ------ Cursor movement actions
+    @MethodBinding.declare("left", mode=EditingMode, selecting=("shift+left",))
     def action_cursor_left(self, select: bool = False) -> None:
         """Move the cursor one location to the left.
 
@@ -2358,6 +2245,7 @@ TextArea {
         """
         return self.navigator.get_location_left(self.cursor_location)
 
+    @MethodBinding.declare("right", mode=EditingMode, selecting=("shift+right",))
     def action_cursor_right(self, select: bool = False) -> None:
         """Move the cursor one location to the right.
 
@@ -2389,6 +2277,7 @@ TextArea {
         """
         return self.navigator.get_location_right(self.cursor_location)
 
+    @MethodBinding.declare("down", mode=EditingMode, selecting=("shift+down",))
     def action_cursor_down(self, select: bool = False) -> None:
         """Move the cursor down one cell.
 
@@ -2409,6 +2298,7 @@ TextArea {
         """
         return self.navigator.get_location_below(self.cursor_location)
 
+    @MethodBinding.declare("up", mode=EditingMode, selecting=("shift+up",))
     def action_cursor_up(self, select: bool = False) -> None:
         """Move the cursor up one cell.
 
@@ -2429,6 +2319,7 @@ TextArea {
         """
         return self.navigator.get_location_above(self.cursor_location)
 
+    @MethodBinding.declare("end", "ctrl+e", mode=EditingMode, selecting=("shift+end",))
     def action_cursor_line_end(self, select: bool = False) -> None:
         """Move the cursor to the end of the line."""
         if not self._has_cursor:
@@ -2445,6 +2336,7 @@ TextArea {
         """
         return self.navigator.get_location_end(self.cursor_location)
 
+    @MethodBinding.declare("home", "ctrl+a", mode=EditingMode, selecting=("shift+home",))
     def action_cursor_line_start(self, select: bool = False) -> None:
         """Move the cursor to the start of the line."""
         if not self._has_cursor:
@@ -2468,6 +2360,7 @@ TextArea {
             self.cursor_location, smart_home=smart_home
         )
 
+    @MethodBinding.declare("ctrl+left", mode=EditingMode, selecting=("ctrl+shift+left",))
     def action_cursor_word_left(self, select: bool = False) -> None:
         """Move the cursor left by a single word, skipping trailing whitespace.
 
@@ -2489,6 +2382,7 @@ TextArea {
         """
         return self.navigator.get_location_word_left(self.cursor_location)
 
+    @MethodBinding.declare("ctrl+right", mode=EditingMode, selecting=("ctrl+shift+right",))
     def action_cursor_word_right(self, select: bool = False) -> None:
         """Move the cursor right by a single word, skipping leading whitespace."""
         if not self.show_cursor:
@@ -2507,6 +2401,7 @@ TextArea {
         """
         return self.navigator.get_location_word_right(self.cursor_location)
 
+    @MethodBinding.declare("pageup", mode=EditingMode)
     def action_cursor_page_up(self) -> None:
         """Move the cursor and scroll up one page."""
         if not self.show_cursor:
@@ -2521,6 +2416,7 @@ TextArea {
         self.scroll_relative(y=-height, animate=False)
         self.move_cursor(target)
 
+    @MethodBinding.declare("pagedown", mode=EditingMode)
     def action_cursor_page_down(self) -> None:
         """Move the cursor and scroll down one page."""
         if not self.show_cursor:
