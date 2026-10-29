@@ -2,6 +2,7 @@ import pytest
 
 from textual.css.errors import StyleValueError
 from textual.dom import BadIdentifier, DOMNode
+from textual.document._editing import EditingMode
 
 
 def test_display_default():
@@ -96,20 +97,11 @@ def test_inherited_bindings():
     class E(D):
         BINDINGS = [("e", "e", "e")]
 
-    a = A()
-    assert list(a._bindings.key_to_bindings.keys()) == ["a"]
-
-    b = B()
-    assert list(b._bindings.key_to_bindings.keys()) == ["a", "b"]
-
-    c = C()
-    assert list(c._bindings.key_to_bindings.keys()) == ["c"]
-
-    d = D()
-    assert not list(d._bindings.key_to_bindings.keys())
-
-    e = E()
-    assert list(e._bindings.key_to_bindings.keys()) == ["e"]
+    assert list(A.binding_defaults(EditingMode).key_to_bindings.keys()) == ["a"]
+    assert list(B.binding_defaults(EditingMode).key_to_bindings.keys()) == ["a", "b"]
+    assert list(C.binding_defaults(EditingMode).key_to_bindings.keys()) == ["c"]
+    assert not list(D.binding_defaults(EditingMode).key_to_bindings.keys())
+    assert list(E.binding_defaults(EditingMode).key_to_bindings.keys()) == ["e"]
 
 
 def test__get_default_css():

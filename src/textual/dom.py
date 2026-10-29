@@ -516,10 +516,6 @@ class DOMNode(PaintNode, MessagePump):
     def _component_styles(self) -> dict[str, RenderStyles]:
         return {}
 
-    @cached_property
-    def _bindings(self) -> BindingsMap:
-        return self._merged_bindings.copy()
-
     _declared_key_bindings: ClassVar[tuple[MethodBinding, ...]] = ()
 
     @classmethod
@@ -558,13 +554,14 @@ class DOMNode(PaintNode, MessagePump):
         return ()
 
     @classmethod
+    @lru_cache(maxsize=None)
     def binding_defaults(cls, mode: type[EditingMode]) -> BindingsMap:
         """Catalogs see the same raw and nominal native defaults as dispatch."""
         return cls._merged_bindings.project(mode, cls.declared_bindings(mode))
 
     def binding_map(self, mode: type[EditingMode]) -> BindingsMap:
         """One projection for native declarations and external subclass bindings."""
-        return self._bindings.project(mode, self.declared_bindings(mode))
+        return self.binding_defaults(mode)
 
     def edit_key(self, event: Key) -> bool:
         """Only the focused node consumes the actual decoded input event."""
