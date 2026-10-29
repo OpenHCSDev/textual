@@ -709,7 +709,7 @@ class Input(FocusActivation, ScrollView):
     async def _on_key(self, event: events.Key) -> None:
         self._restart_blink()
 
-        if self.edit_key(event.key):
+        if self.edit_key(event):
             event.stop()
             event.prevent_default()
             return

@@ -34,7 +34,7 @@ from textual.document._document import (
 from textual.document._document_navigator import DocumentNavigator
 from textual.document._edit import Edit
 from textual.document._history import EditHistory
-from textual.document._editing import EditingMode
+from textual.document._editing import EditingMode, LineMotion, VimNormal
 from textual.document._syntax_aware_document import (
     SyntaxAwareDocument,
     SyntaxAwareDocumentError,
@@ -46,6 +46,7 @@ from textual.style import Style as ContentStyle
 
 if TYPE_CHECKING:
     from tree_sitter import Language, Query
+    from textual.keys import KeyDeclaration
 
 from textual import events, log
 from textual._cells import cell_len, cell_width_to_column_index
@@ -157,8 +158,16 @@ class TextArea(FocusActivation, ScrollView):
     def editor_command_bindings(cls, mode: type[EditingMode]) -> tuple[Binding, ...]:
         return mode().command_bindings()
 
-    def apply_editor_binding(self, binding: MethodBinding) -> bool:
-        return self.editing_mode.apply_native_binding(self, binding)
+    def apply_editor_binding(self, binding: MethodBinding, event: events.Key) -> bool:
+        return self.editing_mode.apply_native_binding(self, binding, event)
+
+    def apply_editor_command(self, command: KeyDeclaration[TextArea]) -> bool:
+        command(self)
+        return True
+
+    def move_line_motion(self, motion: type[LineMotion], mode: VimNormal, count: int) -> None:
+        """Offer an application's line boundary before the original modal geometry."""
+        mode.motion(self, motion, count)
 
     DEFAULT_CSS = """\
 TextArea {

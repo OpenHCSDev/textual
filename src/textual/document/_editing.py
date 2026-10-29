@@ -18,6 +18,7 @@ from textual.document._document_navigator import WordBoundary, PreviousWordBound
 
 if TYPE_CHECKING:
     from textual.events import Key
+    from textual.dom import DOMNode
     from textual.widgets import TextArea
 
 
@@ -37,17 +38,25 @@ class EditingMode:
         """Whether idle modal command entry permits application priority bindings."""
         return False
 
+    @property
+    def allows_history_navigation(self) -> bool:
+        """Text entry can offer an application's prompt-history boundary."""
+        return self.accepts_text
+
     @classmethod
     def fallback_bindings(cls, binding: Binding) -> tuple[Binding, ...]:
         """Ordinary editor keys do not escape their focused owner."""
         return ()
 
     def handle_key(self, editor: TextArea, event: Key) -> bool:
-        return editor.edit_key(event.key)
+        return editor.edit_key(event)
 
-    def apply_native_binding(self, editor: TextArea, binding: MethodBinding) -> bool:
-        binding.call(editor)
-        return True
+    def apply_native_binding(self, editor: TextArea, binding: MethodBinding, event: Key) -> bool:
+        try:
+            binding.call(editor)
+            return True
+        finally:
+            editor.editing_mode = editor.editing_mode.settled()
 
     def command_bindings(self) -> tuple[Binding, ...]:
         return ()
@@ -134,7 +143,7 @@ class VimInsert(VimMode):
         editor.history.begin_group()
 
     def _handle_key(self, editor: TextArea, event: Key) -> bool:
-        return editor.edit_key(event.key)
+        return editor.edit_key(event)
 
     @classmethod
     def editor_bindings(cls, command: type[EditorCommand]) -> tuple[Binding, ...]:
@@ -155,6 +164,11 @@ class VimNormal(VimMode):
         """An idle command mode can yield to application-level priority bindings."""
         return self.count == 0
 
+    @property
+    def allows_history_navigation(self) -> bool:
+        """A counted motion stays a motion, not an application history request."""
+        return self.count == 0
+
     def settled(self) -> EditingMode:
         return replace(self, count=0)
 
@@ -170,7 +184,7 @@ class VimNormal(VimMode):
         if event.key.isdecimal() and (self.count or event.key != "0"):
             editor.editing_mode = replace(self, count=self.count * 10 + int(event.key))
             return True
-        if editor.edit_key(event.key):
+        if editor.edit_key(event):
             return True
         # Unknown normal-mode text must never reach TextArea's insertion path.
         if event.is_printable or event.key == "enter":
@@ -183,10 +197,6 @@ class VimNormal(VimMode):
         editor.editing_mode = self.settled()
         command.apply(editor, self, self.count or 1)
         return True
-
-    def apply_native_binding(self, editor: TextArea, binding: MethodBinding) -> bool:
-        editor.editing_mode = self.settled()
-        return super().apply_native_binding(editor, binding)
 
     def move_to(self, editor: TextArea, location: Location) -> None:
         editor.move_cursor(location)
@@ -214,6 +224,10 @@ class VimNormal(VimMode):
 @dataclass(frozen=True)
 class VimVisual(VimNormal):
     label = "VISUAL"
+
+    @property
+    def allows_history_navigation(self) -> bool:
+        return False
 
     @property
     def binding_mode(self) -> type[VimVisual]:
@@ -247,20 +261,30 @@ class VimVisual(VimNormal):
         editor.editing_mode = VimNormal()
 
 
-@dataclass(frozen=True, kw_only=True)
-class VimOperator(VimNormal):
-    operator: type[Operator]
-    operator_count: int = 1
+class PendingMode(EditingMode):
+    """An unfinished command owns printable operands and suppresses history."""
+
+    @property
+    def allows_history_navigation(self) -> bool:
+        return False
 
     @property
     def allows_application_commands(self) -> bool:
         return False
 
+    def apply_native_binding(self, editor: TextArea, binding: MethodBinding, event: Key) -> bool:
+        if event.is_printable:
+            return False
+        return super().apply_native_binding(editor, binding, event)
+
+
+@dataclass(frozen=True, kw_only=True)
+class VimOperator(PendingMode, VimNormal):
+    operator: type[Operator]
+    operator_count: int = 1
+
     def settled(self) -> EditingMode:
         return VimNormal()
-
-    def apply_native_binding(self, editor: TextArea, binding: MethodBinding) -> bool:
-        return False
 
     def apply_command(self, editor: TextArea, command: type[EditorCommand]) -> bool:
         editor.editing_mode = VimNormal()
@@ -272,7 +296,7 @@ class VimOperator(VimNormal):
 
 
 @dataclass(frozen=True)
-class AwaitKey(VimMode):
+class AwaitKey(PendingMode, VimMode):
     command: type[CharacterCommand]
     previous: VimNormal
     count: int
@@ -295,14 +319,11 @@ class AwaitKey(VimMode):
     def selection_range(self, editor: TextArea) -> Selection:
         return self.previous.selection_range(editor)
 
-    def apply_native_binding(self, editor: TextArea, binding: MethodBinding) -> bool:
-        return False
-
     def declared_command_bindings(self, command: type[EditorCommand]) -> tuple[Binding, ...]:
         return command.pending_bindings(self.binding_mode)
 
     def _handle_key(self, editor: TextArea, event: Key) -> bool:
-        if editor.edit_key(event.key):
+        if editor.edit_key(event):
             return True
         editor.editing_mode = self.settled()
         if not event.is_printable:
@@ -314,11 +335,10 @@ class AwaitKey(VimMode):
 class EditorBinding(CommandBinding["TextArea"]):
     """The native synchronous command participates before text insertion."""
 
-    def edit(self, editor: TextArea) -> bool:
+    def edit(self, editor: DOMNode, event: Key) -> bool:
         if not self.state(editor.app, editor):
             return False
-        self.action(editor)
-        return True
+        return editor.apply_editor_command(self.action)
 
 
 class EditorCommand(KeyDeclaration["TextArea"]):
@@ -423,6 +443,10 @@ class Right(Motion):
 
 class LineMotion(Motion):
     direction: ClassVar[int]
+
+    @classmethod
+    def apply(cls, editor: TextArea, mode: VimNormal, count: int) -> None:
+        editor.move_line_motion(cls, mode, count)
 
     @classmethod
     def destination(cls, editor, origin, count):

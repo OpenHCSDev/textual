@@ -37,7 +37,7 @@ from textual._compat import cached_property
 from textual._node_list import NodeList
 from textual._paint_state import PaintNode
 from textual._types import WatchCallbackType
-from textual.binding import Binding, BindingsMap, BindingType, MethodBinding
+from textual.binding import Binding, BindingsMap, BindingType, MethodBinding, ModeBinding
 from textual.document._editing import EditingMode
 from textual.cache import LRUCache
 from textual.css._error_tools import friendly_list
@@ -68,6 +68,9 @@ if TYPE_CHECKING:
     from textual.reactive import _StoredReactiveAccess
     from textual.screen import Screen
     from textual.widget import Widget
+    from textual.keys import KeyDeclaration
+    from textual.events import Key
+    from textual.widgets import TextArea
     from textual.worker import Worker, WorkType, ResultType
 
 from typing_extensions import Literal
@@ -531,10 +534,22 @@ class DOMNode(PaintNode, MessagePump):
         return tuple(found)
 
     @classmethod
-    def declared_bindings(cls, mode: type[EditingMode]) -> tuple[Binding, ...]:
-        return tuple(projected for base in cls.__mro__
-                     for binding in base.__dict__.get("_declared_key_bindings", ())
+    def method_key_owners(cls) -> tuple[type, ...]:
+        """A native method-key capability declares the ancestor scope it exposes."""
+        return ()
+
+    @classmethod
+    def native_bindings(cls, mode: type[EditingMode]) -> tuple[ModeBinding, ...]:
+        return tuple(projected for base in cls.method_key_owners()
+                     for binding in base.__dict__.get("MODE_BINDINGS", ())
                      for projected in binding.for_mode(mode))
+
+    @classmethod
+    def declared_bindings(cls, mode: type[EditingMode]) -> tuple[Binding, ...]:
+        return (*cls.native_bindings(mode),
+                *(projected for base in cls.__mro__
+                  for binding in base.__dict__.get("_declared_key_bindings", ())
+                  for projected in binding.for_mode(mode)))
 
     @classmethod
     def editor_command_bindings(cls, mode: type[EditingMode]) -> tuple[Binding, ...]:
@@ -545,17 +560,21 @@ class DOMNode(PaintNode, MessagePump):
         """One projection for native declarations and external subclass bindings."""
         return BindingsMap.merge((self._bindings, BindingsMap(self.declared_bindings(mode))))
 
-    def edit_key(self, key: str) -> bool:
-        """Only the focused node can consume an editor call before insertion."""
+    def edit_key(self, event: Key) -> bool:
+        """Only the focused node consumes the actual decoded input event."""
         for node, bindings in self.app.screen._binding_chain:
             if node is self:
-                return any(binding.edit(self)
-                           for binding in bindings.key_to_bindings.get(key, ()))
+                return any(binding.edit(self, event)
+                           for binding in bindings.key_to_bindings.get(event.key, ()))
         return False
 
-    def apply_editor_binding(self, binding: MethodBinding) -> bool:
+    def apply_editor_binding(self, binding: MethodBinding, event: Key) -> bool:
         binding.call(self)
         return True
+
+    def apply_editor_command(self, command: KeyDeclaration[TextArea]) -> bool:
+        """A generic node does not own a modal document editor."""
+        return False
 
     @cached_property
     def _query_one_cache(self) -> LRUCache[QueryOneCacheKey, DOMNode]:

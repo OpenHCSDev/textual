@@ -35,6 +35,7 @@ if TYPE_CHECKING:
 
     from textual.app import App
     from textual.dom import DOMNode
+    from textual.events import Key
 
 BindingType: TypeAlias = "Binding | tuple[str, str] | tuple[str, str, str]"
 """The possible types of a binding found in the `BINDINGS` class variable."""
@@ -155,7 +156,7 @@ class Binding:
         """
         return await app.run_action(self.action, node)
 
-    def edit(self, node: DOMNode) -> bool:
+    def edit(self, node: DOMNode, event: Key) -> bool:
         """Ordinary bindings run through application dispatch, after text handling."""
         return False
 
@@ -305,8 +306,10 @@ class MethodBinding(ModeBinding):
     selecting: tuple[str, ...] = ()
 
     @classmethod
-    def declare(cls, *keys: str, mode: type[EditingMode], selecting: tuple[str, ...] = ()):
-        def declared(method: FunctionType) -> MethodBinding:
+    def declare(cls, *keys: str, mode: type[EditingMode], selecting: tuple[str, ...] = ()) -> Callable[[Callable[..., object]], MethodBinding]:
+        def declared(method: Callable[..., object]) -> MethodBinding:
+            if not isinstance(method, FunctionType):
+                raise TypeError("Native method declarations require a Python function")
             if iscoroutinefunction(method):
                 raise TypeError("Pre-text editor methods must be synchronous")
             return cls(key=",".join(keys), action=method, mode=mode,
@@ -332,12 +335,22 @@ class MethodBinding(ModeBinding):
     def call(self, node: DOMNode) -> object:
         return invoke_sync(getattr(node, self.action.__name__), *self.arguments())
 
-    def edit(self, node: DOMNode) -> bool:
-        # Unconfigured defaults keep ordinary dispatch. Only an explicit focused
-        # override may take a printable key away from the insertion path.
-        if self.id not in node.app._keymap or not self.state(node.app, node):
+    def state(self, app: App[object], node: DOMNode) -> bool | None:
+        if not super().state(app, node):
             return False
-        return node.apply_editor_binding(self)
+        return node.check_action(self.action.__name__.removeprefix("action_"), self.arguments())
+
+    def edit(self, node: DOMNode, event: Key) -> bool:
+        # Only explicit focused overrides take printable input. Native non-text
+        # keys use this same call while the original prefix still owns its state.
+        if event.is_printable and self.id not in node.app._keymap:
+            return False
+        if not self.state(node.app, node):
+            return False
+        try:
+            return node.apply_editor_binding(self, event)
+        except SkipAction:
+            return False
 
 
 class SelectingMethodBinding(MethodBinding):
@@ -476,6 +489,7 @@ class BindingsMap:
         """
         clashed_bindings: set[Binding] = set()
         new_bindings: dict[str, list[Binding]] = {}
+        applied: set[BindingIDString] = set()
 
         key_to_bindings = list(self.key_to_bindings.items())
         for key, bindings in key_to_bindings:
@@ -486,7 +500,8 @@ class BindingsMap:
                     continue
 
                 # An override replaces this binding's keys; an empty override unbinds it.
-                if binding_id in keymap:
+                if binding_id in keymap and binding_id not in applied:
+                    applied.add(binding_id)
                     keymap_keys = [key for key in keymap[binding_id].split(",") if key]
 
                     # Remove this binding from its default keys; other bindings on those keys stay.
