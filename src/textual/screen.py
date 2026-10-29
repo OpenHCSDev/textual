@@ -156,6 +156,12 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         return EditingMode
 
     @property
+    def active_key_mode_label(self) -> str:
+        """Project the focused owner's mode, or this screen's keyboard scope."""
+        focused = self.focused
+        return focused.key_mode_label if focused is not None else self.key_mode_label
+
+    @property
     def active_binding_mode(self) -> type[EditingMode]:
         """Every scope uses the focused editor's actual mode for this binding chain."""
         return self.focused.binding_mode if self.focused is not None else self.binding_mode
