@@ -8,7 +8,7 @@ See [bindings](/guide/input#bindings) in the guide for details.
 from __future__ import annotations
 
 import dataclasses
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from inspect import iscoroutinefunction
 from types import FunctionType
 from typing import (
@@ -20,6 +20,7 @@ from typing import (
     Iterator,
     Mapping,
     NamedTuple,
+    Self,
     TypeVar,
 )
 
@@ -27,7 +28,7 @@ import rich.repr
 
 from textual._callback import invoke, invoke_sync
 from textual.actions import SkipAction
-from textual.keys import KeyDeclaration, KeyInvocation, _character_to_key
+from textual.keys import DeclaredKey, KeyDeclaration, KeyInvocation, UndecodedKey, _character_to_key
 
 if TYPE_CHECKING:
     from textual.document._editing import EditingMode
@@ -36,6 +37,7 @@ if TYPE_CHECKING:
     from textual.app import App
     from textual.dom import DOMNode
     from textual.events import Key
+    from textual.widget import Widget
 
 BindingType: TypeAlias = "Binding | tuple[str, str] | tuple[str, str, str]"
 """The possible types of a binding found in the `BINDINGS` class variable."""
@@ -114,9 +116,20 @@ class Binding:
     group: Group | None = None
     """Optional binding group (used to group related bindings in the footer)."""
 
-    def invocations(self) -> tuple[KeyInvocation, ...]:
-        """Named external actions expose no nominal invocation."""
+    declared_key: DeclaredKey = field(default=UndecodedKey(), kw_only=True, repr=False)
+    """The original native key identity; remapping changes key, never this fact."""
+
+    def command_invocations(self) -> tuple[KeyInvocation, ...]:
+        """Named external actions expose no nominal command."""
         return ()
+
+    def invocations(self) -> tuple[KeyInvocation, ...]:
+        return self.declared_key.invocations(self.command_invocations())
+
+    def for_mode(self, mode: type[EditingMode]) -> tuple[Self, ...]:
+        """Give native arrows their shared preference identity in the actual mode."""
+        identity = next((invocation.binding_identity(mode) for invocation in self.invocations()), self.id)
+        return (dataclasses.replace(self, id=identity),)
 
     def parse_key(self) -> tuple[list[str], str]:
         """Parse a key into a list of modifiers, and the actual key.
@@ -159,6 +172,10 @@ class Binding:
     def edit(self, node: DOMNode, event: Key) -> bool:
         """Ordinary bindings run through application dispatch, after text handling."""
         return False
+
+    async def run_before_text(self, app: App[object], node: DOMNode, event: Key, target: Widget) -> bool:
+        """A configured arrow alias keeps its native action, before type-to-search."""
+        return await self.run(app, node)
 
     def fallback_bindings(self) -> tuple[Binding, ...]:
         """Ordinary keys stay on the focused native ancestor chain."""
@@ -203,6 +220,7 @@ class Binding:
                 yield dataclasses.replace(
                     binding,
                     key=key,
+                    declared_key=binding.declared_key.decoded(key),
                     show=bool(binding.description and binding.show),
                 )
 
@@ -263,7 +281,7 @@ class ModeBinding(CallBinding, KeyInvocation):
     def invocation(self) -> KeyInvocation:
         return self
 
-    def invocations(self) -> tuple[KeyInvocation, ...]:
+    def command_invocations(self) -> tuple[KeyInvocation, ...]:
         return (self.invocation,)
 
     def key_identity(self) -> str:
@@ -282,7 +300,7 @@ class ModeBinding(CallBinding, KeyInvocation):
         """Expose a native callable only in its declared capability's active modes."""
         if self.mode not in mode.__mro__:
             return ()
-        return (dataclasses.replace(self, id=self.invocation.binding_identity(mode)),)
+        return super().for_mode(mode)
 
     def state(self, app: App[object], node: DOMNode) -> bool | None:
         if self.mode not in node.key_mode.__mro__:
@@ -339,6 +357,15 @@ class MethodBinding(ModeBinding):
         if not super().state(app, node):
             return False
         return node.check_action(self.action.__name__.removeprefix("action_"), self.arguments())
+
+    async def run_before_text(self, app: App[object], node: DOMNode, event: Key, target: Widget) -> bool:
+        """The native editor, not an earlier dispatch phase, owns this actual Key.
+
+        Forward it once along the ordinary path so pending operators, native
+        arity, selection and history see precisely the same original mode.
+        """
+        target._forward_event(event)
+        return True
 
     def edit(self, node: DOMNode, event: Key) -> bool:
         # Only explicit focused overrides take printable input. Native non-text
@@ -476,74 +503,40 @@ class BindingsMap:
                 keys.setdefault(key, []).extend(key_bindings)
         return BindingsMap.from_keys(keys)
 
+    def project(self, mode: type[EditingMode], declarations: Iterable[BindingType] = ()) -> BindingsMap:
+        """Raw and nominal declarations use the same native mode projection."""
+        return BindingsMap(
+            projected
+            for binding in (*[binding for _, binding in self], *Binding.make_bindings(declarations))
+            for projected in binding.for_mode(mode)
+        )
+
     def apply_keymap(self, keymap: Keymap) -> KeymapApplyResult:
-        """Replace bindings for keys that are present in `keymap`.
+        """Overlay preferences without losing native alternatives or expanding aliases twice.
 
-        Preserves existing bindings for keys that are not in `keymap`.
-
-        Args:
-            keymap: A keymap to overlay.
-
-        Returns:
-            KeymapApplyResult: The result of applying the keymap, including any clashed bindings.
+        Different controls may share an arrow preference, not its implementation.
+        Within one scope, keep every distinct native binding in its original order;
+        only identical aliases of the same binding collapse.
         """
+        defaults: dict[str, list[Binding]] = {}
+        remapped: dict[str, list[Binding]] = {}
         clashed_bindings: set[Binding] = set()
-        new_bindings: dict[str, list[Binding]] = {}
-        applied: set[BindingIDString] = set()
-
-        key_to_bindings = list(self.key_to_bindings.items())
-        for key, bindings in key_to_bindings:
-            for binding in bindings:
-                binding_id = binding.id
-                if binding_id is None:
-                    # Bindings without an ID are irrelevant when applying a keymap
+        for key, binding in self:
+            binding_id = binding.id
+            if binding_id is None or binding_id not in keymap:
+                defaults.setdefault(key, []).append(binding)
+                continue
+            for configured_key in keymap[binding_id].split(","):
+                if not configured_key:
                     continue
-
-                # An override replaces this binding's keys; an empty override unbinds it.
-                if binding_id in keymap and binding_id not in applied:
-                    applied.add(binding_id)
-                    keymap_keys = [key for key in keymap[binding_id].split(",") if key]
-
-                    # Remove this binding from its default keys; other bindings on those keys stay.
-                    for key, _ in key_to_bindings:
-                        key = key.strip()
-                        if key in self.key_to_bindings:
-                            kept = [bound for bound in self.key_to_bindings[key] if bound.id != binding_id]
-                            if kept:
-                                self.key_to_bindings[key] = kept
-                            else:
-                                del self.key_to_bindings[key]
-
-                    for keymap_key in keymap_keys:
-                        if (
-                            keymap_key in self.key_to_bindings
-                            or keymap_key in new_bindings
-                        ):
-                            # The key is already mapped either by default or by the keymap,
-                            # so there's a clash unless the existing binding is being rebound
-                            # to a different key.
-                            clashing_bindings = self.key_to_bindings.get(
-                                keymap_key, []
-                            ) + new_bindings.get(keymap_key, [])
-                            for clashed_binding in clashing_bindings:
-                                # If the existing binding is not being rebound, it's a clash
-                                if not (
-                                    clashed_binding.id
-                                    and keymap.get(clashed_binding.id)
-                                    != clashed_binding.key
-                                ):
-                                    clashed_bindings.add(clashed_binding)
-
-                            if keymap_key in self.key_to_bindings:
-                                del self.key_to_bindings[keymap_key]
-
-                    for keymap_key in keymap_keys:
-                        new_bindings.setdefault(keymap_key, []).append(
-                            binding.with_key(key=keymap_key, key_display=None)
-                        )
-
-        # Update the key_to_bindings with the new bindings
-        self.key_to_bindings.update(new_bindings)
+                projected = binding.with_key(configured_key, key_display=None)
+                alternatives = remapped.setdefault(configured_key, [])
+                if projected not in alternatives:
+                    alternatives.append(projected)
+        for key, alternatives in remapped.items():
+            clashed_bindings.update(defaults.pop(key, ()))
+            defaults[key] = alternatives
+        self.key_to_bindings = defaults
         return KeymapApplyResult(clashed_bindings)
 
     @property

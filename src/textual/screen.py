@@ -538,6 +538,20 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
                 return binding_chain[:index]
         return binding_chain
 
+    async def dispatch_remapped_key(self, event: events.Key, target: Widget) -> bool:
+        """Explicit arrow aliases use the existing modal chain before text search.
+
+        This is the original decoded event, never a manufactured arrow or a
+        second delivery. Native editor bindings forward it to their mode owner;
+        ordinary controls execute their own declared action.
+        """
+        for node, bindings in self._modal_binding_chain:
+            for binding in bindings.key_to_bindings.get(event.key, ()):
+                if binding.declared_key.preempts(binding, event, self.app._keymap):
+                    if await binding.run_before_text(self.app, node, event, target):
+                        return True
+        return False
+
     @property
     def active_bindings(self) -> dict[str, ActiveBinding]:
         """Get currently active bindings for this screen.

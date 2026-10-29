@@ -249,7 +249,7 @@ class DOMNode(PaintNode, MessagePump):
     _css_type_name: str = ""
 
     # Generated list of bindings
-    _merged_bindings: ClassVar[BindingsMap | None] = None
+    _merged_bindings: ClassVar[BindingsMap] = BindingsMap()
 
     _reactives: ClassVar[dict[str, Reactive]]
     _reactive_accessors: ClassVar[dict[str, _StoredReactiveAccess]]
@@ -513,11 +513,7 @@ class DOMNode(PaintNode, MessagePump):
 
     @cached_property
     def _bindings(self) -> BindingsMap:
-        return (
-            BindingsMap()
-            if self._merged_bindings is None
-            else self._merged_bindings.copy()
-        )
+        return self._merged_bindings.copy()
 
     _declared_key_bindings: ClassVar[tuple[MethodBinding, ...]] = ()
 
@@ -556,9 +552,14 @@ class DOMNode(PaintNode, MessagePump):
         """Only native document editors declare modal document commands."""
         return ()
 
+    @classmethod
+    def binding_defaults(cls, mode: type[EditingMode]) -> BindingsMap:
+        """Catalogs see the same raw and nominal native defaults as dispatch."""
+        return cls._merged_bindings.project(mode, cls.declared_bindings(mode))
+
     def binding_map(self, mode: type[EditingMode]) -> BindingsMap:
         """One projection for native declarations and external subclass bindings."""
-        return BindingsMap.merge((self._bindings, BindingsMap(self.declared_bindings(mode))))
+        return self._bindings.project(mode, self.declared_bindings(mode))
 
     def edit_key(self, event: Key) -> bool:
         """Only the focused node consumes the actual decoded input event."""
