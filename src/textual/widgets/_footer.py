@@ -32,8 +32,36 @@ class FooterBinding:
 
 @dataclass(frozen=True)
 class FooterBindingGroup:
-    group: Binding.Group | None
     bindings: tuple[FooterBinding, ...]
+
+    @property
+    def description(self) -> str:
+        return ""
+
+    @property
+    def compact(self) -> bool:
+        return False
+
+    @property
+    def grouped(self) -> bool:
+        return False
+
+
+@dataclass(frozen=True)
+class FooterGroupedBindings(FooterBindingGroup):
+    group: Binding.Group
+
+    @property
+    def description(self) -> str:
+        return self.group.description
+
+    @property
+    def compact(self) -> bool:
+        return self.group.compact
+
+    @property
+    def grouped(self) -> bool:
+        return True
 
 
 @dataclass(frozen=True)
@@ -48,9 +76,26 @@ class FooterProjection:
 class KeyGroup(HorizontalGroup):
     DEFAULT_CSS = """
     KeyGroup {
-        width: auto;        
+        width: auto;
+        height: 1;
     }
     """
+
+    def __init__(self, part: FooterBindingGroup, *keys: FooterKey) -> None:
+        key_group = HorizontalGroup(*keys, classes="binding-group")
+        key_group.set_class(part.compact, "-compact", update=False)
+        label = FooterLabel(part.description)
+        label.display = bool(part.description)
+        super().__init__(key_group, label)
+
+    def update_projection(self, part: FooterBindingGroup) -> HorizontalGroup:
+        keys = self.query_one(".binding-group", HorizontalGroup)
+        keys.set_class(part.compact, "-compact")
+        label = self.query_one(FooterLabel)
+        if label.content != part.description:
+            label.update(part.description)
+        label.display = bool(part.description)
+        return keys
 
 
 @rich.repr.auto
@@ -203,7 +248,7 @@ class Footer(ScrollableContainer, can_focus=False, can_focus_children=False):
             width: auto;
             height: 1;
         }
-        KeyGroup.-compact {            
+        KeyGroup .binding-group.-compact {
             FooterKey.-grouped {
                 margin: 0;
             }
@@ -226,8 +271,6 @@ class Footer(ScrollableContainer, can_focus=False, can_focus_children=False):
 
     compact = reactive(False, toggle_class="-compact")
     """Display in compact style."""
-    _bindings_ready = reactive(False, repaint=False)
-    """True if the bindings are ready to be displayed."""
     show_command_palette = reactive(True)
     """Show the key to invoke the command palette."""
     combine_groups = reactive(True)
@@ -264,24 +307,16 @@ class Footer(ScrollableContainer, can_focus=False, can_focus_children=False):
         self.set_reactive(Footer.show_command_palette, show_command_palette)
         self.set_reactive(Footer.compact, compact)
         self.set_class(compact, "-compact", update=False)
-        self._binding_projection: FooterProjection | None = None
+        self._binding_projection = FooterProjection((), None, "", 0)
         self._binding_update_pending = False
         self._binding_revision = 0
 
     def compose(self) -> ComposeResult:
-        if not self._bindings_ready:
-            return
-        projection = self._binding_projection = self._project_bindings()
+        projection = self._binding_projection
         self.styles.grid_size_columns = projection.columns
         for part in projection.groups:
-            if part.group is not None:
-                with KeyGroup(classes="-compact" if part.group.compact else ""):
-                    for item in part.bindings:
-                        yield self._make_key(item, grouped=True)
-                yield FooterLabel(part.group.description)
-            else:
-                for item in part.bindings:
-                    yield self._make_key(item)
+            yield KeyGroup(part, *(self._make_key(item, grouped=part.grouped)
+                                   for item in part.bindings))
         mode_label = FooterLabel(projection.mode_label, classes="-mode")
         mode_label.display = bool(projection.mode_label)
         yield mode_label
@@ -307,7 +342,6 @@ class Footer(ScrollableContainer, can_focus=False, can_focus_children=False):
         return key
 
     def bindings_changed(self, screen: Screen) -> None:
-        self._bindings_ready = True
         self._binding_revision += 1
         if not screen.app.app_focus:
             return
@@ -327,9 +361,10 @@ class Footer(ScrollableContainer, can_focus=False, can_focus_children=False):
         groups = []
         for group, items in groupby(by_action.values(), lambda item: item.binding.group):
             bindings = tuple(items)
-            groups.append(FooterBindingGroup(
-                group if group is not None and len(bindings) > 1 else None, bindings
-            ))
+            groups.append(
+                FooterGroupedBindings(bindings, group)
+                if group is not None and len(bindings) > 1 else FooterBindingGroup(bindings)
+            )
         palette = active.get(self.app.COMMAND_PALETTE_BINDING)
         palette_display = None
         if (
@@ -371,45 +406,37 @@ class Footer(ScrollableContainer, can_focus=False, can_focus_children=False):
         if projection == self._binding_projection:
             return
         previous = self._binding_projection
-        same_groups = (
-            previous is not None
-            and len(previous.groups) == len(projection.groups)
-            and all(
-                old.group == new.group
-                for old, new in zip(previous.groups, projection.groups)
-            )
-            and (previous.palette is None) == (projection.palette is None)
-        )
-        if not same_groups:
-            await self.recompose()
-            return
-        if previous is None or (
-            previous.groups != projection.groups or previous.palette != projection.palette
-        ):
-            parents = iter(self.children)
-            for part in projection.groups:
-                if part.group is not None:
-                    parent = next(parents)
-                    assert isinstance(parent, KeyGroup)
-                    await self._reconcile_keys(parent, part.bindings, grouped=True)
-                    next(parents)  # The unchanged group's description label.
-                else:
-                    # A flat footer is the common case; grouped/flat structural
-                    # transitions retain ordinary recomposition above.
-                    if len(projection.groups) != 1:
-                        await self.recompose()
-                        return
-                    await self._reconcile_keys(self, part.bindings)
+        mode_label = self.query_one(".-mode", FooterLabel)
+        if previous.groups != projection.groups or previous.palette != projection.palette:
+            groups = list(self.query_children(KeyGroup))
+            added = [KeyGroup(part) for part in projection.groups[len(groups):]]
+            if added:
+                await self.mount_all(added, before=mode_label)
+                groups.extend(added)
+            if not self.is_attached or self._closing or self._pruning:
+                return
+            existing = {key.action: key for key in self.query(FooterKey)
+                        if not key.has_class("-command-palette")}
+            desired = {item.binding.action for part in projection.groups for item in part.bindings}
+            for action in existing.keys() - desired:
+                await existing.pop(action).remove()
+            for part, group in zip(projection.groups, groups):
+                parent = group.update_projection(part)
+                await self._reconcile_keys(parent, part.bindings, existing, grouped=part.grouped)
                 if not self.is_attached or self._closing or self._pruning:
                     return
+            for group in groups[len(projection.groups):]:
+                await group.remove()
+            palette_keys = [key for key in self.query_children(FooterKey)
+                            if key.has_class("-command-palette")]
             if projection.palette is not None:
-                self._update_key(
-                    self.query_one(".-command-palette", FooterKey),
-                    projection.palette,
-                    palette=True,
-                )
-        mode_label = self.query_one(".-mode", FooterLabel)
-        if previous is None or previous.mode_label != projection.mode_label:
+                if palette_keys:
+                    self._update_key(palette_keys[0], projection.palette, palette=True)
+                else:
+                    await self.mount(self._make_key(projection.palette, palette=True))
+            elif palette_keys:
+                await self.remove_children(palette_keys)
+        if previous.mode_label != projection.mode_label:
             mode_label.update(projection.mode_label)
             mode_label.display = bool(projection.mode_label)
         self.styles.grid_size_columns = projection.columns
@@ -425,8 +452,10 @@ class Footer(ScrollableContainer, can_focus=False, can_focus_children=False):
             (binding.tooltip or binding.description) if palette else
             (item.tooltip or binding.description) if grouped else item.tooltip
         ) or None
-        if (key.key, key.action, key.key_display, key.description, key._disabled, key.tooltip) == (
-            binding.key, binding.action, item.key_display, description, not item.enabled, tooltip
+        if (key.key, key.action, key.key_display, key.description, key._disabled, key.tooltip,
+            key.has_class("-grouped")) == (
+            binding.key, binding.action, item.key_display, description, not item.enabled, tooltip,
+            grouped
         ):
             return
         changed_size = (key.key_display, key.description) != (item.key_display, description)
@@ -434,20 +463,14 @@ class Footer(ScrollableContainer, can_focus=False, can_focus_children=False):
         key.key_display, key.description = item.key_display, description
         key._disabled = not item.enabled
         key.set_class(not item.enabled, "-disabled")
+        key.set_class(grouped, "-grouped")
         key.tooltip = tooltip
         key.refresh(layout=changed_size)
 
     async def _reconcile_keys(
-        self, parent: Widget, items: tuple[FooterBinding, ...], *, grouped: bool = False
+        self, parent: Widget, items: tuple[FooterBinding, ...], existing: dict[str, FooterKey],
+        *, grouped: bool = False,
     ) -> None:
-        existing = {
-            key.action: key for key in parent.children
-            if isinstance(key, FooterKey) and not key.has_class("-command-palette")
-        }
-        desired = {item.binding.action for item in items}
-        removed = [key for action, key in existing.items() if action not in desired]
-        if removed:
-            await parent.remove_children(removed)
         if not parent.is_attached or self._closing or self._pruning:
             return
         ordered = []
@@ -456,8 +479,11 @@ class Footer(ScrollableContainer, can_focus=False, can_focus_children=False):
             key = existing.get(item.binding.action)
             if key is None:
                 key = self._make_key(item, grouped=grouped)
+                existing[item.binding.action] = key
                 added.append(key)
             else:
+                if key.parent is not parent:
+                    key.reparent(parent)
                 self._update_key(key, item, grouped=grouped)
             ordered.append(key)
         if added:
