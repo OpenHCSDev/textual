@@ -4,14 +4,16 @@ import unicodedata
 import inspect
 import re
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Callable, ClassVar, Generic, Iterator, TypeVar
+from typing import TYPE_CHECKING, Callable, ClassVar, Generic, Iterator, Mapping, TypeVar
 from enum import Enum
+from dataclasses import dataclass
 from functools import lru_cache
 
 if TYPE_CHECKING:
     from textual.binding import Binding
     from textual.document._editing import EditingMode
     from textual.dom import DOMNode
+    from textual.events import Key
 
 NodeT = TypeVar("NodeT", bound="DOMNode", contravariant=True)
 
@@ -41,6 +43,10 @@ class KeyInvocation(ABC):
     @staticmethod
     def in_mode(identity: str, mode: type) -> str:
         return f"{identity}:{KeyInvocation.qualified(mode)}"
+
+    def visible_for_focus(self, mode: type[EditingMode], focused: frozenset[str]) -> bool:
+        """Local commands follow the enabled invocation IDs of the previous focus."""
+        return self.binding_identity(mode) in focused
 
     def permits_invocation_overlap(self, other: KeyInvocation) -> bool:
         return False
@@ -319,6 +325,92 @@ class Keys(str, Enum):  # type: ignore[no-redef]
     ShiftControlRight = ControlShiftRight
     ShiftControlHome = ControlShiftHome
     ShiftControlEnd = ControlShiftEnd
+
+
+@dataclass(frozen=True)
+class DeclaredKey:
+    """A decoded native input identity, distinct from its configured spelling."""
+
+    def decoded(self, key: str) -> DeclaredKey:
+        return self
+
+    def invocations(self, defaults: tuple[KeyInvocation, ...]) -> tuple[KeyInvocation, ...]:
+        return defaults
+
+    def preempts(self, binding: Binding, event: Key, keymap: Mapping[str, str]) -> bool:
+        return False
+
+
+class UndecodedKey(DeclaredKey):
+    """Only Binding.make_bindings sees an external declaration's key spelling."""
+
+    def decoded(self, key: str) -> DeclaredKey:
+        return NavigationKey.from_key(key)
+
+
+class NavigationKey(DeclaredKey, KeyInvocation):
+    """One preference for an arrow, independent of the focused control's effect.
+
+    Bindings keep their native callable, availability and order. Only the saved
+    input identity is shared: configuring Up must not mean configuring TextArea,
+    a table, a tree and every future arrow control separately.
+    """
+
+    key: ClassVar[Keys]
+    _by_key: ClassVar[dict[str, type[NavigationKey]]] = {}
+
+    def __init_subclass__(cls, *, key: Keys, **kwargs: object) -> None:
+        super().__init_subclass__(**kwargs)
+        cls.key = key
+        cls._by_key[key.value] = cls
+
+    @classmethod
+    def from_key(cls, key: str) -> DeclaredKey:
+        """Decode a declared native key once, before any preference changes it."""
+        try:
+            declaration = cls._by_key[key]
+        except KeyError:
+            return DeclaredKey()
+        return declaration()
+
+    def invocations(self, defaults: tuple[KeyInvocation, ...]) -> tuple[KeyInvocation, ...]:
+        return (self,)
+
+    def preempts(self, binding: Binding, event: Key, keymap: Mapping[str, str]) -> bool:
+        """Explicit printable aliases precede a list's type-to-search behavior."""
+        return event.is_printable and binding.id in keymap
+
+    def key_identity(self) -> str:
+        return self.qualified(type(self))
+
+    def key_title(self) -> str:
+        return f"Cursor {self.key.value}"
+
+    def key_summary(self) -> str:
+        return f"Use these keys wherever the focused control handles {self.key.value}."
+
+    def key_system(self) -> bool:
+        return False
+
+    def visible_for_focus(self, mode: type[EditingMode], focused: frozenset[str]) -> bool:
+        """Global arrow preferences remain editable even from a non-arrow focus."""
+        return True
+
+
+class UpKey(NavigationKey, key=Keys.Up):
+    pass
+
+
+class DownKey(NavigationKey, key=Keys.Down):
+    pass
+
+
+class LeftKey(NavigationKey, key=Keys.Left):
+    pass
+
+
+class RightKey(NavigationKey, key=Keys.Right):
+    pass
 
 
 # Unicode db contains some obscure names

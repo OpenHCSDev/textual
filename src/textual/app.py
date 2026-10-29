@@ -4271,7 +4271,8 @@ class App(Generic[ReturnType], DOMNode):
                         pass
                 if not await self._check_bindings(event.key, priority=True):
                     forward_target = self.focused or self.screen
-                    forward_target._forward_event(event)
+                    if not await self.screen.dispatch_remapped_key(event, forward_target):
+                        forward_target._forward_event(event)
             else:
                 self.screen._forward_event(event)
 
