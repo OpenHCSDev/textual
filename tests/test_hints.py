@@ -1,9 +1,15 @@
+from dataclasses import dataclass
 from itertools import combinations
 
+import pytest
+
 from textual.app import App, ComposeResult
+from textual.css.scalar import Scalar
+from textual.document._editing import EditingMode
+from textual.geometry import Region
 from textual.widgets import Static, Input, TextArea, Checkbox, RadioButton, Switch, Collapsible, Select
 from textual.widgets._collapsible import CollapsibleTitle
-from textual.widgets._hints import HintLabel, HintSession
+from textual.widgets._hints import HintClick, HintLabel, HintSession
 
 
 class DenseLinksApp(App):
@@ -75,3 +81,92 @@ async def test_native_hints_focus_inputs_and_activate_control_owners():
         await choose(select)
         assert select.expanded
         await pilot.press('escape')
+
+
+@dataclass(frozen=True)
+class HintCaptionMode(EditingMode):
+    """A label-only mode leaves native editing and binding behavior unchanged."""
+
+    text: str
+
+    @property
+    def label(self) -> str:
+        return self.text
+
+
+class HintCaptionApp(App[None]):
+    CSS = "TextArea { height: 4; } Static { margin-top: 1; }"
+
+    def compose(self) -> ComposeResult:
+        yield TextArea("draft stays")
+        yield Static("[@click=app.notify('target')]Hint target[/]")
+
+
+@pytest.mark.parametrize("click", tuple(HintClick))
+async def test_hint_caption_initial_unset_width_mount(click: HintClick) -> None:
+    app = HintCaptionApp()
+    async with app.run_test(size=(80, 24)) as pilot:
+        editor = app.query_one(TextArea)
+        editor.editing_mode = HintCaptionMode("NORMAL")
+        editor.focus()
+        await pilot.pause()
+        targets = app.screen._compositor.activation_targets(click)
+        assert targets, "The session must borrow actual published targets"
+        session = HintSession(app.screen, targets, click)
+        assert session.styles.width is None
+
+        await app.screen.mount(*session.labels, session)
+        session.focus_on_host()
+        await pilot.pause()
+
+        assert app.screen.query_one(HintSession) is session
+        assert app.screen.focused is session
+        assert session.original_focus is editor
+        assert session.styles.width == Scalar.from_number(
+            min(app.screen.size.width, session.caption.cell_length)
+        )
+        assert session.render().plain == f"{editor.editing_mode.label} · {click.caption}"
+        await pilot.press("escape")
+        await pilot.pause()
+        assert not app.screen.query_children(HintSession)
+        assert editor.has_focus
+
+
+@pytest.mark.parametrize("click", tuple(HintClick))
+async def test_hint_caption_same_width_mode_change(click: HintClick) -> None:
+    app = HintCaptionApp()
+    async with app.run_test(size=(80, 24)) as pilot:
+        editor = app.query_one(TextArea)
+        original_mode = HintCaptionMode("NORMAL")
+        replacement_mode = HintCaptionMode("INSERT")
+        editor.editing_mode = original_mode
+        editor.focus()
+        await pilot.pause()
+        assert app.screen._compositor.activation_targets(click)
+        await app.screen._show_hints(click)
+        await pilot.pause()
+        session = app.screen.query_one(HintSession)
+        width, offset = session.styles.width, session.absolute_offset
+        positions = tuple(label.absolute_offset for label in session.labels)
+        crop = Region(0, 0, session.size.width, 1)
+        assert original_mode.label in "".join(
+            strip.text for strip in session.render_lines(crop)
+        )
+
+        editor.editing_mode = replacement_mode
+        await pilot.pause()
+
+        assert app.screen.query_one(HintSession) is session
+        assert app.screen.focused is session
+        assert session.original_focus is editor
+        assert session.styles.width == width
+        assert session.absolute_offset == offset
+        assert tuple(label.absolute_offset for label in session.labels) == positions
+        painted = "".join(strip.text for strip in session.render_lines(crop))
+        assert replacement_mode.label in painted
+        assert original_mode.label not in painted
+        assert session.render().plain == f"{replacement_mode.label} · {click.caption}"
+        await pilot.press("escape")
+        await pilot.pause()
+        assert not app.screen.query_children(HintSession)
+        assert editor.has_focus

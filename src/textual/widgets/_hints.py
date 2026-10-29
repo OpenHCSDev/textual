@@ -8,6 +8,7 @@ from textual import events
 from textual.binding import ModeBinding
 from textual.document._editing import VimMode
 from textual.content import Content
+from textual.css.scalar import Scalar
 from textual.geometry import Offset
 from textual.widget import Widget
 
@@ -169,10 +170,11 @@ class HintSession(Widget, can_focus=True):
     def _reconcile_caption_geometry(self) -> None:
         size = self.screen.size
         width = min(size.width, self.caption.cell_length)
+        desired_width = Scalar.from_number(width)
         offset = Offset(0, size.height - 1)
-        if self.styles.width.value == width and self.absolute_offset == offset:
+        if self.styles.width == desired_width and self.absolute_offset == offset:
             return
-        self.styles.width = width
+        self.styles.width = desired_width
         self.absolute_offset = offset
         placed: dict[int, list[tuple[int, int]]] = {offset.y: [(0, width)]}
         for label in self.labels:
