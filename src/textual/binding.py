@@ -427,11 +427,14 @@ class BindingsMap:
                 if binding_id in keymap:
                     keymap_keys = [key for key in keymap[binding_id].split(",") if key]
 
-                    # Remove the old binding
-                    for key, key_bindings in key_to_bindings:
+                    # Remove this binding from its default keys; other bindings on those keys stay.
+                    for key, _ in key_to_bindings:
                         key = key.strip()
-                        if any(binding.id == binding_id for binding in key_bindings):
-                            if key in self.key_to_bindings:
+                        if key in self.key_to_bindings:
+                            kept = [bound for bound in self.key_to_bindings[key] if bound.id != binding_id]
+                            if kept:
+                                self.key_to_bindings[key] = kept
+                            else:
                                 del self.key_to_bindings[key]
 
                     for keymap_key in keymap_keys:
