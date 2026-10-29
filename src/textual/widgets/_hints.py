@@ -108,7 +108,7 @@ class HintSession(Widget, can_focus=True):
     def __init__(self, screen, targets, click: HintClick):
         super().__init__()
         self.click = click
-        self.original_focus = screen.focused
+        self.original_focus: Widget | None = screen.focused
         targets = sorted(targets, key=lambda target: (target.region.y, target.region.x))
         self.prefix = ""
         width = 1
@@ -125,8 +125,7 @@ class HintSession(Widget, can_focus=True):
         self.styles.height = 1
 
     @property
-    def key_mode_label(self) -> str:
-        """Taking hint focus does not replace the originating editor's mode."""
+    def _current_original_focus(self) -> Widget | None:
         original = self.original_focus
         if (
             original is not None
@@ -134,8 +133,14 @@ class HintSession(Widget, can_focus=True):
             and original.screen is self.screen
             and self.screen is self.app.screen
         ):
-            return original.key_mode_label
-        return super().key_mode_label
+            return original
+        return None
+
+    @property
+    def key_mode_label(self) -> str:
+        """Taking hint focus does not replace the originating editor's mode."""
+        original = self._current_original_focus
+        return original.key_mode_label if original is not None else super().key_mode_label
 
     @property
     def caption(self) -> Content:
@@ -245,7 +250,7 @@ class HintSession(Widget, can_focus=True):
         if self.screen is not self.app.screen:
             return
         original = self.original_focus
-        if original is None or (original.is_attached and original.screen is self.screen):
+        if original is None or self._current_original_focus is not None:
             self.screen.set_focus(original, scroll_visible=False)
 
     def dismiss(self, *, target=None, restore=True):
@@ -269,6 +274,10 @@ class HintSession(Widget, can_focus=True):
     def reconcile_publication(self):
         if self.disabled:
             return
+        if self.original_focus is not None and self._current_original_focus is None:
+            self.original_focus = None
+            self.refresh_bindings()
+            self.refresh()
         self._reconcile_caption_geometry()
         for label in self.labels:
             if label.display and not label.target.available():
