@@ -8,6 +8,7 @@ from textual import events
 from textual.binding import ModeBinding
 from textual.document._editing import VimMode
 from textual.content import Content
+from textual.css.scalar import Scalar
 from textual.geometry import Offset
 from textual.widget import Widget
 
@@ -108,31 +109,78 @@ class HintSession(Widget, can_focus=True):
     def __init__(self, screen, targets, click: HintClick):
         super().__init__()
         self.click = click
-        self.original_focus = screen.focused
+        self.original_focus: Widget | None = screen.focused
         targets = sorted(targets, key=lambda target: (target.region.y, target.region.x))
         self.prefix = ""
         width = 1
         while len(self.alphabet) ** width < len(targets):
             width += 1
-        size = screen.size
-        placed: dict[int, list[tuple[int, int]]] = {
-            size.height - 1: [(0, min(size.width, len(click.caption)))]
-        }
         labels = []
         for index, target in enumerate(targets):
             text = self.label(index, width)
-            offset = self.free_offset(placed, size, target.region.offset, len(text))
-            labels.append(HintLabel(self, text, target, offset))
+            labels.append(HintLabel(self, text, target, target.region.offset))
         self.labels = tuple(labels)
         self.styles.position = "absolute"
         self.styles.overlay = "screen"
         self.styles.layer = "_tooltips"
-        self.styles.width = min(size.width, len(click.caption))
         self.styles.height = 1
-        self.absolute_offset = Offset(0, size.height - 1)
+
+    @property
+    def _current_original_focus(self) -> Widget | None:
+        original = self.original_focus
+        if (
+            original is not None
+            and original.is_attached
+            and original.screen is self.screen
+            and self.screen is self.app.screen
+        ):
+            return original
+        return None
+
+    @property
+    def key_mode_label(self) -> str:
+        """Taking hint focus does not replace the originating editor's mode."""
+        original = self._current_original_focus
+        return original.key_mode_label if original is not None else super().key_mode_label
+
+    @property
+    def caption(self) -> Content:
+        """One complete caption supplies paint, width and reserved cells."""
+        mode_label = self.key_mode_label
+        return Content(
+            f"{mode_label} · {self.click.caption}" if mode_label else self.click.caption
+        )
 
     def render(self) -> Content:
-        return Content(self.click.caption)
+        return self.caption
+
+    def on_mount(self) -> None:
+        self.screen.bindings_updated_signal.subscribe(self, self._bindings_changed)
+        self._bindings_changed(self.screen)
+
+    def on_unmount(self) -> None:
+        self.screen.bindings_updated_signal.unsubscribe(self)
+
+    def _bindings_changed(self, _screen: Widget) -> None:
+        if self.disabled:
+            return
+        self._reconcile_caption_geometry()
+        self.refresh()
+
+    def _reconcile_caption_geometry(self) -> None:
+        size = self.screen.size
+        width = min(size.width, self.caption.cell_length)
+        desired_width = Scalar.from_number(width)
+        offset = Offset(0, size.height - 1)
+        if self.styles.width == desired_width and self.absolute_offset == offset:
+            return
+        self.styles.width = desired_width
+        self.absolute_offset = offset
+        placed: dict[int, list[tuple[int, int]]] = {offset.y: [(0, width)]}
+        for label in self.labels:
+            label.absolute_offset = self.free_offset(
+                placed, size, label.target.region.offset, len(label.text)
+            )
 
     @staticmethod
     def free_offset(placed, size, origin, width):
@@ -204,7 +252,7 @@ class HintSession(Widget, can_focus=True):
         if self.screen is not self.app.screen:
             return
         original = self.original_focus
-        if original is None or (original.is_attached and original.screen is self.screen):
+        if original is None or self._current_original_focus is not None:
             self.screen.set_focus(original, scroll_visible=False)
 
     def dismiss(self, *, target=None, restore=True):
@@ -228,6 +276,11 @@ class HintSession(Widget, can_focus=True):
     def reconcile_publication(self):
         if self.disabled:
             return
+        if self.original_focus is not None and self._current_original_focus is None:
+            self.original_focus = None
+            self.refresh_bindings()
+            self.refresh()
+        self._reconcile_caption_geometry()
         for label in self.labels:
             if label.display and not label.target.available():
                 label.display = False
