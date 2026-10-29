@@ -13,7 +13,9 @@ from textual import events, on
 from textual._immutable_sequence_view import ImmutableSequenceView
 from textual._loop import loop_last
 from textual._segment_tools import line_pad
-from textual.binding import Binding, BindingType
+from textual.binding import MethodBinding
+from textual.document._editing import EditingMode
+from textual.navigation import MovesCursor, SelectCursor
 from textual.cache import LRUCache
 from textual.geometry import Region, Size, clamp
 from textual.message import Message
@@ -515,7 +517,8 @@ class TreeNode(Generic[TreeDataType]):
         self._tree._refresh_line(self._line)
 
 
-class Tree(Generic[TreeDataType], ScrollView, can_focus=True):
+class Tree(MovesCursor, Generic[TreeDataType], ScrollView, can_focus=True,
+           navigation=(SelectCursor,)):
     """A widget for displaying and navigating data in a tree."""
 
     ICON_NODE = "▶ "
@@ -523,34 +526,6 @@ class Tree(Generic[TreeDataType], ScrollView, can_focus=True):
     ICON_NODE_EXPANDED = "▼ "
     """Unicode 'icon' to use for an expanded node."""
 
-    BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("shift+left", "cursor_parent", "Cursor to parent", show=False),
-        Binding(
-            "shift+right",
-            "cursor_parent_next_sibling",
-            "Cursor to next ancestor",
-            show=False,
-        ),
-        Binding(
-            "shift+up",
-            "cursor_previous_sibling",
-            "Cursor to previous sibling",
-            show=False,
-        ),
-        Binding(
-            "shift+down",
-            "cursor_next_sibling",
-            "Cursor to next sibling",
-            show=False,
-        ),
-        Binding("enter", "select_cursor", "Select", show=False),
-        Binding("space", "toggle_node", "Toggle", show=False),
-        Binding(
-            "shift+space", "toggle_expand_all", "Expand or collapse all", show=False
-        ),
-        Binding("up", "cursor_up", "Cursor Up", show=False),
-        Binding("down", "cursor_down", "Cursor Down", show=False),
-    ]
     """
     | Key(s) | Description |
     | :- | :- |
@@ -1514,6 +1489,7 @@ class Tree(Generic[TreeDataType], ScrollView, can_focus=True):
         self.cursor_line = self.last_line
         self.scroll_to_line(self.cursor_line)
 
+    @MethodBinding.declare("space", mode=EditingMode)
     def action_toggle_node(self) -> None:
         """Toggle the expanded state of the target node."""
         try:
@@ -1541,18 +1517,21 @@ class Tree(Generic[TreeDataType], ScrollView, can_focus=True):
             node = line.path[-1]
             self.post_message(Tree.NodeSelected(node))
 
+    @MethodBinding.declare("shift+left", mode=EditingMode)
     def action_cursor_parent(self) -> None:
         """Move the cursor to the parent node."""
         cursor_node = self.cursor_node
         if cursor_node is not None and cursor_node.parent is not None:
             self.move_cursor(cursor_node.parent, animate=True)
 
+    @MethodBinding.declare("shift+right", mode=EditingMode)
     def action_cursor_parent_next_sibling(self) -> None:
         """Move the cursor to the parent's next sibling."""
         cursor_node = self.cursor_node
         if cursor_node is not None and cursor_node.parent is not None:
             self.move_cursor(cursor_node.parent.next_sibling, animate=True)
 
+    @MethodBinding.declare("shift+up", mode=EditingMode)
     def action_cursor_previous_sibling(self) -> None:
         """Move the cursor to previous sibling, or to the parent if there are no more siblings."""
         cursor_node = self.cursor_node
@@ -1563,6 +1542,7 @@ class Tree(Generic[TreeDataType], ScrollView, can_focus=True):
             else:
                 self.move_cursor(previous_sibling, animate=True)
 
+    @MethodBinding.declare("shift+down", mode=EditingMode)
     def action_cursor_next_sibling(self) -> None:
         """Move the cursor to the next sibling, or to the paren't sibling if there are no more siblings."""
         cursor_node = self.cursor_node
@@ -1575,6 +1555,7 @@ class Tree(Generic[TreeDataType], ScrollView, can_focus=True):
             else:
                 self.move_cursor(next_sibling, animate=True)
 
+    @MethodBinding.declare("shift+space", mode=EditingMode)
     def action_toggle_expand_all(self) -> None:
         """Expand or collapse all siblings.
 
