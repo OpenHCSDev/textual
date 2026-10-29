@@ -8,6 +8,37 @@ from textual.document._wrapped_document import WrappedDocument
 from textual.geometry import Offset, clamp
 
 
+class WordBoundary:
+    """Vim word boundaries in document coordinates, independent of the cursor."""
+
+    direction = 1
+    pattern = re.compile(r"\w+|[^\w\s]+")
+
+    def matches(self, line: str):
+        return self.pattern.finditer(line)
+
+    def position(self, match) -> int:
+        return match.start()
+
+    def accepts(self, column: int, origin: int) -> bool:
+        return column > origin
+
+
+class PreviousWordBoundary(WordBoundary):
+    direction = -1
+
+    def matches(self, line: str):
+        return reversed(tuple(super().matches(line)))
+
+    def accepts(self, column: int, origin: int) -> bool:
+        return column < origin
+
+
+class EndWordBoundary(WordBoundary):
+    def position(self, match) -> int:
+        return match.end() - 1
+
+
 class DocumentNavigator:
     """Cursor navigation in the TextArea is "wrapping-aware".
 
@@ -70,6 +101,37 @@ class DocumentNavigator:
         self.last_x_offset = 0
         """Remembers the last x offset (cell width) the cursor was moved horizontally to,
         so that it can be restored on vertical movement where possible."""
+
+    def get_location_column_offset(self, location: Location, columns: int) -> Location:
+        """Move within a raw document line without crossing its newline."""
+        row, column = location
+        return row, clamp(column + columns, 0, len(self._document[row]))
+
+    def get_location_line_offset(self, location: Location, rows: int) -> Location:
+        """Move by logical lines, as opposed to wrapped visual sections."""
+        row = clamp(location[0] + rows, 0, self._document.line_count - 1)
+        return row, min(location[1], len(self._document[row]))
+
+    def get_location_first_nonblank(self, location: Location) -> Location:
+        line = self._document[location[0]]
+        return location[0], len(line) - len(line.lstrip())
+
+    def get_location_document_line_end(self, location: Location, lines: int = 1) -> Location:
+        row = min(self._document.line_count - 1, location[0] + lines - 1)
+        return row, len(self._document[row])
+
+    def get_location_word_boundary(self, location: Location, count: int, boundary: WordBoundary) -> Location:
+        """Find counted raw-word boundaries without moving an editor selection."""
+        row, column = location
+        stop = self._document.line_count if boundary.direction > 0 else -1
+        for next_row in range(row, stop, boundary.direction):
+            for match in boundary.matches(self._document[next_row]):
+                next_column = boundary.position(match)
+                if next_row != row or boundary.accepts(next_column, column):
+                    count -= 1
+                    if count == 0:
+                        return next_row, next_column
+        return self._document.end if boundary.direction > 0 else self._document.start
 
     def get_location_word_left(self, location: Location) -> Location:
         """The native word-left boundary, including its whitespace semantics."""

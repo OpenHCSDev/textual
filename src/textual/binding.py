@@ -22,7 +22,6 @@ from typing import (
     NamedTuple,
     Self,
     TypeVar,
-    overload,
 )
 
 import rich.repr
@@ -39,7 +38,6 @@ if TYPE_CHECKING:
     from textual.dom import DOMNode
     from textual.events import Key
     from textual.widget import Widget
-    from textual.widgets import TextArea
 
 BindingType: TypeAlias = "Binding | tuple[str, str] | tuple[str, str, str]"
 """The possible types of a binding found in the `BINDINGS` class variable."""
@@ -182,10 +180,6 @@ class Binding:
     def fallback_bindings(self) -> tuple[Binding, ...]:
         """Ordinary keys stay on the focused native ancestor chain."""
         return ()
-
-    def engine_boundary(self, editor: TextArea) -> bool:
-        """Native declarations may offer an application edge to an external editor."""
-        return False
 
     @classmethod
     def make_bindings(cls, bindings: Iterable[BindingType]) -> Iterable[Binding]:
@@ -341,12 +335,6 @@ class MethodBinding(ModeBinding):
                        tooltip=method.__doc__ or "", show=False, selecting=selecting)
         return declared
 
-    @overload
-    def __get__(self, instance: None, owner: type) -> FunctionType: ...
-
-    @overload
-    def __get__(self, instance: object, owner: type) -> Callable[..., object]: ...
-
     def __get__(self, instance: object, owner: type) -> Callable[..., object]:
         return self.action.__get__(instance, owner)
 
@@ -361,9 +349,6 @@ class MethodBinding(ModeBinding):
 
     def arguments(self) -> tuple[object, ...]:
         return ()
-
-    def engine_boundary(self, editor: TextArea) -> bool:
-        return editor.before_engine_input(self.action)
 
     def call(self, node: DOMNode) -> object:
         return invoke_sync(getattr(node, self.action.__name__), *self.arguments())

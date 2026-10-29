@@ -29,14 +29,6 @@ class EditResult:
     """The text that was replaced."""
 
 
-@dataclass
-class RangedEditResult(EditResult):
-    """A projected edit retains the original range needed by its view."""
-
-    start: Location
-    old_end: Location
-
-
 @lru_cache(maxsize=1024)
 def _utf8_encode(text: str) -> bytes:
     """Encode the input text as utf-8 bytes.
@@ -87,22 +79,6 @@ class DocumentBase(ABC):
         Returns:
             The new end location after the edit is complete.
         """
-
-    def replace_lines(self, first: int, last: int, lines: tuple[str, ...]) -> RangedEditResult:
-        """Project an end-exclusive line change into this same document."""
-        count = self.line_count
-        end = (last, 0) if last < count else self.end
-        start = (first, 0) if first < count else self.end
-        text = self.newline.join(lines)
-        if last < count:
-            if lines:
-                text += self.newline
-        elif first > 0:
-            start = first - 1, len(self.get_line(first - 1))
-            if lines:
-                text = self.newline + text
-        result = self.replace_range(start, end, text)
-        return RangedEditResult(result.end_location, result.replaced_text, start, end)
 
     @property
     @abstractmethod

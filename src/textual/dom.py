@@ -548,6 +548,11 @@ class DOMNode(PaintNode, MessagePump):
                   for projected in binding.for_mode(mode)))
 
     @classmethod
+    def editor_command_bindings(cls, mode: type[EditingMode]) -> tuple[Binding, ...]:
+        """Only native document editors declare modal document commands."""
+        return ()
+
+    @classmethod
     def binding_defaults(cls, mode: type[EditingMode]) -> BindingsMap:
         """Catalogs see the same raw and nominal native defaults as dispatch."""
         return cls._merged_bindings.project(mode, cls.declared_bindings(mode))
@@ -567,6 +572,10 @@ class DOMNode(PaintNode, MessagePump):
     def apply_editor_binding(self, binding: MethodBinding, event: Key) -> bool:
         binding.call(self)
         return True
+
+    def apply_editor_command(self, command: KeyDeclaration[TextArea]) -> bool:
+        """A generic node does not own a modal document editor."""
+        return False
 
     @cached_property
     def _query_one_cache(self) -> LRUCache[QueryOneCacheKey, DOMNode]:
