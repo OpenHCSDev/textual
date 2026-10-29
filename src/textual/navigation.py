@@ -1,36 +1,32 @@
 """Shared list navigation declarations, consumed through the native keymap."""
 from __future__ import annotations
 
+from abc import abstractmethod
 from typing import ClassVar
 
 from textual.binding import Binding, CommandBinding
 from textual.document._editing import EditingMode
 from textual.dom import DOMNode
-from textual.keys import KeyDeclaration
+from textual.keys import DeclaredKey, DownKey, KeyDeclaration, UndecodedKey, UpKey
 
 
 class NavigationCommand(KeyDeclaration["Navigation"]):
     """A list command owns its keys; controls own the operation it requests."""
 
     keys: ClassVar[tuple[str, ...]] = ()
-    _declared: ClassVar[list[type[NavigationCommand]]] = []
-
-    def __init_subclass__(cls, **kwargs) -> None:
-        super().__init_subclass__(**kwargs)
-        if "keys" in cls.__dict__:
-            NavigationCommand._declared.append(cls)
-
-    @classmethod
-    def declarations(cls):
-        return (member for member in NavigationCommand._declared
-                if issubclass(member, cls))
+    priority: ClassVar[bool] = False
+    declared_key: ClassVar[DeclaredKey] = UndecodedKey()
 
     @classmethod
     def bindings_for(cls, mode: type[EditingMode]) -> tuple[Binding, ...]:
+        if not cls.keys:
+            return ()
+        command = cls()
         return tuple(
-            CommandBinding(key=key, action=cls(), description=cls.title,
+            CommandBinding(key=key, action=command, description=cls.title,
                            available=cls.available, mode=EditingMode,
-                           id=cls.binding_id(mode), show=False, priority=True)
+                           id=cls.binding_id(mode), show=False, priority=cls.priority,
+                           declared_key=cls.declared_key)
             for key in cls.keys
         )
 
@@ -41,16 +37,19 @@ class NavigationCommand(KeyDeclaration["Navigation"]):
     def __call__(self, node: Navigation) -> object:
         return node.apply_navigation(self)
 
-    def apply(self, node: Navigation) -> object:
-        raise NotImplementedError
+    @abstractmethod
+    def apply(self, node: Navigation) -> object: ...
 
 
 class CursorCommand(NavigationCommand):
-    """Move the selected row, not an unrelated scroll container."""
+    """Move the selected row before a list's optional type-to-search handler."""
+
+    priority = True
 
 
 class CursorUp(CursorCommand):
     keys = ("up", "k")
+    declared_key = UpKey()
 
     def apply(self, node):
         return node.action_cursor_up()
@@ -58,6 +57,7 @@ class CursorUp(CursorCommand):
 
 class CursorDown(CursorCommand):
     keys = ("down", "j")
+    declared_key = DownKey()
 
     def apply(self, node):
         return node.action_cursor_down()
@@ -65,6 +65,21 @@ class CursorDown(CursorCommand):
 
 class ListCommand(NavigationCommand):
     """Navigation through a list's ends and pages."""
+
+
+class SelectionCommand(NavigationCommand):
+    """Activate the native control's current selection."""
+
+    def apply(self, node):
+        return node.action_select_cursor()
+
+
+class SelectCursor(SelectionCommand, ListCommand):
+    keys = ("enter",)
+
+
+class ActivateSelection(SelectionCommand):
+    keys = ("space",)
 
 
 class First(ListCommand):

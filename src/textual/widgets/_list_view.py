@@ -7,7 +7,6 @@ from typing_extensions import TypeGuard
 from textual._loop import loop_from_index
 from textual.await_complete import AwaitComplete
 from textual.await_remove import AwaitRemove
-from textual.binding import Binding, BindingType
 from textual.containers import VerticalScroll
 from textual.events import Mount
 from textual.message import Message
@@ -61,9 +60,6 @@ class ListView(ListNavigation, VerticalScroll, can_focus=True, can_focus_childre
     }
     """
 
-    BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("enter", "select_cursor", "Select", show=False),
-    ]
     """
     | Key(s) | Description |
     | :- | :- |

@@ -9,7 +9,6 @@ from rich.segment import Segment
 from textual import _widget_navigation, events
 from textual._activation import Activation
 from textual._loop import loop_last
-from textual.binding import Binding, BindingType
 from textual.cache import LRUCache
 from textual.css.styles import RulesMap
 from textual.geometry import Region, Size, Spacing, clamp
@@ -134,9 +133,6 @@ class OptionList(ListNavigation, ScrollView, can_focus=True):
     """A navigable list of options."""
 
     ALLOW_SELECT = False
-    BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("enter", "select", "Select", show=False),
-    ]
     """
     | Key(s) | Description |
     | :- | :- |
@@ -769,7 +765,7 @@ class OptionList(ListNavigation, ScrollView, can_focus=True):
         """Pointer and hint selection share highlight and the native action."""
         if self.option_enabled(option):
             self.highlighted = self._option_to_index[option]
-            self.action_select()
+            self.action_select_cursor()
 
     def _get_left_gutter_width(self) -> int:
         """Returns the size of any left gutter that should be taken into account.
@@ -1056,7 +1052,7 @@ class OptionList(ListNavigation, ScrollView, can_focus=True):
         else:
             self._move_page(1)
 
-    def action_select(self) -> None:
+    def action_select_cursor(self) -> None:
         """Select the currently highlighted option.
 
         If an option is selected then a
