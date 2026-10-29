@@ -7,9 +7,9 @@ from typing import TYPE_CHECKING
 from textual.binding import Binding, MethodBinding
 from textual.cursor_shape import CellCursor, CursorShape, SteadyBlock
 from textual.document._document import EditResult, Location, Selection
+from textual.document._edit import Edit, InsertionPoint
 
 if TYPE_CHECKING:
-    from textual.document._edit import Edit
     from textual.events import Key
     from textual.widgets import TextArea
 
@@ -119,9 +119,8 @@ class EditingMode:
     def edit(self, editor: TextArea, edit: Edit) -> EditResult | None:
         return editor._edit(edit)
 
-    def insert(self, editor: TextArea, text: str, location: Location | None, maintain_selection_offset: bool) -> EditResult | None:
-        from textual.document._edit import Edit
-        location = editor.cursor_location if location is None else location
+    def insert(self, editor: TextArea, text: str, point: InsertionPoint, maintain_selection_offset: bool) -> EditResult | None:
+        location = point.resolve(editor.cursor_location)
         return self.edit(editor, Edit(text, location, location, maintain_selection_offset))
 
     def clear(self, editor: TextArea) -> EditResult | None:

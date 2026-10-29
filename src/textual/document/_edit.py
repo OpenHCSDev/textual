@@ -9,6 +9,27 @@ if TYPE_CHECKING:
     from textual.widgets import TextArea
 
 
+class InsertionPoint:
+    """An omitted position follows the executing editor's cursor, not its view."""
+
+    def resolve(self, cursor: Location) -> Location:
+        return cursor
+
+    def engine_location(self) -> object:
+        return None
+
+
+@dataclass(frozen=True)
+class InsertAt(InsertionPoint):
+    location: Location
+
+    def resolve(self, cursor: Location) -> Location:
+        return self.location
+
+    def engine_location(self) -> object:
+        return self.location
+
+
 @dataclass
 class Edit:
     """Implements the Undoable protocol to replace text at some range within a document."""

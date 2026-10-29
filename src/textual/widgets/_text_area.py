@@ -33,7 +33,7 @@ from textual.document._document import (
     _utf8_encode,
 )
 from textual.document._document_navigator import DocumentNavigator
-from textual.document._edit import Edit
+from textual.document._edit import Edit, InsertAt, InsertionPoint
 from textual.document._history import EditHistory
 from textual.document._editing import EditingFailure, EditingMode
 from textual.document._syntax_aware_document import (
@@ -1214,7 +1214,7 @@ TextArea {
             self.editing_mode.capture(self),
         )
 
-    async def restore_editor_state(self, state: TextAreaState) -> bool:
+    async def restore_editor_state(self, state: TextAreaState) -> None:
         """Attach captured editor state without loading text or clearing history.
 
         The receiving widget owns fresh width-dependent wrapping and paint.
@@ -1222,11 +1222,8 @@ TextArea {
         """
         previous_mode = self.editing_mode
         if previous_mode is not state.editing_mode:
-            try:
-                if not await previous_mode.finish(self):
-                    return False
-            except EditingFailure:
-                pass  # The retained owner replaces a failed temporary editor.
+            # This surface is being reconstructed, not transferring user input.
+            # The retained owner replaces the unused temporary owner outright.
             await previous_mode.close()
         self._languages = {language.name: language for language in state.languages}
         self.set_reactive(TextArea.language, state.language)
@@ -1246,7 +1243,6 @@ TextArea {
                                 animate=False, immediate=True)
         self.post_message(self.Changed(self).set_sender(self))
         self.update_suggestion()
-        return True
 
     def _on_resize(self) -> None:
         self._rewrap_and_refresh_virtual_size()
@@ -1697,7 +1693,24 @@ TextArea {
         """Transfer a complete external buffer without adding native undo entries."""
         self.history.clear()
         self._set_document(text, self.language)
-        self._engine_document_changed()
+
+    def invalidate_engine_regions(self, regions: Sequence[Selection]) -> None:
+        """Invalidate only cached/visible rows intersecting engine-painted regions.
+
+        Document-to-display coordinates and cache keys belong to TextArea, not
+        to an external editor. Both the old and new regions belong in this call.
+        """
+        def affected(offset: int) -> bool:
+            row, _ = self.wrapped_document.offset_to_location(Offset(0, offset))
+            return any(region.contains_line(row) for region in regions)
+
+        for key in tuple(self._line_cache.keys()):
+            if affected(key[2]):
+                self._line_cache.discard(key)
+        first, last = self._visible_line_indices
+        for offset in range(first, last):
+            if affected(offset):
+                self.refresh_lines(offset)
 
     def apply_engine_lines(self, first: int, last: int, lines: tuple[str, ...]) -> None:
         """Replace an end-exclusive line range; no backend wire sentinels enter here."""
@@ -1715,12 +1728,23 @@ TextArea {
             start = first - 1, len(document[first - 1])
             if lines:
                 text = document.newline + text
+        previous_height = self.wrapped_document.height
         result = document.replace_range(start, end, text)
         self.wrapped_document.wrap_range(start, end, result.end_location)
-        self._engine_document_changed()
+        final = max(last, first + len(lines), start[0])
+        if self.wrapped_document.height != previous_height:
+            # Reflow changes the meaning of every following display offset.
+            final = max(final, document.line_count)
+        self.invalidate_engine_regions((Selection((start[0], 0), (final, 0)),))
 
-    def _engine_document_changed(self) -> None:
-        self._build_highlight_map()
+    def finish_engine_changes(self) -> None:
+        """Finish one batch of projected ranges, never once per buffer event.
+
+        Syntax queries can have nonlocal effects; rebuild them once when present.
+        Plain/custom-highlighted editors retain their unaffected row cache here.
+        """
+        if self._highlight_query:
+            self._build_highlight_map()
         self._refresh_size()
         self.post_message(self.Changed(self))
         self.update_suggestion()
@@ -2557,7 +2581,8 @@ TextArea {
         """
         if len(text) > 1:
             self._restart_blink()
-        return self.editing_mode.insert(self, text, location, maintain_selection_offset)
+        point = InsertionPoint() if location is None else InsertAt(location)
+        return self.editing_mode.insert(self, text, point, maintain_selection_offset)
 
     def delete(
         self,
