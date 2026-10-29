@@ -151,6 +151,11 @@ class DOMNode(PaintNode, MessagePump):
         return self.screen.key_mode
 
     @property
+    def key_mode_label(self) -> str:
+        """Display the current keyboard scope without interpreting its identity."""
+        return self.key_mode().label
+
+    @property
     def binding_mode(self) -> type[EditingMode]:
         """The canonical editing mode used to project this node's bindings."""
         return self.key_mode().binding_mode

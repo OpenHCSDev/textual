@@ -146,6 +146,11 @@ class TextArea(FocusActivation, ScrollView):
         return type(self.editing_mode)
 
     @property
+    def key_mode_label(self) -> str:
+        """Read the actual state, including parameterized pending modes."""
+        return self.editing_mode.label
+
+    @property
     def binding_mode(self) -> type[EditingMode]:
         return self.editing_mode.binding_mode
 
