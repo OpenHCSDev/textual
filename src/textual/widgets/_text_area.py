@@ -829,7 +829,22 @@ TextArea {
             self.editing_mode.suspend(self)
             self.editing_mode = self.editing_mode.settled()
 
-    def _watch_selection(
+    def apply_engine_selection(self, selection: Selection) -> None:
+        """Paint acknowledged cursor state without issuing another cursor request."""
+        previous = self.selection
+        start, end = selection
+        selection = Selection(self.clamp_visitable(start), self.clamp_visitable(end))
+        self.set_reactive(TextArea.selection, selection)
+        self._present_selection(previous, selection)
+        self.watch_selection(previous, selection)
+
+    def watch_selection(self, previous_selection: Selection, selection: Selection) -> None:
+        """Application presentation hook shared by native and engine cursor updates."""
+
+    def _watch_selection(self, previous_selection: Selection, selection: Selection) -> None:
+        self._present_selection(previous_selection, selection)
+
+    def _present_selection(
         self, previous_selection: Selection, selection: Selection
     ) -> None:
         """When the cursor moves, scroll it into view."""
@@ -838,7 +853,6 @@ TextArea {
         if not self.is_mounted:
             return
 
-        self.editing_mode.selection_changed(self, selection)
         self.app.clear_selection()
 
         cursor_location = selection.end
@@ -935,7 +949,9 @@ TextArea {
         """Clamp the selection to valid locations."""
         start, end = selection
         clamp_visitable = self.clamp_visitable
-        return Selection(clamp_visitable(start), clamp_visitable(end))
+        return self.editing_mode.request_selection(
+            self, Selection(clamp_visitable(start), clamp_visitable(end))
+        )
 
     def _watch_language(self, language: str | None) -> None:
         """When the language is updated, update the type of document."""
@@ -1156,7 +1172,6 @@ TextArea {
         self.wrapped_document = wrapped_document
         self.navigator = DocumentNavigator(self.wrapped_document)
         self._build_highlight_map()
-        self.move_cursor((0, 0))
 
     @property
     def _visible_line_indices(self) -> tuple[int, int]:
@@ -1182,6 +1197,7 @@ TextArea {
         self.history.clear()
         self.editing_mode = self.editing_mode.document_changed()
         self._set_document(text, self.language)
+        self.move_cursor((0, 0))
         self.editing_mode.resume(self)
         self.post_message(self.Changed(self).set_sender(self))
         self.update_suggestion()
@@ -1213,10 +1229,10 @@ TextArea {
         self.navigator = DocumentNavigator(self.wrapped_document)
         self._build_highlight_map()
         self._rewrap_and_refresh_virtual_size()
-        self.selection = state.selection
         self.editing_mode = state.editing_mode
         if previous_mode is state.editing_mode:
             self.editing_mode.attach(self)
+        self.selection = state.selection
         self.record_cursor_width()
         self.call_after_refresh(self.scroll_to, x=state.scroll_x, y=state.scroll_y,
                                 animate=False, immediate=True)

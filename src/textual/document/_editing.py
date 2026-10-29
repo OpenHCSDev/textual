@@ -82,6 +82,9 @@ class EditingMode:
     async def flush(self, editor: TextArea) -> None:
         """Finish admitted input before submission, transfer or retirement."""
 
+    async def acknowledge(self, editor: TextArea) -> None:
+        """Read actual engine state without waiting for a modal command to finish."""
+
     async def prepare_input(self, editor: TextArea) -> bool:
         """Asynchronous engines may fence earlier widget input before binding lookup."""
         return True
@@ -89,8 +92,8 @@ class EditingMode:
     def resize(self, editor: TextArea) -> None:
         pass
 
-    def selection_changed(self, editor: TextArea, selection: Selection) -> None:
-        pass
+    def request_selection(self, editor: TextArea, selection: Selection) -> Selection:
+        return selection
 
     def selection_range(self, editor: TextArea) -> Selection:
         return editor.selection
@@ -114,6 +117,9 @@ class EditingMode:
 
     def clear(self, editor: TextArea) -> EditResult | None:
         return editor.delete((0, 0), editor.document.end, maintain_selection_offset=False)
+
+    def move_to_end(self, editor: TextArea) -> None:
+        editor.move_cursor(editor.document.end)
 
     def undo(self, editor: TextArea) -> None:
         editor._undo()
