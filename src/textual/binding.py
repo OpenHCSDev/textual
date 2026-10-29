@@ -423,15 +423,18 @@ class BindingsMap:
                     # Bindings without an ID are irrelevant when applying a keymap
                     continue
 
-                # If the keymap has an override for this binding ID
-                if keymap_key_string := keymap.get(binding_id):
-                    keymap_keys = keymap_key_string.split(",")
+                # An override replaces this binding's keys; an empty override unbinds it.
+                if binding_id in keymap:
+                    keymap_keys = [key for key in keymap[binding_id].split(",") if key]
 
-                    # Remove the old binding
-                    for key, key_bindings in key_to_bindings:
+                    # Remove this binding from its default keys; other bindings on those keys stay.
+                    for key, _ in key_to_bindings:
                         key = key.strip()
-                        if any(binding.id == binding_id for binding in key_bindings):
-                            if key in self.key_to_bindings:
+                        if key in self.key_to_bindings:
+                            kept = [bound for bound in self.key_to_bindings[key] if bound.id != binding_id]
+                            if kept:
+                                self.key_to_bindings[key] = kept
+                            else:
                                 del self.key_to_bindings[key]
 
                     for keymap_key in keymap_keys:

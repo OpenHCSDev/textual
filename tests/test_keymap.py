@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from textual.app import App, ComposeResult
-from textual.binding import Binding, Keymap
+from textual.binding import Binding, BindingsMap, Keymap
 from textual.dom import DOMNode
 from textual.widget import Widget
 from textual.widgets import Label
@@ -51,6 +51,26 @@ async def test_keymap_default_binding_replaces_old_binding():
         # The new bindings are active and call the action.
         await pilot.press("right", "k")
         assert app.count == 2
+
+
+async def test_keymap_empty_override_unbinds():
+    app = Counter({"app.increment": ""})
+    async with app.run_test() as pilot:
+        # An empty override removes every default key and binds none.
+        await pilot.press("i", "up")
+        assert app.count == 0
+        # Other bindings keep their defaults.
+        await pilot.press("d")
+        assert app.count == -1
+
+
+def test_keymap_override_keeps_other_bindings_on_the_same_key():
+    bindings = BindingsMap([
+        Binding("ctrl+w", "close", id="close"),
+        Binding("ctrl+w", "other", id="other"),
+    ])
+    bindings.apply_keymap({"close": ""})
+    assert [binding.id for binding in bindings.key_to_bindings["ctrl+w"]] == ["other"]
 
 
 async def test_keymap_sends_message_when_clash():
