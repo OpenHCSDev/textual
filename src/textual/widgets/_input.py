@@ -23,7 +23,8 @@ from textual.strip import Strip
 if TYPE_CHECKING:
     pass
 
-from textual.binding import Binding, BindingType
+from textual.binding import Binding, BindingType, MethodBinding
+from textual.document._editing import EditingMode
 from textual.css._error_tools import friendly_list
 from textual.events import Blur, Focus, Mount
 from textual.geometry import Offset, Region, Size, clamp
@@ -76,50 +77,7 @@ class Input(FocusActivation, ScrollView):
 
     BINDING_GROUP_TITLE = "Input"
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("left", "cursor_left", "Move cursor left", show=False),
-        Binding(
-            "shift+left",
-            "cursor_left(True)",
-            "Move cursor left and select",
-            show=False,
-        ),
-        Binding("ctrl+left", "cursor_left_word", "Move cursor left a word", show=False),
-        Binding(
-            "ctrl+shift+left",
-            "cursor_left_word(True)",
-            "Move cursor left a word and select",
-            show=False,
-        ),
-        Binding(
-            "right",
-            "cursor_right",
-            "Move cursor right or accept the completion suggestion",
-            show=False,
-        ),
-        Binding(
-            "shift+right",
-            "cursor_right(True)",
-            "Move cursor right and select",
-            show=False,
-        ),
-        Binding(
-            "ctrl+right",
-            "cursor_right_word",
-            "Move cursor right a word",
-            show=False,
-        ),
-        Binding(
-            "ctrl+shift+right",
-            "cursor_right_word(True)",
-            "Move cursor right a word and select",
-            show=False,
-        ),
         Binding("backspace", "delete_left", "Delete character left", show=False),
-        Binding("ctrl+shift+a", "select_all", "Select all", show=False),
-        Binding("home,ctrl+a", "home", "Go to start", show=False),
-        Binding("end,ctrl+e", "end", "Go to end", show=False),
-        Binding("shift+home", "home(True)", "Select line start", show=False),
-        Binding("shift+end", "end(True)", "Select line end", show=False),
         Binding("delete,ctrl+d", "delete_right", "Delete character right", show=False),
         Binding("enter", "submit", "Submit", show=False),
         Binding(
@@ -751,6 +709,11 @@ class Input(FocusActivation, ScrollView):
     async def _on_key(self, event: events.Key) -> None:
         self._restart_blink()
 
+        if self.edit_key(event.key):
+            event.stop()
+            event.prevent_default()
+            return
+
         if event.is_printable:
             event.stop()
             assert event.character is not None
@@ -864,6 +827,7 @@ class Input(FocusActivation, ScrollView):
         start, end = sorted(self.selection)
         return self.value[start:end]
 
+    @MethodBinding.declare("left", mode=EditingMode, selecting=("shift+left",))
     def action_cursor_left(self, select: bool = False) -> None:
         """Move the cursor one position to the left.
 
@@ -879,6 +843,7 @@ class Input(FocusActivation, ScrollView):
             else:
                 self.cursor_position = min(start, end)
 
+    @MethodBinding.declare("right", mode=EditingMode, selecting=("shift+right",))
     def action_cursor_right(self, select: bool = False) -> None:
         """Accept an auto-completion or move the cursor one position to the right.
 
@@ -903,10 +868,12 @@ class Input(FocusActivation, ScrollView):
         self.selection = Selection(0, len(self.value))
         self._suggestion = ""
 
+    @MethodBinding.declare("ctrl+shift+a", mode=EditingMode)
     def action_select_all(self) -> None:
         """Select all of the text in the Input."""
         self.select_all()
 
+    @MethodBinding.declare("home", "ctrl+a", mode=EditingMode, selecting=("shift+home",))
     def action_home(self, select: bool = False) -> None:
         """Move the cursor to the start of the input.
 
@@ -918,6 +885,7 @@ class Input(FocusActivation, ScrollView):
         else:
             self.cursor_position = 0
 
+    @MethodBinding.declare("end", "ctrl+e", mode=EditingMode, selecting=("shift+end",))
     def action_end(self, select: bool = False) -> None:
         """Move the cursor to the end of the input.
 
@@ -931,6 +899,7 @@ class Input(FocusActivation, ScrollView):
 
     _WORD_START = re.compile(r"(?<=\W)\w")
 
+    @MethodBinding.declare("ctrl+left", mode=EditingMode, selecting=("ctrl+shift+left",))
     def action_cursor_left_word(self, select: bool = False) -> None:
         """Move the cursor left to the start of a word.
 
@@ -957,6 +926,7 @@ class Input(FocusActivation, ScrollView):
             else:
                 self.cursor_position = target
 
+    @MethodBinding.declare("ctrl+right", mode=EditingMode, selecting=("ctrl+shift+right",))
     def action_cursor_right_word(self, select: bool = False) -> None:
         """Move the cursor right to the start of a word.
 

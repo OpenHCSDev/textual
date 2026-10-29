@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass
+from inspect import iscoroutinefunction
+from types import FunctionType
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -23,7 +25,7 @@ from typing import (
 
 import rich.repr
 
-from textual._callback import invoke
+from textual._callback import invoke, invoke_sync
 from textual.actions import SkipAction
 from textual.keys import KeyDeclaration, KeyInvocation, _character_to_key
 
@@ -33,7 +35,6 @@ if TYPE_CHECKING:
 
     from textual.app import App
     from textual.dom import DOMNode
-    from textual.widgets import TextArea
 
 BindingType: TypeAlias = "Binding | tuple[str, str] | tuple[str, str, str]"
 """The possible types of a binding found in the `BINDINGS` class variable."""
@@ -154,7 +155,7 @@ class Binding:
         """
         return await app.run_action(self.action, node)
 
-    def edit(self, node: TextArea) -> bool:
+    def edit(self, node: DOMNode) -> bool:
         """Ordinary bindings run through application dispatch, after text handling."""
         return False
 
@@ -234,11 +235,14 @@ class CallBinding(Binding):
     def state(self, app: App[Any], node: DOMNode) -> bool | None:
         return self.available(node)
 
+    def call(self, node: DOMNode) -> object:
+        return invoke_sync(self.action, node)
+
     async def run(self, app: App[Any], node: DOMNode) -> bool:
         if not self.state(app, node):
             return False
         try:
-            await invoke(self.action, node)
+            await invoke(self.call, node)
         except SkipAction:
             return False
         return True
@@ -286,6 +290,64 @@ class ModeBinding(CallBinding, KeyInvocation):
 
     def fallback_bindings(self) -> tuple[Binding, ...]:
         return self.mode.fallback_bindings(self)
+
+
+@dataclass(frozen=True, kw_only=True)
+class MethodBinding(ModeBinding):
+    """A native method declares its own keys, with normal Python override dispatch.
+
+    The descriptor retains the original callable for stable invocation identity;
+    its name is derived only to bind the actual overriding method on the node.
+    No second action-name spelling or implementation lives in a menu.
+    """
+
+    action: FunctionType
+    selecting: tuple[str, ...] = ()
+
+    @classmethod
+    def declare(cls, *keys: str, mode: type[EditingMode], selecting: tuple[str, ...] = ()):
+        def declared(method: FunctionType) -> MethodBinding:
+            if iscoroutinefunction(method):
+                raise TypeError("Pre-text editor methods must be synchronous")
+            return cls(key=",".join(keys), action=method, mode=mode,
+                       description=method.__name__.removeprefix("action_").replace("_", " ").capitalize(),
+                       tooltip=method.__doc__ or "", show=False, selecting=selecting)
+        return declared
+
+    def __get__(self, instance: object, owner: type) -> Callable[..., object]:
+        return self.action.__get__(instance, owner)
+
+    def __set_name__(self, owner: type[DOMNode], name: str) -> None:
+        owner._declared_key_bindings = (
+            *owner.__dict__.get("_declared_key_bindings", ()), self,
+            *(SelectingMethodBinding(key=key, action=self.action, mode=self.mode,
+                                     description=f"{self.description} select",
+                                     tooltip=self.tooltip, show=self.show)
+              for key in self.selecting),
+        )
+
+    def arguments(self) -> tuple[object, ...]:
+        return ()
+
+    def call(self, node: DOMNode) -> object:
+        return invoke_sync(getattr(node, self.action.__name__), *self.arguments())
+
+    def edit(self, node: DOMNode) -> bool:
+        # Unconfigured defaults keep ordinary dispatch. Only an explicit focused
+        # override may take a printable key away from the insertion path.
+        if self.id not in node.app._keymap or not self.state(node.app, node):
+            return False
+        return node.apply_editor_binding(self)
+
+
+class SelectingMethodBinding(MethodBinding):
+    """The same native method with its real selection argument, not a Vim motion."""
+
+    def arguments(self) -> tuple[object, ...]:
+        return (True,)
+
+    def key_identity(self) -> str:
+        return f"{super().key_identity()}:{self.qualified(type(self))}"
 
 
 NodeT = TypeVar("NodeT", bound="DOMNode", contravariant=True)

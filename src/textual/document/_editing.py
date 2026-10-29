@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, ClassVar
 
-from textual.binding import Binding, CommandBinding
+from textual.binding import Binding, CommandBinding, MethodBinding
 from textual.document._document import Location, Selection
 from textual._clipboard import ClipboardContent, LinewiseClipboard
 from textual.keys import KeyDeclaration
@@ -43,7 +43,11 @@ class EditingMode:
         return ()
 
     def handle_key(self, editor: TextArea, event: Key) -> bool:
-        return False
+        return editor.edit_key(event.key)
+
+    def apply_native_binding(self, editor: TextArea, binding: MethodBinding) -> bool:
+        binding.call(editor)
+        return True
 
     def command_bindings(self) -> tuple[Binding, ...]:
         return ()
@@ -180,6 +184,10 @@ class VimNormal(VimMode):
         command.apply(editor, self, self.count or 1)
         return True
 
+    def apply_native_binding(self, editor: TextArea, binding: MethodBinding) -> bool:
+        editor.editing_mode = self.settled()
+        return super().apply_native_binding(editor, binding)
+
     def move_to(self, editor: TextArea, location: Location) -> None:
         editor.move_cursor(location)
 
@@ -251,6 +259,9 @@ class VimOperator(VimNormal):
     def settled(self) -> EditingMode:
         return VimNormal()
 
+    def apply_native_binding(self, editor: TextArea, binding: MethodBinding) -> bool:
+        return False
+
     def apply_command(self, editor: TextArea, command: type[EditorCommand]) -> bool:
         editor.editing_mode = VimNormal()
         command.pending(editor, self, self.operator_count * (self.count or 1))
@@ -283,6 +294,9 @@ class AwaitKey(VimMode):
 
     def selection_range(self, editor: TextArea) -> Selection:
         return self.previous.selection_range(editor)
+
+    def apply_native_binding(self, editor: TextArea, binding: MethodBinding) -> bool:
+        return False
 
     def declared_command_bindings(self, command: type[EditorCommand]) -> tuple[Binding, ...]:
         return command.pending_bindings(self.binding_mode)

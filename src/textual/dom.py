@@ -37,7 +37,7 @@ from textual._compat import cached_property
 from textual._node_list import NodeList
 from textual._paint_state import PaintNode
 from textual._types import WatchCallbackType
-from textual.binding import Binding, BindingsMap, BindingType
+from textual.binding import Binding, BindingsMap, BindingType, MethodBinding
 from textual.document._editing import EditingMode
 from textual.cache import LRUCache
 from textual.css._error_tools import friendly_list
@@ -516,9 +516,46 @@ class DOMNode(PaintNode, MessagePump):
             else self._merged_bindings.copy()
         )
 
+    _declared_key_bindings: ClassVar[tuple[MethodBinding, ...]] = ()
+
+    @classmethod
+    def contexts(cls) -> tuple[type[DOMNode], ...]:
+        """Native and application declarations share the actual node hierarchy."""
+        pending = [cls]
+        found: dict[type[DOMNode], None] = {}
+        while pending:
+            owner = pending.pop()
+            if owner not in found:
+                found[owner] = None
+                pending.extend(reversed(owner.__subclasses__()))
+        return tuple(found)
+
+    @classmethod
+    def declared_bindings(cls, mode: type[EditingMode]) -> tuple[Binding, ...]:
+        return tuple(projected for base in cls.__mro__
+                     for binding in base.__dict__.get("_declared_key_bindings", ())
+                     for projected in binding.for_mode(mode))
+
+    @classmethod
+    def editor_command_bindings(cls, mode: type[EditingMode]) -> tuple[Binding, ...]:
+        """Only native document editors declare modal document commands."""
+        return ()
+
     def binding_map(self, mode: type[EditingMode]) -> BindingsMap:
-        """A fresh projection for this node, before the application's keymap."""
-        return self._bindings.copy()
+        """One projection for native declarations and external subclass bindings."""
+        return BindingsMap.merge((self._bindings, BindingsMap(self.declared_bindings(mode))))
+
+    def edit_key(self, key: str) -> bool:
+        """Only the focused node can consume an editor call before insertion."""
+        for node, bindings in self.app.screen._binding_chain:
+            if node is self:
+                return any(binding.edit(self)
+                           for binding in bindings.key_to_bindings.get(key, ()))
+        return False
+
+    def apply_editor_binding(self, binding: MethodBinding) -> bool:
+        binding.call(self)
+        return True
 
     @cached_property
     def _query_one_cache(self) -> LRUCache[QueryOneCacheKey, DOMNode]:

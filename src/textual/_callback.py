@@ -43,6 +43,11 @@ def _count_parameters(func: Callable) -> int:
     return len(signature(func).parameters)
 
 
+def invoke_sync(callback: Callable[..., object], *params: object) -> object:
+    """Call with the native callback arity, including derived bound-method arity."""
+    return callback(*params[:count_parameters(callback)])
+
+
 async def _invoke(callback: Callable, *params: object) -> Any:
     """Invoke a callback with an arbitrary number of parameters.
 
@@ -53,8 +58,7 @@ async def _invoke(callback: Callable, *params: object) -> Any:
         The return value of the invoked callable.
     """
     _rich_traceback_guard = True
-    parameter_count = count_parameters(callback)
-    result = callback(*params[:parameter_count])
+    result = invoke_sync(callback, *params)
     if isawaitable(result):
         result = await result
     return result
