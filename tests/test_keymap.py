@@ -53,6 +53,17 @@ async def test_keymap_default_binding_replaces_old_binding():
         assert app.count == 2
 
 
+async def test_keymap_empty_override_unbinds():
+    app = Counter({"app.increment": ""})
+    async with app.run_test() as pilot:
+        # An empty override removes every default key and binds none.
+        await pilot.press("i", "up")
+        assert app.count == 0
+        # Other bindings keep their defaults.
+        await pilot.press("d")
+        assert app.count == -1
+
+
 async def test_keymap_sends_message_when_clash():
     app = Counter({"app.increment": "d"})
     async with app.run_test() as pilot:
