@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING
 
 from textual.binding import Binding, MethodBinding
 from textual.cursor_shape import CellCursor, CursorShape, SteadyBlock
@@ -22,9 +22,17 @@ class EditingMode:
     """Native text entry, with overridable document and input ownership."""
 
     modal = False
-    accepts_text = True
-    cursor_shape: ClassVar[CursorShape] = CellCursor()
-    label = ""
+    @property
+    def accepts_text(self) -> bool:
+        return True
+
+    @property
+    def cursor_shape(self) -> CursorShape:
+        return CellCursor()
+
+    @property
+    def label(self) -> str:
+        return ""
 
     @property
     def allows_application_commands(self) -> bool:
@@ -76,11 +84,12 @@ class EditingMode:
     async def close(self) -> None:
         pass
 
-    async def finish(self, editor: TextArea) -> None:
-        await self.flush(editor)
+    async def finish(self, editor: TextArea) -> bool:
+        return await self.flush(editor)
 
-    async def flush(self, editor: TextArea) -> None:
-        """Finish admitted input before submission, transfer or retirement."""
+    async def flush(self, editor: TextArea) -> bool:
+        """Acknowledge input, or explicitly refuse transfer while input is pending."""
+        return True
 
     async def acknowledge(self, editor: TextArea) -> None:
         """Read actual engine state without waiting for a modal command to finish."""
@@ -136,7 +145,9 @@ class VimMode(EditingMode, ABC):
     """Modal binding capability, not a second implementation of Vim."""
 
     modal = True
-    cursor_shape = SteadyBlock()
+    @property
+    def cursor_shape(self) -> CursorShape:
+        return SteadyBlock()
 
     @classmethod
     def fallback_bindings(cls, binding: Binding) -> tuple[Binding, ...]:

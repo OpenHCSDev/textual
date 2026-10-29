@@ -8,6 +8,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+from types import FunctionType
 from typing import TYPE_CHECKING, ClassVar, Iterable, Optional, Sequence, Tuple
 
 from rich.console import RenderableType
@@ -151,7 +152,7 @@ class TextArea(FocusActivation, ScrollView):
     def apply_editor_binding(self, binding: MethodBinding, event: events.Key) -> bool:
         return self.editing_mode.apply_native_binding(self, binding, event)
 
-    def before_engine_input(self, key: str) -> bool:
+    def before_engine_input(self, action: FunctionType) -> bool:
         """Offer a declared application boundary without interpreting engine commands."""
         return False
 
@@ -166,7 +167,9 @@ class TextArea(FocusActivation, ScrollView):
         """Transfer only after the previous engine has acknowledged its input."""
         previous = self.editing_mode
         try:
-            await previous.finish(self)
+            if not await previous.finish(self):
+                self.notify("Finish pending editor input before changing the editing profile.", severity="warning")
+                return
         except EditingFailure:
             # Explicitly selecting another editor recovers the displayed draft,
             # not the failed engine's uncertain input.
@@ -174,7 +177,8 @@ class TextArea(FocusActivation, ScrollView):
         await previous.close()
         self.editing_mode = mode
 
-    async def _on_unmount(self) -> None:
+    async def on_unmount(self) -> None:
+        """The public lifecycle hook awaits the editor's owned child retirement."""
         await self.editing_mode.unmount(self)
 
     DEFAULT_CSS = """\
@@ -1210,7 +1214,7 @@ TextArea {
             self.editing_mode.capture(self),
         )
 
-    async def restore_editor_state(self, state: TextAreaState) -> None:
+    async def restore_editor_state(self, state: TextAreaState) -> bool:
         """Attach captured editor state without loading text or clearing history.
 
         The receiving widget owns fresh width-dependent wrapping and paint.
@@ -1218,7 +1222,11 @@ TextArea {
         """
         previous_mode = self.editing_mode
         if previous_mode is not state.editing_mode:
-            await previous_mode.flush(self)
+            try:
+                if not await previous_mode.finish(self):
+                    return False
+            except EditingFailure:
+                pass  # The retained owner replaces a failed temporary editor.
             await previous_mode.close()
         self._languages = {language.name: language for language in state.languages}
         self.set_reactive(TextArea.language, state.language)
@@ -1238,6 +1246,7 @@ TextArea {
                                 animate=False, immediate=True)
         self.post_message(self.Changed(self).set_sender(self))
         self.update_suggestion()
+        return True
 
     def _on_resize(self) -> None:
         self._rewrap_and_refresh_virtual_size()
@@ -1684,32 +1693,35 @@ TextArea {
         start, end = sorted((start, end))
         return self.document.get_text_range(start, end)
 
+    def apply_engine_text(self, text: str) -> None:
+        """Transfer a complete external buffer without adding native undo entries."""
+        self.history.clear()
+        self._set_document(text, self.language)
+        self._engine_document_changed()
+
     def apply_engine_lines(self, first: int, last: int, lines: tuple[str, ...]) -> None:
-        """Project an engine's line-range notification without writing native undo."""
-        if last == -1:
-            # Initial ownership transfer is the only notification without a
-            # range in the existing rendering document.
-            self.history.clear()
-            self._set_document("\n".join(lines), self.language)
-        else:
-            document = self.document
-            count = document.line_count
-            end = (last, 0) if last < count else document.end
-            start = (first, 0) if first < count else document.end
-            text = document.newline.join(lines)
-            if last < count:
-                if lines:
-                    text += document.newline
-            elif first > 0:
-                # The last line owns its preceding newline. Consume it when
-                # removing the tail, and restore it only if new lines exist.
-                start = first - 1, len(document[first - 1])
-                if lines:
-                    text = document.newline + text
-            result = document.replace_range(start, end, text)
-            self.wrapped_document.wrap_range(start, end, result.end_location)
-            self._build_highlight_map()
-            self._refresh_size()
+        """Replace an end-exclusive line range; no backend wire sentinels enter here."""
+        document = self.document
+        count = document.line_count
+        end = (last, 0) if last < count else document.end
+        start = (first, 0) if first < count else document.end
+        text = document.newline.join(lines)
+        if last < count:
+            if lines:
+                text += document.newline
+        elif first > 0:
+            # Tail replacement consumes its preceding newline, restoring it
+            # only when replacement lines exist.
+            start = first - 1, len(document[first - 1])
+            if lines:
+                text = document.newline + text
+        result = document.replace_range(start, end, text)
+        self.wrapped_document.wrap_range(start, end, result.end_location)
+        self._engine_document_changed()
+
+    def _engine_document_changed(self) -> None:
+        self._build_highlight_map()
+        self._refresh_size()
         self.post_message(self.Changed(self))
         self.update_suggestion()
 
@@ -2041,7 +2053,7 @@ TextArea {
         """Finalize the selection that has been made using the mouse."""
         self._end_mouse_selection()
 
-    async def _on_hide(self, event: events.Hide) -> None:
+    def _on_hide(self, event: events.Hide) -> None:
         """Finalize the selection that has been made using the mouse when the widget is hidden."""
         self._end_mouse_selection()
 
