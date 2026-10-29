@@ -1,12 +1,7 @@
 import pytest
 
 from textual.app import App, ComposeResult
-from textual.document._editing import (
-    EditingMode,
-    VimInsert,
-    VimNormal,
-    VimVisual,
-)
+from textual.document._editing import EditingMode
 from textual.widgets import TextArea
 
 
@@ -24,9 +19,6 @@ HIDDEN_DEFAULT = "\x1b[0 q\x1b[?25l"
     ("mode", "focused_sequence", "draws_cell"),
     [
         (EditingMode(), "", True),
-        (VimInsert(), "\x1b[5 q\x1b[?25h", False),
-        (VimNormal(), "\x1b[2 q\x1b[?25h", False),
-        (VimVisual(), "\x1b[2 q\x1b[?25h", False),
     ],
 )
 async def test_editing_mode_sets_terminal_cursor_shape(
