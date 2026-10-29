@@ -34,7 +34,7 @@ from textual.document._document import (
 from textual.document._document_navigator import DocumentNavigator
 from textual.document._edit import Edit
 from textual.document._history import EditHistory
-from textual.document._editing import EditingMode
+from textual.document._editing import EditingFailure, EditingMode
 from textual.document._syntax_aware_document import (
     SyntaxAwareDocument,
     SyntaxAwareDocumentError,
@@ -46,11 +46,10 @@ from textual.style import Style as ContentStyle
 
 if TYPE_CHECKING:
     from tree_sitter import Language, Query
-    from textual.keys import KeyDeclaration
 
 from textual import events, log
 from textual._cells import cell_len, cell_width_to_column_index
-from textual.binding import Binding, BindingsMap, MethodBinding
+from textual.binding import Binding, MethodBinding
 from textual.events import Message, MouseEvent
 from textual.geometry import Offset, Region, Size, Spacing, clamp
 from textual.reactive import Reactive, reactive
@@ -149,15 +148,6 @@ class TextArea(FocusActivation, ScrollView):
     def binding_mode(self) -> type[EditingMode]:
         return self.editing_mode.binding_mode
 
-    def binding_map(self, mode: type[EditingMode]) -> BindingsMap:
-        return BindingsMap.merge((
-            BindingsMap(self.editing_mode.command_bindings()), super().binding_map(mode),
-        ))
-
-    @classmethod
-    def editor_command_bindings(cls, mode: type[EditingMode]) -> tuple[Binding, ...]:
-        return mode().command_bindings()
-
     def apply_editor_binding(self, binding: MethodBinding, event: events.Key) -> bool:
         return self.editing_mode.apply_native_binding(self, binding, event)
 
@@ -165,13 +155,22 @@ class TextArea(FocusActivation, ScrollView):
         """Offer a declared application boundary without interpreting engine commands."""
         return False
 
-    async def prepare_key(self) -> None:
-        await self.editing_mode.prepare_input(self)
+    async def prepare_key(self) -> bool:
+        mode = self.editing_mode
+        ready = await mode.prepare_input(self)
+        if mode is not self.editing_mode:
+            return await self.prepare_key()
+        return ready
 
     async def switch_editing_mode(self, mode: EditingMode) -> None:
         """Transfer only after the previous engine has acknowledged its input."""
         previous = self.editing_mode
-        await previous.flush(self)
+        try:
+            await previous.finish(self)
+        except EditingFailure:
+            # Explicitly selecting another editor recovers the displayed draft,
+            # not the failed engine's uncertain input.
+            pass
         await previous.close()
         self.editing_mode = mode
 
@@ -820,12 +819,6 @@ TextArea {
         """Hook for an embedding application to focus its navigation surface."""
         self.screen.focus_next()
 
-    def paste_editor_text(self, *, before: bool, count: int = 1) -> None:
-        """Paste the retained native register with its original range semantics."""
-        content = self.app.clipboard_content
-        if not self.read_only and content.text:
-            content.paste(self, before, count)
-
     def _watch_has_focus(self, focus: bool) -> None:
         self._cursor_visible = focus
         if focus:
@@ -1201,12 +1194,16 @@ TextArea {
             self.editing_mode.capture(self),
         )
 
-    def restore_editor_state(self, state: TextAreaState) -> None:
+    async def restore_editor_state(self, state: TextAreaState) -> None:
         """Attach captured editor state without loading text or clearing history.
 
         The receiving widget owns fresh width-dependent wrapping and paint.
         Selection and scroll are restored through their ordinary native paths.
         """
+        previous_mode = self.editing_mode
+        if previous_mode is not state.editing_mode:
+            await previous_mode.flush(self)
+            await previous_mode.close()
         self._languages = {language.name: language for language in state.languages}
         self.set_reactive(TextArea.language, state.language)
         self.document = state.document
@@ -1218,6 +1215,8 @@ TextArea {
         self._rewrap_and_refresh_virtual_size()
         self.selection = state.selection
         self.editing_mode = state.editing_mode
+        if previous_mode is state.editing_mode:
+            self.editing_mode.attach(self)
         self.record_cursor_width()
         self.call_after_refresh(self.scroll_to, x=state.scroll_x, y=state.scroll_y,
                                 animate=False, immediate=True)
@@ -1226,6 +1225,7 @@ TextArea {
 
     def _on_resize(self) -> None:
         self._rewrap_and_refresh_virtual_size()
+        self.editing_mode.resize(self)
 
     def _watch_soft_wrap(self) -> None:
         self._rewrap_and_refresh_virtual_size()
@@ -1445,7 +1445,7 @@ TextArea {
         line.set_length(line_character_count + 1)  # space at end for cursor
         virtual_width, _virtual_height = self.virtual_size
 
-        selection = self.editing_mode.selection_range(self)
+        selection = self.editing_mode.selection_for_line(self, line_index)
         start, end = selection
         cursor_row, cursor_column = self.cursor_location
 
@@ -1648,8 +1648,7 @@ TextArea {
     @property
     def selected_text(self) -> str:
         """The selected range, shared with paint and modal operators."""
-        start, end = self.editing_mode.selection_range(self)
-        return self.get_text_range(start, end)
+        return self.editing_mode.selected_text(self)
 
     @property
     def matching_bracket_location(self) -> Location | None:
@@ -1668,6 +1667,35 @@ TextArea {
         """
         start, end = sorted((start, end))
         return self.document.get_text_range(start, end)
+
+    def apply_engine_lines(self, first: int, last: int, lines: tuple[str, ...]) -> None:
+        """Project an engine's line-range notification without writing native undo."""
+        if last == -1:
+            # Initial ownership transfer is the only notification without a
+            # range in the existing rendering document.
+            self.history.clear()
+            self._set_document("\n".join(lines), self.language)
+        else:
+            document = self.document
+            count = document.line_count
+            end = (last, 0) if last < count else document.end
+            start = (first, 0) if first < count else document.end
+            text = document.newline.join(lines)
+            if last < count:
+                if lines:
+                    text += document.newline
+            elif first > 0:
+                # The last line owns its preceding newline. Consume it when
+                # removing the tail, and restore it only if new lines exist.
+                start = first - 1, len(document[first - 1])
+                if lines:
+                    text = document.newline + text
+            result = document.replace_range(start, end, text)
+            self.wrapped_document.wrap_range(start, end, result.end_location)
+            self._build_highlight_map()
+            self._refresh_size()
+        self.post_message(self.Changed(self))
+        self.update_suggestion()
 
     def edit(self, edit: Edit) -> EditResult | None:
         """Submit an edit; asynchronous engines publish its acknowledged result."""
@@ -2501,9 +2529,7 @@ TextArea {
         """
         if len(text) > 1:
             self._restart_blink()
-        if location is None:
-            location = self.cursor_location
-        return self.edit(Edit(text, location, location, maintain_selection_offset))
+        return self.editing_mode.insert(self, text, location, maintain_selection_offset)
 
     def delete(
         self,
@@ -2557,8 +2583,7 @@ TextArea {
         Returns:
             An EditResult relating to the deletion of all content.
         """
-        self.editing_mode = self.editing_mode.document_changed()
-        return self.delete((0, 0), self.document.end, maintain_selection_offset=False)
+        return self.editing_mode.clear(self)
 
     def _delete_via_keyboard(
         self,
@@ -2680,10 +2705,7 @@ TextArea {
         """Paste from local clipboard."""
         if self.read_only:
             return
-        self.editing_mode = self.editing_mode.pasted()
-        clipboard = self.app.clipboard
-        if result := self._replace_via_keyboard(clipboard, *self.selection):
-            self.move_cursor(result.end_location)
+        self.editing_mode.paste(self, self.app.clipboard)
 
     def action_delete_to_start_of_line(self) -> None:
         """Deletes from the cursor location to the start of the line."""

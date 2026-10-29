@@ -340,9 +340,9 @@ class DeclaredKey:
     def preempts(self, binding: Binding, event: Key, keymap: Mapping[str, str]) -> bool:
         return False
 
-    def input_key(self, event: Key) -> str:
-        """The external editor receives native input identity, not a remapped spelling."""
-        return event.key
+    def input_bindings(self, spelling: str) -> tuple[tuple[str, str], ...]:
+        """Native input aliases for an external editing engine."""
+        return ()
 
 
 class UndecodedKey(DeclaredKey):
@@ -387,8 +387,8 @@ class NavigationKey(DeclaredKey, KeyInvocation):
     def key_identity(self) -> str:
         return self.qualified(type(self))
 
-    def input_key(self, event: Key) -> str:
-        return self.key.value
+    def input_bindings(self, spelling: str) -> tuple[tuple[str, str], ...]:
+        return ((spelling, self.key.value),)
 
     def key_title(self) -> str:
         return f"Cursor {self.key.value}"
