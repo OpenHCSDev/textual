@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 
 from textual.binding import Binding, BindingType, MethodBinding
 from textual.css._error_tools import friendly_list
+from textual.document._editing import EditingMode
 from textual.events import Blur, Focus, Mount
 from textual.geometry import Offset, Region, Size, clamp
 from textual.message import Message
@@ -454,6 +455,11 @@ class Input(FocusActivation, ScrollView):
     def cursor_at_end(self) -> bool:
         """Flag to indicate if the cursor is at the end."""
         return self.cursor_position == len(self.value)
+
+    @property
+    def key_mode(self) -> type[EditingMode]:
+        """Single-line inputs always own printable text, regardless of screen profile."""
+        return EditingMode
 
     @property
     def allows_application_commands(self) -> bool:
