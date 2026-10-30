@@ -562,16 +562,16 @@ async def test_navigation_around_disabled_tabs():
         tabbed_conent = app.query_one(TabbedContent)
         tabs = app.query_one(Tabs)
         assert tabbed_conent.active == "tab-1"
-        tabs.action_next_tab()
+        tabs.action_cursor_right()
         await pilot.pause()
         assert tabbed_conent.active == "tab-2"
-        tabs.action_next_tab()
+        tabs.action_cursor_right()
         await pilot.pause()
         assert tabbed_conent.active == "tab-4"
-        tabs.action_next_tab()
+        tabs.action_cursor_right()
         await pilot.pause()
         assert tabbed_conent.active == "tab-2"
-        tabs.action_previous_tab()
+        tabs.action_cursor_left()
         await pilot.pause()
         assert tabbed_conent.active == "tab-4"
 

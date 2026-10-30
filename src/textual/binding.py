@@ -330,15 +330,22 @@ class MethodBinding(ModeBinding):
     selecting: tuple[str, ...] = ()
 
     @classmethod
-    def declare(cls, *keys: str, mode: type[EditingMode], selecting: tuple[str, ...] = ()) -> Callable[[Callable[..., object]], MethodBinding]:
+    def declare(
+        cls, *keys: str, selecting: tuple[str, ...] = (), description: str = "",
+        priority: bool = False, available: Callable[[DOMNode], bool | None] = _always,
+        show: bool = False,
+    ) -> Callable[[Callable[..., object]], MethodBinding]:
+        from textual.document._editing import EditingMode
+
         def declared(method: Callable[..., object]) -> MethodBinding:
             if not isinstance(method, FunctionType):
                 raise TypeError("Native method declarations require a Python function")
             if iscoroutinefunction(method):
                 raise TypeError("Pre-text editor methods must be synchronous")
-            return cls(key=",".join(keys), action=method, mode=mode,
-                       description=method.__name__.removeprefix("action_").replace("_", " ").capitalize(),
-                       tooltip=method.__doc__ or "", show=False, selecting=selecting)
+            return cls(key=",".join(keys), action=method, mode=EditingMode,
+                       description=description or method.__name__.removeprefix("action_").replace("_", " ").capitalize(),
+                       tooltip=method.__doc__ or "", show=show, selecting=selecting,
+                       priority=priority, available=available)
         return declared
 
     @overload

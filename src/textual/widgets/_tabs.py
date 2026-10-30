@@ -9,8 +9,7 @@ from rich.text import Text
 from textual import events
 from textual.app import ComposeResult, RenderResult
 from textual.await_complete import AwaitComplete
-from textual.binding import MethodBinding
-from textual.document._editing import EditingMode
+from textual.navigation import MovesHorizontalCursor
 from textual.containers import Container, Horizontal, Vertical
 from textual.content import Content, ContentText
 from textual.css.query import NoMatches
@@ -210,7 +209,7 @@ class Tab(Static):
         self.post_message(self.Disabled(self) if disabled else self.Enabled(self))
 
 
-class Tabs(Widget, can_focus=True):
+class Tabs(MovesHorizontalCursor, Widget, can_focus=True):
     """A row of tabs."""
 
     DEFAULT_CSS = """
@@ -242,13 +241,6 @@ class Tabs(Widget, can_focus=True):
             overflow: hidden hidden;
         }
     }
-    """
-
-    """
-    | Key(s) | Description |
-    | :- | :- |
-    | left | Move to the previous tab. |
-    | right | Move to the next tab. |
     """
 
     class TabError(Exception):
@@ -729,13 +721,11 @@ class Tabs(Widget, can_focus=True):
         self._highlight_active(animate=False)
         self._scroll_active_tab()
 
-    @MethodBinding.declare("right", mode=EditingMode)
-    def action_next_tab(self) -> None:
+    def action_cursor_right(self) -> None:
         """Make the next tab active."""
         self._move_tab(+1)
 
-    @MethodBinding.declare("left", mode=EditingMode)
-    def action_previous_tab(self) -> None:
+    def action_cursor_left(self) -> None:
         """Make the previous tab active."""
         self._move_tab(-1)
 

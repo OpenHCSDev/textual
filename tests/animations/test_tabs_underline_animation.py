@@ -24,7 +24,7 @@ async def test_tabs_underline_animates_on_full() -> None:
     async with app.run_test() as pilot:
         animator = app.animator
         animator._record_animation = animations.append
-        app.query_one(Tabs).action_previous_tab()
+        app.query_one(Tabs).action_cursor_left()
         await pilot.pause()
         assert "highlight_start" in animations
         assert "highlight_end" in animations
@@ -40,7 +40,7 @@ async def test_tabs_underline_animates_on_basic() -> None:
     async with app.run_test() as pilot:
         animator = app.animator
         animator._record_animation = animations.append
-        app.query_one(Tabs).action_previous_tab()
+        app.query_one(Tabs).action_cursor_left()
         await pilot.pause()
         assert "highlight_start" in animations
         assert "highlight_end" in animations
@@ -56,7 +56,7 @@ async def test_tabs_underline_does_not_animate_on_none() -> None:
     async with app.run_test() as pilot:
         animator = app.animator
         animator._record_animation = animations.append
-        app.query_one(Tabs).action_previous_tab()
+        app.query_one(Tabs).action_cursor_left()
         await pilot.pause()
         assert "highlight_start" not in animations
         assert "highlight_end" not in animations

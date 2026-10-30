@@ -16,7 +16,6 @@ if TYPE_CHECKING:
 from rich.style import Style
 
 from textual.binding import MethodBinding
-from textual.document._editing import EditingMode
 from textual.content import Content, ContentText
 from textual.css._error_tools import friendly_list
 from textual.geometry import Size
@@ -452,7 +451,7 @@ class Button(PrimaryActivation, Widget, can_focus=True):
                 self.active_effect_duration, partial(self.remove_class, "-active")
             )
 
-    @MethodBinding.declare("enter", mode=EditingMode)
+    @MethodBinding.declare("enter")
     def action_press(self) -> None:
         """Activate a press of the button."""
         if not self.has_class("-active"):

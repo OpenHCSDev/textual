@@ -11,7 +11,6 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
 from textual.binding import MethodBinding
-from textual.document._editing import EditingMode
 from textual.events import Click
 from textual.geometry import Size
 from textual.message import Message
@@ -208,7 +207,7 @@ class Switch(PrimaryActivation, Widget, can_focus=True):
     def primary_activation(self):
         return self.action_toggle_switch
 
-    @MethodBinding.declare("enter", "space", mode=EditingMode)
+    @MethodBinding.declare("enter", "space")
     def action_toggle_switch(self) -> None:
         """Toggle the state of the switch."""
         self.toggle()

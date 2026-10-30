@@ -12,7 +12,6 @@ from rich.text import Text
 from textual import events, on
 from textual.binding import MethodBinding
 from textual.containers import Horizontal, Vertical
-from textual.document._editing import EditingMode
 from textual.css.query import NoMatches
 from textual.message import Message
 from textual.navigation import ActivateSelection, MovesCursor, NavigationCommand, SelectCursor
@@ -160,7 +159,7 @@ class SelectOverlay(OptionList):
 
         return best_match
 
-    @MethodBinding.declare("escape", mode=EditingMode)
+    @MethodBinding.declare("escape")
     def action_dismiss(self) -> None:
         """Dismiss the overlay."""
         self.post_message(self.Dismiss())
@@ -283,7 +282,7 @@ SelectOption: TypeAlias = "tuple[str, SelectType]"
 
 
 class Select(MovesCursor, PrimaryActivation, Generic[SelectType], Vertical,
-             navigation=(SelectCursor, ActivateSelection), can_focus=True):
+             key_families=(SelectCursor, ActivateSelection), can_focus=True):
     """Widget to select from a list of possible options.
 
     A Select displays the current selection.
@@ -682,6 +681,10 @@ class Select(MovesCursor, PrimaryActivation, Generic[SelectType], Vertical,
     @property
     def primary_activation(self):
         return self.action_show_overlay
+
+    @property
+    def accepts_navigation(self) -> bool:
+        return not self.expanded
 
     def apply_navigation(self, command: NavigationCommand) -> None:
         """A collapsed list admits navigation by opening its native overlay."""

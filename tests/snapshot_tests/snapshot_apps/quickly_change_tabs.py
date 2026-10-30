@@ -14,8 +14,8 @@ class QuicklyChangeTabsApp(App[None]):
                 yield Label("three")
 
     def key_p(self) -> None:
-        self.query_one(Tabs).action_next_tab()
-        self.query_one(Tabs).action_next_tab()
+        self.query_one(Tabs).action_cursor_right()
+        self.query_one(Tabs).action_cursor_right()
 
 
 app = QuicklyChangeTabsApp()

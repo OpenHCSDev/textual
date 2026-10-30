@@ -75,8 +75,7 @@ class KeyDeclaration(KeyInvocation, Generic[NodeT]):
 
     def __init_subclass__(cls, **kwargs) -> None:
         super().__init_subclass__(**kwargs)
-        if "keys" in cls.__dict__:
-            KeyDeclaration._declared.append(cls)
+        KeyDeclaration._declared.append(cls)
 
     @classmethod
     def default_title(cls) -> str:
@@ -135,7 +134,7 @@ class KeyDeclaration(KeyInvocation, Generic[NodeT]):
     def declarations(cls) -> Iterator[type[KeyDeclaration]]:
         """Project each key family from the declaration owner's registry."""
         return (member for member in KeyDeclaration._declared
-                if issubclass(member, cls))
+                if issubclass(member, cls) and not inspect.isabstract(member))
 
 
 # Adapted from prompt toolkit https://github.com/prompt-toolkit/python-prompt-toolkit/blob/master/prompt_toolkit/keys.py

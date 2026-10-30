@@ -5,7 +5,6 @@ from textual._activation import PrimaryActivation
 from textual import events
 from textual.app import ComposeResult
 from textual.binding import MethodBinding
-from textual.document._editing import EditingMode
 from textual.containers import Container
 from textual.content import Content, ContentText
 from textual.css.query import NoMatches
@@ -82,7 +81,7 @@ class CollapsibleTitle(PrimaryActivation, Static, can_focus=True):
     def primary_activation(self):
         return self.action_toggle_collapsible
 
-    @MethodBinding.declare("enter", mode=EditingMode)
+    @MethodBinding.declare("enter")
     def action_toggle_collapsible(self) -> None:
         """Toggle the state of the parent collapsible."""
         self.post_message(self.Toggle())

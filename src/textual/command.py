@@ -1227,11 +1227,11 @@ class CommandPalette(SystemModalScreen[None]):
                 # If there is one option, assume the user wants to select it
                 if command_list.option_count == 1:
                     # Call after a short delay to provide a little visual feedback
-                    self._action_command_list("select")
+                    command_list.action_select_cursor()
             else:
                 # The list is visible, something is highlighted, the user
                 # made a selection "gesture"; let's go select it!
-                self._action_command_list("select")
+                command_list.action_select_cursor()
         else:
             # The list isn't visible, which means that if we have a
             # command...
@@ -1256,18 +1256,6 @@ class CommandPalette(SystemModalScreen[None]):
         self.app.post_message(CommandPalette.Closed(option_selected=False))
         self.dismiss()
 
-    def _action_command_list(self, action: str) -> None:
-        """Pass an action on to the [`CommandList`][textual.command.CommandList].
-
-        Args:
-            action: The action to pass on to the [`CommandList`][textual.command.CommandList].
-        """
-        try:
-            command_action = getattr(self.query_one(CommandList), f"action_{action}")
-        except AttributeError:
-            return
-        command_action()
-
     def _action_cursor_down(self) -> None:
         """Handle the cursor down action.
 
@@ -1283,4 +1271,4 @@ class CommandPalette(SystemModalScreen[None]):
             commands.option_count
             and not commands.get_option_at_index(0).id == self._NO_MATCHES
         ):
-            self._action_command_list("cursor_down")
+            commands.action_cursor_down()

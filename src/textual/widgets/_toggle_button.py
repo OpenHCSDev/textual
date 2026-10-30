@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING, ClassVar
 from rich.console import RenderableType
 
 from textual.binding import MethodBinding
-from textual.document._editing import EditingMode
 from textual.content import Content, ContentText
 from textual.events import Click
 from textual.geometry import Size
@@ -251,7 +250,7 @@ class ToggleButton(PrimaryActivation, Static, can_focus=True):
     def primary_activation(self):
         return self.action_toggle_button
 
-    @MethodBinding.declare("enter", "space", mode=EditingMode)
+    @MethodBinding.declare("enter", "space")
     def action_toggle_button(self) -> None:
         """Toggle the value of the widget when called as an action.
 

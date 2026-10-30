@@ -8,22 +8,21 @@ import rich.repr
 from rich.console import RenderableType
 
 from textual import _widget_navigation
-from textual.binding import MethodBinding
 from textual.containers import VerticalScroll
-from textual.document._editing import EditingMode
 from textual.events import Click, Mount
 from textual.message import Message
-from textual.navigation import ActivateSelection, MovesCursor, SelectCursor
+from textual.navigation import ActivateSelection, MovesCursor, MovesHorizontalCursor, SelectCursor
 from textual.reactive import reactive, var
 from textual.widgets._radio_button import RadioButton
 
 
 class RadioSet(
     MovesCursor,
+    MovesHorizontalCursor,
     VerticalScroll,
     can_focus=True,
     can_focus_children=False,
-    navigation=(SelectCursor, ActivateSelection),
+    key_families=(SelectCursor, ActivateSelection),
 ):
     """Widget for grouping a collection of radio buttons into a set.
 
@@ -91,14 +90,6 @@ class RadioSet(
 
         }
     }
-    """
-
-    """
-    | Key(s) | Description |
-    | :- | :- |
-    | enter, space | Toggle the currently-selected button. |
-    | left, up, k | Select the previous radio button in the set. |
-    | right, down, j | Select the next radio button in the set. |
     """
 
     _selected: var[int | None] = var[Optional[int]](None)
@@ -293,14 +284,7 @@ class RadioSet(
             direction=-1,
         )
 
-    action_cursor_up = MethodBinding(
-        key="left",
-        action=action_cursor_up,
-        description="Previous option",
-        mode=EditingMode,
-        priority=True,
-        show=False,
-    )
+    action_cursor_left = action_cursor_up
 
     def action_cursor_down(self) -> None:
         """Navigate to the next button in the set.
@@ -313,14 +297,7 @@ class RadioSet(
             direction=1,
         )
 
-    action_cursor_down = MethodBinding(
-        key="right",
-        action=action_cursor_down,
-        description="Next option",
-        mode=EditingMode,
-        priority=True,
-        show=False,
-    )
+    action_cursor_right = action_cursor_down
 
     def action_select_cursor(self) -> None:
         """Toggle the state of the currently-selected button."""

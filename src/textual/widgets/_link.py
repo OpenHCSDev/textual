@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from textual.binding import MethodBinding
-from textual.document._editing import EditingMode
 from textual.reactive import reactive
 from textual.widgets import Static
 
@@ -66,10 +65,7 @@ class Link(Static, can_focus=True):
     def on_click(self) -> None:
         self.action_open_link()
 
+    @MethodBinding.declare("enter", description="Open link", show=True)
     def action_open_link(self) -> None:
         if self.url:
             self.app.open_url(self.url)
-
-    action_open_link = MethodBinding(
-        key="enter", action=action_open_link, description="Open link", mode=EditingMode
-    )

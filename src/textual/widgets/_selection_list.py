@@ -74,7 +74,7 @@ class Selection(Generic[SelectionType], Option):
         return self._initial_state
 
 
-class SelectionList(Generic[SelectionType], OptionList, navigation=(ActivateSelection,)):
+class SelectionList(Generic[SelectionType], OptionList, key_families=(ActivateSelection,)):
     """A vertical selection list that allows making multiple selections."""
 
     """

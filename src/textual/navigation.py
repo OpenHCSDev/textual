@@ -7,7 +7,7 @@ from typing import ClassVar
 from textual.binding import Binding, CommandBinding
 from textual.document._editing import EditingMode
 from textual.dom import DOMNode
-from textual.keys import DeclaredKey, DownKey, KeyDeclaration, UndecodedKey, UpKey
+from textual.keys import DeclaredKey, DownKey, KeyDeclaration, LeftKey, RightKey, UndecodedKey, UpKey
 
 
 class NavigationCommand(KeyDeclaration["Navigation"]):
@@ -47,7 +47,31 @@ class CursorCommand(NavigationCommand):
     priority = True
 
 
-class CursorUp(CursorCommand):
+class VerticalCursorCommand(CursorCommand):
+    """Move within a vertical selection without claiming horizontal keys."""
+
+
+class HorizontalCursorCommand(CursorCommand):
+    """Step a horizontal selection using the same cursor priority."""
+
+
+class CursorLeft(HorizontalCursorCommand):
+    keys = ("left",)
+    declared_key = LeftKey()
+
+    def apply(self, node: MovesHorizontalCursor) -> object:
+        return node.action_cursor_left()
+
+
+class CursorRight(HorizontalCursorCommand):
+    keys = ("right",)
+    declared_key = RightKey()
+
+    def apply(self, node: MovesHorizontalCursor) -> object:
+        return node.action_cursor_right()
+
+
+class CursorUp(VerticalCursorCommand):
     keys = ("up", "k")
     declared_key = UpKey()
 
@@ -55,7 +79,7 @@ class CursorUp(CursorCommand):
         return node.action_cursor_up()
 
 
-class CursorDown(CursorCommand):
+class CursorDown(VerticalCursorCommand):
     keys = ("down", "j")
     declared_key = DownKey()
 
@@ -113,27 +137,6 @@ class PageDown(ListCommand):
 class Navigation(DOMNode):
     """Compose navigation families with the control's other key capabilities."""
 
-    own_navigation: ClassVar[tuple[type[NavigationCommand], ...]] = ()
-
-    def __init_subclass__(cls, navigation: tuple[type[NavigationCommand], ...] = (), **kwargs):
-        cls.own_navigation = navigation
-        super().__init_subclass__(**kwargs)
-
-    @classmethod
-    def present_navigation_binding(cls, declaration, binding):
-        return binding
-
-    @classmethod
-    def declared_bindings(cls, mode):
-        return (
-            *super().declared_bindings(mode),
-            *(cls.present_navigation_binding(declaration, binding)
-              for base in cls.__mro__
-              for family in base.__dict__.get("own_navigation", ())
-              for declaration in family.declarations()
-              for binding in declaration.bindings_for(mode)),
-        )
-
     @property
     def accepts_navigation(self) -> bool:
         return True
@@ -142,7 +145,17 @@ class Navigation(DOMNode):
         return command.apply(self)
 
 
-class MovesCursor(Navigation, navigation=(CursorCommand,)):
+class MovesHorizontalCursor(Navigation, key_families=(HorizontalCursorCommand,)):
+    """Horizontal lists share declarations while retaining native stepping."""
+
+    def action_cursor_left(self) -> None:
+        raise NotImplementedError
+
+    def action_cursor_right(self) -> None:
+        raise NotImplementedError
+
+
+class MovesCursor(Navigation, key_families=(VerticalCursorCommand,)):
     """Every selectable list shares its up/down/k/j declarations."""
 
     def action_cursor_up(self) -> None:
@@ -152,7 +165,7 @@ class MovesCursor(Navigation, navigation=(CursorCommand,)):
         raise NotImplementedError
 
 
-class ListNavigation(MovesCursor, navigation=(ListCommand,)):
+class ListNavigation(MovesCursor, key_families=(ListCommand,)):
     """A full list adds end and page operations to the shared cursor keys."""
 
     def action_first(self) -> None:

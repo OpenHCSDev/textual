@@ -14,7 +14,6 @@ from textual._immutable_sequence_view import ImmutableSequenceView
 from textual._loop import loop_last
 from textual._segment_tools import line_pad
 from textual.binding import MethodBinding
-from textual.document._editing import EditingMode
 from textual.navigation import MovesCursor, SelectCursor
 from textual.cache import LRUCache
 from textual.geometry import Region, Size, clamp
@@ -518,7 +517,7 @@ class TreeNode(Generic[TreeDataType]):
 
 
 class Tree(MovesCursor, Generic[TreeDataType], ScrollView, can_focus=True,
-           navigation=(SelectCursor,)):
+           key_families=(SelectCursor,)):
     """A widget for displaying and navigating data in a tree."""
 
     ICON_NODE = "▶ "
@@ -1489,7 +1488,7 @@ class Tree(MovesCursor, Generic[TreeDataType], ScrollView, can_focus=True,
         self.cursor_line = self.last_line
         self.scroll_to_line(self.cursor_line)
 
-    @MethodBinding.declare("space", mode=EditingMode)
+    @MethodBinding.declare("space")
     def action_toggle_node(self) -> None:
         """Toggle the expanded state of the target node."""
         try:
@@ -1517,21 +1516,21 @@ class Tree(MovesCursor, Generic[TreeDataType], ScrollView, can_focus=True,
             node = line.path[-1]
             self.post_message(Tree.NodeSelected(node))
 
-    @MethodBinding.declare("shift+left", mode=EditingMode)
+    @MethodBinding.declare("shift+left")
     def action_cursor_parent(self) -> None:
         """Move the cursor to the parent node."""
         cursor_node = self.cursor_node
         if cursor_node is not None and cursor_node.parent is not None:
             self.move_cursor(cursor_node.parent, animate=True)
 
-    @MethodBinding.declare("shift+right", mode=EditingMode)
+    @MethodBinding.declare("shift+right")
     def action_cursor_parent_next_sibling(self) -> None:
         """Move the cursor to the parent's next sibling."""
         cursor_node = self.cursor_node
         if cursor_node is not None and cursor_node.parent is not None:
             self.move_cursor(cursor_node.parent.next_sibling, animate=True)
 
-    @MethodBinding.declare("shift+up", mode=EditingMode)
+    @MethodBinding.declare("shift+up")
     def action_cursor_previous_sibling(self) -> None:
         """Move the cursor to previous sibling, or to the parent if there are no more siblings."""
         cursor_node = self.cursor_node
@@ -1542,7 +1541,7 @@ class Tree(MovesCursor, Generic[TreeDataType], ScrollView, can_focus=True,
             else:
                 self.move_cursor(previous_sibling, animate=True)
 
-    @MethodBinding.declare("shift+down", mode=EditingMode)
+    @MethodBinding.declare("shift+down")
     def action_cursor_next_sibling(self) -> None:
         """Move the cursor to the next sibling, or to the paren't sibling if there are no more siblings."""
         cursor_node = self.cursor_node
@@ -1555,7 +1554,7 @@ class Tree(MovesCursor, Generic[TreeDataType], ScrollView, can_focus=True,
             else:
                 self.move_cursor(next_sibling, animate=True)
 
-    @MethodBinding.declare("shift+space", mode=EditingMode)
+    @MethodBinding.declare("shift+space")
     def action_toggle_expand_all(self) -> None:
         """Expand or collapse all siblings.
 
