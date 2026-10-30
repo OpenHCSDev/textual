@@ -4,7 +4,7 @@ import unicodedata
 import inspect
 import re
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Callable, ClassVar, Generic, Iterator, Mapping, TypeVar
+from typing import TYPE_CHECKING, Callable, ClassVar, Generic, Iterator, TypeVar
 from enum import Enum
 from dataclasses import dataclass
 from functools import lru_cache
@@ -345,7 +345,7 @@ class DeclaredKey:
     def invocations(self, defaults: tuple[KeyInvocation, ...]) -> tuple[KeyInvocation, ...]:
         return defaults
 
-    def preempts(self, binding: Binding, event: Key, keymap: Mapping[str, str]) -> bool:
+    def preempts(self, event: Key) -> bool:
         return False
 
     def input_bindings(self, spelling: str) -> tuple[tuple[str, str], ...]:
@@ -393,7 +393,7 @@ class NavigationKey(DeclaredKey, KeyInvocation):
     def spellings(self, mode: type[EditingMode], spelling: str) -> tuple[str, ...]:
         return mode.navigation_spellings(type(self))
 
-    def preempts(self, binding: Binding, event: Key, keymap: Mapping[str, str]) -> bool:
+    def preempts(self, event: Key) -> bool:
         """Printable arrow aliases precede a list's type-to-search behavior."""
         return event.is_printable
 

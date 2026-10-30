@@ -550,7 +550,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         """
         for node, bindings in self._modal_binding_chain:
             for binding in bindings.key_to_bindings.get(event.key, ()):
-                if binding.declared_key.preempts(binding, event, self.app._keymap):
+                if binding.declared_key.preempts(event):
                     if await binding.run_before_text(self.app, node, event, target):
                         return True
         return False

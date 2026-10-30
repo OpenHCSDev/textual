@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 from textual.binding import Binding, BindingType, MethodBinding
 from textual.css._error_tools import friendly_list
-from textual.document._editing import EditingMode
+from textual.document._editing import NativeTextKeys
 from textual.events import Blur, Focus, Mount
 from textual.geometry import Offset, Region, Size, clamp
 from textual.message import Message
@@ -72,7 +72,7 @@ class Selection(NamedTuple):
         return self.start == self.end
 
 
-class Input(FocusActivation, ScrollView):
+class Input(NativeTextKeys, FocusActivation, ScrollView):
     """A text input widget."""
 
     BINDING_GROUP_TITLE = "Input"
@@ -455,15 +455,6 @@ class Input(FocusActivation, ScrollView):
     def cursor_at_end(self) -> bool:
         """Flag to indicate if the cursor is at the end."""
         return self.cursor_position == len(self.value)
-
-    @property
-    def key_mode(self) -> type[EditingMode]:
-        """Single-line inputs always own printable text, regardless of screen profile."""
-        return EditingMode
-
-    @property
-    def allows_application_commands(self) -> bool:
-        return False
 
     def check_consume_key(self, key: str, character: str | None) -> bool:
         """Check if the widget may consume the given key.
