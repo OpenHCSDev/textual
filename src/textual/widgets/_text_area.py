@@ -2207,7 +2207,7 @@ TextArea {
             self.selection = Selection((index, 0), (index, len(line)))
             self.record_cursor_width()
 
-    @MethodBinding.declare("f6", mode=EditingMode)
+    @MethodBinding.declare("f6")
     def action_select_line(self) -> None:
         """Select all the text on the current line."""
         cursor_row, _ = self.cursor_location
@@ -2222,7 +2222,7 @@ TextArea {
         self.selection = Selection(selection_start, selection_end)
         self.record_cursor_width()
 
-    @MethodBinding.declare("f7", mode=EditingMode)
+    @MethodBinding.declare("f7")
     def action_select_all(self) -> None:
         """Select all the text in the document."""
         self.select_all()
@@ -2301,7 +2301,7 @@ TextArea {
         return self.cursor_at_last_line and self.cursor_at_end_of_line
 
     # ------ Cursor movement actions
-    @MethodBinding.declare("left", mode=EditingMode, selecting=("shift+left",))
+    @MethodBinding.declare("left", selecting=("shift+left",))
     def action_cursor_left(self, select: bool = False) -> None:
         """Move the cursor one location to the left.
 
@@ -2331,7 +2331,7 @@ TextArea {
         """
         return self.navigator.get_location_left(self.cursor_location)
 
-    @MethodBinding.declare("right", mode=EditingMode, selecting=("shift+right",))
+    @MethodBinding.declare("right", selecting=("shift+right",))
     def action_cursor_right(self, select: bool = False) -> None:
         """Move the cursor one location to the right.
 
@@ -2363,7 +2363,7 @@ TextArea {
         """
         return self.navigator.get_location_right(self.cursor_location)
 
-    @MethodBinding.declare("down", mode=EditingMode, selecting=("shift+down",))
+    @MethodBinding.declare("down", selecting=("shift+down",))
     def action_cursor_down(self, select: bool = False) -> None:
         """Move the cursor down one cell.
 
@@ -2384,7 +2384,7 @@ TextArea {
         """
         return self.navigator.get_location_below(self.cursor_location)
 
-    @MethodBinding.declare("up", mode=EditingMode, selecting=("shift+up",))
+    @MethodBinding.declare("up", selecting=("shift+up",))
     def action_cursor_up(self, select: bool = False) -> None:
         """Move the cursor up one cell.
 
@@ -2405,7 +2405,7 @@ TextArea {
         """
         return self.navigator.get_location_above(self.cursor_location)
 
-    @MethodBinding.declare("end", "ctrl+e", mode=EditingMode, selecting=("shift+end",))
+    @MethodBinding.declare("end", "ctrl+e", selecting=("shift+end",))
     def action_cursor_line_end(self, select: bool = False) -> None:
         """Move the cursor to the end of the line."""
         if not self._has_cursor:
@@ -2422,7 +2422,7 @@ TextArea {
         """
         return self.navigator.get_location_end(self.cursor_location)
 
-    @MethodBinding.declare("home", "ctrl+a", mode=EditingMode, selecting=("shift+home",))
+    @MethodBinding.declare("home", "ctrl+a", selecting=("shift+home",))
     def action_cursor_line_start(self, select: bool = False) -> None:
         """Move the cursor to the start of the line."""
         if not self._has_cursor:
@@ -2446,7 +2446,7 @@ TextArea {
             self.cursor_location, smart_home=smart_home
         )
 
-    @MethodBinding.declare("ctrl+left", mode=EditingMode, selecting=("ctrl+shift+left",))
+    @MethodBinding.declare("ctrl+left", selecting=("ctrl+shift+left",))
     def action_cursor_word_left(self, select: bool = False) -> None:
         """Move the cursor left by a single word, skipping trailing whitespace.
 
@@ -2468,7 +2468,7 @@ TextArea {
         """
         return self.navigator.get_location_word_left(self.cursor_location)
 
-    @MethodBinding.declare("ctrl+right", mode=EditingMode, selecting=("ctrl+shift+right",))
+    @MethodBinding.declare("ctrl+right", selecting=("ctrl+shift+right",))
     def action_cursor_word_right(self, select: bool = False) -> None:
         """Move the cursor right by a single word, skipping leading whitespace."""
         if not self.show_cursor:
@@ -2487,7 +2487,7 @@ TextArea {
         """
         return self.navigator.get_location_word_right(self.cursor_location)
 
-    @MethodBinding.declare("pageup", mode=EditingMode)
+    @MethodBinding.declare("pageup")
     def action_cursor_page_up(self) -> None:
         """Move the cursor and scroll up one page."""
         if not self.show_cursor:
@@ -2502,7 +2502,7 @@ TextArea {
         self.scroll_relative(y=-height, animate=False)
         self.move_cursor(target)
 
-    @MethodBinding.declare("pagedown", mode=EditingMode)
+    @MethodBinding.declare("pagedown")
     def action_cursor_page_down(self) -> None:
         """Move the cursor and scroll down one page."""
         if not self.show_cursor:

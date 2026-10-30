@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 from rich.style import Style
 
-from textual.binding import Binding
+from textual.binding import MethodBinding
 from textual.content import Content, ContentText
 from textual.css._error_tools import friendly_list
 from textual.geometry import Size
@@ -295,7 +295,6 @@ class Button(PrimaryActivation, Widget, can_focus=True):
     }
     """
 
-    BINDINGS = [Binding("enter", "press", "Press button", show=False)]
 
     label: reactive[ContentText] = reactive[ContentText](Content.empty())
     """The text label that appears within the button."""
@@ -452,6 +451,7 @@ class Button(PrimaryActivation, Widget, can_focus=True):
                 self.active_effect_duration, partial(self.remove_class, "-active")
             )
 
+    @MethodBinding.declare("enter")
     def action_press(self) -> None:
         """Activate a press of the button."""
         if not self.has_class("-active"):

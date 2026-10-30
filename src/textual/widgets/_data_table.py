@@ -28,12 +28,13 @@ from textual import events
 from textual._segment_tools import line_crop
 from textual._two_way_dict import TwoWayDict
 from textual._types import SegmentLines
-from textual.binding import Binding, BindingType
+from textual.binding import MethodBinding
 from textual.cache import LRUCache
 from textual.color import Color
 from textual.coordinate import Coordinate
 from textual.geometry import Region, Size, Spacing, clamp
 from textual.message import Message
+from textual.navigation import MovesCursor, MovesHorizontalCursor, PageDown, PageUp, SelectCursor
 from textual.reactive import Reactive
 from textual.render import measure
 from textual.renderables.styled import Styled
@@ -266,39 +267,13 @@ class RowRenderables(NamedTuple):
     cells: list[RenderableType]
 
 
-class DataTable(ScrollView, Generic[CellType], can_focus=True):
+class DataTable(
+    MovesCursor, MovesHorizontalCursor, ScrollView, Generic[CellType], can_focus=True,
+    key_families=(SelectCursor, PageUp, PageDown),
+):
     """A tabular widget that contains data."""
 
     ALLOW_SELECT = False
-
-    BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("enter", "select_cursor", "Select", show=False),
-        Binding("up", "cursor_up", "Cursor up", show=False),
-        Binding("down", "cursor_down", "Cursor down", show=False),
-        Binding("right", "cursor_right", "Cursor right", show=False),
-        Binding("left", "cursor_left", "Cursor left", show=False),
-        Binding("pageup", "page_up", "Page up", show=False),
-        Binding("pagedown", "page_down", "Page down", show=False),
-        Binding("ctrl+home", "scroll_top", "Top", show=False),
-        Binding("ctrl+end", "scroll_bottom", "Bottom", show=False),
-        Binding("home", "scroll_home", "Home", show=False),
-        Binding("end", "scroll_end", "End", show=False),
-    ]
-    """
-    | Key(s) | Description |
-    | :- | :- |
-    | enter | Select cells under the cursor. |
-    | up | Move the cursor up. |
-    | down | Move the cursor down. |
-    | right | Move the cursor right. |
-    | left | Move the cursor left. |
-    | pageup | Move one page up. |
-    | pagedown | Move one page down. |
-    | ctrl+home | Move to the top. |
-    | ctrl+end | Move to the bottom. |
-    | home | Move to the home position (leftmost column). |
-    | end | Move to the end position (rightmost column). |
-    """
 
     COMPONENT_CLASSES: ClassVar[set[str]] = {
         "datatable--cursor",
@@ -2741,6 +2716,7 @@ class DataTable(ScrollView, Generic[CellType], can_focus=True):
         self._set_hover_cursor(False)
         super().scroll_page_right()
 
+    @MethodBinding.declare("ctrl+home", description="Top")
     def action_scroll_top(self) -> None:
         """Move the cursor and scroll to the top."""
         self._set_hover_cursor(False)
@@ -2751,6 +2727,7 @@ class DataTable(ScrollView, Generic[CellType], can_focus=True):
         else:
             super().action_scroll_home()
 
+    @MethodBinding.declare("ctrl+end", description="Bottom")
     def action_scroll_bottom(self) -> None:
         """Move the cursor and scroll to the bottom."""
         self._set_hover_cursor(False)
@@ -2761,6 +2738,7 @@ class DataTable(ScrollView, Generic[CellType], can_focus=True):
         else:
             super().action_scroll_end()
 
+    @MethodBinding.declare("home", description="Home")
     def action_scroll_home(self) -> None:
         """Move the cursor and scroll to the leftmost column."""
         self._set_hover_cursor(False)
@@ -2770,6 +2748,7 @@ class DataTable(ScrollView, Generic[CellType], can_focus=True):
         else:
             self.scroll_x = 0
 
+    @MethodBinding.declare("end", description="End")
     def action_scroll_end(self) -> None:
         """Move the cursor and scroll to the rightmost column."""
         self._set_hover_cursor(False)

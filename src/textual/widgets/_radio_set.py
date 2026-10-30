@@ -2,21 +2,28 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, Optional
+from typing import Optional
 
 import rich.repr
 from rich.console import RenderableType
 
 from textual import _widget_navigation
-from textual.binding import Binding, BindingType
 from textual.containers import VerticalScroll
 from textual.events import Click, Mount
 from textual.message import Message
+from textual.navigation import ActivateSelection, MovesCursor, MovesHorizontalCursor, SelectCursor
 from textual.reactive import reactive, var
 from textual.widgets._radio_button import RadioButton
 
 
-class RadioSet(VerticalScroll, can_focus=True, can_focus_children=False):
+class RadioSet(
+    MovesCursor,
+    MovesHorizontalCursor,
+    VerticalScroll,
+    can_focus=True,
+    can_focus_children=False,
+    key_families=(SelectCursor, ActivateSelection),
+):
     """Widget for grouping a collection of radio buttons into a set.
 
     When a collection of [`RadioButton`][textual.widgets.RadioButton]s are
@@ -83,19 +90,6 @@ class RadioSet(VerticalScroll, can_focus=True, can_focus_children=False):
 
         }
     }
-    """
-
-    BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("down,right", "next_button", "Next option", show=False),
-        Binding("enter,space", "toggle_button", "Toggle", show=False),
-        Binding("up,left", "previous_button", "Previous option", show=False),
-    ]
-    """
-    | Key(s) | Description |
-    | :- | :- |
-    | enter, space | Toggle the currently-selected button. |
-    | left, up | Select the previous radio button in the set. |
-    | right, down | Select the next radio button in the set. |
     """
 
     _selected: var[int | None] = var[Optional[int]](None)
@@ -188,7 +182,7 @@ class RadioSet(VerticalScroll, can_focus=True, can_focus_children=False):
         """Perform some processing once mounted in the DOM."""
 
         # If there are radio buttons, select the first available one.
-        self.action_next_button()
+        self.action_cursor_down()
 
         # Get all the buttons within us; we'll be doing a couple of things
         # with that list.
@@ -279,7 +273,7 @@ class RadioSet(VerticalScroll, can_focus=True, can_focus_children=False):
             else -1
         )
 
-    def action_previous_button(self) -> None:
+    def action_cursor_up(self) -> None:
         """Navigate to the previous button in the set.
 
         Note that this will wrap around to the end if at the start.
@@ -290,7 +284,9 @@ class RadioSet(VerticalScroll, can_focus=True, can_focus_children=False):
             direction=-1,
         )
 
-    def action_next_button(self) -> None:
+    action_cursor_left = action_cursor_up
+
+    def action_cursor_down(self) -> None:
         """Navigate to the next button in the set.
 
         Note that this will wrap around to the start if at the end.
@@ -301,7 +297,9 @@ class RadioSet(VerticalScroll, can_focus=True, can_focus_children=False):
             direction=1,
         )
 
-    def action_toggle_button(self) -> None:
+    action_cursor_right = action_cursor_down
+
+    def action_select_cursor(self) -> None:
         """Toggle the state of the currently-selected button."""
         if self._selected is not None:
             button = self._nodes[self._selected]

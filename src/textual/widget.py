@@ -3732,6 +3732,7 @@ class Widget(DOMNode):
         can_focus_children: bool | None = None,
         inherit_css: bool = True,
         inherit_bindings: bool = True,
+        **kwargs: object,
     ) -> None:
         name = cls.__name__
         if not name[0].isupper() and not name.startswith("_"):
@@ -3742,6 +3743,7 @@ class Widget(DOMNode):
         super().__init_subclass__(
             inherit_css=inherit_css,
             inherit_bindings=inherit_bindings,
+            **kwargs,
         )
         if "_paint_only_render" not in cls.__dict__ and any(
             method in cls.__dict__ for method in ("render", "_render", "_render_bar")

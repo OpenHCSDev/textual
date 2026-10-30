@@ -11,7 +11,7 @@ from rich.style import Style
 from typing_extensions import Self
 
 from textual import events
-from textual.binding import Binding
+from textual.navigation import ActivateSelection
 from textual.content import Content, ContentText
 from textual.messages import Message
 from textual._paint_state import PaintState
@@ -74,10 +74,9 @@ class Selection(Generic[SelectionType], Option):
         return self._initial_state
 
 
-class SelectionList(Generic[SelectionType], OptionList):
+class SelectionList(Generic[SelectionType], OptionList, key_families=(ActivateSelection,)):
     """A vertical selection list that allows making multiple selections."""
 
-    BINDINGS = [Binding("space", "select", "Toggle option", show=False)]
     """
     | Key(s) | Description |
     | :- | :- |
