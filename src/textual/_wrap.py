@@ -29,13 +29,28 @@ def chunks(text: str) -> Iterable[tuple[int, int, str]]:
         yield start, end, chunk
 
 
+class WrapOffset(int):
+    """A codepoint break with the cell position computed by that same wrap."""
+
+    _cell_offset: int
+
+    def __new__(cls, column: int, cell_offset: int) -> WrapOffset:
+        offset = super().__new__(cls, column)
+        offset._cell_offset = cell_offset
+        return offset
+
+    @property
+    def cell_offset(self) -> int:
+        return self._cell_offset
+
+
 def compute_wrap_offsets(
     text: str,
     width: int,
     tab_size: int,
     fold: bool = True,
     precomputed_tab_sections: list[tuple[str, int]] | None = None,
-) -> list[int]:
+) -> list[WrapOffset]:
     """Given a string of text, and a width (measured in cells), return a list
     of codepoint indices which the string should be split at in order for it to fit
     within the given width.
@@ -57,12 +72,12 @@ def compute_wrap_offsets(
     else:
         tab_sections = get_tab_widths(text, tab_size)
 
-    break_positions: list[int] = []  # offsets to insert the breaks at
+    break_positions: list[WrapOffset] = []
     append = break_positions.append
     cell_offset = 0
+    consumed_cells = 0
     _cell_len = cell_len
 
-    tab_section_index = 0
     cumulative_width = 0
     cumulative_widths: list[int] = []  # prefix sum of tab widths for each codepoint
     record_widths = cumulative_widths.extend
@@ -94,54 +109,31 @@ def compute_wrap_offsets(
                 # The word doesn't fit on any line, so we must fold it
                 if fold:
                     _get_character_cell_size = get_character_cell_size
-                    lines: list[list[str]] = [[]]
-
-                    append_new_line = lines.append
-                    append_to_last_line = lines[-1].append
-
+                    if start:
+                        append(WrapOffset(start, consumed_cells))
                     total_width = 0
-                    for character in chunk:
+                    absolute_cells = consumed_cells
+                    for column, character in enumerate(chunk, start):
                         if character == "\t":
-                            # Tab characters have dynamic width, so look it up
-                            cell_width = tab_sections[tab_section_index][1]
-                            tab_section_index += 1
+                            cell_width = cumulative_widths[column + 1] - cumulative_widths[column]
                         else:
                             cell_width = _get_character_cell_size(character)
-
-                        if total_width + cell_width > width:
-                            append_new_line([character])
-                            append_to_last_line = lines[-1].append
-                            total_width = cell_width
-                        else:
-                            append_to_last_line(character)
-                            total_width += cell_width
-
-                    folded_word = ["".join(line) for line in lines]
-                    for last, line in loop_last(folded_word):
-                        if start:
-                            append(start)
-                        if last:
-                            # Since cell_len ignores tabs, we need to check the width
-                            # of the tabs in this line. The width of tabs within the
-                            # line is computed by taking the difference between the
-                            # cumulative width of tabs up to the end of the line and the
-                            # cumulative width of tabs up to the start of the line.
-                            line_tab_widths = (
-                                cumulative_widths[start + len(line)]
-                                - cumulative_widths[start]
-                            )
-                            cell_offset = _cell_len(line) + line_tab_widths
-                        else:
-                            start += len(line)
+                        if total_width and total_width + cell_width > width:
+                            append(WrapOffset(column, absolute_cells))
+                            total_width = 0
+                        total_width += cell_width
+                        absolute_cells += cell_width
+                    cell_offset = total_width
                 else:
                     # Folding isn't allowed, so crop the word.
                     if start:
-                        append(start)
+                        append(WrapOffset(start, consumed_cells))
                     cell_offset = chunk_width
             elif cell_offset and start:
                 # The word doesn't fit within the remaining space on the current
                 # line, but it *can* fit on to the next (empty) line.
-                append(start)
+                append(WrapOffset(start, consumed_cells))
                 cell_offset = chunk_width
+        consumed_cells += chunk_width
 
     return break_positions
