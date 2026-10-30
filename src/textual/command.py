@@ -39,12 +39,16 @@ from rich.text import Text
 from typing_extensions import Final, TypeAlias
 
 from textual import on, work
-from textual.binding import Binding, BindingType
+from textual.binding import MethodBinding
 from textual.containers import Horizontal, Vertical
 from textual.content import Content
 from textual.events import Click, Mount
 from textual.fuzzy import Matcher
 from textual.message import Message
+from textual.navigation import (
+    FirstNavigation, LastNavigation, Navigation, NavigationCommand,
+    PageDown, PageUp, VerticalCursorCommand,
+)
 from textual.reactive import var
 from textual.screen import Screen, SystemModalScreen
 from textual.style import Style
@@ -491,6 +495,16 @@ class CommandList(OptionList, can_focus=False):
     """
 
 
+    def action_cursor_down(self) -> None:
+        """Open the native results before stepping their current selection."""
+        palette = self.query_ancestor(CommandPalette)
+        if self.option_count and not palette._list_visible:
+            palette._list_visible = True
+            self.highlighted = 0
+        elif self.option_count and self.get_option_at_index(0).id != palette._NO_MATCHES:
+            super().action_cursor_down()
+
+
 class SearchIcon(Static, inherit_css=False):
     """Widget for displaying a search icon before the command input."""
 
@@ -529,7 +543,22 @@ class CommandInput(Input):
     """
 
 
-class CommandPalette(SystemModalScreen[None]):
+class PaletteBoundaryCommand(NavigationCommand):
+    """The palette's modified end keys leave ordinary input Home/End alone."""
+
+
+class PaletteFirst(FirstNavigation, PaletteBoundaryCommand):
+    keys = ("ctrl+home", "shift+home")
+
+
+class PaletteLast(LastNavigation, PaletteBoundaryCommand):
+    keys = ("ctrl+end", "shift+end")
+
+
+class CommandPalette(
+    Navigation, SystemModalScreen[None],
+    key_families=(VerticalCursorCommand, PageUp, PageDown, PaletteBoundaryCommand),
+):
     """The Textual command palette."""
 
     AUTO_FOCUS = "CommandInput"
@@ -629,36 +658,8 @@ class CommandPalette(SystemModalScreen[None]):
     }
     """
 
-    BINDINGS: ClassVar[list[BindingType]] = [
-        Binding(
-            "ctrl+end, shift+end",
-            "command_list('last')",
-            "Go to bottom",
-            show=False,
-        ),
-        Binding(
-            "ctrl+home, shift+home",
-            "command_list('first')",
-            "Go to top",
-            show=False,
-        ),
-        Binding("down", "cursor_down", "Next command", show=False),
-        Binding("escape", "escape", "Exit the command palette"),
-        Binding("pagedown", "command_list('page_down')", "Next page", show=False),
-        Binding("pageup", "command_list('page_up')", "Previous page", show=False),
-        Binding("up", "command_list('cursor_up')", "Previous command", show=False),
-    ]
-    """
-    | Key(s) | Description |
-    | :- | :- |
-    | ctrl+end, shift+end | Jump to the last available commands. |
-    | ctrl+home, shift+home | Jump to the first available commands. |
-    | down | Navigate down through the available commands. |
-    | escape | Exit the command palette. |
-    | pagedown | Navigate down a page through the available commands. |
-    | pageup | Navigate up a page through the available commands. |
-    | up | Navigate up through the available commands. |
-    """
+    def apply_navigation(self, command: NavigationCommand) -> object:
+        return command.apply(self.query_one(CommandList))
 
     run_on_select: ClassVar[bool] = True
     """A flag to say if a command should be run when selected by the user.
@@ -1223,7 +1224,7 @@ class CommandPalette(SystemModalScreen[None]):
             # ...so if nothing in the list is highlighted yet...
             if command_list.highlighted is None:
                 # ...cause the first completion to be highlighted.
-                self._action_cursor_down()
+                command_list.action_cursor_down()
                 # If there is one option, assume the user wants to select it
                 if command_list.option_count == 1:
                     # Call after a short delay to provide a little visual feedback
@@ -1250,25 +1251,9 @@ class CommandPalette(SystemModalScreen[None]):
         event.stop()
         self.app.post_message(CommandPalette.OptionHighlighted(highlighted_event=event))
 
+    @MethodBinding.declare("escape", description="Exit the command palette", show=True)
     def _action_escape(self) -> None:
         """Handle a request to escape out of the command palette."""
         self._cancel_gather_commands()
         self.app.post_message(CommandPalette.Closed(option_selected=False))
         self.dismiss()
-
-    def _action_cursor_down(self) -> None:
-        """Handle the cursor down action.
-
-        This allows the cursor down key to either open the command list, if
-        it's closed but has options, or if it's open with options just
-        cursor through them.
-        """
-        commands = self.query_one(CommandList)
-        if commands.option_count and not self._list_visible:
-            self._list_visible = True
-            commands.highlighted = 0
-        elif (
-            commands.option_count
-            and not commands.get_option_at_index(0).id == self._NO_MATCHES
-        ):
-            commands.action_cursor_down()

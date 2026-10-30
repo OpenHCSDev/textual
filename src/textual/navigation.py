@@ -71,20 +71,38 @@ class CursorRight(HorizontalCursorCommand):
         return node.action_cursor_right()
 
 
-class CursorUp(VerticalCursorCommand):
-    keys = ("up", "k")
+class UpNavigation(NavigationCommand):
     declared_key = UpKey()
 
     def apply(self, node):
         return node.action_cursor_up()
 
 
-class CursorDown(VerticalCursorCommand):
-    keys = ("down", "j")
+class DownNavigation(NavigationCommand):
     declared_key = DownKey()
 
     def apply(self, node):
         return node.action_cursor_down()
+
+
+class CursorUp(UpNavigation, VerticalCursorCommand):
+    keys = ("up",)
+
+
+class CursorDown(DownNavigation, VerticalCursorCommand):
+    keys = ("down",)
+
+
+class TextCursorCommand(NavigationCommand):
+    """Opt-in printable list shortcuts yield to focused text consumers."""
+
+
+class TextCursorUp(UpNavigation, TextCursorCommand):
+    keys = ("k",)
+
+
+class TextCursorDown(DownNavigation, TextCursorCommand):
+    keys = ("j",)
 
 
 class ListCommand(NavigationCommand):
@@ -106,18 +124,22 @@ class ActivateSelection(SelectionCommand):
     keys = ("space",)
 
 
-class First(ListCommand):
-    keys = ("home",)
-
+class FirstNavigation(NavigationCommand):
     def apply(self, node):
         return node.action_first()
 
 
-class Last(ListCommand):
-    keys = ("end",)
-
+class LastNavigation(NavigationCommand):
     def apply(self, node):
         return node.action_last()
+
+
+class First(FirstNavigation, ListCommand):
+    keys = ("home",)
+
+
+class Last(LastNavigation, ListCommand):
+    keys = ("end",)
 
 
 class PageUp(ListCommand):
@@ -156,7 +178,7 @@ class MovesHorizontalCursor(Navigation, key_families=(HorizontalCursorCommand,))
 
 
 class MovesCursor(Navigation, key_families=(VerticalCursorCommand,)):
-    """Every selectable list shares its up/down/k/j declarations."""
+    """Selectable controls share arrow declarations, not printable input policy."""
 
     def action_cursor_up(self) -> None:
         raise NotImplementedError
@@ -165,7 +187,7 @@ class MovesCursor(Navigation, key_families=(VerticalCursorCommand,)):
         raise NotImplementedError
 
 
-class ListNavigation(MovesCursor, key_families=(ListCommand,)):
+class ListNavigation(MovesCursor, key_families=(ListCommand, TextCursorCommand)):
     """A full list adds end and page operations to the shared cursor keys."""
 
     def action_first(self) -> None:
