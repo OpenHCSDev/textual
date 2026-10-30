@@ -339,6 +339,9 @@ class DeclaredKey:
     def decoded(self, key: str) -> DeclaredKey:
         return self
 
+    def spellings(self, mode: type[EditingMode], spelling: str) -> tuple[str, ...]:
+        return (spelling,)
+
     def invocations(self, defaults: tuple[KeyInvocation, ...]) -> tuple[KeyInvocation, ...]:
         return defaults
 
@@ -366,11 +369,13 @@ class NavigationKey(DeclaredKey, KeyInvocation):
     """
 
     key: ClassVar[Keys]
+    modal: ClassVar[str]
     _by_key: ClassVar[dict[str, type[NavigationKey]]] = {}
 
-    def __init_subclass__(cls, *, key: Keys, **kwargs: object) -> None:
+    def __init_subclass__(cls, *, key: Keys, modal: str, **kwargs: object) -> None:
         super().__init_subclass__(**kwargs)
         cls.key = key
+        cls.modal = modal
         cls._by_key[key.value] = cls
 
     @classmethod
@@ -385,9 +390,12 @@ class NavigationKey(DeclaredKey, KeyInvocation):
     def invocations(self, defaults: tuple[KeyInvocation, ...]) -> tuple[KeyInvocation, ...]:
         return (self,)
 
+    def spellings(self, mode: type[EditingMode], spelling: str) -> tuple[str, ...]:
+        return mode.navigation_spellings(type(self))
+
     def preempts(self, binding: Binding, event: Key, keymap: Mapping[str, str]) -> bool:
-        """Explicit printable aliases precede a list's type-to-search behavior."""
-        return event.is_printable and binding.id in keymap
+        """Printable arrow aliases precede a list's type-to-search behavior."""
+        return event.is_printable
 
     def key_identity(self) -> str:
         return self.qualified(type(self))
@@ -409,19 +417,19 @@ class NavigationKey(DeclaredKey, KeyInvocation):
         return True
 
 
-class UpKey(NavigationKey, key=Keys.Up):
+class UpKey(NavigationKey, key=Keys.Up, modal="k"):
     pass
 
 
-class DownKey(NavigationKey, key=Keys.Down):
+class DownKey(NavigationKey, key=Keys.Down, modal="j"):
     pass
 
 
-class LeftKey(NavigationKey, key=Keys.Left):
+class LeftKey(NavigationKey, key=Keys.Left, modal="h"):
     pass
 
 
-class RightKey(NavigationKey, key=Keys.Right):
+class RightKey(NavigationKey, key=Keys.Right, modal="l"):
     pass
 
 

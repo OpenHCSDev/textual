@@ -11,6 +11,7 @@ from textual.document._edit import Edit, InsertionPoint
 
 if TYPE_CHECKING:
     from textual.events import Key
+    from textual.keys import NavigationKey
     from textual.widgets import TextArea
 
 
@@ -22,6 +23,11 @@ class EditingMode:
     """Native text entry, with overridable document and input ownership."""
 
     modal = False
+
+    @classmethod
+    def navigation_spellings(cls, key: type[NavigationKey]) -> tuple[str, ...]:
+        return (key.key.value,)
+
     @property
     def accepts_text(self) -> bool:
         return True
@@ -144,6 +150,11 @@ class VimMode(EditingMode, ABC):
     """Modal binding capability, not a second implementation of Vim."""
 
     modal = True
+
+    @classmethod
+    def navigation_spellings(cls, key: type[NavigationKey]) -> tuple[str, ...]:
+        return (*super().navigation_spellings(key), key.modal)
+
     @property
     def cursor_shape(self) -> CursorShape:
         return SteadyBlock()

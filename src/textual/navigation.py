@@ -93,18 +93,6 @@ class CursorDown(DownNavigation, VerticalCursorCommand):
     keys = ("down",)
 
 
-class TextCursorCommand(NavigationCommand):
-    """Opt-in printable list shortcuts yield to focused text consumers."""
-
-
-class TextCursorUp(UpNavigation, TextCursorCommand):
-    keys = ("k",)
-
-
-class TextCursorDown(DownNavigation, TextCursorCommand):
-    keys = ("j",)
-
-
 class ListCommand(NavigationCommand):
     """Navigation through a list's ends and pages."""
 
@@ -187,7 +175,7 @@ class MovesCursor(Navigation, key_families=(VerticalCursorCommand,)):
         raise NotImplementedError
 
 
-class ListNavigation(MovesCursor, key_families=(ListCommand, TextCursorCommand)):
+class ListNavigation(MovesCursor, key_families=(ListCommand,)):
     """A full list adds end and page operations to the shared cursor keys."""
 
     def action_first(self) -> None:

@@ -131,7 +131,10 @@ class Binding:
     def for_mode(self, mode: type[EditingMode]) -> tuple[Self, ...]:
         """Give native arrows their shared preference identity in the actual mode."""
         identity = next((invocation.binding_identity(mode) for invocation in self.invocations()), self.id)
-        return (dataclasses.replace(self, id=identity),)
+        return tuple(
+            dataclasses.replace(self, key=spelling, id=identity)
+            for spelling in self.declared_key.spellings(mode, self.key)
+        )
 
     def parse_key(self) -> tuple[list[str], str]:
         """Parse a key into a list of modifiers, and the actual key.
@@ -540,11 +543,13 @@ class BindingsMap:
 
     def project(self, mode: type[EditingMode], declarations: Iterable[BindingType] = ()) -> BindingsMap:
         """Raw and nominal declarations use the same native mode projection."""
-        return BindingsMap(
-            projected
-            for binding in (*[binding for _, binding in self], *Binding.make_bindings(declarations))
-            for projected in binding.for_mode(mode)
-        )
+        keys: dict[str, list[Binding]] = {}
+        for binding in (*[binding for _, binding in self], *Binding.make_bindings(declarations)):
+            for projected in binding.for_mode(mode):
+                bindings = keys.setdefault(projected.key, [])
+                if projected not in bindings:
+                    bindings.append(projected)
+        return BindingsMap.from_keys(keys)
 
     def apply_keymap(self, keymap: Keymap) -> KeymapApplyResult:
         """Overlay preferences without losing native alternatives or expanding aliases twice.
