@@ -71,6 +71,11 @@ class KeyDeclaration(KeyInvocation, Generic[NodeT]):
 
     title = KeyTitle()
     system: ClassVar[bool] = False
+    _declared: ClassVar[list[type[KeyDeclaration]]] = []
+
+    def __init_subclass__(cls, **kwargs) -> None:
+        super().__init_subclass__(**kwargs)
+        KeyDeclaration._declared.append(cls)
 
     @classmethod
     def default_title(cls) -> str:
@@ -126,10 +131,10 @@ class KeyDeclaration(KeyInvocation, Generic[NodeT]):
         return False
 
     @classmethod
-    @abstractmethod
     def declarations(cls) -> Iterator[type[KeyDeclaration]]:
-        for provider in cls.__subclasses__():
-            yield from provider.declarations()
+        """Project each key family from the declaration owner's registry."""
+        return (member for member in KeyDeclaration._declared
+                if issubclass(member, cls) and not inspect.isabstract(member))
 
 
 # Adapted from prompt toolkit https://github.com/prompt-toolkit/python-prompt-toolkit/blob/master/prompt_toolkit/keys.py
@@ -340,6 +345,10 @@ class DeclaredKey:
     def preempts(self, binding: Binding, event: Key, keymap: Mapping[str, str]) -> bool:
         return False
 
+    def input_bindings(self, spelling: str) -> tuple[tuple[str, str], ...]:
+        """Native input aliases for an external editing engine."""
+        return ()
+
 
 class UndecodedKey(DeclaredKey):
     """Only Binding.make_bindings sees an external declaration's key spelling."""
@@ -382,6 +391,9 @@ class NavigationKey(DeclaredKey, KeyInvocation):
 
     def key_identity(self) -> str:
         return self.qualified(type(self))
+
+    def input_bindings(self, spelling: str) -> tuple[tuple[str, str], ...]:
+        return ((spelling, self.key.value),)
 
     def key_title(self) -> str:
         return f"Cursor {self.key.value}"

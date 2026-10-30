@@ -2056,10 +2056,7 @@ class App(Generic[ReturnType], DOMNode):
         return BindingsMap()
 
     def binding_map(self, mode: type[EditingMode]) -> BindingsMap:
-        defaults = self.binding_defaults(mode)
-        if not self._bindings.key_to_bindings:
-            return defaults
-        return BindingsMap.merge((defaults, self._bindings.project(mode)))
+        return BindingsMap.merge((self.binding_defaults(mode), self._bindings.project(mode)))
 
     def bind(
         self,
@@ -4276,6 +4273,8 @@ class App(Generic[ReturnType], DOMNode):
                     self.screen.minimize()
                     return
                 if self.focused:
+                    if not await self.focused.prepare_key():
+                        return
                     try:
                         self.screen._clear_tooltip()
                     except NoScreen:

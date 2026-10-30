@@ -10,10 +10,11 @@ from rich.console import RenderableType
 from rich.text import Text
 
 from textual import events, on
-from textual.binding import Binding
+from textual.binding import MethodBinding
 from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
 from textual.message import Message
+from textual.navigation import ActivateSelection, MovesCursor, NavigationCommand, SelectCursor
 from textual.reactive import reactive, var
 from textual.timer import Timer
 from textual.widgets import Static
@@ -49,8 +50,6 @@ class EmptySelectError(Exception):
 
 class SelectOverlay(OptionList):
     """The 'pop-up' overlay for the Select control."""
-
-    BINDINGS = [("escape", "dismiss", "Dismiss menu")]
 
     ALLOW_SELECT = False
 
@@ -160,6 +159,7 @@ class SelectOverlay(OptionList):
 
         return best_match
 
+    @MethodBinding.declare("escape")
     def action_dismiss(self) -> None:
         """Dismiss the overlay."""
         self.post_message(self.Dismiss())
@@ -281,7 +281,8 @@ SelectOption: TypeAlias = "tuple[str, SelectType]"
 """The type used for options in the Select."""
 
 
-class Select(PrimaryActivation, Generic[SelectType], Vertical, can_focus=True):
+class Select(MovesCursor, PrimaryActivation, Generic[SelectType], Vertical,
+             key_families=(SelectCursor, ActivateSelection), can_focus=True):
     """Widget to select from a list of possible options.
 
     A Select displays the current selection.
@@ -294,9 +295,6 @@ class Select(PrimaryActivation, Generic[SelectType], Vertical, can_focus=True):
     NULL = NULL
     """Constant to flag that the widget has no selection."""
 
-    BINDINGS = [
-        Binding("enter,down,space,up", "show_overlay", "Show menu", show=False),
-    ]
     """
     | Key(s) | Description |
     | :- | :- |
@@ -683,6 +681,14 @@ class Select(PrimaryActivation, Generic[SelectType], Vertical, can_focus=True):
     @property
     def primary_activation(self):
         return self.action_show_overlay
+
+    @property
+    def accepts_navigation(self) -> bool:
+        return not self.expanded
+
+    def apply_navigation(self, command: NavigationCommand) -> None:
+        """A collapsed list admits navigation by opening its native overlay."""
+        self.action_show_overlay()
 
     def action_show_overlay(self) -> None:
         """Show the overlay."""

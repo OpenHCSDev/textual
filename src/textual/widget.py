@@ -3732,6 +3732,7 @@ class Widget(DOMNode):
         can_focus_children: bool | None = None,
         inherit_css: bool = True,
         inherit_bindings: bool = True,
+        **kwargs: object,
     ) -> None:
         name = cls.__name__
         if not name[0].isupper() and not name.startswith("_"):
@@ -3742,6 +3743,7 @@ class Widget(DOMNode):
         super().__init_subclass__(
             inherit_css=inherit_css,
             inherit_bindings=inherit_bindings,
+            **kwargs,
         )
         if "_paint_only_render" not in cls.__dict__ and any(
             method in cls.__dict__ for method in ("render", "_render", "_render_bar")
@@ -4587,6 +4589,10 @@ class Widget(DOMNode):
                     self.select_container.text_select_all()
 
         await self.broker_event("click", event)
+
+    async def prepare_key(self) -> bool:
+        """Allow an asynchronous editor to settle previous input before key lookup."""
+        return True
 
     async def _on_key(self, event: events.Key) -> None:
         await self.handle_key(event)

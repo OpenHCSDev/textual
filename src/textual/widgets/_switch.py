@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from textual.app import RenderResult
     from typing_extensions import Self
 
-from textual.binding import Binding, BindingType
+from textual.binding import MethodBinding
 from textual.events import Click
 from textual.geometry import Size
 from textual.message import Message
@@ -22,15 +22,12 @@ from textual.widget import Widget
 class Switch(PrimaryActivation, Widget, can_focus=True):
     """A switch widget that represents a boolean value.
 
-    Can be toggled by clicking on it or through its [bindings][textual.widgets.Switch.BINDINGS].
+    Can be toggled by clicking on it or through its keyboard bindings.
 
     The switch widget also contains [component classes][textual.widgets.Switch.COMPONENT_CLASSES]
     that enable more customization.
     """
 
-    BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("enter,space", "toggle_switch", "Toggle", show=False),
-    ]
     """
     | Key(s) | Description |
     | :- | :- |
@@ -210,6 +207,7 @@ class Switch(PrimaryActivation, Widget, can_focus=True):
     def primary_activation(self):
         return self.action_toggle_switch
 
+    @MethodBinding.declare("enter", "space")
     def action_toggle_switch(self) -> None:
         """Toggle the state of the switch."""
         self.toggle()

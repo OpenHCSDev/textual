@@ -37,7 +37,7 @@ from textual._compat import cached_property
 from textual._node_list import NodeList
 from textual._paint_state import PaintNode
 from textual._types import WatchCallbackType
-from textual.binding import Binding, BindingsMap, BindingType, MethodBinding, ModeBinding
+from textual.binding import Binding, BindingsMap, BindingType, KeymapClaim, MethodBinding, ModeBinding
 from textual.document._editing import EditingMode
 from textual.cache import LRUCache
 from textual.css._error_tools import friendly_list
@@ -517,6 +517,8 @@ class DOMNode(PaintNode, MessagePump):
         return {}
 
     _declared_key_bindings: ClassVar[tuple[MethodBinding, ...]] = ()
+    _own_key_families: ClassVar[tuple[type[KeyDeclaration], ...]] = ()
+    key_families: ClassVar[tuple[type[KeyDeclaration], ...]] = ()
 
     @classmethod
     def contexts(cls) -> tuple[type[DOMNode], ...]:
@@ -542,22 +544,40 @@ class DOMNode(PaintNode, MessagePump):
                      for projected in binding.for_mode(mode))
 
     @classmethod
-    def declared_bindings(cls, mode: type[EditingMode]) -> tuple[Binding, ...]:
-        return (*cls.native_bindings(mode),
-                *(projected for base in cls.__mro__
-                  for binding in base.__dict__.get("_declared_key_bindings", ())
-                  for projected in binding.for_mode(mode)))
+    def present_binding(cls, declaration: type[KeyDeclaration], binding: Binding) -> Binding:
+        return binding
 
     @classmethod
-    def editor_command_bindings(cls, mode: type[EditingMode]) -> tuple[Binding, ...]:
-        """Only native document editors declare modal document commands."""
-        return ()
+    def declared_bindings(cls, mode: type[EditingMode]) -> tuple[Binding, ...]:
+        return (
+            *(cls.present_binding(declaration, binding)
+              for family in cls.key_families
+              for declaration in family.declarations()
+              for binding in declaration.bindings_for(mode)),
+            *cls.native_bindings(mode),
+            *(projected for base in cls.__mro__
+              for binding in base.__dict__.get("_declared_key_bindings", ())
+              for projected in binding.for_mode(mode)),
+        )
 
     @classmethod
     @lru_cache(maxsize=None)
+    def _binding_defaults(cls, mode: type[EditingMode]) -> tuple[tuple[str, tuple[Binding, ...]], ...]:
+        """Cache immutable projections, never a caller's mutable remapping table."""
+        projected = cls._merged_bindings.project(mode, cls.declared_bindings(mode))
+        return tuple((key, tuple(bindings)) for key, bindings in projected.key_to_bindings.items())
+
+    @classmethod
     def binding_defaults(cls, mode: type[EditingMode]) -> BindingsMap:
-        """Catalogs see the same raw and nominal native defaults as dispatch."""
-        return cls._merged_bindings.project(mode, cls.declared_bindings(mode))
+        """Catalogs and dispatch receive their own map over the same frozen bindings."""
+        return BindingsMap.from_keys({
+            key: list(bindings) for key, bindings in cls._binding_defaults(mode)
+        })
+
+    @classmethod
+    def keymap_claims(cls, mode: type[EditingMode]) -> tuple[KeymapClaim, ...]:
+        """A native scope exposes its declared invocations without constructing controls."""
+        return tuple(KeymapClaim.from_bindings(binding for _, binding in cls.binding_defaults(mode)))
 
     def binding_map(self, mode: type[EditingMode]) -> BindingsMap:
         """One projection for native declarations and external subclass bindings."""
@@ -574,10 +594,6 @@ class DOMNode(PaintNode, MessagePump):
     def apply_editor_binding(self, binding: MethodBinding, event: Key) -> bool:
         binding.call(self)
         return True
-
-    def apply_editor_command(self, command: KeyDeclaration[TextArea]) -> bool:
-        """A generic node does not own a modal document editor."""
-        return False
 
     @cached_property
     def _query_one_cache(self) -> LRUCache[QueryOneCacheKey, DOMNode]:
@@ -925,7 +941,13 @@ class DOMNode(PaintNode, MessagePump):
         inherit_css: bool = True,
         inherit_bindings: bool = True,
         inherit_component_classes: bool = True,
+        key_families: tuple[type[KeyDeclaration], ...] = (),
     ) -> None:
+        cls._own_key_families = key_families
+        cls.key_families = tuple(dict.fromkeys(
+            family for base in cls.__mro__
+            for family in base.__dict__.get("_own_key_families", ())
+        ))
         super().__init_subclass__()
 
         reactives = cls._reactives = {}

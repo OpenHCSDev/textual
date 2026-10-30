@@ -22,6 +22,7 @@ from typing import (
     NamedTuple,
     Self,
     TypeVar,
+    overload,
 )
 
 import rich.repr
@@ -38,6 +39,7 @@ if TYPE_CHECKING:
     from textual.dom import DOMNode
     from textual.events import Key
     from textual.widget import Widget
+    from textual.widgets import TextArea
 
 BindingType: TypeAlias = "Binding | tuple[str, str] | tuple[str, str, str]"
 """The possible types of a binding found in the `BINDINGS` class variable."""
@@ -180,6 +182,10 @@ class Binding:
     def fallback_bindings(self) -> tuple[Binding, ...]:
         """Ordinary keys stay on the focused native ancestor chain."""
         return ()
+
+    def engine_boundary(self, editor: TextArea) -> bool:
+        """Native declarations may offer an application edge to an external editor."""
+        return False
 
     @classmethod
     def make_bindings(cls, bindings: Iterable[BindingType]) -> Iterable[Binding]:
@@ -324,16 +330,29 @@ class MethodBinding(ModeBinding):
     selecting: tuple[str, ...] = ()
 
     @classmethod
-    def declare(cls, *keys: str, mode: type[EditingMode], selecting: tuple[str, ...] = ()) -> Callable[[Callable[..., object]], MethodBinding]:
+    def declare(
+        cls, *keys: str, selecting: tuple[str, ...] = (), description: str = "",
+        priority: bool = False, available: Callable[[DOMNode], bool | None] = _always,
+        show: bool = False,
+    ) -> Callable[[Callable[..., object]], MethodBinding]:
+        from textual.document._editing import EditingMode
+
         def declared(method: Callable[..., object]) -> MethodBinding:
             if not isinstance(method, FunctionType):
                 raise TypeError("Native method declarations require a Python function")
             if iscoroutinefunction(method):
                 raise TypeError("Pre-text editor methods must be synchronous")
-            return cls(key=",".join(keys), action=method, mode=mode,
-                       description=method.__name__.removeprefix("action_").replace("_", " ").capitalize(),
-                       tooltip=method.__doc__ or "", show=False, selecting=selecting)
+            return cls(key=",".join(keys), action=method, mode=EditingMode,
+                       description=description or method.__name__.removeprefix("action_").replace("_", " ").capitalize(),
+                       tooltip=method.__doc__ or "", show=show, selecting=selecting,
+                       priority=priority, available=available)
         return declared
+
+    @overload
+    def __get__(self, instance: None, owner: type) -> FunctionType: ...
+
+    @overload
+    def __get__(self, instance: object, owner: type) -> Callable[..., object]: ...
 
     def __get__(self, instance: object, owner: type) -> Callable[..., object]:
         return self.action.__get__(instance, owner)
@@ -349,6 +368,9 @@ class MethodBinding(ModeBinding):
 
     def arguments(self) -> tuple[object, ...]:
         return ()
+
+    def engine_boundary(self, editor: TextArea) -> bool:
+        return editor.before_engine_input(self.action)
 
     def call(self, node: DOMNode) -> object:
         return invoke_sync(getattr(node, self.action.__name__), *self.arguments())
@@ -415,6 +437,19 @@ class ActiveBinding(NamedTuple):
     """Is the binding enabled? (enabled bindings are typically rendered dim)"""
     tooltip: str = ""
     """Optional tooltip shown in Footer."""
+
+
+@dataclass(frozen=True)
+class KeymapClaim:
+    """A detached default claim, with its original nominal invocation intact."""
+
+    invocation: KeyInvocation
+    keys: tuple[str, ...]
+
+    @classmethod
+    def from_bindings(cls, bindings: Iterable[Binding]) -> Iterator[KeymapClaim]:
+        return (cls(invocation, (key,)) for key, binding in BindingsMap(bindings)
+                for invocation in binding.invocations())
 
 
 @rich.repr.auto
