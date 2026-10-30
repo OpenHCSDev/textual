@@ -439,6 +439,19 @@ class ActiveBinding(NamedTuple):
     """Optional tooltip shown in Footer."""
 
 
+@dataclass(frozen=True)
+class KeymapClaim:
+    """A detached default claim, with its original nominal invocation intact."""
+
+    invocation: KeyInvocation
+    keys: tuple[str, ...]
+
+    @classmethod
+    def from_bindings(cls, bindings: Iterable[Binding]) -> Iterator[KeymapClaim]:
+        return (cls(invocation, (key,)) for key, binding in BindingsMap(bindings)
+                for invocation in binding.invocations())
+
+
 @rich.repr.auto
 class BindingsMap:
     """Manage a set of bindings."""

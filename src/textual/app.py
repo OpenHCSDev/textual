@@ -889,7 +889,7 @@ class App(Generic[ReturnType], DOMNode):
         """Number of current realtime animations, such as scrolling."""
 
         if self.ENABLE_COMMAND_PALETTE:
-            for _key, binding in self._bindings:
+            for _key, binding in self._merged_bindings:
                 if binding.action in {"command_palette", "app.command_palette"}:
                     break
             else:
@@ -2049,6 +2049,14 @@ class App(Generic[ReturnType], DOMNode):
                 placeholder="Search for themes…",
             ),
         )
+
+    @cached_property
+    def _bindings(self) -> BindingsMap:
+        """Only runtime App.bind / palette additions are mutable per application."""
+        return BindingsMap()
+
+    def binding_map(self, mode: type[EditingMode]) -> BindingsMap:
+        return BindingsMap.merge((self.binding_defaults(mode), self._bindings.project(mode)))
 
     def bind(
         self,
