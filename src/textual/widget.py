@@ -48,6 +48,8 @@ if TYPE_CHECKING:
     from textual.app import RenderResult
 
 from textual import constants, errors, events, messages
+from textual.binding import ModeBinding
+from textual.document._editing import VimMode
 from textual._animator import DEFAULT_EASING, Animatable, BoundAnimator, EasingFunction
 from textual._arrange import DockArrangeResult, arrange
 from textual._context import NoActiveAppError
@@ -4742,6 +4744,11 @@ class Widget(DOMNode):
         if not self.allow_horizontal_scroll:
             raise SkipAction()
         self.scroll_right()
+
+    MODE_BINDINGS = (
+        ModeBinding("h", action_scroll_left, "Scroll left", mode=VimMode, show=False),
+        ModeBinding("l", action_scroll_right, "Scroll right", mode=VimMode, show=False),
+    )
 
     def action_scroll_up(self) -> None:
         if not self.allow_vertical_scroll:

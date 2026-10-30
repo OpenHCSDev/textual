@@ -23,7 +23,9 @@ from typing import (
 import rich.repr
 
 from textual._callback import invoke
+from textual.actions import SkipAction
 from textual.keys import _character_to_key
+from textual.document._editing import EditingMode
 
 if TYPE_CHECKING:
     from typing_extensions import TypeAlias
@@ -146,6 +148,10 @@ class Binding:
         """
         return await app.run_action(self.action, node)
 
+    def fallback_bindings(self) -> tuple[Binding, ...]:
+        """Ordinary keys stay on the focused native ancestor chain."""
+        return ()
+
     @classmethod
     def make_bindings(cls, bindings: Iterable[BindingType]) -> Iterable[Binding]:
         """Convert a list of BindingType (the types that can be specified in BINDINGS)
@@ -215,10 +221,32 @@ class CallBinding(Binding):
         return self.available(node)
 
     async def run(self, app: App[Any], node: DOMNode) -> bool:
-        if not self.available(node):
+        if not self.state(app, node):
             return False
-        await invoke(self.action, node)
+        try:
+            await invoke(self.action, node)
+        except SkipAction:
+            return False
         return True
+
+
+@dataclass(frozen=True, kw_only=True)
+class ModeBinding(CallBinding):
+    """A native callable whose key belongs to a nominal editing capability.
+
+    The declaring class keeps the method and its key together. Applications
+    choose which native declarations they expose through their own projection.
+    """
+
+    mode: type[EditingMode]
+
+    def state(self, app: App[object], node: DOMNode) -> bool | None:
+        if self.mode not in node.key_mode.__mro__:
+            return False
+        return super().state(app, node)
+
+    def fallback_bindings(self) -> tuple[Binding, ...]:
+        return self.mode.fallback_bindings(self)
 
 
 class ActiveBinding(NamedTuple):

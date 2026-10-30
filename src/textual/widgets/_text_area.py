@@ -136,6 +136,12 @@ class TextAreaState:
 class TextArea(ScrollView):
     editing_mode: reactive[EditingMode] = reactive(EditingMode, init=False, bindings=True)
     """The active native editing capability. Ordinary text entry is the default."""
+
+    @property
+    def key_mode(self) -> type[EditingMode]:
+        """Editor bindings follow the live editor state, including native transitions."""
+        return type(self.editing_mode)
+
     DEFAULT_CSS = """\
 TextArea {
     width: 1fr;

@@ -4,6 +4,8 @@ from __future__ import annotations
 from typing import ClassVar
 
 from textual import events
+from textual.binding import ModeBinding
+from textual.document._editing import VimMode
 from textual.content import Content
 from textual.geometry import Offset
 from textual.widget import Widget
@@ -20,6 +22,10 @@ class HintHost:
         session = HintSession(self, targets)
         await self.mount(*session.labels, session)
         session.focus_on_host()
+
+    MODE_BINDINGS = (
+        ModeBinding("f,ctrl+f", action_show_hints, "Hints", mode=VimMode, show=False),
+    )
 
     def dismiss_hints(self, *, restore=True) -> None:
         for session in self.query_children(HintSession):
