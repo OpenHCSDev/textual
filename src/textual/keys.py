@@ -3,7 +3,7 @@ from __future__ import annotations
 import unicodedata
 import inspect
 import re
-from abc import ABC, abstractmethod
+from abc import ABC, ABCMeta, abstractmethod
 from typing import TYPE_CHECKING, Callable, ClassVar, Generic, Iterator, TypeVar
 from enum import Enum
 from dataclasses import dataclass
@@ -16,6 +16,14 @@ if TYPE_CHECKING:
     from textual.events import Key
 
 NodeT = TypeVar("NodeT", bound="DOMNode", contravariant=True)
+
+
+class KeyDeclarationType(ABCMeta):
+    """A key-declaring class, including declarations supplied by a metaclass."""
+
+    def permits_key_overlap(cls, other: KeyDeclarationType) -> bool:
+        """An explicitly declared alternative may share this declaration's key."""
+        return False
 
 
 class KeyInvocation(ABC):
@@ -51,7 +59,7 @@ class KeyInvocation(ABC):
     def permits_invocation_overlap(self, other: KeyInvocation) -> bool:
         return False
 
-    def overlaps_declaration(self, other: type[KeyDeclaration]) -> bool:
+    def overlaps_declaration(self, other: KeyDeclarationType) -> bool:
         return False
 
 
@@ -62,7 +70,7 @@ class KeyTitle:
         return owner.default_title()
 
 
-class KeyDeclaration(KeyInvocation, Generic[NodeT]):
+class KeyDeclaration(KeyInvocation, Generic[NodeT], metaclass=KeyDeclarationType):
     """Shared metadata for application actions and native editor commands.
 
     Each provider retains its existing family registry. This view discovers the
@@ -109,7 +117,7 @@ class KeyDeclaration(KeyInvocation, Generic[NodeT]):
     def permits_invocation_overlap(self, other: KeyInvocation) -> bool:
         return other.overlaps_declaration(type(self))
 
-    def overlaps_declaration(self, other: type[KeyDeclaration]) -> bool:
+    def overlaps_declaration(self, other: KeyDeclarationType) -> bool:
         return type(self).permits_key_overlap(other)
 
     @abstractmethod
@@ -124,11 +132,6 @@ class KeyDeclaration(KeyInvocation, Generic[NodeT]):
     @classmethod
     def summary(cls) -> str:
         return inspect.cleandoc(cls.__doc__ or "")
-
-    @classmethod
-    def permits_key_overlap(cls, other: type[KeyDeclaration]) -> bool:
-        """An explicitly declared alternative may share a key with another declaration."""
-        return False
 
     @classmethod
     def declarations(cls) -> Iterator[type[KeyDeclaration]]:
