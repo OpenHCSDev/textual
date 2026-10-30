@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import ClassVar
 
 import rich.repr
 from rich.style import Style
@@ -10,7 +9,8 @@ from rich.text import Text
 from textual import events
 from textual.app import ComposeResult, RenderResult
 from textual.await_complete import AwaitComplete
-from textual.binding import Binding, BindingType
+from textual.binding import MethodBinding
+from textual.document._editing import EditingMode
 from textual.containers import Container, Horizontal, Vertical
 from textual.content import Content, ContentText
 from textual.css.query import NoMatches
@@ -244,10 +244,6 @@ class Tabs(Widget, can_focus=True):
     }
     """
 
-    BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("left", "previous_tab", "Previous tab", show=False),
-        Binding("right", "next_tab", "Next tab", show=False),
-    ]
     """
     | Key(s) | Description |
     | :- | :- |
@@ -733,10 +729,12 @@ class Tabs(Widget, can_focus=True):
         self._highlight_active(animate=False)
         self._scroll_active_tab()
 
+    @MethodBinding.declare("right", mode=EditingMode)
     def action_next_tab(self) -> None:
         """Make the next tab active."""
         self._move_tab(+1)
 
+    @MethodBinding.declare("left", mode=EditingMode)
     def action_previous_tab(self) -> None:
         """Make the previous tab active."""
         self._move_tab(-1)
