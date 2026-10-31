@@ -10,7 +10,9 @@ Note that more extensive testing for editing is done at the Document level.
 import pytest
 
 from textual.app import App, ComposeResult
+from textual.document._editing import EditingMode
 from textual.events import Paste
+from textual.keys import KeyInvocation, LeftKey
 from textual.widgets import TextArea
 from textual.widgets.text_area import Selection
 
@@ -629,3 +631,24 @@ async def test_delete_to_start_of_line_deletes_newline(hotkey: str):
         # Delete empty is a NOOP
         await pilot.press(hotkey)
         assert text_area.text == ""
+
+
+@pytest.mark.parametrize(
+    ("read_only", "expected_text", "expected_cursor"),
+    [(False, "hab", (0, 1)), (True, "ab", (0, 0))],
+)
+async def test_printable_arrow_alias_types_only_where_text_is_taken(
+    read_only, expected_text, expected_cursor
+):
+    """An arrow remapped to `h` still moves a read-only area; an editable one gets the letter."""
+    app = TextAreaApp()
+    async with app.run_test() as pilot:
+        text_area = app.query_one(TextArea)
+        text_area.load_text("ab")
+        text_area.read_only = read_only
+        text_area.cursor_location = (0, 1) if read_only else (0, 0)
+        app.set_keymap({KeyInvocation.in_mode(KeyInvocation.qualified(LeftKey), EditingMode): "left,h"})
+        await pilot.press("h")
+        await pilot.pause()
+        assert text_area.text == expected_text
+        assert text_area.cursor_location == expected_cursor

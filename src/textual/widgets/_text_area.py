@@ -155,6 +155,10 @@ class TextArea(FocusActivation, ScrollView):
     def binding_mode(self) -> type[EditingMode]:
         return self.editing_mode.binding_mode
 
+    @property
+    def takes_typed_text(self) -> bool:
+        return not self.read_only and self.editing_mode.accepts_text
+
     def apply_editor_binding(self, binding: MethodBinding, event: events.Key) -> bool:
         return self.editing_mode.apply_native_binding(self, binding, event)
 
@@ -2637,7 +2641,7 @@ TextArea {
         Returns:
             An EditResult or None if no edit was performed (e.g. on read-only mode).
         """
-        if self.read_only or not self.editing_mode.accepts_text:
+        if not self.takes_typed_text:
             return None
         return self.delete(start, end, maintain_selection_offset=False)
 
@@ -2657,7 +2661,7 @@ TextArea {
         Returns:
             An EditResult or None if no edit was performed (e.g. on read-only mode).
         """
-        if self.read_only or not self.editing_mode.accepts_text:
+        if not self.takes_typed_text:
             return None
         return self.replace(insert, start, end, maintain_selection_offset=False)
 
