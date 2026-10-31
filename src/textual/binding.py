@@ -393,9 +393,10 @@ class MethodBinding(ModeBinding):
         return True
 
     def edit(self, node: DOMNode, event: Key) -> bool:
-        # Only explicit focused overrides take printable input. Native non-text
-        # keys use this same call while the original prefix still owns its state.
-        if event.is_printable and self.id not in node.app._keymap:
+        # Only explicit overrides take printable input, and never from a control
+        # that is taking text. Native non-text keys use this same call while the
+        # original prefix still owns its state.
+        if event.is_printable and (self.id not in node.app._keymap or node.takes_typed_text):
             return False
         if not self.state(node.app, node):
             return False

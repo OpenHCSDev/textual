@@ -591,6 +591,11 @@ class DOMNode(PaintNode, MessagePump):
                            for binding in bindings.key_to_bindings.get(event.key, ()))
         return False
 
+    @property
+    def takes_typed_text(self) -> bool:
+        """Whether a printable key pressed here is text before it is a binding."""
+        return False
+
     def apply_editor_binding(self, binding: MethodBinding, event: Key) -> bool:
         binding.call(self)
         return True
