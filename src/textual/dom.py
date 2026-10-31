@@ -579,6 +579,10 @@ class DOMNode(PaintNode, MessagePump):
         """A native scope exposes its declared invocations without constructing controls."""
         return tuple(KeymapClaim.from_bindings(binding for _, binding in cls.binding_defaults(mode)))
 
+    def chain_binding_mode(self, focused: type[EditingMode]) -> type[EditingMode]:
+        """The mode this node's bindings project through while ``focused`` holds focus."""
+        return focused
+
     def binding_map(self, mode: type[EditingMode]) -> BindingsMap:
         """One projection for native declarations and external subclass bindings."""
         return self.binding_defaults(mode)

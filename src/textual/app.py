@@ -4041,6 +4041,10 @@ class App(Generic[ReturnType], DOMNode):
             shape_sequence = f"\x1b]22;{shape}\x07"
             self._driver.write(shape_sequence)
 
+    def chain_binding_mode(self, focused: type[EditingMode]) -> type[EditingMode]:
+        """Application shortcuts follow the screen's keyboard scope, not a focused text box."""
+        return self.screen.binding_mode
+
     @property
     def _binding_chain(self) -> list[tuple[DOMNode, BindingsMap]]:
         """Get a chain of nodes and bindings to consider.
@@ -4055,11 +4059,12 @@ class App(Generic[ReturnType], DOMNode):
         if focused is None:
             namespace_bindings = [
                 (self.screen, self.screen.binding_map(mode)),
-                (self, self.binding_map(mode)),
+                (self, self.binding_map(self.chain_binding_mode(mode))),
             ]
         else:
             namespace_bindings = [
-                (node, node.binding_map(mode)) for node in focused.ancestors_with_self
+                (node, node.binding_map(node.chain_binding_mode(mode)))
+                for node in focused.ancestors_with_self
             ]
 
         return namespace_bindings

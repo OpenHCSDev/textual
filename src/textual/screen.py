@@ -500,11 +500,12 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         if focused is None:
             namespace_bindings = [
                 (self, self.binding_map(mode)),
-                (self.app, self.app.binding_map(mode)),
+                (self.app, self.app.binding_map(self.app.chain_binding_mode(mode))),
             ]
         else:
             namespace_bindings = [
-                (node, node.binding_map(mode)) for node in focused.ancestors_with_self
+                (node, node.binding_map(node.chain_binding_mode(mode)))
+                for node in focused.ancestors_with_self
             ]
 
         owners = {node for node, _ in namespace_bindings}
