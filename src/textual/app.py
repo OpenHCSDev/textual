@@ -4041,34 +4041,6 @@ class App(Generic[ReturnType], DOMNode):
             shape_sequence = f"\x1b]22;{shape}\x07"
             self._driver.write(shape_sequence)
 
-    def chain_binding_mode(self, focused: type[EditingMode]) -> type[EditingMode]:
-        """Application shortcuts follow the screen's keyboard scope, not a focused text box."""
-        return self.screen.binding_mode
-
-    @property
-    def _binding_chain(self) -> list[tuple[DOMNode, BindingsMap]]:
-        """Get a chain of nodes and bindings to consider.
-
-        If no widget is focused, returns the bindings from both the screen and the app level bindings.
-        Otherwise, combines all the bindings from the currently focused node up the DOM to the root App.
-        """
-        focused = self.focused
-        mode = self.screen.active_binding_mode
-        namespace_bindings: list[tuple[DOMNode, BindingsMap]]
-
-        if focused is None:
-            namespace_bindings = [
-                (self.screen, self.screen.binding_map(mode)),
-                (self, self.binding_map(self.chain_binding_mode(mode))),
-            ]
-        else:
-            namespace_bindings = [
-                (node, node.binding_map(node.chain_binding_mode(mode)))
-                for node in focused.ancestors_with_self
-            ]
-
-        return namespace_bindings
-
     def simulate_key(self, key: str) -> None:
         """Simulate a key press.
 
