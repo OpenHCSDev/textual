@@ -161,11 +161,6 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         focused = self.focused
         return focused.key_mode_label if focused is not None else self.key_mode_label
 
-    @property
-    def active_binding_mode(self) -> type[EditingMode]:
-        """Every scope uses the focused editor's actual mode for this binding chain."""
-        return self.focused.binding_mode if self.focused is not None else self.binding_mode
-
     AUTO_FOCUS: ClassVar[str | None] = None
     """A selector to determine what to focus automatically when the screen is activated.
 
