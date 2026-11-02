@@ -52,9 +52,9 @@ class KeyInvocation(ABC):
     def in_mode(identity: str, mode: type) -> str:
         return f"{identity}:{KeyInvocation.qualified(mode)}"
 
-    def visible_for_focus(self, mode: type[EditingMode], focused: frozenset[str]) -> bool:
-        """Local commands follow the enabled invocation IDs of the previous focus."""
-        return self.binding_identity(mode) in focused
+    def visible_for_focus(self, focused: bool) -> bool:
+        """Local commands follow their declaration's actual prior-focus membership."""
+        return focused
 
     def permits_invocation_overlap(self, other: KeyInvocation) -> bool:
         return False
@@ -415,7 +415,7 @@ class NavigationKey(DeclaredKey, KeyInvocation):
     def key_system(self) -> bool:
         return False
 
-    def visible_for_focus(self, mode: type[EditingMode], focused: frozenset[str]) -> bool:
+    def visible_for_focus(self, focused: bool) -> bool:
         """Global arrow preferences remain editable even from a non-arrow focus."""
         return True
 

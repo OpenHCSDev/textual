@@ -161,11 +161,6 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         focused = self.focused
         return focused.key_mode_label if focused is not None else self.key_mode_label
 
-    @property
-    def active_binding_mode(self) -> type[EditingMode]:
-        """Every scope uses the focused editor's actual mode for this binding chain."""
-        return self.focused.binding_mode if self.focused is not None else self.binding_mode
-
     AUTO_FOCUS: ClassVar[str | None] = None
     """A selector to determine what to focus automatically when the screen is activated.
 
@@ -494,17 +489,16 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         if focused is not None and focused.loading:
             focused = None
 
-        mode = self.active_binding_mode
-
         namespace_bindings: list[tuple[DOMNode, BindingsMap]]
         if focused is None:
             namespace_bindings = [
-                (self, self.binding_map(mode)),
-                (self.app, self.app.binding_map(mode)),
+                (self, self.binding_map(self.binding_mode)),
+                (self.app, self.app.binding_map(self.app.binding_mode)),
             ]
         else:
             namespace_bindings = [
-                (node, node.binding_map(mode)) for node in focused.ancestors_with_self
+                (node, node.binding_map(node.binding_mode))
+                for node in focused.ancestors_with_self
             ]
 
         owners = {node for node, _ in namespace_bindings}
