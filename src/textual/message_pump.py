@@ -21,6 +21,7 @@ from typing import (
     Any,
     Awaitable,
     Callable,
+    ClassVar,
     Generator,
     Iterable,
     Type,
@@ -35,7 +36,7 @@ from textual._compat import cached_property
 from textual._context import NoActiveAppError, active_app, active_message_pump
 from textual._context import message_hook as message_hook_context_var
 from textual._context import prevent_message_types_stack
-from textual._on import MessageHandler, MessageRoute
+from textual._on import DispatchScope, MessageHandler, NamedScope
 from textual._queue import Queue
 from textual._time import time
 from textual._types import CallbackType
@@ -105,21 +106,10 @@ class _MessagePumpMeta(type):
         return class_obj
 
     def _compile_dispatch(cls) -> None:
-        """Declare C3 handler routes once; event delivery only binds their methods."""
-        scopes = []
-        for owner in cls.__mro__:
-            declarations = owner.__dict__
-            decorated = {}
-            for value in declarations.values():
-                if isinstance(value, MessageHandler):
-                    for declaration in value.declarations:
-                        decorated.setdefault(declaration.message_type, []).append(
-                            MessageRoute(value, declaration)
-                        )
-            # A class mapping is live: replacing a named handler during a
-            # decorated yield must affect this same dispatch, not the next class.
-            scopes.append((owner, decorated, declarations))
-        cls._dispatch_declarations = tuple(scopes)
+        """Derive receiver-first C3 scopes from their original declarations."""
+        cls._dispatch_declarations = tuple(
+            NamedScope.from_class(owner) for owner in cls.__mro__
+        )
 
 
 class ParentLinks:
@@ -160,7 +150,10 @@ class ParentLinks:
 class MessagePump(ParentLinks, metaclass=_MessagePumpMeta):
     """Base class which supplies a message pump."""
 
+    _dispatch_declarations: ClassVar[tuple[DispatchScope, ...]]
+
     def __init__(self, parent: MessagePump | None = None) -> None:
+        self._bound_message_scopes: dict[type[Message], tuple[DispatchScope, ...]] = {}
         self._parent = parent
         self._running: bool = False
         self._closing: bool = False
@@ -243,7 +236,8 @@ class MessagePump(ParentLinks, metaclass=_MessagePumpMeta):
         if self._subscribed_signals is not None:
             self._subscribed_signals.discard(signal)
 
-    def _clear_signal_subscriptions(self) -> None:
+    def _clear_dispatch_resources(self) -> None:
+        self._bound_message_scopes.clear()
         signals, self._subscribed_signals = self._subscribed_signals, None
         if signals is not None:
             for signal in tuple(signals):
@@ -660,7 +654,7 @@ class MessagePump(ParentLinks, metaclass=_MessagePumpMeta):
         self._closing = True
         self._message_pump_closing()
         self._discard_next_callbacks()
-        self._clear_signal_subscriptions()
+        self._clear_dispatch_resources()
         Reactive._clear_watch_subscriptions(self)
         if self._timers:
             await Timer._stop_all(self._timers)
@@ -696,6 +690,7 @@ class MessagePump(ParentLinks, metaclass=_MessagePumpMeta):
             self._closed = True
             self._message_pump_closing()
             self._discard_pending_messages()
+            self._clear_dispatch_resources()
 
     async def _process_messages(self, **kwargs: Any) -> None:
         """Own the real pump task through subclass startup, dispatch and exit."""
@@ -709,7 +704,7 @@ class MessagePump(ParentLinks, metaclass=_MessagePumpMeta):
             # including cancellation and failed pre-processing.
             self._running = False
             self._discard_pending_messages()
-            self._clear_signal_subscriptions()
+            self._clear_dispatch_resources()
             Reactive._clear_watch_subscriptions(self)
             self._task = None
 
@@ -845,9 +840,7 @@ class MessagePump(ParentLinks, metaclass=_MessagePumpMeta):
                     self._last_idle = current_time
                     if not self._closed:
                         event = events.Idle()
-                        for _cls, method in self._get_dispatch_methods(
-                            "on_idle", event
-                        ):
+                        for _cls, method in self._get_dispatch_methods(event):
                             try:
                                 await invoke(method, event)
                             except Exception as error:
@@ -921,30 +914,36 @@ class MessagePump(ParentLinks, metaclass=_MessagePumpMeta):
             if self._next_callbacks:
                 await self._flush_next_callbacks()
 
+    def _declared_message_scopes(self, message_type: type[Message]) -> tuple[DispatchScope, ...]:
+        """Bind declarations once for this receiving pump and nominal message type."""
+        try:
+            return self._bound_message_scopes[message_type]
+        except KeyError:
+            scopes = tuple(
+                scope.bound_for(self, message_type) for scope in self._dispatch_declarations
+            )
+            self._bound_message_scopes[message_type] = scopes
+            return scopes
+
     def _get_dispatch_methods(
-        self, method_name: str, message: Message
+        self, message: Message
     ) -> Iterable[tuple[type, Callable[..., object]]]:
-        """Bind declared routes, retaining live selector and default-action checks."""
+        """Deliver either scope capability with one live-filter/suppression algorithm."""
         methods_dispatched: set[MessageHandler] | None = None
-        for cls, decorated_handlers, named in self._dispatch_declarations:
+        message_type = type(message)
+        for scope in message._dispatch_scopes(self):
             if message._no_default_action:
                 break
-            if decorated_handlers:
-                for message_class in message._dispatch_types:
-                    handlers = decorated_handlers.get(message_class, ())
-
-                    for route in handlers:
-                        if methods_dispatched is None:
-                            methods_dispatched = set()
-                        if route.handler in methods_dispatched:
-                            continue
-                        if route.declaration.matches(message):
-                            yield cls, route.method_for(self, cls)
-                            methods_dispatched.add(route.handler)
-
-            conventional = named.get("_" + method_name) or named.get(method_name)
-            if conventional is not None and not isinstance(conventional, MessageHandler):
-                yield cls, conventional.__get__(self, cls)
+            for route in scope.routes_for(message_type):
+                if methods_dispatched is None:
+                    methods_dispatched = set()
+                if route.handler in methods_dispatched:
+                    continue
+                if route.declaration.matches(message):
+                    yield scope.owner, route.method_for(self, scope.owner)
+                    methods_dispatched.add(route.handler)
+            for method in scope.conventional_methods(self, message):
+                yield scope.owner, method
 
     async def on_event(self, event: events.Event) -> None:
         """Called to process an event.
@@ -961,7 +960,6 @@ class MessagePump(ParentLinks, metaclass=_MessagePumpMeta):
             message: A Message object.
         """
         _rich_traceback_guard = True
-        handler_name = message.handler_name
 
         if self._listeners:
             callbacks = tuple(
@@ -974,12 +972,12 @@ class MessagePump(ParentLinks, metaclass=_MessagePumpMeta):
 
         # Look through the MRO to find a handler
         dispatched = False
-        for cls, method in self._get_dispatch_methods(handler_name, message):
+        for cls, method in self._get_dispatch_methods(message):
             log.event.verbosity(message.verbose)(
                 message,
                 ">>>",
                 self,
-                f"method=<{cls.__name__}.{handler_name}>",
+                f"scope=<{cls.__name__}>", method,
             )
             dispatched = True
             await invoke(method, message)

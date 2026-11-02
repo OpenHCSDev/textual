@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from functools import update_wrapper
-from typing import TYPE_CHECKING, Callable, TypeVar, cast
+from typing import TYPE_CHECKING, Callable, Protocol, TypeVar, cast
 
 from textual.css.match import match
 from textual.css.model import SelectorSet
@@ -87,6 +87,110 @@ class MessageRoute:
 
     def method_for(self, receiver: MessagePump, owner: type) -> Callable[..., object]:
         return cast(Callable[..., object], self.handler.__get__(receiver, owner))
+
+    def bound_for(self, receiver: MessagePump, owner: type) -> BoundMessageRoute:
+        return BoundMessageRoute(
+            self.handler, self.declaration, self.method_for(receiver, owner)
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class BoundMessageRoute(MessageRoute):
+    """A receiver-owned binding; declaration predicates are not cached."""
+
+    bound_method: Callable[..., object]
+
+    def method_for(self, receiver: MessagePump, owner: type) -> Callable[..., object]:
+        return self.bound_method
+
+
+class MethodDescriptor(Protocol):
+    """Python's descriptor boundary for a conventional class-dictionary entry."""
+
+    def __get__(self, instance: object, owner: type) -> Callable[..., object]: ...
+
+
+@dataclass(frozen=True)
+class DispatchScope:
+    """One C3 declaring scope and the defaults for absent capabilities."""
+
+    owner: type
+
+    def routes_for(self, message_type: type[Message]) -> Iterable[MessageRoute]:
+        return ()
+
+    def conventional_methods(
+        self, receiver: MessagePump, message: Message
+    ) -> Iterable[Callable[..., object]]:
+        return ()
+
+    def bound_for(self, receiver: MessagePump, message_type: type[Message]) -> BoundScope:
+        return BoundScope(
+            self.owner,
+            tuple(route.bound_for(receiver, self.owner)
+                  for route in self.routes_for(message_type)),
+        )
+
+
+@dataclass(frozen=True)
+class NamedScope(DispatchScope):
+    """The live Python namespace still used by unmigrated messages."""
+
+    named: Mapping[str, object]
+
+    @classmethod
+    def from_class(cls, owner: type) -> DispatchScope:
+        namespace = owner.__dict__
+        declarations: dict[type[Message], list[MessageRoute]] = {}
+        # A Python class dictionary is foreign until decoded here. The
+        # resulting scopes carry their capabilities, not another kind flag.
+        for value in namespace.values():
+            if isinstance(value, MessageHandler):
+                for declaration in value.declarations:
+                    declarations.setdefault(declaration.message_type, []).append(
+                        MessageRoute(value, declaration)
+                    )
+        if declarations:
+            return ClassScope(
+                owner=owner, named=namespace,
+                declarations={key: tuple(routes) for key, routes in declarations.items()},
+            )
+        return cls(owner=owner, named=namespace)
+
+    def conventional_methods(
+        self, receiver: MessagePump, message: Message
+    ) -> Iterable[Callable[..., object]]:
+        conventional = self.named.get('_' + message.handler_name) or self.named.get(message.handler_name)
+        # Keep private-name precedence and the live dictionary. A decorated
+        # private entry masks the public conventional entry, too.
+        if conventional is not None and not isinstance(conventional, MessageHandler):
+            yield cast(MethodDescriptor, conventional).__get__(receiver, self.owner)
+
+
+@dataclass(frozen=True)
+class DeclaredRoutes(DispatchScope):
+    """Message-type lookup shared by class scopes with declared handlers."""
+
+    declarations: Mapping[type[Message], tuple[MessageRoute, ...]]
+
+    def routes_for(self, message_type: type[Message]) -> Iterable[MessageRoute]:
+        for ancestor in message_type._dispatch_types:
+            yield from self.declarations.get(ancestor, ())
+
+
+@dataclass(frozen=True)
+class ClassScope(DeclaredRoutes, NamedScope):
+    """Compose declared routes and a live conventional namespace by C3."""
+
+
+@dataclass(frozen=True)
+class BoundScope(DispatchScope):
+    """A declared-only candidate sequence bound to one receiving pump."""
+
+    routes: tuple[MessageRoute, ...]
+
+    def routes_for(self, message_type: type[Message]) -> Iterable[MessageRoute]:
+        return self.routes
 
 
 def on(

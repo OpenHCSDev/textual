@@ -16,6 +16,7 @@ from textual.case import camel_to_snake
 
 if TYPE_CHECKING:
     from asyncio import Future, Task
+    from textual._on import DispatchScope
     from textual.dom import DOMNode
     from textual.driver import Driver
     from textual.message_pump import MessagePump
@@ -103,6 +104,10 @@ class Message:
     def control(self) -> DOMNode | None:
         """The widget associated with this message, or None by default."""
         return None
+
+    def _dispatch_scopes(self, receiver: MessagePump) -> tuple[DispatchScope, ...]:
+        """Unmigrated messages retain the receiver's live conventional scopes."""
+        return receiver._dispatch_declarations
 
     @property
     def is_forwarded(self) -> bool:
@@ -192,3 +197,16 @@ class Message:
                 self._dispatch_completion = None
                 if not completion.done():
                     completion.set_result(self)
+
+
+class DeclaredMessage(Message):
+    """A message handled only by typed declarations, never conventional names.
+
+    Handler identities and receiver bindings are fixed for this receiving
+    lifetime. Selector predicates, payloads and callback data remain live.
+    """
+
+    __slots__ = ()
+
+    def _dispatch_scopes(self, receiver: MessagePump) -> tuple[DispatchScope, ...]:
+        return receiver._declared_message_scopes(type(self))
