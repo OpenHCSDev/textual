@@ -5,6 +5,7 @@ from __future__ import annotations
 from . import events
 from .app import App
 from .widget import Widget
+from .text_format import TextFormat
 from ._paint_state import PaintLayer
 from ._styles_cache import FramePaint
 from .box_model import (
@@ -30,7 +31,7 @@ FILL = Scalar(1.0, Unit.FRACTION, Unit.WIDTH)
 _EMPTY_EDGES = Edges(*(("", TRANSPARENT),) * 4)
 
 
-class WidgetView(BoxGeometry, PaintLayer, FramePaint, Widget):
+class WidgetView(BoxGeometry, PaintLayer, FramePaint, TextFormat, Widget):
     """The view supplies native inputs directly, without a CSS declaration mirror."""
 
     width: Dimension = None
@@ -71,6 +72,10 @@ class WidgetView(BoxGeometry, PaintLayer, FramePaint, Widget):
     @property
     def border(self) -> Edges:
         return _EMPTY_EDGES
+
+    @property
+    def text_format(self) -> TextFormat:
+        return self
 
     @property
     def geometry(self) -> BoxGeometry:

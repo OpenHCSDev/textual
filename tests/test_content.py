@@ -8,6 +8,7 @@ from textual.content import Content, Span
 from textual.geometry import Offset
 from textual.selection import Selection
 from textual.style import Style
+from textual.text_format import TextFormat, TextFormatSnapshot
 from textual.visual import RenderOptions
 from textual.widget import Widget
 
@@ -17,9 +18,9 @@ from textual.widget import Widget
 @pytest.mark.parametrize(
     "rules",
     [
-        {},
-        {"text_wrap": "nowrap", "text_overflow": "clip", "text_align": "right"},
-        {"text_align": "justify", "line_pad": 1},
+        TextFormat(),
+        TextFormatSnapshot("right", "nowrap", "clip", 0),
+        TextFormatSnapshot("justify", "wrap", "fold", 1),
     ],
 )
 def test_render_height_preserves_source_segments(width, height, rules):
@@ -334,7 +335,7 @@ async def test_split_and_tabs():
 
     content = Content("--- hello.py\t2024-01-15 10:30:00.000000000 -0800", spans=spans)
     widget = Widget()
-    content.render_strips(0, None, Style(), RenderOptions(widget._get_style, {}))
+    content.render_strips(0, None, Style(), RenderOptions(widget._get_style, TextFormat()))
 
 
 def test_simplify():

@@ -229,9 +229,9 @@ class ToggleButton(PrimaryActivation, Static, can_focus=True):
 
     def get_content_width(self, container: Size, viewport: Size) -> int:
         return (
-            self._button.get_optimal_width(self.styles, 0)
+            self._button.get_optimal_width(self.text_format, 0)
             + (2 if self._label else 0)
-            + self._label.get_optimal_width(self.styles, 0)
+            + self._label.get_optimal_width(self.text_format, 0)
         )
 
     def get_content_height(self, container: Size, viewport: Size, width: int) -> int:
