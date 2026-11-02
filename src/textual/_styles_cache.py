@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import TYPE_CHECKING, Callable, Iterable, Sequence
 
@@ -15,6 +15,8 @@ from textual._paint_state import PaintState
 from textual._segment_tools import apply_hatch, line_pad, line_trim, make_blank
 from textual.ansi_palette import AnsiPalette
 from textual.color import TRANSPARENT, Color
+from textual.box_model import Bordered
+from textual.css._style_properties import Edges
 from textual.constants import DEBUG
 from textual.content import Content
 from textual.filter import LineFilter
@@ -31,11 +33,10 @@ if TYPE_CHECKING:
 RenderLineCallback: TypeAlias = Callable[[int], Strip]
 
 
-class FramePaint:
+class FramePaint(Bordered):
     """Inputs consumed by the existing line painter, not a second style store."""
 
     paint_gutter: Spacing
-    border: tuple
     outline: tuple
     hatch: tuple | None
     tint: Color
@@ -64,7 +65,7 @@ class PaintStyles(FramePaint):
     """
 
     paint_gutter: Spacing
-    border: tuple
+    border: Edges = field()
     outline: tuple
     hatch: tuple | None
     tint: Color
