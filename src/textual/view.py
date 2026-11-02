@@ -21,6 +21,7 @@ from .css.scalar import (
     Unit,
 )
 from .geometry import Spacing
+from .layout import Layout
 
 AUTO = Scalar(1.0, Unit.AUTO, Unit.AUTO)
 
@@ -59,10 +60,16 @@ class WidgetView(BoxGeometry, PaintLayer, FramePaint, TextFormat, Widget):
     keyline = ("none", TRANSPARENT)
     position = "relative"
     overlay = constrain_x = constrain_y = "none"
-    child_layout = None
-    placement_offset = None
+    placement_offset: ScalarOffset | None = None
     layer_name = DEFAULT_LAYER
-    layer_order = None
+
+    @property
+    def child_layout(self) -> Layout | None:
+        return None
+
+    @property
+    def layer_order(self) -> tuple[str, ...] | None:
+        return None
 
     tint = TRANSPARENT
     hatch = None
