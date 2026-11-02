@@ -3765,14 +3765,12 @@ class Widget(DOMNode):
             and getattr(cls.pre_layout, "_height_dependency", CONTEXT_HEIGHT) is INDEPENDENT_HEIGHT
             and getattr(cls.process_layout, "_height_dependency", CONTEXT_HEIGHT) is INDEPENDENT_HEIGHT
         )
-        base = cls.__mro__[0]
-        if issubclass(base, Widget):
-            cls.can_focus = base.can_focus if can_focus is None else can_focus
-            cls.can_focus_children = (
-                base.can_focus_children
-                if can_focus_children is None
-                else can_focus_children
-            )
+        # Declare only explicit choices. Copying inherited values here makes an
+        # intermediate base shadow a later capability in the child's C3 order.
+        if can_focus is not None:
+            cls.can_focus = can_focus
+        if can_focus_children is not None:
+            cls.can_focus_children = can_focus_children
 
     def __rich_repr__(self) -> rich.repr.Result:
         try:

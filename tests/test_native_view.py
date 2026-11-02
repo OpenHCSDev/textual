@@ -17,6 +17,10 @@ class NativeLabel(WidgetView, Static):
     padding = Spacing(0, 1, 0, 1)
 
 
+class NativeInput(WidgetView, Input):
+    """Native presentation must retain the actual input's focus capability."""
+
+
 class FocusFrame(FocusWithinView, VerticalGroup):
     width = Scalar.from_number(20)
     height = Scalar.from_number(5)
@@ -39,7 +43,7 @@ class NativeViewApp(App[None]):
         styled.styles.height = 2
         yield styled
         yield FocusFrame(Input(id="inside"), id="frame")
-        yield Input(id="outside")
+        yield NativeInput(id="outside")
 
 
 def border_colour(frame: FocusFrame) -> tuple[int, int, int]:
@@ -61,6 +65,22 @@ async def test_native_geometry_and_styles_backed_sibling() -> None:
         assert native.geometry is native
         assert native.frame_paint is native
         assert str(native.styles.width) == "55"
+
+
+async def test_native_input_focus_and_blur_reach_the_real_control() -> None:
+    app = NativeViewApp()
+    blurred: list[Input.Blurred] = []
+    async with app.run_test(size=(80, 24)) as pilot:
+        native = app.query_one("#outside", NativeInput)
+        native.listen(Input.Blurred, blurred.append)
+        native.focus()
+        await pilot.pause()
+        assert app.focused is native
+        native.value = "edited"
+        app.query_one("#inside", Input).focus()
+        await pilot.pause()
+        assert len(blurred) == 1
+        assert blurred[0].value == "edited"
 
 
 async def test_focus_frame_repaints_and_remount_retires_only_its_listeners() -> None:
