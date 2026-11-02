@@ -38,6 +38,7 @@ from textual._context import prevent_message_types_stack
 from textual._on import MessageHandler, OnNoWidget
 from textual._queue import Queue
 from textual._time import time
+from textual._types import CallbackType
 from textual.constants import SLOW_THRESHOLD
 from textual.css.match import match
 from textual.events import Event
@@ -176,12 +177,12 @@ class MessagePump(ParentLinks, metaclass=_MessagePumpMeta):
         self._thread_id: int = threading.get_ident()
         self._prevented_messages_on_mount = self._prevent_message_types_stack[-1]
         self._subscribed_signals: WeakSet[Signal[Any]] | None = None
-        self._listeners: dict[type[Message], list[Callable[[Any], Any]]] = {}
+        self._listeners: dict[type[Message], list[Callback]] = {}
 
     def listen(
         self,
         message_type: type[MessageType],
-        callback: Callable[[MessageType], Awaitable[None] | None],
+        callback: Callable[[MessageType], Awaitable[None] | None] | CallbackType,
     ) -> None:
         """Call `callback` with each message of a type that reaches this node.
 
@@ -196,6 +197,17 @@ class MessagePump(ParentLinks, metaclass=_MessagePumpMeta):
             callback: Called with the message. May be a coroutine function.
         """
         self._listeners.setdefault(message_type, []).append(callback)
+
+    def unlisten(
+        self,
+        message_type: type[MessageType],
+        callback: Callable[[MessageType], Awaitable[None] | None] | CallbackType,
+    ) -> None:
+        """Remove one registered listener, retaining the order of other listeners.
+
+        Raises KeyError or ValueError when the registration does not exist.
+        """
+        self._listeners[message_type].remove(callback)
 
     @cached_property
     def _disabled_messages(self) -> set[type[Message]]:
