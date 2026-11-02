@@ -18,7 +18,7 @@ from textual._loop import loop_last
 from textual._parser import ParseError
 from textual._xterm_parser import XTermParser
 from textual.driver import Driver
-from textual.geometry import Size
+from textual.geometry import Region, Size
 
 if TYPE_CHECKING:
     from textual.app import App
@@ -46,6 +46,13 @@ class LinuxInlineDriver(Driver):
     @property
     def is_inline(self) -> bool:
         return True
+
+    def to_terminal_region(self, region: Region) -> Region:
+        """Use the terminal's existing reported origin, never a guessed cursor row."""
+        if not region or self.cursor_origin is None:
+            return Region()
+        x, y = self.cursor_origin
+        return Region(region.x + x, region.y + y, region.width, region.height)
 
     def _enable_bracketed_paste(self) -> None:
         """Enable bracketed paste mode."""
@@ -177,6 +184,7 @@ class LinuxInlineDriver(Driver):
                 pass
 
     def start_application_mode(self) -> None:
+        self.cursor_origin = None
         loop = asyncio.get_running_loop()
 
         def send_size_event(clear: bool = False) -> None:

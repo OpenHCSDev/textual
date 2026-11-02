@@ -17,6 +17,7 @@ from textual.actions import SkipAction
 from textual.expand_tabs import expand_tabs_inline
 from textual.screen import Screen
 from textual.scroll_view import ScrollView
+from textual.editable_input import EditableInput
 from textual._paint_state import PaintState
 from textual.strip import Strip
 
@@ -73,7 +74,7 @@ class Selection(NamedTuple):
         return self.start == self.end
 
 
-class Input(NativeTextKeys, FocusActivation, ScrollView):
+class Input(NativeTextKeys, FocusActivation, EditableInput, ScrollView):
     """A text input widget."""
 
     BINDING_GROUP_TITLE = "Input"

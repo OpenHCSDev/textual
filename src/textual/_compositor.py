@@ -605,6 +605,13 @@ class CompositorUpdate:
         self._publications.append(
             (compositor, compositor._publication_geometry(arranged, regions), regions))
 
+    def output_geometry(self, compositor: Compositor) -> CompositorMap:
+        """The placement represented by these bytes, without admitting it early."""
+        for owner, geometry, _regions in reversed(self._publications):
+            if owner is compositor:
+                return geometry
+        return compositor._published_map
+
     def admit(self) -> None:
         """Commit only after the original output owner has accepted this update.
 

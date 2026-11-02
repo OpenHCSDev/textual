@@ -57,5 +57,4 @@ class BlinkingBar(TerminalCursor):
 
 
 class TextEntryCursor(BlinkingBar):
-    """The shape every focused text entry shows. A visible terminal cursor is the signal a
-    phone terminal (Termux) reads to raise its soft keyboard."""
+    """A blinking bar used by text-entry editing modes; appearance is not input admission."""

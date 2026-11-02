@@ -38,8 +38,7 @@ async def test_editing_mode_sets_terminal_cursor_shape() -> None:
 
 @pytest.mark.parametrize("entry", [TextArea, Input])
 async def test_focused_text_entry_shows_the_terminal_cursor(entry: type[Widget]) -> None:
-    """A visible terminal cursor is the signal a phone terminal (Termux) reads to raise
-    its soft keyboard, so every focused text entry shows one."""
+    """Default text-entry modes show their native terminal cursor appearance."""
     app = CursorShapeApp()
     async with app.run_test() as pilot:
         app.query_one(entry).focus()
