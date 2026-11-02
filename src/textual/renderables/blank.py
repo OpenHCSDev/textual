@@ -4,7 +4,7 @@ from rich.style import Style as RichStyle
 
 from textual.color import Color
 from textual.content import Style
-from textual.css.styles import RulesMap
+from textual.text_format import TextFormat
 from textual.strip import Strip
 from textual.visual import RenderOptions, Visual
 
@@ -18,10 +18,10 @@ class Blank(Visual):
     def visualize(self) -> Blank:
         return self
 
-    def get_optimal_width(self, rules: RulesMap, container_width: int) -> int:
+    def get_optimal_width(self, rules: TextFormat, container_width: int) -> int:
         return container_width
 
-    def get_height(self, rules: RulesMap, width: int) -> int:
+    def get_height(self, rules: TextFormat, width: int) -> int:
         return 1
 
     def render_strips(

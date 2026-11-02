@@ -15,7 +15,7 @@ from rich.text import Text
 
 from textual._paint_state import PaintState
 from textual._context import active_app
-from textual.css.styles import RulesMap
+from textual.text_format import TextFormat
 from textual.geometry import Spacing
 from textual.render import measure
 from textual.selection import Selection
@@ -39,8 +39,8 @@ class RenderOptions:
 
     get_style: Callable[[str | Style], Style]
     """Callable to get a style."""
-    rules: RulesMap
-    """Mapping of style rules."""
+    text_format: TextFormat
+    """The line policy also used for intrinsic measurement."""
     selection: Selection | None = None
     """Text selection information."""
     selection_style: Style | None = None
@@ -154,8 +154,12 @@ class Visual(ABC):
             An list of Strips.
         """
 
+    def get_text_format(self, supplied: TextFormat) -> TextFormat:
+        """Select one line policy for this visual's measurement and paint."""
+        return supplied
+
     @abstractmethod
-    def get_optimal_width(self, rules: RulesMap, container_width: int) -> int:
+    def get_optimal_width(self, rules: TextFormat, container_width: int) -> int:
         """Get optimal width of the Visual to display its content.
 
         The exact definition of "optimal width" is dependant on the Visual, but
@@ -172,7 +176,7 @@ class Visual(ABC):
 
         """
 
-    def get_minimal_width(self, rules: RulesMap) -> int:
+    def get_minimal_width(self, rules: TextFormat) -> int:
         """Get a minimal width (the smallest width before data loss occurs).
 
         Args:
@@ -187,7 +191,7 @@ class Visual(ABC):
         return 1
 
     @abstractmethod
-    def get_height(self, rules: RulesMap, width: int) -> int:
+    def get_height(self, rules: TextFormat, width: int) -> int:
         """Get the height of the Visual if rendered at the given width.
 
         Args:
@@ -246,7 +250,7 @@ class Visual(ABC):
         strips = visual.render_strips(
             width, height, style,
             RenderOptions(
-                lambda style: paint.get_style(widget, style), widget.styles,
+                lambda style: paint.get_style(widget, style), widget.text_format,
                 selection if apply_selection else None, selection_style,
                 link_style=link_style,
             ),
@@ -326,14 +330,14 @@ class RichVisual(Visual):
             )
         return self._measurement
 
-    def get_optimal_width(self, rules: RulesMap, container_width: int) -> int:
+    def get_optimal_width(self, rules: TextFormat, container_width: int) -> int:
         console = active_app.get().console
         width = measure(
             console, self._renderable, container_width, container_width=container_width
         )
         return width
 
-    def get_height(self, rules: RulesMap, width: int) -> int:
+    def get_height(self, rules: TextFormat, width: int) -> int:
         app = active_app.get()
         console = app.console
         renderable = self._renderable
@@ -411,12 +415,12 @@ class Padding(Visual):
         yield self._visual
         yield self._spacing
 
-    def get_optimal_width(self, rules: RulesMap, container_width: int) -> int:
+    def get_optimal_width(self, rules: TextFormat, container_width: int) -> int:
         return (
             self._visual.get_optimal_width(rules, container_width) + self._spacing.width
         )
 
-    def get_height(self, rules: RulesMap, width: int) -> int:
+    def get_height(self, rules: TextFormat, width: int) -> int:
         return (
             self._visual.get_height(rules, width - self._spacing.width)
             + self._spacing.height

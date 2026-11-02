@@ -267,7 +267,7 @@ class GridLayout(Layout):
                         widget = cell_info[0]
                         column_minimums[column_index] = max(
                             visualize(widget, widget.render()).get_minimal_width(
-                                widget.styles
+                                widget.text_format
                             )
                             + widget.geometry.box_gutter.width,
                             column_minimums[column_index],

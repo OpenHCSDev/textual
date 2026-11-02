@@ -17,6 +17,7 @@ from textual._types import AnimationLevel, CallbackType
 from textual.color import Color
 from textual.box_model import DEFAULT_LAYER, BoxGeometry
 from textual._paint_state import PaintLayer
+from textual.text_format import TextFormat
 from textual.css._style_properties import (
     AlignProperty,
     BooleanProperty,
@@ -227,7 +228,7 @@ RULE_NAMES_SET = frozenset(RULE_NAMES)
 _rule_getter = attrgetter(*RULE_NAMES)
 
 
-class StylesBase(BoxGeometry, PaintLayer):
+class StylesBase(BoxGeometry, PaintLayer, TextFormat):
     """A common base class for Styles and RenderStyles"""
 
     ANIMATABLE = {
@@ -470,7 +471,7 @@ class StylesBase(BoxGeometry, PaintLayer):
     column_span = IntegerProperty(default=1, layout=True)
 
     text_align: StringEnumProperty[TextAlign] = StringEnumProperty(
-        VALID_TEXT_ALIGN, "start"
+        VALID_TEXT_ALIGN, TextFormat.line_align
     )
 
     link_color = ColorProperty("transparent")
@@ -507,14 +508,26 @@ class StylesBase(BoxGeometry, PaintLayer):
         VALID_CONSTRAIN, "none"
     )
     text_wrap: StringEnumProperty[TextWrap] = StringEnumProperty(
-        VALID_TEXT_WRAP, "wrap"
+        VALID_TEXT_WRAP, TextFormat.line_wrap
     )
     text_overflow: StringEnumProperty[TextOverflow] = StringEnumProperty(
-        VALID_TEXT_OVERFLOW, "fold"
+        VALID_TEXT_OVERFLOW, TextFormat.line_overflow
     )
     expand: StringEnumProperty[Expand] = StringEnumProperty(VALID_EXPAND, "greedy")
-    line_pad = IntegerProperty(default=0, layout=True)
+    line_pad = IntegerProperty(default=TextFormat.line_pad, layout=True)
     """Padding added to left and right of lines."""
+
+    @property
+    def line_align(self) -> TextAlign:
+        return self.text_align
+
+    @property
+    def line_wrap(self) -> TextWrap:
+        return self.text_wrap
+
+    @property
+    def line_overflow(self) -> TextOverflow:
+        return self.text_overflow
 
     pointer: StringEnumProperty[PointerShape] = StringEnumProperty(
         VALID_POINTER, "default", pointer=True, geometry=False

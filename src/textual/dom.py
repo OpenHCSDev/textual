@@ -48,6 +48,7 @@ from textual.css.query import NoMatches, TooManyMatches, WrongType
 from textual.css.model import HoverDependency
 from textual.css.styles import RenderStyles, Styles
 from textual.box_model import BoxGeometry
+from textual.text_format import TextFormat
 from textual.geometry import Size
 from textual.css.tokenize import IDENTIFIER
 from textual.message_pump import MessagePump
@@ -334,7 +335,7 @@ class DOMNode(PaintNode, MessagePump):
         """Intrinsic native layout/visual width, independent of scene custody."""
         if self.is_container:
             return self.layout.get_content_width(self, container, viewport)
-        width = self._render().get_optimal_width(self.styles, container.width)
+        width = self._render().get_optimal_width(self.text_format, container.width)
         if self.expand:
             width = max(container.width, width)
         if self.shrink:
@@ -357,7 +358,12 @@ class DOMNode(PaintNode, MessagePump):
             return 0
         if self.is_container:
             return self.layout.get_content_height(self, container, viewport, width)
-        return self._render().get_height(self.styles, width)
+        return self._render().get_height(self.text_format, width)
+
+    @property
+    def text_format(self) -> TextFormat:
+        """The shared intrinsic-measurement and line-paint policy."""
+        return self.styles
 
     @property
     def style_type(self) -> type[DOMNode]:

@@ -34,7 +34,8 @@ from textual.css.types import TextAlign, TextOverflow
 from textual.selection import Selection
 from textual.strip import Strip
 from textual.style import Style
-from textual.visual import RenderOptions, RulesMap, Visual
+from textual.text_format import TextFormat
+from textual.visual import RenderOptions, Visual
 
 __all__ = ["ContentType", "Content", "Span"]
 
@@ -556,7 +557,7 @@ class Content(Visual):
             return False
         return self.spans == content.spans
 
-    def get_optimal_width(self, rules: RulesMap, container_width: int) -> int:
+    def get_optimal_width(self, rules: TextFormat, container_width: int) -> int:
         """Get optimal width of the Visual to display its content.
 
         The exact definition of "optimal width" is dependent on the Visual, but
@@ -576,9 +577,9 @@ class Content(Visual):
             )
         else:
             width = self._optimal_width_cache
-        return width + rules.get("line_pad", 0) * 2
+        return width + self.get_text_format(rules).line_pad * 2
 
-    def get_minimal_width(self, rules: RulesMap) -> int:
+    def get_minimal_width(self, rules: TextFormat) -> int:
         """Minimal width is the largest single word."""
         if not self.plain.strip():
             return 0
@@ -591,9 +592,9 @@ class Content(Visual):
             )
         else:
             width = self._minimal_width_cache
-        return width + rules.get("line_pad", 0) * 2
+        return width + self.get_text_format(rules).line_pad * 2
 
-    def get_height(self, rules: RulesMap, width: int) -> int:
+    def get_height(self, rules: TextFormat, width: int) -> int:
         """Get the height of the Visual if rendered at the given width.
 
         Args:
@@ -603,10 +604,10 @@ class Content(Visual):
         Returns:
             A height in lines.
         """
-        get_rule = rules.get
-        line_pad = get_rule("line_pad", 0) * 2
-        overflow = get_rule("text_overflow", "fold")
-        no_wrap = get_rule("text_wrap", "wrap") == "nowrap"
+        formatting = self.get_text_format(rules)
+        line_pad = formatting.line_pad * 2
+        overflow = formatting.line_overflow
+        no_wrap = formatting.line_wrap == "nowrap"
         cache_key = (width, line_pad, overflow, no_wrap)
         if self._height_cache[0] == cache_key:
             height = self._height_cache[1]
@@ -736,13 +737,13 @@ class Content(Visual):
         if not width:
             return []
 
-        get_rule = options.rules.get
+        formatting = self.get_text_format(options.text_format)
         lines: Iterable[_FormattedLine] = self._wrap_and_format(
             width,
-            align=get_rule("text_align", "left"),
-            overflow=get_rule("text_overflow", "fold"),
-            no_wrap=get_rule("text_wrap", "wrap") == "nowrap",
-            line_pad=get_rule("line_pad", 0),
+            align=formatting.line_align,
+            overflow=formatting.line_overflow,
+            no_wrap=formatting.line_wrap == "nowrap",
+            line_pad=formatting.line_pad,
             tab_size=8,
             selection=options.selection,
             selection_style=options.selection_style,

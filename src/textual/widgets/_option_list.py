@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, ClassVar, Iterable, Sequence, cast
+from typing import TYPE_CHECKING, ClassVar, Iterable, Sequence
 
 import rich.repr
 from rich.segment import Segment
@@ -10,7 +10,6 @@ from textual import _widget_navigation, events
 from textual._activation import Activation
 from textual._loop import loop_last
 from textual.cache import LRUCache
-from textual.css.styles import RulesMap
 from textual.geometry import Region, Size, Spacing, clamp
 from textual.message import Message
 from textual.navigation import ListNavigation
@@ -864,7 +863,7 @@ class OptionList(ListNavigation, ScrollView, can_focus=True):
             for index, option in enumerate(self.options[next_index:], next_index):
                 line_cache.index_to_line[index] = len(line_cache.lines)
                 line_count = (
-                    get_visual(option).get_height(self.styles, width - padding.width)
+                    get_visual(option).get_height(self.text_format, width - padding.width)
                     + option._divider
                 )
                 line_cache.heights[index] = line_count
@@ -882,14 +881,13 @@ class OptionList(ListNavigation, ScrollView, can_focus=True):
         """Get maximum width of options."""
         if not self.options:
             return 0
-        styles = self.styles
         get_visual_from_index = self._get_visual_from_index
         padding = self.get_component_styles("option-list--option").padding
         gutter_width = self._get_left_gutter_width()
         container_width = container.width
         width = (
             max(
-                get_visual_from_index(index).get_optimal_width(styles, container_width)
+                get_visual_from_index(index).get_optimal_width(self.text_format, container_width)
                 for index in range(len(self.options))
             )
             + padding.width
@@ -899,13 +897,12 @@ class OptionList(ListNavigation, ScrollView, can_focus=True):
 
     def get_content_height(self, container: Size, viewport: Size, width: int) -> int:
         """Get height for the given width."""
-        styles = self.styles
-        rules = cast(RulesMap, styles)
+        formatting = self.text_format
         padding_width = self.get_component_styles("option-list--option").padding.width
         get_visual = self._get_visual
         height = sum(
             (
-                get_visual(option).get_height(rules, width - padding_width)
+                get_visual(option).get_height(formatting, width - padding_width)
                 + (1 if option._divider and not last else 0)
             )
             for last, option in loop_last(self.options)
