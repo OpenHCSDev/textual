@@ -28,9 +28,17 @@ class Variable(NativeValue):
 
     name: str
     token_name = "variable_ref"
+    prefix: ClassVar[str] = ""
 
     def text(self) -> str:
-        return f"${self.name}"
+        return f"${self.prefix}{self.name}"
+
+
+@dataclass(frozen=True)
+class TextVariable(Variable):
+    """The design system's text expression for a named semantic colour."""
+
+    prefix = "text-"
 
 
 @dataclass(frozen=True)

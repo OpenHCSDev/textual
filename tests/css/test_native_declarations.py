@@ -1,18 +1,19 @@
 import pytest
 
-from textual.css.native import Keyword, NativeDeclaration, Percent, Variable
+from textual.css.native import Keyword, NativeDeclaration, Percent, TextVariable, Variable
 from textual.css.styles import Styles
 from textual.css.stylesheet import Stylesheet
 from textual.css.tokenizer import TokenError
 
 
+@pytest.mark.parametrize("reference", (Variable("ink"), TextVariable("warning")))
 @pytest.mark.parametrize("expression", ("#4488aa", "auto 75%", "red 50%", "$secondary", "ansi_yellow"))
-def test_native_theme_colour_uses_the_css_value_owner(expression: str) -> None:
-    stylesheet = Stylesheet(variables={"ink": expression, "secondary": "#aa8844"})
-    stylesheet.add_source("Widget { color: $ink; }")
+def test_native_theme_colour_uses_the_css_value_owner(expression: str, reference: Variable) -> None:
+    stylesheet = Stylesheet(variables={"ink": expression, "text-warning": expression, "secondary": "#aa8844"})
+    stylesheet.add_source(f"Widget {{ color: {reference.text()}; }}")
     stylesheet.parse()
 
-    native = stylesheet.native_styles(NativeDeclaration.of(Styles.color, Variable("ink")))
+    native = stylesheet.native_styles(NativeDeclaration.of(Styles.color, reference))
 
     assert native.get_rules() == stylesheet.rules[0].styles.get_rules()
 
