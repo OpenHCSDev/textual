@@ -35,12 +35,11 @@ from textual._compat import cached_property
 from textual._context import NoActiveAppError, active_app, active_message_pump
 from textual._context import message_hook as message_hook_context_var
 from textual._context import prevent_message_types_stack
-from textual._on import MessageHandler, OnNoWidget
+from textual._on import MessageHandler, MessageRoute
 from textual._queue import Queue
 from textual._time import time
 from textual._types import CallbackType
 from textual.constants import SLOW_THRESHOLD
-from textual.css.match import match
 from textual.events import Event
 from textual.message import Message
 from textual.reactive import Reactive, TooManyComputesError
@@ -113,8 +112,10 @@ class _MessagePumpMeta(type):
             decorated = {}
             for value in declarations.values():
                 if isinstance(value, MessageHandler):
-                    for message_type, selectors in value.declarations:
-                        decorated.setdefault(message_type, []).append((value, selectors))
+                    for declaration in value.declarations:
+                        decorated.setdefault(declaration.message_type, []).append(
+                            MessageRoute(value, declaration)
+                        )
             # A class mapping is live: replacing a named handler during a
             # decorated yield must affect this same dispatch, not the next class.
             scopes.append((owner, decorated, declarations))
@@ -922,9 +923,9 @@ class MessagePump(ParentLinks, metaclass=_MessagePumpMeta):
 
     def _get_dispatch_methods(
         self, method_name: str, message: Message
-    ) -> Iterable[tuple[type, Callable[[Message], Awaitable]]]:
+    ) -> Iterable[tuple[type, Callable[..., object]]]:
         """Bind declared routes, retaining live selector and default-action checks."""
-        methods_dispatched: set[Callable] | None = None
+        methods_dispatched: set[MessageHandler] | None = None
         for cls, decorated_handlers, named in self._dispatch_declarations:
             if message._no_default_action:
                 break
@@ -932,35 +933,14 @@ class MessagePump(ParentLinks, metaclass=_MessagePumpMeta):
                 for message_class in message._dispatch_types:
                     handlers = decorated_handlers.get(message_class, ())
 
-                    for method, selectors in handlers:
+                    for route in handlers:
                         if methods_dispatched is None:
                             methods_dispatched = set()
-                        if method in methods_dispatched:
+                        if route.handler in methods_dispatched:
                             continue
-                        if not selectors:
-                            yield cls, method.__get__(self, cls)
-                            methods_dispatched.add(method)
-                        else:
-                            if not message._sender:
-                                continue
-                            # Widget is required only by selector matching.
-                            # Idle, named and unfiltered decorated delivery
-                            # do not acquire this unrelated type boundary.
-                            from textual.widget import Widget
-
-                            for attribute, selector in selectors.items():
-                                node = getattr(message, attribute)
-                                if node is None:
-                                    break
-                                if not isinstance(node, Widget):
-                                    raise OnNoWidget(
-                                        f"on decorator can't match against {attribute!r} as it is not a widget."
-                                    )
-                                if not match(selector, node):
-                                    break
-                            else:
-                                yield cls, method.__get__(self, cls)
-                                methods_dispatched.add(method)
+                        if route.declaration.matches(message):
+                            yield cls, route.method_for(self, cls)
+                            methods_dispatched.add(route.handler)
 
             conventional = named.get("_" + method_name) or named.get(method_name)
             if conventional is not None and not isinstance(conventional, MessageHandler):

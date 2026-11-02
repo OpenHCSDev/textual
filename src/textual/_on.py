@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+from dataclasses import dataclass
 from functools import update_wrapper
-from typing import Callable, TypeVar, cast
+from typing import TYPE_CHECKING, Callable, TypeVar, cast
 
+from textual.css.match import match
 from textual.css.model import SelectorSet
 from textual.css.parse import parse_selectors
 from textual.css.tokenizer import TokenError
 from textual.message import Message
+
+if TYPE_CHECKING:
+    from textual.message_pump import MessagePump
 
 DecoratedType = TypeVar("DecoratedType")
 
@@ -22,12 +28,47 @@ class OnNoWidget(Exception):
     """A selector was applied to an attribute that isn't a widget."""
 
 
+@dataclass(frozen=True, slots=True)
+class MessageDeclaration:
+    """One unfiltered message-type declaration on a handler."""
+
+    message_type: type[Message]
+
+    def matches(self, message: Message) -> bool:
+        return True
+
+
+@dataclass(frozen=True, slots=True)
+class SelectorDeclaration(MessageDeclaration):
+    """A declaration whose widget predicates remain live at delivery."""
+
+    selectors: Mapping[str, tuple[SelectorSet, ...]]
+
+    def matches(self, message: Message) -> bool:
+        if not message._sender:
+            return False
+        # Only selector matching acquires the widget boundary.
+        from textual.widget import Widget
+
+        for attribute, selector in self.selectors.items():
+            node = getattr(message, attribute)
+            if node is None:
+                return False
+            if not isinstance(node, Widget):
+                raise OnNoWidget(
+                    f"on decorator can't match against {attribute!r} as it is not a widget."
+                )
+            if not match(selector, node):
+                return False
+        return True
+
+
 class MessageHandler:
     """A method's declared message routes; binding remains the method's work."""
 
     def __init__(self, method: Callable) -> None:
         self.method = method
-        self.declarations: list[tuple[type[Message], dict[str, tuple[SelectorSet, ...]]]] = []
+        self.declarations: list[MessageDeclaration] = []
         update_wrapper(self, method)
 
     def __get__(self, instance, owner=None):
@@ -35,6 +76,17 @@ class MessageHandler:
 
     def __call__(self, *args, **kwargs):
         return self.method(*args, **kwargs)
+
+
+@dataclass(frozen=True, slots=True)
+class MessageRoute:
+    """A declaring scope's reference to a method and one of its declarations."""
+
+    handler: MessageHandler
+    declaration: MessageDeclaration
+
+    def method_for(self, receiver: MessagePump, owner: type) -> Callable[..., object]:
+        return cast(Callable[..., object], self.handler.__get__(receiver, owner))
 
 
 def on(
@@ -100,7 +152,11 @@ def on(
     def decorator(method: DecoratedType) -> DecoratedType:
         """Compose routes on their declaration, not optional function attributes."""
         handler = method if isinstance(method, MessageHandler) else MessageHandler(cast(Callable, method))
-        handler.declarations.append((message_type, parsed_selectors))
+        declaration = (
+            SelectorDeclaration(message_type, parsed_selectors)
+            if parsed_selectors else MessageDeclaration(message_type)
+        )
+        handler.declarations.append(declaration)
         return cast(DecoratedType, handler)
 
     return decorator
