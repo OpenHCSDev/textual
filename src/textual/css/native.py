@@ -1,9 +1,12 @@
 """Native property declarations use the existing value grammar without selectors."""
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from functools import partial
 from typing import ClassVar
 
+from textual.css._declaration import NativeProperty, ValueBuilder
 from textual.css._style_properties import StyleProperty
 from textual.css.model import Declaration
 from textual.css.tokenizer import Token
@@ -63,8 +66,21 @@ class Percent(NativeValue):
         return f"{self.value:g}%"
 
 
+@dataclass
 class NativeDeclaration(Declaration):
-    """The property descriptor supplies its name; callers supply only its values."""
+    """The property descriptor owns native dispatch; callers supply its values."""
+
+    owner: NativeProperty = field(kw_only=True)
+
+    @property
+    def rule_name(self) -> str:
+        return self.owner.name
+
+    def defined(self) -> bool:
+        return True
+
+    def bind(self, builder: ValueBuilder) -> Callable[[list[Token]], None]:
+        return partial(self.owner.build_native, builder)
 
     @classmethod
     def of[Value](
@@ -75,4 +91,5 @@ class NativeDeclaration(Declaration):
             Token("declaration_name", name, ("<native>", name), name, (0, 0)),
             name,
             [value.token() for value in values],
+            owner=property,
         )

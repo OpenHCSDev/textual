@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Iterable, NoReturn, cast
+from typing import Callable, Iterable, NoReturn, cast
 
 import rich.repr
 
@@ -9,7 +9,9 @@ from textual._cells import cell_len
 from textual._duration import _duration_as_seconds
 from textual._easing import EASING
 from textual.color import TRANSPARENT, Color, ColorParseError
+from textual.css._declaration import ValueBuilder
 from textual.css._error_tools import friendly_list
+from textual.css._style_properties import Edges
 from textual.css._help_renderables import HelpText
 from textual.css._help_text import (
     align_help_text,
@@ -87,7 +89,7 @@ from textual.geometry import Spacing, SpacingDimensions, clamp
 from textual.suggestions import get_suggestion
 
 
-class StylesBuilder:
+class StylesBuilder(ValueBuilder):
     """
     The StylesBuilder object takes tokens parsed from the CSS and converts
     to the appropriate internal types.
@@ -106,9 +108,9 @@ class StylesBuilder:
         raise DeclarationError(name, token, message)
 
     def add_declaration(self, declaration: Declaration) -> None:
-        if not declaration.name:
+        if not declaration.defined():
             return
-        rule_name = declaration.name.replace("-", "_")
+        rule_name = declaration.rule_name
 
         tokens = [token for token in declaration.tokens if token.name != "whitespace"]
         if not tokens:
@@ -118,22 +120,7 @@ class StylesBuilder:
                 f"Missing property value for '{declaration.name}:'",
             )
 
-        process_method = getattr(self, f"process_{rule_name}", None)
-
-        if process_method is None:
-            suggested_property_name = self._get_suggested_property_name_for_rule(
-                declaration.name
-            )
-            self.error(
-                declaration.name,
-                declaration.token,
-                property_invalid_value_help_text(
-                    declaration.name,
-                    "css",
-                    suggested_property_name=suggested_property_name,
-                ),
-            )
-
+        process = declaration.bind(self)
         important = tokens[-1].name == "important"
         if important:
             tokens = tokens[:-1]
@@ -146,11 +133,24 @@ class StylesBuilder:
                 self.styles._rules[rule_name] = None
                 return
         try:
-            process_method(declaration.name, tokens)
+            process(tokens)
         except DeclarationError:
             raise
         except Exception as error:
             self.error(declaration.name, declaration.token, str(error))
+
+    def resolve_css(self, name: str, token: Token) -> Callable[[str, list[Token]], None]:
+        """The foreign declaration boundary resolves its external property spelling once."""
+        process_method: Callable[[str, list[Token]], None] | None = getattr(
+            self, f"process_{name.replace('-', '_')}", None
+        )
+        if process_method is None:
+            suggested = self._get_suggested_property_name_for_rule(name)
+            self.error(
+                name, token,
+                property_invalid_value_help_text(name, "css", suggested_property_name=suggested),
+            )
+        return process_method
 
     def _process_enum_multiple(
         self, name: str, tokens: list[Token], valid_values: set[str], count: int
@@ -557,12 +557,14 @@ class StylesBuilder:
         border = self._parse_border(name, tokens)
         self.styles._rules[f"border_{edge}"] = border  # type: ignore
 
-    def process_border(self, name: str, tokens: list[Token]) -> None:
+    def build_edges(self, name: str, tokens: list[Token]) -> None:
         border = self._parse_border(name, tokens)
-        rules = self.styles._rules
-        rules["border_top"] = rules["border_right"] = border
-        rules["border_bottom"] = rules["border_left"] = border
-        self._distribute_importance("border", ("top", "left", "bottom", "right"))
+        for edge in Edges._fields:
+            self.styles.set_rule(f"{name}_{edge}", border)
+        self._distribute_importance(name, Edges._fields)
+
+    def process_border(self, name: str, tokens: list[Token]) -> None:
+        self.build_edges(name, tokens)
 
     def process_border_top(self, name: str, tokens: list[Token]) -> None:
         self._process_border_edge("top", name, tokens)
@@ -581,11 +583,7 @@ class StylesBuilder:
         self.styles._rules[f"outline_{edge}"] = border  # type: ignore
 
     def process_outline(self, name: str, tokens: list[Token]) -> None:
-        border = self._parse_border(name, tokens)
-        rules = self.styles._rules
-        rules["outline_top"] = rules["outline_right"] = border
-        rules["outline_bottom"] = rules["outline_left"] = border
-        self._distribute_importance("outline", ("top", "left", "bottom", "right"))
+        self.build_edges(name, tokens)
 
     def process_outline_top(self, name: str, tokens: list[Token]) -> None:
         self._process_outline("top", name, tokens)
