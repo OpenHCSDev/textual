@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from itertools import chain, zip_longest
 from operator import itemgetter
 from pathlib import Path, PurePath
@@ -17,9 +17,11 @@ from rich.panel import Panel
 from rich.text import Text
 
 from textual.cache import FIFOCache, LRUCache
+from textual.css._styles_builder import StylesBuilder
 from textual.css.errors import StylesheetError
 from textual.css.model import HoverDependency, RuleSet, SelectorType
-from textual.css.parse import parse
+from textual.css.native import NativeDeclaration
+from textual.css.parse import parse, substitute_references
 from textual.css.styles import RenderStyles, RulesMap, Styles
 from textual.css.tokenize import Token, tokenize_values
 from textual.css.tokenizer import TokenError
@@ -289,6 +291,23 @@ class Stylesheet:
         self._source_rules.clear()
         self._style_parse_cache.clear()
         self._path_rules_cache.clear()
+
+    def native_styles(self, *declarations: NativeDeclaration) -> Styles:
+        """Build native declarations through the same theme and value owners as CSS.
+
+        Property descriptors supply declaration identity. Variable substitution and
+        StylesBuilder retain auto colour, alpha and border semantics; PaintState
+        still resolves automatic text against the receiving widget's background.
+        No selector or stylesheet source is manufactured.
+        """
+        builder = StylesBuilder()
+        for declaration in declarations:
+            resolved = replace(
+                declaration,
+                tokens=list(substitute_references(declaration.tokens, self._variable_tokens)),
+            )
+            builder.add_declaration(resolved)
+        return builder.styles
 
     def parse_style(self, style_text: str | Style) -> Style:
         """Parse a (visual) Style.

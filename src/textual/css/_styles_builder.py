@@ -110,7 +110,8 @@ class StylesBuilder:
             return
         rule_name = declaration.name.replace("-", "_")
 
-        if not declaration.tokens:
+        tokens = [token for token in declaration.tokens if token.name != "whitespace"]
+        if not tokens:
             self.error(
                 rule_name,
                 declaration.token,
@@ -132,8 +133,6 @@ class StylesBuilder:
                     suggested_property_name=suggested_property_name,
                 ),
             )
-
-        tokens = declaration.tokens
 
         important = tokens[-1].name == "important"
         if important:
