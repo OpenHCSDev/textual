@@ -76,7 +76,7 @@ PointerShape = Literal[
 
 TextWrap = Literal["wrap", "nowrap"]
 TextOverflow = Literal["clip", "fold", "ellipsis"]
-Expand = Literal["greedy", "expand"]
+Expand = Literal["greedy", "optimal"]
 ScrollbarVisibility = Literal["visible", "hidden"]
 
 Specificity3 = Tuple[int, int, int]

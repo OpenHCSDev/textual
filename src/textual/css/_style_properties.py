@@ -259,13 +259,13 @@ class ScalarListProperty(StyleProperty[tuple[Scalar, ...] | None]):
         self.refresh_children = refresh_children
 
     def __set__(
-        self, obj: StylesBase, value: str | Iterable[str | float] | None
+        self, obj: StylesBase, value: str | Iterable[Scalar | str | float] | None
     ) -> None:
         if value is None:
             if obj.clear_rule(self.name):
                 obj.refresh(layout=True, children=self.refresh_children)
             return
-        parse_values: Iterable[str | float]
+        parse_values: Iterable[Scalar | str | float]
         if isinstance(value, str):
             parse_values = value.split()
         else:
