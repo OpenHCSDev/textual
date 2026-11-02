@@ -63,7 +63,7 @@ async def test_native_line_policy_measures_and_paints_like_styles():
 def test_styles_preserve_descriptor_defaults_and_snapshot_publication():
     styles = Styles()
     assert styles.text_align == "start"
-    assert styles.line_align == TextFormat.line_align == "start"
+    assert styles.line_align == TextFormat().line_align == "start"
     styles.text_align = "end"
     styles.text_wrap = "nowrap"
     styles.text_overflow = "ellipsis"

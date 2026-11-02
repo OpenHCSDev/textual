@@ -471,7 +471,7 @@ class StylesBase(BoxGeometry, PaintLayer, TextFormat):
     column_span = IntegerProperty(default=1, layout=True)
 
     text_align: StringEnumProperty[TextAlign] = StringEnumProperty(
-        VALID_TEXT_ALIGN, TextFormat.line_align
+        VALID_TEXT_ALIGN, TextFormat().line_align
     )
 
     link_color = ColorProperty("transparent")
@@ -508,13 +508,13 @@ class StylesBase(BoxGeometry, PaintLayer, TextFormat):
         VALID_CONSTRAIN, "none"
     )
     text_wrap: StringEnumProperty[TextWrap] = StringEnumProperty(
-        VALID_TEXT_WRAP, TextFormat.line_wrap
+        VALID_TEXT_WRAP, TextFormat().line_wrap
     )
     text_overflow: StringEnumProperty[TextOverflow] = StringEnumProperty(
-        VALID_TEXT_OVERFLOW, TextFormat.line_overflow
+        VALID_TEXT_OVERFLOW, TextFormat().line_overflow
     )
     expand: StringEnumProperty[Expand] = StringEnumProperty(VALID_EXPAND, "greedy")
-    line_pad = IntegerProperty(default=TextFormat.line_pad, layout=True)
+    line_pad = IntegerProperty(default=TextFormat().line_pad, layout=True)
     """Padding added to left and right of lines."""
 
     @property

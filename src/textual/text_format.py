@@ -10,10 +10,23 @@ from textual.css.types import TextAlign, TextOverflow, TextWrap
 class TextFormat:
     """Native line policy; Styles supplies the same inputs from its descriptors."""
 
-    line_align: TextAlign = "start"
-    line_wrap: TextWrap = "wrap"
-    line_overflow: TextOverflow = "fold"
-    line_pad: int = 0
+    __slots__ = ()
+
+    @property
+    def line_align(self) -> TextAlign:
+        return "start"
+
+    @property
+    def line_wrap(self) -> TextWrap:
+        return "wrap"
+
+    @property
+    def line_overflow(self) -> TextOverflow:
+        return "fold"
+
+    @property
+    def line_pad(self) -> int:
+        return 0
 
     def snapshot(self) -> TextFormatSnapshot:
         """Capture these actual inputs for a detached or worker render."""
