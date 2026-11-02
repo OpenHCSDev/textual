@@ -24,7 +24,7 @@ from textual.css.tokenize import (
     tokenize_declarations,
     tokenize_values,
 )
-from textual.css.tokenizer import ReferencedBy, UnexpectedEnd
+from textual.css.tokenizer import ReferencedBy, TokenError, UnexpectedEnd
 from textual.css.types import CSSLocation, Specificity3
 from textual.suggestions import get_suggestion
 
@@ -194,7 +194,7 @@ def parse_rule_set(
     while True:
         token = next(tokens)
         token_name = token.name
-        if token_name in ("whitespace", "declaration_end"):
+        if token_name == "declaration_end":
             continue
         if token_name in {
             "selector_start_id",
@@ -314,7 +314,7 @@ def parse_declarations(css: str, read_from: CSSLocation) -> Styles:
         if token is None:
             break
         token_name = token.name
-        if token_name in ("whitespace", "declaration_end", "eof"):
+        if token_name in ("declaration_end", "eof"):
             continue
         if token_name == "declaration_name":
             if declaration:
@@ -367,7 +367,8 @@ def _unresolved(variable_name: str, variables: Iterable[str], token: Token) -> N
 
 
 def substitute_references(
-    tokens: Iterable[Token], css_variables: dict[str, list[Token]] | None = None
+    tokens: Iterable[Token], css_variables: dict[str, list[Token]] | None = None,
+    _references: tuple[str, ...] = (),
 ) -> Iterable[Token]:
     """Replace variable references with values by substituting variable reference
     tokens with the tokens representing their values.
@@ -435,12 +436,21 @@ def substitute_references(
                 token = next(iter_tokens, None)
         elif token.name == "variable_ref":
             variable_name = token.value[1:]  # Trim the $, so $x -> x
+            if variable_name in _references:
+                raise TokenError(
+                    token.read_from, token.code, token.start,
+                    "circular variable reference: " + " -> ".join((*_references, variable_name)),
+                    end=token.end,
+                )
             if variable_name in variables:
                 variable_tokens = variables[variable_name]
                 ref_location = token.location
                 ref_length = len(token.value)
                 ref_code = token.code
-                for _token in variable_tokens:
+                resolved = substitute_references(
+                    variable_tokens, variables, (*_references, variable_name)
+                )
+                for _token in resolved:
                     yield _token.with_reference(
                         ReferencedBy(variable_name, ref_location, ref_length, ref_code)
                     )

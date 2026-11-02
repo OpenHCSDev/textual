@@ -7,6 +7,10 @@ from typing import TYPE_CHECKING, Iterable
 
 import rich.repr
 
+from collections.abc import Callable
+from functools import partial
+
+from textual.css._declaration import ValueBuilder
 from textual.css._help_renderables import HelpText
 from textual.css.styles import Styles
 from textual.css.tokenize import Token
@@ -186,6 +190,16 @@ class Declaration:
     token: Token
     name: str
     tokens: list[Token] = field(default_factory=list)
+
+    @property
+    def rule_name(self) -> str:
+        return self.name.replace("-", "_")
+
+    def defined(self) -> bool:
+        return bool(self.name)
+
+    def bind(self, builder: ValueBuilder) -> Callable[[list[Token]], None]:
+        return partial(builder.resolve_css(self.name, self.token), self.name)
 
 
 @rich.repr.auto(angular=True)
