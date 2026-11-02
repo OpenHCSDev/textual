@@ -56,6 +56,7 @@ from textual.events import Message, MouseEvent
 from textual.geometry import Offset, Region, Size, Spacing, clamp
 from textual.reactive import Reactive, reactive
 from textual.scroll_view import ScrollView
+from textual.editable_input import EditableInput
 from textual._paint_state import PaintState
 from textual.strip import Strip
 
@@ -137,7 +138,7 @@ class TextAreaState:
     editing_mode: EditingMode
 
 
-class TextArea(FocusActivation, ScrollView):
+class TextArea(FocusActivation, EditableInput, ScrollView):
     editing_mode: reactive[EditingMode] = reactive(EditingMode, init=False, bindings=True)
     """The active native editing capability. Ordinary text entry is the default."""
 
@@ -2252,14 +2253,16 @@ TextArea {
         """The offset of the cursor relative to the screen."""
         return self.cursor_offset_in(self.content_region)
 
+    def input_region(self, content_region: Region) -> Region:
+        return Region() if self.read_only else super().input_region(content_region)
+
     @property
     def cursor_shape(self) -> CursorShape:
         """The editing mode's shape while the cursor is usable and on screen."""
         if self._has_cursor and self.scrollable_content_region.contains_point(
             self.cursor_screen_offset
         ):
-            shape = self.editing_mode.cursor_shape
-            return shape.without_input() if self.read_only else shape
+            return self.editing_mode.cursor_shape
         return CellCursor()
 
     def cursor_offset_in(self, content_region: Region) -> Offset:

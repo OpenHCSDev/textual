@@ -1052,7 +1052,7 @@ class App(Generic[ReturnType], DOMNode):
         focused = self.screen.focused
         return CellCursor() if focused is None else focused.cursor_shape
 
-    def _focused_content_in(self, placements: CompositorMap) -> Region:
+    def _input_region_in(self, placements: CompositorMap) -> Region:
         """Read focused content from one scene; never reuse a previous cursor point."""
         focused = self.focused
         if focused is None or not focused.visible:
@@ -1062,13 +1062,18 @@ class App(Generic[ReturnType], DOMNode):
             return Region()
         content = geometry.content_region.intersection(geometry.visible_region)
         content = content.intersection(self.screen.outer_size.region)
-        return content
+        return focused.input_region(content)
 
     @property
-    def cursor_input_region(self) -> Region:
-        """The focused text-entry content in the currently published scene."""
-        content = self._focused_content_in(self.screen._compositor._published_map)
-        return self.cursor_shape.input_region(content)
+    def keyboard_input_region(self) -> Region:
+        """The focused editable input in the currently published scene."""
+        return self._input_region_in(self.screen._compositor._published_map)
+
+    @staticmethod
+    def _input_region_sequence(region: Region = Region()) -> str:
+        """Publish terminal-cell bounds, including explicit clearing."""
+        x, y, width, height = region
+        return f"\x1b]777;input-region;{x};{y};{width};{height}\x1b\\"
 
     def _cursor_shape_change(self) -> str:
         """The sequence that brings the terminal cursor to `cursor_shape`; empty when it is already there."""
@@ -3609,7 +3614,7 @@ class App(Generic[ReturnType], DOMNode):
                                 Control.move(0, -self.INLINE_PADDING).segment.text
                             )
 
-                    self._driver.write(CellCursor().terminal_sequence() + CellCursor().input_region_sequence())
+                    self._driver.write(CellCursor().terminal_sequence() + self._input_region_sequence())
                     driver.stop_application_mode()
         except Exception as error:
             self._handle_exception(error)
@@ -3978,10 +3983,10 @@ class App(Generic[ReturnType], DOMNode):
                                     *cursor_position
                                 ).segment.text
                             terminal_sequence += self._cursor_shape_change()
-                            content = self._focused_content_in(
+                            content = self._input_region_in(
                                 renderable.output_geometry(self.screen._compositor)
                             )
-                            terminal_sequence += self.cursor_shape.input_region_sequence(
+                            terminal_sequence += self._input_region_sequence(
                                 self._driver.to_terminal_region(content)
                             )
                             self._previous_cursor_position = cursor_position
@@ -4801,7 +4806,7 @@ class App(Generic[ReturnType], DOMNode):
         """Signal that the application is being suspended."""
         self.app_suspend_signal.publish(self)
         if self._driver is not None:
-            self._driver.write(CellCursor().input_region_sequence())
+            self._driver.write(self._input_region_sequence())
             self._driver.flush()
 
     @on(Driver.SignalResume)

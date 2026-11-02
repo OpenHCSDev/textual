@@ -2165,6 +2165,10 @@ class Widget(DOMNode):
         """
         return self._container_size
 
+    def input_region(self, content_region: Region) -> Region:
+        """Ordinary widgets advertise no terminal keyboard-input target."""
+        return Region()
+
     def cursor_offset_in(self, content_region: Region) -> Offset | None:
         """Where this widget's text cursor is on screen, given its placed content region.
 
