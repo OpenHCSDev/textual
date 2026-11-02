@@ -190,7 +190,9 @@ class MessagePump(ParentLinks, metaclass=_MessagePumpMeta):
         matched by name. A message that bubbles reaches the nodes above its
         sender too, so a parent hears its children. Listeners run in the order
         they were added, before handlers found by method name, and one that
-        stops the message keeps it from bubbling further.
+        stops the message keeps it from bubbling further. Dispatch captures the
+        admitted callbacks before invoking any; listener changes take effect
+        on the next message, not partway through that callback sequence.
 
         Args:
             message_type: The message class; its subclasses are heard too.
@@ -982,9 +984,13 @@ class MessagePump(ParentLinks, metaclass=_MessagePumpMeta):
         handler_name = message.handler_name
 
         if self._listeners:
-            for message_type in type(message).__mro__:
-                for callback in self._listeners.get(message_type, ()):
-                    await invoke(callback, message)
+            callbacks = tuple(
+                callback
+                for message_type in type(message).__mro__
+                for callback in self._listeners.get(message_type, ())
+            )
+            for callback in callbacks:
+                await invoke(callback, message)
 
         # Look through the MRO to find a handler
         dispatched = False
