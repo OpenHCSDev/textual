@@ -32,8 +32,8 @@ FILL = Scalar(1.0, Unit.FRACTION, Unit.WIDTH)
 _EMPTY_EDGES = Edges(*(("", TRANSPARENT),) * 4)
 
 
-class WidgetView(BoxGeometry, PaintLayer, FramePaint, TextFormat, Widget):
-    """The view supplies native inputs directly, without a CSS declaration mirror."""
+class BoxView(BoxGeometry, PaintLayer, FramePaint, Widget):
+    """Native geometry and frame paint without replacing a control's line policy."""
 
     width: Dimension = None
     height: Dimension = AUTO
@@ -81,10 +81,6 @@ class WidgetView(BoxGeometry, PaintLayer, FramePaint, TextFormat, Widget):
         return _EMPTY_EDGES
 
     @property
-    def text_format(self) -> TextFormat:
-        return self
-
-    @property
     def geometry(self) -> BoxGeometry:
         return self
 
@@ -101,8 +97,20 @@ class WidgetView(BoxGeometry, PaintLayer, FramePaint, TextFormat, Widget):
         self.refresh(layout=True)
 
 
-class FocusWithinView(WidgetView):
-    """A native widget whose focus changes invalidate its frame paint."""
+class TextView(TextFormat, Widget):
+    """A widget explicitly supplying its own native line policy."""
+
+    @property
+    def text_format(self) -> TextFormat:
+        return self
+
+
+class WidgetView(BoxView, TextView):
+    """Compose the native box, paint and text capabilities for a whole view."""
+
+
+class FocusWithin(Widget):
+    """Focus changes invalidate paint without changing geometry or line policy."""
 
     def _post_register(self, app: App) -> None:
         super()._post_register(app)
@@ -112,3 +120,7 @@ class FocusWithinView(WidgetView):
     def _on_unmount(self) -> None:
         self.unlisten(events.DescendantFocus, self.refresh_paint)
         self.unlisten(events.DescendantBlur, self.refresh_paint)
+
+
+class FocusWithinView(FocusWithin, WidgetView):
+    """A whole native view with descendant-focus paint invalidation."""
