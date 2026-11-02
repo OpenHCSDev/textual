@@ -36,7 +36,11 @@ RenderLineCallback: TypeAlias = Callable[[int], Strip]
 class FramePaint(Bordered):
     """Inputs consumed by the existing line painter, not a second style store."""
 
-    paint_gutter: Spacing
+    @property
+    def paint_gutter(self) -> Spacing:
+        """Gutter consumed by the painter; native geometry may derive it."""
+        raise NotImplementedError
+
     outline: tuple
     hatch: tuple | None
     tint: Color
@@ -64,7 +68,7 @@ class PaintStyles(FramePaint):
     properties once per render rather than once per line.
     """
 
-    paint_gutter: Spacing
+    paint_gutter: Spacing = field()
     border: Edges = field()
     outline: tuple
     hatch: tuple | None

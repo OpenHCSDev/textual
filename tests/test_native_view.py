@@ -47,7 +47,8 @@ def border_colour(frame: FocusFrame) -> tuple[int, int, int]:
     style = next(iter(strip)).style
     assert style is not None and style.color is not None
     assert style.color.triplet is not None
-    return tuple(style.color.triplet)
+    red, green, blue = style.color.triplet
+    return red, green, blue
 
 
 async def test_native_geometry_and_styles_backed_sibling() -> None:
