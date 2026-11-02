@@ -4,13 +4,13 @@ from fractions import Fraction
 from typing import TYPE_CHECKING, NamedTuple, get_args
 
 from textual._extrema import Extrema, NO_EXTREMA
+from textual.color import Color
 from textual.css.scalar import Scalar, ScalarOffset, Unit
+from textual.css._style_properties import Edges
 from textual.css.types import AlignHorizontal, AlignVertical
 from textual.geometry import NULL_OFFSET, NULL_SPACING, Offset, Size, Spacing
 
 if TYPE_CHECKING:
-    from textual.color import Color
-    from textual.css._style_properties import Edges
     from textual.layout import Layout
     from textual.widget import Widget
 
@@ -27,7 +27,18 @@ class BoxModel(NamedTuple):
     margin: Spacing
 
 
-class BoxGeometry:
+type Dimension = Scalar | None
+
+
+class Bordered:
+    """Border edges read by both native layout and frame painting."""
+
+    @property
+    def border(self) -> Edges:
+        raise NotImplementedError
+
+
+class BoxGeometry(Bordered):
     """Geometry inputs and their shared measurement/placement algorithms.
 
     CSS styles supply these inputs through their descriptors. A widget may
@@ -35,15 +46,14 @@ class BoxGeometry:
     path translates into, or keeps a copy of, the other path's declarations.
     """
 
-    width: Scalar | None
-    height: Scalar | None
-    min_width: Scalar | None
-    min_height: Scalar | None
-    max_width: Scalar | None
-    max_height: Scalar | None
+    width: Dimension
+    height: Dimension
+    min_width: Dimension
+    min_height: Dimension
+    max_width: Dimension
+    max_height: Dimension
     padding: Spacing
     margin: Spacing
-    border: Edges
     box_sizing: str
     width_policy: str
     dock: str
