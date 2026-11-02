@@ -22,6 +22,65 @@ def test_layout_replacement_preserves_distinct_source_requests():
     assert not request.can_replace(Layout(second))
 
 
+class ListenerMessage(Message):
+    pass
+
+
+class ChildListenerMessage(ListenerMessage):
+    pass
+
+
+class ListenerPump(MessagePump):
+    def __init__(self) -> None:
+        super().__init__()
+        self.seen: list[str] = []
+
+    def on_child_listener_message(self, message: ChildListenerMessage) -> None:
+        self.seen.append("handler")
+
+
+async def test_listener_self_removal_keeps_the_other_admitted_callback() -> None:
+    pump = MessagePump()
+    seen: list[str] = []
+
+    def first(message: ListenerMessage) -> None:
+        seen.append("first")
+        pump.unlisten(ListenerMessage, first)
+
+    def second(message: ListenerMessage) -> None:
+        seen.append("second")
+
+    pump.listen(ListenerMessage, first)
+    pump.listen(ListenerMessage, second)
+    await pump._on_message(ListenerMessage())
+    assert seen == ["first", "second"]
+    await pump._on_message(ListenerMessage())
+    assert seen == ["first", "second", "second"]
+
+
+async def test_listener_cut_includes_base_callbacks_before_handlers() -> None:
+    pump = ListenerPump()
+
+    def later() -> None:
+        pump.seen.append("later")
+
+    def parent(message: ListenerMessage) -> None:
+        pump.seen.append("parent")
+
+    def first(message: ChildListenerMessage) -> None:
+        pump.seen.append("first")
+        pump.unlisten(ChildListenerMessage, first)
+        pump.unlisten(ListenerMessage, parent)
+        pump.listen(ChildListenerMessage, later)
+
+    pump.listen(ChildListenerMessage, first)
+    pump.listen(ListenerMessage, parent)
+    await pump._on_message(ChildListenerMessage())
+    assert pump.seen == ["first", "parent", "handler"]
+    await pump._on_message(ChildListenerMessage())
+    assert pump.seen == ["first", "parent", "handler", "later", "handler"]
+
+
 class ValidWidget(Widget):
     called_by = None
 
