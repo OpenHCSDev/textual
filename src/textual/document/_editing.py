@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 from textual.binding import Binding, MethodBinding
-from textual.cursor_shape import CellCursor, CursorShape, SteadyBlock
+from textual.cursor_shape import BlinkingBar, CursorShape, SteadyBlock
 from textual.document._document import EditResult, Location, Selection
 from textual.document._edit import Edit, InsertionPoint
 
@@ -34,7 +34,9 @@ class EditingMode:
 
     @property
     def cursor_shape(self) -> CursorShape:
-        return CellCursor()
+        """Text entry hands its cursor to the terminal: a visible terminal cursor is how a
+        phone terminal knows to raise its soft keyboard."""
+        return BlinkingBar()
 
     @property
     def label(self) -> str:

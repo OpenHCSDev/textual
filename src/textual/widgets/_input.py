@@ -28,6 +28,7 @@ from textual.css._error_tools import friendly_list
 from textual.document._editing import NativeTextKeys
 from textual.events import Blur, Focus, Mount
 from textual.geometry import Offset, Region, Size, clamp
+from textual.cursor_shape import BlinkingBar, CursorShape
 from textual.message import Message
 from textual.reactive import Reactive, reactive, var
 from textual.suggester import Suggester, SuggestionReady
@@ -498,6 +499,11 @@ class Input(NativeTextKeys, FocusActivation, ScrollView):
         """The offset of the cursor of this input in screen-space. (x, y)/(column, row)."""
         return self.cursor_offset_in(self.content_region)
 
+    @property
+    def cursor_shape(self) -> CursorShape:
+        """Text entry hands its cursor to the terminal, which raises a phone's soft keyboard."""
+        return BlinkingBar()
+
     def cursor_offset_in(self, content_region: Region) -> Offset:
         x, y, _width, _height = content_region
         scroll_x, _ = self.scroll_offset
@@ -589,7 +595,7 @@ class Input(NativeTextKeys, FocusActivation, ScrollView):
             placeholder.stylize(self.get_component_rich_style("input--placeholder"))
             if self.has_focus:
                 cursor_style = self.get_component_rich_style("input--cursor")
-                if self._cursor_visible:
+                if self.cursor_shape.draws_cell(self._cursor_visible):
                     # If the placeholder is empty, there's no characters to stylise
                     # to make the cursor flash, so use a single space character
                     if len(placeholder) == 0:
@@ -623,7 +629,7 @@ class Input(NativeTextKeys, FocusActivation, ScrollView):
                     selection_style = self.get_component_rich_style("input--selection")
                     result.stylize_before(selection_style, start, end)
 
-                if self._cursor_visible:
+                if self.cursor_shape.draws_cell(self._cursor_visible):
                     cursor_style = self.get_component_rich_style("input--cursor")
                     cursor = self.cursor_position
                     if not show_suggestion and self.cursor_at_end:
