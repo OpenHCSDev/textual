@@ -2258,7 +2258,8 @@ TextArea {
         if self._has_cursor and self.scrollable_content_region.contains_point(
             self.cursor_screen_offset
         ):
-            return self.editing_mode.cursor_shape
+            shape = self.editing_mode.cursor_shape
+            return shape.without_input() if self.read_only else shape
         return CellCursor()
 
     def cursor_offset_in(self, content_region: Region) -> Offset:

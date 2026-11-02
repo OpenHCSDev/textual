@@ -76,7 +76,7 @@ from textual._ansi_theme import ALABASTER, MONOKAI
 from textual._callback import invoke
 from textual._clipboard import ClipboardContent
 from textual._compat import cached_property
-from textual._compositor import CompositorUpdate, run_steps
+from textual._compositor import CompositorMap, CompositorUpdate, run_steps
 from textual._context import NoActiveAppError, active_app, active_message_pump
 from textual._context import message_hook as message_hook_context_var
 from textual._dispatch_key import dispatch_key
@@ -1051,6 +1051,24 @@ class App(Generic[ReturnType], DOMNode):
         """How the terminal shows the focused widget's text cursor."""
         focused = self.screen.focused
         return CellCursor() if focused is None else focused.cursor_shape
+
+    def _focused_content_in(self, placements: CompositorMap) -> Region:
+        """Read focused content from one scene; never reuse a previous cursor point."""
+        focused = self.focused
+        if focused is None or not focused.visible:
+            return Region()
+        geometry = placements.get(focused)
+        if geometry is None:
+            return Region()
+        content = geometry.content_region.intersection(geometry.visible_region)
+        content = content.intersection(self.screen.outer_size.region)
+        return content
+
+    @property
+    def cursor_input_region(self) -> Region:
+        """The focused text-entry content in the currently published scene."""
+        content = self._focused_content_in(self.screen._compositor._published_map)
+        return self.cursor_shape.input_region(content)
 
     def _cursor_shape_change(self) -> str:
         """The sequence that brings the terminal cursor to `cursor_shape`; empty when it is already there."""
@@ -3591,7 +3609,7 @@ class App(Generic[ReturnType], DOMNode):
                                 Control.move(0, -self.INLINE_PADDING).segment.text
                             )
 
-                    self._driver.write(CellCursor().terminal_sequence())
+                    self._driver.write(CellCursor().terminal_sequence() + CellCursor().input_region_sequence())
                     driver.stop_application_mode()
         except Exception as error:
             self._handle_exception(error)
@@ -3960,6 +3978,12 @@ class App(Generic[ReturnType], DOMNode):
                                     *cursor_position
                                 ).segment.text
                             terminal_sequence += self._cursor_shape_change()
+                            content = self._focused_content_in(
+                                renderable.output_geometry(self.screen._compositor)
+                            )
+                            terminal_sequence += self.cursor_shape.input_region_sequence(
+                                self._driver.to_terminal_region(content)
+                            )
                             self._previous_cursor_position = cursor_position
                         else:
                             segments = console.render(renderable)
@@ -4776,6 +4800,9 @@ class App(Generic[ReturnType], DOMNode):
     def _suspend_signal(self) -> None:
         """Signal that the application is being suspended."""
         self.app_suspend_signal.publish(self)
+        if self._driver is not None:
+            self._driver.write(CellCursor().input_region_sequence())
+            self._driver.flush()
 
     @on(Driver.SignalResume)
     def _resume_signal(self) -> None:

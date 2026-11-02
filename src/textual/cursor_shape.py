@@ -12,6 +12,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import ClassVar
 
+from textual.geometry import Region
+
 
 @dataclass(frozen=True)
 class CursorShape(ABC):
@@ -20,6 +22,19 @@ class CursorShape(ABC):
     @abstractmethod
     def terminal_sequence(self) -> str:
         """Escape sequence that puts the terminal cursor into this shape."""
+
+    def input_region(self, content_region: Region) -> Region:
+        """Non-entry cursor capabilities advertise no text-input target."""
+        return Region()
+
+    def input_region_sequence(self, content_region: Region = Region()) -> str:
+        """Publish the capability's terminal-cell bounds, including explicit clearing."""
+        x, y, width, height = self.input_region(content_region)
+        return f"\x1b]777;input-region;{x};{y};{width};{height}\x1b\\"
+
+    def without_input(self) -> CursorShape:
+        """Keep the appearance while withdrawing text-entry admission."""
+        return self
 
     @abstractmethod
     def draws_cell(self, cell_visible: bool) -> bool:
@@ -57,5 +72,10 @@ class BlinkingBar(TerminalCursor):
 
 
 class TextEntryCursor(BlinkingBar):
-    """The shape every focused text entry shows. A visible terminal cursor is the signal a
-    phone terminal (Termux) reads to raise its soft keyboard."""
+    """A text-entry cursor advertises its visible content, independently of cursor visibility."""
+
+    def input_region(self, content_region: Region) -> Region:
+        return content_region
+
+    def without_input(self) -> CursorShape:
+        return BlinkingBar()

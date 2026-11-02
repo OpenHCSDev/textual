@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, BinaryIO, Callable, Iterator, Literal, Te
 from textual import events, log, messages
 from textual.drivers._writer_thread import _FlushSignal
 from textual.events import MouseUp
+from textual.geometry import Region
 
 if TYPE_CHECKING:
     from textual.app import App
@@ -69,6 +70,10 @@ class Driver(ABC):
     def is_inline(self) -> bool:
         """Is the driver 'inline' (not full-screen)?"""
         return False
+
+    def to_terminal_region(self, region: Region) -> Region:
+        """Map application cells to terminal cells; fullscreen coordinates already agree."""
+        return region
 
     @property
     def is_web(self) -> bool:
