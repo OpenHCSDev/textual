@@ -28,7 +28,7 @@ from textual.css._error_tools import friendly_list
 from textual.document._editing import NativeTextKeys
 from textual.events import Blur, Focus, Mount
 from textual.geometry import Offset, Region, Size, clamp
-from textual.cursor_shape import BlinkingBar, CursorShape
+from textual.cursor_shape import CursorShape, TextEntryCursor
 from textual.message import Message
 from textual.reactive import Reactive, reactive, var
 from textual.suggester import Suggester, SuggestionReady
@@ -501,8 +501,7 @@ class Input(NativeTextKeys, FocusActivation, ScrollView):
 
     @property
     def cursor_shape(self) -> CursorShape:
-        """Text entry hands its cursor to the terminal, which raises a phone's soft keyboard."""
-        return BlinkingBar()
+        return TextEntryCursor()
 
     def cursor_offset_in(self, content_region: Region) -> Offset:
         x, y, _width, _height = content_region

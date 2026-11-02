@@ -54,3 +54,8 @@ class SteadyBlock(TerminalCursor):
 
 class BlinkingBar(TerminalCursor):
     code = 5
+
+
+class TextEntryCursor(BlinkingBar):
+    """The shape every focused text entry shows. A visible terminal cursor is the signal a
+    phone terminal (Termux) reads to raise its soft keyboard."""
