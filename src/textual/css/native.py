@@ -9,6 +9,7 @@ from typing import ClassVar
 from textual.css._declaration import NativeProperty, ValueBuilder
 from textual.css._style_properties import StyleProperty
 from textual.css.model import Declaration
+from textual.css.styles import Styles
 from textual.css.tokenizer import Token
 
 
@@ -93,3 +94,8 @@ class NativeDeclaration(Declaration):
             [value.token() for value in values],
             owner=property,
         )
+
+
+class NativeStyleResolver(ABC):
+    @abstractmethod
+    def native_styles(self, *declarations: NativeDeclaration) -> Styles: ...

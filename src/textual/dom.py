@@ -46,6 +46,7 @@ from textual.css.errors import DeclarationError, StyleValueError
 from textual.css.parse import is_id_selector, parse_declarations
 from textual.css.query import NoMatches, TooManyMatches, WrongType
 from textual.css.model import HoverDependency
+from textual.css.native import NativeStyleResolver
 from textual.css.styles import RenderStyles, Styles
 from textual.box_model import BoxGeometry
 from textual.text_format import TextFormat
@@ -1087,6 +1088,9 @@ class DOMNode(PaintNode, MessagePump):
 
         new_bindings = BindingsMap.from_keys(keys)
         return new_bindings
+
+    def apply_native_styles(self, resolver: NativeStyleResolver) -> None:
+        """Apply a node's native declarations in the current style publication."""
 
     def _post_register(self, app: App) -> None:
         """Called when the widget is registered

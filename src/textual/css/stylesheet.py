@@ -20,7 +20,7 @@ from textual.cache import FIFOCache, LRUCache
 from textual.css._styles_builder import StylesBuilder
 from textual.css.errors import StylesheetError
 from textual.css.model import HoverDependency, RuleSet, SelectorType
-from textual.css.native import NativeDeclaration
+from textual.css.native import NativeDeclaration, NativeStyleResolver
 from textual.css.parse import parse, substitute_references
 from textual.css.styles import RenderStyles, RulesMap, Styles
 from textual.css.tokenize import Token, tokenize_values
@@ -201,7 +201,7 @@ class CandidateRules:
 
 
 @rich.repr.auto(angular=True)
-class Stylesheet:
+class Stylesheet(NativeStyleResolver):
     """A Stylesheet generated from Textual CSS."""
 
     def __init__(self, *, variables: dict[str, str] | None = None,
@@ -622,7 +622,8 @@ class Stylesheet:
         """
         # Matching, replacement and virtual components are one native style
         # publication. Styles owns the notification and dependent damage.
-        with node._css_styles.batch_update():
+        with node._css_styles.batch_update(), node.styles.batch_update():
+            node.apply_native_styles(self)
             # Dictionary of rule attribute names e.g. "text_background" to list of tuples.
             # The tuples contain the rule specificity, and the value for that rule.
             # We can use this to determine, for a given rule, whether we should apply it
