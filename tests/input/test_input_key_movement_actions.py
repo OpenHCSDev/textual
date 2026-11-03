@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from textual.app import App, ComposeResult
+from textual.document._editing import EditingMode
+from textual.keys import KeyInvocation, LeftKey, RightKey
 from textual.widgets import Input
 
 
@@ -21,6 +23,26 @@ class InputTester(App[None]):
             ("Long as she does it quiet-like", "multi-and-hyphenated"),
         ):
             yield Input(value, id=input_id)
+
+
+async def test_input_printable_arrow_aliases_remain_text() -> None:
+    """Printable arrow preferences do not consume a native text control's letters."""
+    app = InputTester()
+    async with app.run_test() as pilot:
+        editor = app.query_one("#empty", Input)
+        editor.focus()
+        app.set_keymap({
+            KeyInvocation.in_mode(KeyInvocation.qualified(LeftKey), EditingMode): "left,h",
+            KeyInvocation.in_mode(KeyInvocation.qualified(RightKey), EditingMode): "right,l",
+        })
+        await pilot.press(*"hello")
+        assert editor.value == "hello"
+        assert editor.cursor_position == 5
+        await pilot.press("left")
+        assert editor.cursor_position == 4
+        await pilot.press("right")
+        assert editor.cursor_position == 5
+        assert editor.value == "hello"
 
 
 async def test_input_home() -> None:
