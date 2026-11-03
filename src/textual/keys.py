@@ -348,7 +348,7 @@ class DeclaredKey:
     def invocations(self, defaults: tuple[KeyInvocation, ...]) -> tuple[KeyInvocation, ...]:
         return defaults
 
-    def preempts(self, event: Key) -> bool:
+    def preempts(self, event: Key, target: DOMNode) -> bool:
         return False
 
     def input_bindings(self, spelling: str) -> tuple[tuple[str, str], ...]:
@@ -396,9 +396,9 @@ class NavigationKey(DeclaredKey, KeyInvocation):
     def spellings(self, mode: type[EditingMode], spelling: str) -> tuple[str, ...]:
         return mode.navigation_spellings(type(self))
 
-    def preempts(self, event: Key) -> bool:
-        """Printable arrow aliases precede a list's type-to-search behavior."""
-        return event.is_printable
+    def preempts(self, event: Key, target: DOMNode) -> bool:
+        """Arrow aliases precede search, never the target's literal text input."""
+        return event.is_printable and not target.takes_typed_text
 
     def key_identity(self) -> str:
         return self.qualified(type(self))
