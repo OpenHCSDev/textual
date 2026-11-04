@@ -4,6 +4,11 @@ from fractions import Fraction
 
 import pytest
 
+from textual.layouts.grid import GridLayout
+from textual.layouts.horizontal import HorizontalLayout
+from textual.layouts.stream import StreamLayout
+from textual.layouts.vertical import VerticalLayout
+
 from textual.app import App
 from textual.containers import ScrollableContainer, VerticalGroup
 from textual.color import Color
@@ -198,12 +203,12 @@ async def test_local_style_projection_covers_all_raw_mutation_boundaries():
             assert sibling.arrange(Size(40, 100)) is unrelated
 
 
-@pytest.mark.parametrize("layout", ["vertical", "horizontal", "stream", "grid"])
+@pytest.mark.parametrize("layout", [VerticalLayout, HorizontalLayout, StreamLayout, GridLayout])
 async def test_reuse_skips_a_complete_intrinsic_arrangement(layout):
     app = App()
     async with app.run_test() as pilot:
         parent = VerticalGroup(Static("one"), Static("wrapped " * 15))
-        parent.styles.layout = layout
+        parent.styles.layout = layout()
         await app.mount(parent)
         await pilot.pause()
         parent._clear_arrangement_cache()
@@ -214,13 +219,13 @@ async def test_reuse_skips_a_complete_intrinsic_arrangement(layout):
         assert parent.arrange(Size(40, 20), optimal=True) is not first
 
 
-@pytest.mark.parametrize("layout", ["vertical", "horizontal", "stream", "grid"])
+@pytest.mark.parametrize("layout", [VerticalLayout, HorizontalLayout, StreamLayout, GridLayout])
 async def test_reuse_matches_native_placements_and_invalidates_before_idle(layout):
     app = App()
     async with app.run_test() as pilot:
         inner = VerticalGroup(Static("nested " * 10))
         parent = VerticalGroup(inner, Static("second"))
-        parent.styles.layout = layout
+        parent.styles.layout = layout()
         parent.styles.padding = (1, 2)
         inner.styles.margin = (1, 2, 3, 4)
         inner.styles.offset = (1, 2)
@@ -272,7 +277,7 @@ async def test_context_sensitive_flow_keeps_native_height_inputs(field, value):
         assert parent.arrange(Size(40, 100)) is not first
 
 
-@pytest.mark.parametrize("layout", ["stream", "grid"])
+@pytest.mark.parametrize("layout", [StreamLayout, GridLayout])
 async def test_direct_content_measurement_cannot_use_a_fixed_box_proof(layout):
     class ContextContent(Static):
         def get_content_height(self, container, viewport, width):
@@ -283,7 +288,7 @@ async def test_direct_content_measurement_cannot_use_a_fixed_box_proof(layout):
         child = ContextContent("text")
         child.styles.height = 2  # Box is constant; direct content measurement is not.
         parent = VerticalGroup(child)
-        parent.styles.layout = layout
+        parent.styles.layout = layout()
         await app.mount(parent)
         await pilot.pause()
         parent._clear_arrangement_cache()

@@ -5,6 +5,10 @@ from unittest.mock import patch
 
 import pytest
 
+from textual.layouts.horizontal import HorizontalLayout
+from textual.layouts.stream import StreamLayout
+from textual.layouts.vertical import VerticalLayout
+
 from textual.app import App
 from textual.containers import HorizontalGroup, VerticalGroup
 from textual.css.scalar import Scalar, Unit
@@ -153,19 +157,30 @@ async def test_fixed_box_constrain_width_and_viewport_remain_inputs():
         assert second.width == 20
 
 
-async def test_noncell_width_limit_keeps_original_zero_width_parent_exception():
+@pytest.mark.parametrize(
+    ("max_width", "at_zero_width", "at_seventy"),
+    [
+        # A container-relative limit cannot resolve against a zero-width auto parent.
+        ("10%", 30, 7),
+        # A viewport limit resolves whatever the container width is.
+        ("10vw", 12, 12),
+    ],
+)
+async def test_zero_width_auto_parent_skips_only_container_relative_width_limits(
+    max_width, at_zero_width, at_seventy
+):
     async with App().run_test() as pilot:
         child = Widget()
         child.styles.width = 30
         child.styles.height = 3
-        child.styles.max_width = "10vw"
+        child.styles.max_width = max_width
         parent = VerticalGroup(child)
         parent.styles.width = "auto"
         await pilot.app.mount(parent)
         first = child._get_box_model(Size(0, 10), Size(120, 40), Fraction(0), Fraction(10))
         second = child._get_box_model(Size(70, 10), Size(120, 40), Fraction(70), Fraction(10))
-        assert first.width == 30
-        assert second.width == 12
+        assert first.width == at_zero_width
+        assert second.width == at_seventy
 
 
 
@@ -378,13 +393,13 @@ async def test_unknown_width_and_stream_overrides_do_not_inherit_a_proof():
         assert box(width, 30).width == 30
 
 
-@pytest.mark.parametrize("layout_name", ["vertical", "horizontal", "stream"])
+@pytest.mark.parametrize("layout_name", [VerticalLayout, HorizontalLayout, StreamLayout])
 async def test_width_padding_margin_offset_and_viewport_parity(layout_name):
     app = App()
     async with app.run_test() as pilot:
         children = [Static("line one\nline two"), Static("wrapped " * 15)]
         column = VerticalGroup(*children)
-        column.styles.layout = layout_name
+        column.styles.layout = layout_name()
         column.styles.padding = (1, 2)
         children[0].styles.margin = (1, 2, 3, 4)
         children[1].styles.offset = (1, 2)

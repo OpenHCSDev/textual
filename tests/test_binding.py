@@ -17,6 +17,11 @@ BINDING2 = Binding("c", action="action2", description="description2")
 BINDING3 = Binding(" d   , e ", action="action3", description="description3")
 
 
+def decoded(*declarations: Binding) -> list[Binding]:
+    """What a map holds for these declarations: one decoded binding per key."""
+    return list(Binding.make_bindings(declarations))
+
+
 @pytest.fixture
 def bindings():
     yield BindingsMap([BINDING1, BINDING2])
@@ -28,10 +33,10 @@ def more_bindings():
 
 
 def test_bindings_get_key(bindings):
-    assert bindings.get_bindings_for_key("b") == [
+    assert bindings.get_bindings_for_key("b") == decoded(
         Binding("b", action="action1", description="description1")
-    ]
-    assert bindings.get_bindings_for_key("c") == [BINDING2]
+    )
+    assert bindings.get_bindings_for_key("c") == decoded(BINDING2)
     with pytest.raises(NoBinding):
         bindings.get_bindings_for_key("control+meta+alt+shift+super+hyper+t")
 
@@ -57,11 +62,11 @@ def test_bindings_merge_overlap():
     assert BindingsMap.merge(
         [left, BindingsMap([another_binding])]
     ).key_to_bindings == {
-        "a": [
+        "a": decoded(
             Binding("a", action="action1", description="description1"),
             another_binding,
-        ],
-        "b": [Binding("b", action="action1", description="description1")],
+        ),
+        "b": decoded(Binding("b", action="action1", description="description1")),
     }
 
 
@@ -75,7 +80,7 @@ def test_bad_binding_tuple():
 def test_binding_from_tuples():
     assert BindingsMap(
         ((BINDING2.key, BINDING2.action, BINDING2.description),)
-    ).get_bindings_for_key("c") == [BINDING2]
+    ).get_bindings_for_key("c") == decoded(BINDING2)
 
 
 def test_shown():

@@ -585,7 +585,10 @@ class CommandPalette(
         background: $background 60%;
         align-horizontal: center;        
 
-        #--container {
+        /* The input is live from the first frame: input events reach only
+           displayed widgets, so hiding it would drop what the user types.
+           The results wait for the first gather, so they appear at once. */
+        #--results {
             display: none;
         }
 
@@ -595,7 +598,7 @@ class CommandPalette(
     }
 
     CommandPalette.-ready {
-        #--container {
+        #--results {
             display: block;
         }
     }

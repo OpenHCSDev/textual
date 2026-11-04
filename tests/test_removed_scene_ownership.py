@@ -1,5 +1,9 @@
 import asyncio
+from contextlib import asynccontextmanager
 
+from textual.layout import Layout
+from textual.layouts.stream import StreamLayout
+from textual.layouts.vertical import VerticalLayout
 from textual.app import App
 from textual.await_remove import AwaitRemove
 from textual.containers import VerticalGroup
@@ -91,8 +95,9 @@ async def test_pending_removal_revokes_pointer_intent_but_keeps_surviving_select
             release.set()
 
 
-@pytest.mark.parametrize("layout", ["vertical", "stream"])
-async def test_inactive_scene_releases_removed_geometry_and_arrangements(layout):
+@asynccontextmanager
+async def removed_in_inactive_scene(layout: Layout):
+    """Remove the first of two children while another screen is active."""
     app = App()
     async with app.run_test() as pilot:
         parent = VerticalGroup(Static("retire me"), Static("retain me"))
@@ -116,9 +121,18 @@ async def test_inactive_scene_releases_removed_geometry_and_arrangements(layout)
         await removed.remove()
         await pilot.pause()
         assert removed._closed
-        if layout == "stream":
-            assert all(placement.widget is not removed
-                       for placement in parent.layout._cached_placements or ())
+        yield removed, parent, compositor, retired_offset
+        await app.pop_screen()
+        await pilot.pause()
+        assert survivor in compositor.visible_widgets
+        assert survivor.region.y == parent.content_region.y
+
+
+@pytest.mark.parametrize("layout", [VerticalLayout, StreamLayout])
+async def test_inactive_scene_releases_removed_geometry_and_arrangements(layout):
+    async with removed_in_inactive_scene(layout()) as (
+        removed, parent, compositor, retired_offset
+    ):
         assert not any(placement.widget is removed
                        for result in parent._arrangement_cache._cache.values()
                        for _, placement in result.placements)
@@ -129,10 +143,13 @@ async def test_inactive_scene_releases_removed_geometry_and_arrangements(layout)
         assert all(widget is not removed for widget, _ in compositor.layers)
         assert all(widget is not removed
                    for widget, _ in compositor.get_widgets_at(*retired_offset))
-        await app.pop_screen()
-        await pilot.pause()
-        assert survivor in compositor.visible_widgets
-        assert survivor.region.y == parent.content_region.y
+
+
+async def test_inactive_scene_stream_layout_releases_its_placement_memo():
+    layout = StreamLayout()
+    async with removed_in_inactive_scene(layout) as (removed, *_):
+        assert all(placement.widget is not removed
+                   for placement in layout._cached_placements or ())
 
 
 async def test_removed_child_damage_is_painted_without_retaining_the_child():
