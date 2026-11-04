@@ -326,6 +326,14 @@ class DirectoryTree(Tree[DirEntry]):
                 _ = self._tree_lines
                 self.cursor_line = best_found.line
 
+    @property
+    def cursor_path(self) -> Path:
+        """The path of the entry under the cursor, or the root's when no entry is under it."""
+        node = self.cursor_node
+        if node is not None and node.data is not None:
+            return node.data.path
+        return self.PATH(self.path)
+
     def reload_node(self, node: TreeNode[DirEntry]) -> AwaitComplete:
         """Reload the given node's contents.
 
