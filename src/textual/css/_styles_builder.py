@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Callable, Iterable, NoReturn, cast
 
 import rich.repr
+from rich.style import Style
 
 from textual._border import BorderValue, normalize_border_value
 from textual._cells import cell_len
@@ -798,7 +799,8 @@ class StylesBuilder(ValueBuilder):
                 )
 
         style_definition = " ".join(token.value for token in tokens)
-        self.styles._rules[name.replace("-", "_")] = style_definition  # type: ignore
+        # The rule holds the parsed Style, as the property's own setter stores it.
+        self.styles._rules[name.replace("-", "_")] = Style.parse(style_definition)  # type: ignore
 
     process_link_style = process_text_style
     process_link_style_hover = process_text_style
