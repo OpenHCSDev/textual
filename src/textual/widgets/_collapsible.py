@@ -11,6 +11,7 @@ from textual.css.query import NoMatches
 from textual.message import Message
 from textual.reactive import reactive
 from textual.widget import Widget
+from textual.view import AUTO
 from textual.widgets import Static
 
 __all__ = ["Collapsible", "CollapsibleTitle"]
@@ -173,13 +174,17 @@ class Collapsible(Widget):
         """
 
     class Contents(Container):
-        DEFAULT_CSS = """
-        Contents {
-            width: 100%;
-            height: auto;
-            padding: 1 0 0 3;            
-        }
+        """The disclosed body: full width, its content's height, indented under the title.
+
+        Declared on this class, not by a `Contents` type selector, which matched every
+        widget class named `Contents` in the app.
         """
+
+        def apply_native_layout(self) -> None:
+            super().apply_native_layout()
+            self.styles.width = "100%"
+            self.styles.height = AUTO
+            self.styles.padding = (1, 0, 0, 3)
 
     def __init__(
         self,
