@@ -1722,7 +1722,16 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
     async def _on_layout(self, message: messages.Layout) -> None:
         message.stop()
         message.prevent_default()
+        self._record_layout(message)
 
+    def _record_layout(self, message: messages.Layout) -> None:
+        """Record a layout request with the frame it belongs to.
+
+        A mounted widget calls this when it asks for layout, so the next frame
+        lays it out before painting: a request that crossed ancestor message
+        queues could arrive after a repaint, and that frame would paint a scene
+        no layout produced.
+        """
         layout_required = False
         widget: DOMNode = message.widget
         if widget._pruning or widget._closed:

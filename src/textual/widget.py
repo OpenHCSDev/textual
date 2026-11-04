@@ -4225,7 +4225,13 @@ class Widget(DOMNode):
 
         self._layout_cache.clear()
         if layout:
-            self.post_message(messages.LayoutChildren(self))
+            try:
+                screen = self.screen
+            except NoScreen:
+                # A detached widget is in no frame: there is nothing to lay out.
+                pass
+            else:
+                screen._record_layout(messages.LayoutChildren(self))
         if repaint:
             self._set_dirty(*regions)
             self.clear_cached_dimensions()
