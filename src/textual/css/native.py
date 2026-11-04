@@ -3,7 +3,8 @@
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from functools import partial
+from enum import Enum
+from functools import cache, partial
 from typing import ClassVar
 
 from textual.css._declaration import NativeProperty, ValueBuilder
@@ -57,6 +58,17 @@ class Keyword(NativeValue):
 
 
 @dataclass(frozen=True)
+class Number(NativeValue):
+    """A plain number, such as one cell of spacing or a fractional opacity."""
+
+    value: float
+    token_name = "number"
+
+    def text(self) -> str:
+        return f"{self.value:g}"
+
+
+@dataclass(frozen=True)
 class Percent(NativeValue):
     """A percentage retains the native property's own alpha interpretation."""
 
@@ -94,6 +106,34 @@ class NativeDeclaration(Declaration):
             [value.token() for value in values],
             owner=property,
         )
+
+
+class Component(Enum):
+    """A widget's styled parts. Members are the parts; each part's CSS component
+    class name is derived here, once, from the declaring widget's prefix."""
+
+    def __init_subclass__(cls, *, prefix: str = "", **kwargs) -> None:
+        super().__init_subclass__(**kwargs)
+        if prefix:
+            cls._prefix = prefix
+        Component.named.cache_clear()
+
+    @property
+    def css_name(self) -> str:
+        return f"{type(self)._prefix}--{self.name.lower().replace('_', '-')}"
+
+    @staticmethod
+    @cache
+    def named(css_name: str) -> "Component | None":
+        """The declared part a stylesheet component class names, if any."""
+        pending: list[type[Component]] = [Component]
+        while pending:
+            parts = pending.pop()
+            pending.extend(parts.__subclasses__())
+            for part in parts:
+                if part.css_name == css_name:
+                    return part
+        return None
 
 
 class NativeStyleResolver(ABC):

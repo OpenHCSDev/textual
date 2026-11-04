@@ -1,3 +1,3 @@
-from textual.widgets._input import Selection
+from textual.widgets._input import InputComponent, Selection
 
-__all__ = ["Selection"]
+__all__ = ["InputComponent", "Selection"]

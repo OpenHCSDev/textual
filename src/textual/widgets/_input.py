@@ -4,6 +4,7 @@ from textual._activation import FocusActivation
 
 import re
 from dataclasses import dataclass
+from enum import auto
 from typing import TYPE_CHECKING, ClassVar, Iterable, NamedTuple
 
 from rich.cells import cell_len, get_character_cell_size
@@ -26,6 +27,7 @@ if TYPE_CHECKING:
 
 from textual.binding import Binding, BindingType, MethodBinding
 from textual.css._error_tools import friendly_list
+from textual.css.native import Component
 from textual.document._editing import NativeTextKeys
 from textual.events import Blur, Focus, Mount
 from textual.geometry import Offset, Region, Size, clamp
@@ -72,6 +74,15 @@ class Selection(NamedTuple):
     def is_empty(self) -> bool:
         """Return True if the selection is empty."""
         return self.start == self.end
+
+
+class InputComponent(Component, prefix="input"):
+    """The input's styled parts."""
+
+    CURSOR = auto()
+    PLACEHOLDER = auto()
+    SUGGESTION = auto()
+    SELECTION = auto()
 
 
 class Input(NativeTextKeys, FocusActivation, EditableInput, ScrollView):
@@ -131,12 +142,7 @@ class Input(NativeTextKeys, FocusActivation, EditableInput, ScrollView):
     | ctrl+v | Paste text from the clipboard. | 
     """
 
-    COMPONENT_CLASSES: ClassVar[set[str]] = {
-        "input--cursor",
-        "input--placeholder",
-        "input--suggestion",
-        "input--selection",
-    }
+    COMPONENT_CLASSES: ClassVar[set[str]] = {part.css_name for part in InputComponent}
     """
     | Class | Description |
     | :- | :- |

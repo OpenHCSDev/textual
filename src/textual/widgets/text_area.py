@@ -19,12 +19,14 @@ from textual.widgets._text_area import (
     LanguageDoesNotExist,
     StartColumn,
     ThemeDoesNotExist,
+    TextAreaComponent,
     TextAreaState,
     BUILTIN_LANGUAGES,
 )
 
 __all__ = [
     "BUILTIN_LANGUAGES",
+    "TextAreaComponent",
     "Document",
     "DocumentBase",
     "DocumentNavigator",

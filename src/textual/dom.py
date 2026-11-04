@@ -46,7 +46,7 @@ from textual.css.errors import DeclarationError, StyleValueError
 from textual.css.parse import is_id_selector, parse_declarations
 from textual.css.query import NoMatches, TooManyMatches, WrongType
 from textual.css.model import HoverDependency
-from textual.css.native import NativeStyleResolver
+from textual.css.native import Component, NativeDeclaration, NativeStyleResolver
 from textual.css.styles import RenderStyles, Styles
 from textual.box_model import BoxGeometry
 from textual.text_format import TextFormat
@@ -216,7 +216,7 @@ class DOMNode(PaintNode, MessagePump):
     _component_style_scope: ClassVar[bool] = False
 
     def _make_component_node(self, component: str) -> DOMNode:
-        return DOMNode(classes=component)
+        return ComponentNode(component)
 
     DEFAULT_CSS: ClassVar[str] = ""
     """Default TCSS."""
@@ -226,6 +226,9 @@ class DOMNode(PaintNode, MessagePump):
 
     COMPONENT_CLASSES: ClassVar[set[str]] = set()
     """Virtual DOM nodes, used to expose styles to line API widgets."""
+
+    native_components: ClassVar[Mapping[Component, tuple[NativeDeclaration, ...]]] = {}
+    """Native declarations for each of the widget's declared component parts."""
 
     BINDING_GROUP_TITLE: str | None = None
     """Title of widget used where bindings are displayed (such as in the key panel)."""
@@ -1000,7 +1003,7 @@ class DOMNode(PaintNode, MessagePump):
                 return node
         raise KeyError(f"No matching component class found for '.{name}'")
 
-    def get_component_styles(self, *names: str) -> RenderStyles:
+    def get_component_styles(self, *names: str | Component) -> RenderStyles:
         """Get a "component" styles object (must be defined in COMPONENT_CLASSES classvar).
 
         Args:
@@ -1016,6 +1019,8 @@ class DOMNode(PaintNode, MessagePump):
         styles = RenderStyles(self, Styles(), Styles())
 
         for name in names:
+            if isinstance(name, Component):
+                name = name.css_name
             if name not in self._component_styles:
                 raise KeyError(f"No {name!r} key in COMPONENT_CLASSES")
             component_styles = self._component_styles[name]
@@ -1091,6 +1096,25 @@ class DOMNode(PaintNode, MessagePump):
 
     def apply_native_styles(self, resolver: NativeStyleResolver) -> None:
         """Apply a node's native declarations in the current style publication."""
+
+    @classmethod
+    @lru_cache(maxsize=None)
+    def declared_components(cls) -> Mapping[Component, tuple[NativeDeclaration, ...]]:
+        """Every class's own component declarations, base first, so the most derived wins."""
+        declared: dict[Component, tuple[NativeDeclaration, ...]] = {}
+        for owner in reversed(cls.__mro__):
+            for part, declarations in vars(owner).get("native_components", {}).items():
+                declared[part] = (*declared.get(part, ()), *declarations)
+        return declared
+
+    def native_component_declarations(self, component: Component) -> tuple[NativeDeclaration, ...]:
+        """A component's native declarations; providers may extend this with their state."""
+        return self.declared_components().get(component, ())
+
+    def _component_class_declarations(self, component_class: str) -> tuple[NativeDeclaration, ...]:
+        """The stylesheet boundary: a component class resolves to its declared part."""
+        part = Component.named(component_class)
+        return () if part is None else self.native_component_declarations(part)
 
     def _post_register(self, app: App) -> None:
         """Called when the widget is registered
@@ -2239,3 +2263,20 @@ class DOMNode(PaintNode, MessagePump):
         """
         value = getattr(self, attribute_name)
         setattr(self, attribute_name, not value)
+
+
+class ComponentNode(DOMNode):
+    """A component class's style node. Its owner's native declarations are its
+    inline layer, resolved in the same publication as the component's CSS."""
+
+    def __init__(self, component: str) -> None:
+        super().__init__(classes=component)
+        self.component = component
+
+    def apply_native_styles(self, resolver: NativeStyleResolver) -> None:
+        owner = self._parent
+        assert isinstance(owner, DOMNode)
+        declarations = owner._component_class_declarations(self.component)
+        inline = self.styles.inline
+        if declarations or inline._rules:
+            inline.replace_rules(resolver.native_styles(*declarations).get_rules())
