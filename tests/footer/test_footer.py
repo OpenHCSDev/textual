@@ -2,6 +2,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.widget import Widget
 from textual.widgets import Button, Footer
+from textual.widgets._footer import FooterKey
 
 
 async def test_footer_bindings() -> None:
@@ -54,13 +55,14 @@ async def test_footer_bindings() -> None:
         # Pause to ensure the footer is fully composed to avoid flakiness in CI
         await pilot.pause(0.4)
         await app.wait_for_refresh()
+        binding_key = next(key for key in app.query(FooterKey) if key.key == "b")
 
-        footer_key_clicked = await pilot.click("FooterKey")
+        footer_key_clicked = await pilot.click(binding_key)
         assert footer_key_clicked is True  # Sanity check
         await pilot.pause()
         assert app_binding_count == 1
 
-        footer_key_clicked = await pilot.click("FooterKey")
+        footer_key_clicked = await pilot.click(binding_key)
         assert footer_key_clicked is True  # Sanity check
         await pilot.pause()
         assert app_binding_count == 2
