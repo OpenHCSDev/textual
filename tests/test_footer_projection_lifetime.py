@@ -7,7 +7,7 @@ from textual.app import App
 from textual.binding import Binding
 from textual.widget import Widget
 from textual.widgets import Footer, Input
-from textual.widgets._footer import FooterKey, KeyGroup
+from textual.widgets._footer import FooterKey
 
 
 async def test_repeated_unchanged_binding_notifications_keep_native_key_owners():
@@ -120,7 +120,7 @@ async def test_group_transitions_match_fresh_native_composition(mixed):
             app.screen.refresh_bindings()
             await pilot.pause()
             before = displayed(footer)
-            groups = len(footer.query(KeyGroup))
+            groups = len({key.parent for key in footer.query(FooterKey) if key.has_class("-grouped")})
             assert groups == (0 if state is False else 1)
             if state is None:
                 key = next(key for key in footer.query(FooterKey) if key.key == "f3")
