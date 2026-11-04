@@ -46,7 +46,7 @@ from textual.css.errors import DeclarationError, StyleValueError
 from textual.css.parse import is_id_selector, parse_declarations
 from textual.css.query import NoMatches, TooManyMatches, WrongType
 from textual.css.model import HoverDependency
-from textual.css.native import Component, NativeDeclaration, NativeStyleResolver
+from textual.css.native import Component, DeclaresTheme, NativeDeclaration, NativeStyleResolver, ThemeState
 from textual.css.styles import RenderStyles, Styles
 from textual.box_model import BoxGeometry
 from textual.text_format import TextFormat
@@ -141,7 +141,7 @@ class _ClassesDescriptor:
 
 
 @rich.repr.auto
-class DOMNode(PaintNode, MessagePump):
+class DOMNode(DeclaresTheme, PaintNode, MessagePump):
     """The base class for object that can be in the Textual DOM (App and Widget)"""
 
     _subtree_style_revision = 0
@@ -474,6 +474,7 @@ class DOMNode(PaintNode, MessagePump):
         classes: str | None = None,
     ) -> None:
         self._classes: set[str] = set()
+        self._theme_looks: dict[ThemeState, type[DeclaresTheme]] = {}
         self._name = name
         self._id = None
         if id is not None:
@@ -1094,8 +1095,35 @@ class DOMNode(PaintNode, MessagePump):
         new_bindings = BindingsMap.from_keys(keys)
         return new_bindings
 
+    @classmethod
+    @lru_cache(maxsize=None)
+    def theme_states(cls) -> tuple[ThemeState, ...]:
+        """Every look this class's state selects, in MRO order."""
+        return tuple(
+            state
+            for owner in reversed(cls.__mro__)
+            for state in vars(owner).values()
+            if isinstance(state, ThemeState)
+        )
+
+    def native_declarations(self) -> tuple[NativeDeclaration, ...]:
+        """The class's own declarations, then each current look's; providers may extend it."""
+        return (
+            *self.declared_theme(),
+            *(
+                declaration
+                for state in self.theme_states()
+                for declaration in state.__get__(self, type(self)).declared_theme()
+            ),
+        )
+
     def apply_native_styles(self, resolver: NativeStyleResolver) -> None:
         """Apply a node's native declarations in the current style publication."""
+        if declarations := self.native_declarations():
+            self.styles.merge(resolver.native_styles(*declarations))
+
+    def apply_native_layout(self) -> None:
+        """Layout a node sets once, when it is registered; mixins extend it cooperatively."""
 
     @classmethod
     @lru_cache(maxsize=None)

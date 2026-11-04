@@ -5,7 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from functools import cache, partial
-from typing import ClassVar
+from typing import ClassVar, Protocol, Self, overload
 
 from textual.css._declaration import NativeProperty, ValueBuilder
 from textual.css._style_properties import StyleProperty
@@ -134,6 +134,53 @@ class Component(Enum):
                 if part.css_name == css_name:
                     return part
         return None
+
+
+class DeclaresTheme:
+    """Owns native theme declarations: each class declares its own, the MRO composes them."""
+
+    native_theme: ClassVar[tuple[NativeDeclaration, ...]] = ()
+
+    @classmethod
+    @cache
+    def declared_theme(cls) -> tuple[NativeDeclaration, ...]:
+        """Every class's own declarations, base first, so the most derived wins."""
+        return tuple(
+            declaration
+            for owner in reversed(cls.__mro__)
+            for declaration in vars(owner).get("native_theme", ())
+        )
+
+
+class ThemedNode(Protocol):
+    """What a theme state needs from the node holding it."""
+
+    _theme_looks: dict["ThemeState", type[DeclaresTheme]]
+
+    def update_node_styles(self, animate: bool = True) -> None: ...
+
+
+class ThemeState[Look: DeclaresTheme]:
+    """A node's look: the family member its state selects. Assigning it restyles the node."""
+
+    def __init__(self, default: type[Look]) -> None:
+        self.default = default
+
+    @overload
+    def __get__(self, node: None, owner: type) -> Self: ...
+
+    @overload
+    def __get__(self, node: ThemedNode, owner: type) -> type[Look]: ...
+
+    def __get__(self, node: ThemedNode | None, owner: type) -> "type[Look] | Self":
+        if node is None:
+            return self
+        return node._theme_looks.get(self, self.default)
+
+    def __set__(self, node: ThemedNode, look: type[Look]) -> None:
+        if node._theme_looks.get(self, self.default) is not look:
+            node._theme_looks[self] = look
+            node.update_node_styles()
 
 
 class NativeStyleResolver(ABC):

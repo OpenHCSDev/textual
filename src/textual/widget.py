@@ -1692,6 +1692,7 @@ class Widget(DOMNode):
                 tie_breaker=tie_breaker,
                 scope=scope,
             )
+        self.apply_native_layout()
         if app.debug:
             app.call_next(self.preflight_checks)
 
