@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from itertools import groupby
-from typing import TYPE_CHECKING
+from enum import auto
+from typing import TYPE_CHECKING, ClassVar
 
 import rich.repr
 from rich.text import Text
@@ -11,6 +12,7 @@ from textual import events
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import HorizontalGroup, ScrollableContainer
+from textual.css.native import Component
 from textual.reactive import reactive
 from textual.widget import Widget
 from textual.layouts.horizontal import HorizontalLayout
@@ -98,13 +100,17 @@ class KeyGroup(HorizontalGroup):
         return keys
 
 
+class FooterKeyComponent(Component, prefix="footer-key"):
+    """A footer key's styled parts."""
+
+    KEY = auto()
+    DESCRIPTION = auto()
+
+
 @rich.repr.auto
 class FooterKey(Widget):
     ALLOW_SELECT = False
-    COMPONENT_CLASSES = {
-        "footer-key--key",
-        "footer-key--description",
-    }
+    COMPONENT_CLASSES = {part.css_name for part in FooterKeyComponent}
 
     DEFAULT_CSS = """
     FooterKey {
@@ -269,6 +275,9 @@ class Footer(ScrollableContainer, can_focus=False, can_focus_children=False):
     }
     """
 
+    key_type: ClassVar[type[FooterKey]] = FooterKey
+    """The key widget each binding is shown with."""
+
     compact = reactive(False, toggle_class="-compact")
     """Display in compact style."""
     show_command_palette = reactive(True)
@@ -327,7 +336,7 @@ class Footer(ScrollableContainer, can_focus=False, can_focus_children=False):
         self, item: FooterBinding, *, grouped: bool = False, palette: bool = False
     ) -> FooterKey:
         binding = item.binding
-        key = FooterKey(
+        key = self.key_type(
             binding.key,
             item.key_display,
             "" if grouped else binding.description,

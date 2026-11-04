@@ -799,11 +799,15 @@ class Stylesheet(NativeStyleResolver):
                 relevant_classes = frozenset().union(
                     *(candidate.classes for _, candidate in component_candidates)
                 )
+                # Native component declarations and the theme they resolve
+                # against are inputs to the same publication as the rules.
                 signature = (
-                    tuple((component, candidate.rules)
+                    tuple((component, candidate.rules,
+                           node._component_class_declarations(component))
                           for component, candidate in component_candidates),
                     frozenset(component_classes),
                     self._css_path_key(node.css_path_nodes, relevant_classes),
+                    self._variables,
                 )
                 previous = getattr(node, "_component_css_signature", None)
                 if (node._component_styles and previous is not None

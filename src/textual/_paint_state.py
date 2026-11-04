@@ -2,10 +2,13 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
 from rich.style import NULL_STYLE, Style
 from textual.color import Color, TRANSPARENT
 from textual.style import Style as VisualStyle
+
+if TYPE_CHECKING:
+    from textual.css.native import Component
 
 
 class PaintLayer:
@@ -56,7 +59,7 @@ class PaintState(NamedTuple):
         return replace(VisualStyle.from_rich_style(self.text_style),
                        background=self.background, foreground=self.foreground)
 
-    def component_style(self, node, *names: str, partial: bool = False) -> VisualStyle:
+    def component_style(self, node, *names: str | Component, partial: bool = False) -> VisualStyle:
         """Apply component declarations to this render's already inherited paint."""
         background = TRANSPARENT if partial else self.background
         foreground = (Color(255, 255, 255, 0) if partial

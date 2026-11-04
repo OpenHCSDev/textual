@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import auto
 from typing import TYPE_CHECKING, ClassVar, Iterable, Sequence
 
 import rich.repr
@@ -10,6 +11,7 @@ from textual import _widget_navigation, events
 from textual._activation import Activation
 from textual._loop import loop_last
 from textual.cache import LRUCache
+from textual.css.native import Component
 from textual.geometry import Region, Size, Spacing, clamp
 from textual.message import Message
 from textual.navigation import ListNavigation
@@ -128,6 +130,16 @@ class _LineCache:
         self.index_to_line.clear()
 
 
+class OptionListComponent(Component, prefix="option-list"):
+    """The option list's styled parts."""
+
+    OPTION = auto()
+    OPTION_DISABLED = auto()
+    OPTION_HIGHLIGHTED = auto()
+    OPTION_HOVER = auto()
+    SEPARATOR = auto()
+
+
 class OptionList(ListNavigation, ScrollView, can_focus=True):
     """A navigable list of options."""
 
@@ -190,13 +202,7 @@ class OptionList(ListNavigation, ScrollView, can_focus=True):
     }
     """
 
-    COMPONENT_CLASSES: ClassVar[set[str]] = {
-        "option-list--option",
-        "option-list--option-disabled",
-        "option-list--option-highlighted",
-        "option-list--option-hover",
-        "option-list--separator",
-    }
+    COMPONENT_CLASSES: ClassVar[set[str]] = {part.css_name for part in OptionListComponent}
     """
     | Class | Description |
     | :- | :- |

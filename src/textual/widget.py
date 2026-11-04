@@ -46,6 +46,7 @@ from textual.css.styles import RenderStyles
 
 if TYPE_CHECKING:
     from textual.app import RenderResult
+    from textual.css.native import Component
 
 from textual import constants, errors, events, messages
 from textual._animator import DEFAULT_EASING, Animatable, BoundAnimator, EasingFunction
@@ -1162,7 +1163,7 @@ class Widget(DOMNode):
         raise NoMatches(f"No immediate child of type {expect_type}; {self._nodes}")
 
     def get_component_rich_style(
-        self, *names: str, partial: bool = False, default: Style | None = None
+        self, *names: str | Component, partial: bool = False, default: Style | None = None
     ) -> Style:
         """Get a *Rich* style for a component.
 
@@ -1691,6 +1692,7 @@ class Widget(DOMNode):
                 tie_breaker=tie_breaker,
                 scope=scope,
             )
+        self.apply_native_layout()
         if app.debug:
             app.call_next(self.preflight_checks)
 

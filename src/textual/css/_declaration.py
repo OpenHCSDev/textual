@@ -10,15 +10,12 @@ class ValueBuilder(ABC):
     @abstractmethod
     def resolve_css(self, name: str, token: Token) -> Callable[[str, list[Token]], None]: ...
 
-    @abstractmethod
-    def process_color(self, name: str, tokens: list[Token]) -> None: ...
-
-    @abstractmethod
-    def build_edges(self, name: str, tokens: list[Token]) -> None: ...
 
 
 class NativeProperty:
     name: str
 
     def build_native(self, builder: ValueBuilder, tokens: list[Token]) -> None:
-        raise NotImplementedError(f"Native expressions are not declared for {self.name}")
+        """A native declaration builds through the same processor its CSS spelling names,
+        so every property a stylesheet can set, a widget can declare."""
+        builder.resolve_css(self.name, tokens[0])(self.name, tokens)

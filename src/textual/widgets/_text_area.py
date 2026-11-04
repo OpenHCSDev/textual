@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from types import FunctionType
+from enum import auto
 from typing import TYPE_CHECKING, ClassVar, Iterable, Optional, Sequence, Tuple
 
 from rich.console import RenderableType
@@ -18,6 +19,7 @@ from rich.text import Text
 from typing_extensions import Literal
 
 from textual._text_area_theme import TextAreaTheme
+from textual.css.native import Component
 from textual._tree_sitter import TREE_SITTER, get_language
 from textual.actions import SkipAction
 from textual.cache import LRUCache
@@ -136,6 +138,19 @@ class TextAreaState:
     languages: tuple[TextAreaLanguage, ...]
     highlight_query: Query | None
     editing_mode: EditingMode
+
+
+class TextAreaComponent(Component, prefix="text-area"):
+    """The text area's styled parts."""
+
+    CURSOR = auto()
+    GUTTER = auto()
+    CURSOR_GUTTER = auto()
+    CURSOR_LINE = auto()
+    SELECTION = auto()
+    MATCHING_BRACKET = auto()
+    SUGGESTION = auto()
+    PLACEHOLDER = auto()
 
 
 class TextArea(FocusActivation, EditableInput, ScrollView):
@@ -276,16 +291,7 @@ TextArea {
 }
 """
 
-    COMPONENT_CLASSES: ClassVar[set[str]] = {
-        "text-area--cursor",
-        "text-area--gutter",
-        "text-area--cursor-gutter",
-        "text-area--cursor-line",
-        "text-area--selection",
-        "text-area--matching-bracket",
-        "text-area--suggestion",
-        "text-area--placeholder",
-    }
+    COMPONENT_CLASSES: ClassVar[set[str]] = {part.css_name for part in TextAreaComponent}
     """
     `TextArea` offers some component classes which can be used to style aspects of the widget.
 
