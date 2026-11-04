@@ -40,7 +40,7 @@ from textual.css._help_text import (
     string_enum_help_text,
     style_flags_property_help_text,
 )
-from textual.css._declaration import NativeProperty, ValueBuilder
+from textual.css._declaration import NativeProperty
 from textual.css.constants import HATCHES, VALID_STYLE_FLAGS
 from textual.css.tokenizer import Token
 from textual.css.errors import StyleTypeError, StyleValueError
@@ -411,9 +411,6 @@ class BorderProperty(StyleProperty[Edges]):
     Args:
         layout: True if the layout should be refreshed after setting, False otherwise.
     """
-
-    def build_native(self, builder: ValueBuilder, tokens: list[Token]) -> None:
-        builder.build_edges(self.name, tokens)
 
     def __init__(self, layout: bool) -> None:
         self._layout = layout
@@ -841,9 +838,6 @@ class NameListProperty(StyleProperty[tuple[str, ...]]):
 
 class ColorProperty(StyleProperty[Color]):
     """Descriptor for getting and setting color properties."""
-
-    def build_native(self, builder: ValueBuilder, tokens: list[Token]) -> None:
-        builder.process_color(self.name, tokens)
 
     def affects_geometry(self, previous: object | None, value: object | None) -> bool:
         return False
