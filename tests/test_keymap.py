@@ -11,8 +11,10 @@ from textual.widgets import Label
 
 class Counter(App[None]):
     BINDINGS = [
-        Binding(key="i,up", action="increment", id="app.increment"),
-        Binding(key="d,down", action="decrement", id="app.decrement"),
+        # Arrows carry the shared navigation preference, not these ids, so the
+        # app's own keys are letters.
+        Binding(key="i,u", action="increment", id="app.increment"),
+        Binding(key="d,n", action="decrement", id="app.decrement"),
     ]
 
     def __init__(self, keymap: Keymap, *args: Any, **kwargs: Any):
@@ -45,7 +47,7 @@ async def test_keymap_default_binding_replaces_old_binding():
     app = Counter({"app.increment": "right,k"})
     async with app.run_test() as pilot:
         # The original bindings are removed - action not called.
-        await pilot.press("i", "up")
+        await pilot.press("i", "u")
         assert app.count == 0
 
         # The new bindings are active and call the action.
@@ -57,7 +59,7 @@ async def test_keymap_empty_override_unbinds():
     app = Counter({"app.increment": ""})
     async with app.run_test() as pilot:
         # An empty override removes every default key and binds none.
-        await pilot.press("i", "up")
+        await pilot.press("i", "u")
         assert app.count == 0
         # Other bindings keep their defaults.
         await pilot.press("d")
@@ -79,11 +81,13 @@ async def test_keymap_sends_message_when_clash():
         await pilot.press("d")
         assert app.clashed_bindings is not None
         assert len(app.clashed_bindings) == 1
+        # The clash reports the default that lost its key to the override.
         clash = app.clashed_bindings.pop()
         assert app.clashed_node is app
         assert clash.key == "d"
-        assert clash.action == "increment"
-        assert clash.id == "app.increment"
+        assert clash.action == "decrement"
+        assert clash.id == "app.decrement"
+        assert app.count == 1
 
 
 async def test_keymap_with_unknown_id_is_noop():
