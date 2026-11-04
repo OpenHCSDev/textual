@@ -439,14 +439,13 @@ class Reactive(Generic[ReactiveType]):
         if callable(public_validate_function):
             value = public_validate_function(value)
 
-        # Toggle the classes using the value's truthiness
-        if (toggle_class := self._toggle_class) is not None:
-            obj.set_class(bool(value), *toggle_class.split())
-
         # If the value has changed, or this is the first time setting the value
         if always or self._always_update or current_value != value:
-            # Store the internal value
+            # Store the internal value, then toggle its classes: a restyle the
+            # class change triggers reads the value it reflects.
             setattr(obj, self.internal_name, value)
+            if (toggle_class := self._toggle_class) is not None:
+                obj.set_class(bool(value), *toggle_class.split())
 
             # Check all watchers
             self._check_watchers(obj, name, current_value)
