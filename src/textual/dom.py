@@ -2290,7 +2290,7 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump):
     ) -> Self:
         return self
 
-    def refresh_lines(self) -> Self:
+    def repaint_lines(self) -> Self:
         """A node that paints nothing has no lines to repaint (Widget paints them)."""
         return self
 
