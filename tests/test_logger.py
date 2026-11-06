@@ -30,7 +30,6 @@ async def test_log_from_worker() -> None:
 
         def on_mount(self) -> None:
             self.do_work()
-            self.call_after_refresh(self.exit)
 
         @work(thread=True)
         def do_work(self) -> None:
