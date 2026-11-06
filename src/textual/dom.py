@@ -260,6 +260,8 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump):
 
     # Generated list of bindings
     _merged_bindings: ClassVar[BindingsMap] = BindingsMap()
+    _own_bindings: ClassVar[BindingsMap] = BindingsMap()
+    """This class's own BINDINGS, parsed once when the class is created."""
 
     _reactives: ClassVar[dict[str, Reactive]]
     _reactive_accessors: ClassVar[dict[str, _StoredReactiveAccess]]
@@ -566,17 +568,46 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump):
               for declaration in family.declarations()
               for binding in declaration.bindings_for(mode)),
             *cls.native_bindings(mode),
-            *(projected for base in cls.__mro__
-              for binding in base.__dict__.get("_declared_key_bindings", ())
-              for projected in binding.for_mode(mode)),
+            *cls.method_bindings(mode),
         )
+
+    @classmethod
+    def method_bindings(cls, mode: type[EditingMode]) -> tuple[Binding, ...]:
+        """Keys each class in the MRO declares on its own methods."""
+        return tuple(projected for base in cls.__mro__
+                     for binding in base.__dict__.get("_declared_key_bindings", ())
+                     for projected in binding.for_mode(mode))
+
+    @classmethod
+    def class_bindings(cls, mode: type[EditingMode]) -> dict[str, list[Binding]]:
+        """Each class's own keys replace its ancestors' bindings for those keys.
+
+        A class writes a key either in BINDINGS or by declaring it on a method; both are
+        that class's word on the key, so the most-derived class wins whichever form it
+        used (TextArea's declared End over ScrollableContainer's End BINDINGS).
+        """
+        keys: dict[str, list[Binding]] = {}
+        for base in reversed(cls.__mro__):
+            if issubclass(base, DOMNode):
+                if not base._inherit_bindings:
+                    keys.clear()
+                keys.update(base._own_bindings.project(
+                    mode, base.__dict__.get("_declared_key_bindings", ())).key_to_bindings)
+        return keys
 
     @classmethod
     @lru_cache(maxsize=None)
     def _binding_defaults(cls, mode: type[EditingMode]) -> tuple[tuple[str, tuple[Binding, ...]], ...]:
         """Cache immutable projections, never a caller's mutable remapping table."""
-        projected = cls._merged_bindings.project(mode, cls.declared_bindings(mode))
-        return tuple((key, tuple(bindings)) for key, bindings in projected.key_to_bindings.items())
+        keys = {key: list(bindings) for key, bindings in cls.class_bindings(mode).items()}
+        # A method's key was placed, or replaced, with its class above; the families follow.
+        placed = cls.method_bindings(mode)
+        for binding in Binding.make_bindings(
+                declared for declared in cls.declared_bindings(mode) if declared not in placed):
+            for projected in binding.for_mode(mode):
+                if projected not in (bindings := keys.setdefault(projected.key, [])):
+                    bindings.append(projected)
+        return tuple((key, tuple(bindings)) for key, bindings in keys.items())
 
     @classmethod
     def binding_defaults(cls, mode: type[EditingMode]) -> BindingsMap:
@@ -984,6 +1015,7 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump):
         cls._css_type_name = bases[0].__name__
         for base in bases:
             css_type_names.add(base.__name__)
+        cls._own_bindings = BindingsMap(cls.__dict__.get("BINDINGS", []))
         cls._merged_bindings = cls._merge_bindings()
         cls._css_type_names = frozenset(css_type_names)
         compute_methods = frozenset(
