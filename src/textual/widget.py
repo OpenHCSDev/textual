@@ -4245,7 +4245,7 @@ class Widget(ScrollsView):
         self.check_idle()
         return self
 
-    def refresh_lines(self) -> Self:
+    def repaint_lines(self) -> Self:
         """Paint every line again from the content already rendered.
 
         For a change over the lines and not in them: an animation frame tinting the same
