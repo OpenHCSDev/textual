@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from textual._queue import Queue
+from textual.message_pump import Queue
 
 
 async def test_get_rechecks_after_nowait_consumer_drains_wakeup():
