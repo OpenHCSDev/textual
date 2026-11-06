@@ -276,17 +276,8 @@ async def test_readers_between_steps_see_the_previous_scene(monkeypatch) -> None
             with screen.hold_frames():
                 steps = drive(screen)
                 pauses = 0
-                rendering = 0
                 try:
                     while True:
-                        if compositor._visible_map is not maps[1]:
-                            # Committed: the remaining steps only render.
-                            committed = compositor._visible_map
-                            rendering += 1
-                            assert compositor._published_map is maps[2]
-                            next(steps)
-                            assert compositor._visible_map is committed
-                            continue
                         # Readers that could arrange lazily must not.
                         try:
                             screen.find_widget(offscreen)
@@ -312,9 +303,10 @@ async def test_readers_between_steps_see_the_previous_scene(monkeypatch) -> None
                 except StopIteration:
                     screen._stepped_layout = None
                 assert pauses > 40
-                assert rendering > 3, "the visible widgets render in steps after the commit"
                 assert not compositor._arranging
                 assert outcome(screen)["layout_map"] == one_shot["layout_map"]
+                # Held frames compose nothing, so the commit is the last step:
+                # every pause above saw the previous scene.
                 assert compositor._visible_map is not maps[1]
 
 
@@ -587,14 +579,16 @@ async def test_a_repaint_between_steps_publishes_with_the_layout() -> None:
         await change(screen)
         top = screen.query_one("#top", Static)
         compositor = screen._compositor
-        published = []
-        refresh = screen._compositor_refresh
+        # The frame consumes the pending repaints after its budget pause; the
+        # damage it composes is what the compositor holds once they are taken.
+        damage = []
+        update_widgets = compositor.update_widgets
 
-        def publish(deadline=None):
-            published.append(set(compositor._dirty_regions))
-            yield from refresh(deadline)
+        def consume(widgets):
+            update_widgets(widgets)
+            damage.append(set(compositor._dirty_regions))
 
-        screen._compositor_refresh = publish
+        compositor.update_widgets = consume
         try:
             steps = drive(screen)
             # The widget's refresh, delivered to the screen between steps.
@@ -604,11 +598,10 @@ async def test_a_repaint_between_steps_publishes_with_the_layout() -> None:
             assert top in screen._dirty_widgets
             finish(screen, steps)
         finally:
-            del screen._compositor_refresh
-        # The publication covers the widget repainted between the steps;
-        # publishing cleared its request, so it is not left for later.
-        [damage] = published
-        assert any(region.contains_region(top.region) for region in damage)
+            del compositor.update_widgets
+        # The frame that publishes with the layout composes damage covering
+        # the widget repainted between the steps; publishing cleared its request.
+        assert any(region.contains_region(top.region) for region in damage[-1])
         assert top not in screen._dirty_widgets
 
 

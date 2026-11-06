@@ -26,9 +26,12 @@ from textual.widgets import Static
 # sha256 of the joined updates and their count, recorded on Textual 266d53c94.
 # Re-recorded when a scoped scroll reflow stopped putting the history in front
 # of its own scrollbar: the only change is that the scrollbar's cells (column
-# 99) show the bar again instead of the container's background.
-EXPECTED_DIGEST = "43fb71c47b758efd8d4e9300096d7a9638d5f78e2f29072d136e06f76d815826"
-EXPECTED_UPDATES = 22
+# 99) show the bar again instead of the container's background. Re-recorded
+# when the pilot stopped waking idle widgets (ad7782f09): a pause now returns
+# before the screen's timer frame, so the first page-up's scrollbar column is
+# written as its own update; every update after that split is byte-identical.
+EXPECTED_DIGEST = "f95eae34ff72b6b74e15f7b54c7e82551599bae6252ac4da67f1417d99adee5e"
+EXPECTED_UPDATES = 23
 
 WORDS = ("history", "│", "─┼─", "漢字", "scroll", "ü", "paint", "🙂", "line", "cells", "┌─┐", "compositor")
 
