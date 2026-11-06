@@ -4,6 +4,7 @@ from textual.app import App, ComposeResult
 from textual.containers import Grid
 from textual.screen import ModalScreen
 from textual.widgets import Button, Footer, Header, Label
+from textual.widgets._footer import FooterKey
 
 TEXT = """I must not fear.
 Fear is the mind-killer.
@@ -91,7 +92,9 @@ async def test_modal_pop_screen():
         # Pause to ensure the footer is fully composed to avoid flakiness in CI
         await pilot.pause()
         await pilot.pause()  # Required in Windows
-        assert await pilot.click("FooterKey")
+        # The footer also shows the command palette key; click the Quit binding.
+        quit_key = next(key for key in app.query(FooterKey) if key.action == "request_quit")
+        assert await pilot.click(quit_key)
         assert await app.wait_for_refresh()
         assert isinstance(app.screen, QuitScreen)
         # Check activating the quit button exits the app
