@@ -523,12 +523,15 @@ class Content(Visual):
             )
         return self
 
-    def draws_like(self, other: Content) -> bool:
+    def draws_like(self, other: Visual) -> bool:
         """Whether both draw the same: the same text with the same styled spans.
 
         Equality compares text only, for sorting; a changed style or link is a change on screen.
         """
-        return self.plain == other.plain and list(self._spans) == list(other._spans)
+        return other.draws_text(self.plain, self._spans)
+
+    def draws_text(self, plain: str, spans: Sequence[object]) -> bool:
+        return self.plain == plain and list(self._spans) == list(spans)
 
     def __eq__(self, other: object) -> bool:
         """Compares text only, so that markup doesn't effect sorting."""
