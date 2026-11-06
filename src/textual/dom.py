@@ -587,13 +587,22 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump):
         used (TextArea's declared End over ScrollableContainer's End BINDINGS).
         """
         keys: dict[str, list[Binding]] = {}
+        for base in cls._binding_bases():
+            keys.update(base._own_bindings.project(
+                mode, base.__dict__.get("_declared_key_bindings", ())).key_to_bindings)
+        return keys
+
+    @classmethod
+    def _binding_bases(cls) -> list[type[DOMNode]]:
+        """The DOMNode bases whose keys this class inherits, oldest first: the walk restarts
+        at any base that does not inherit its ancestors' bindings."""
+        bases: list[type[DOMNode]] = []
         for base in reversed(cls.__mro__):
             if issubclass(base, DOMNode):
                 if not base._inherit_bindings:
-                    keys.clear()
-                keys.update(base._own_bindings.project(
-                    mode, base.__dict__.get("_declared_key_bindings", ())).key_to_bindings)
-        return keys
+                    bases.clear()
+                bases.append(base)
+        return bases
 
     @classmethod
     @lru_cache(maxsize=None)
@@ -1107,22 +1116,9 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump):
         Returns:
             Merged bindings.
         """
-        bindings: list[BindingsMap] = []
-
-        for base in reversed(cls.__mro__):
-            if issubclass(base, DOMNode):
-                if not base._inherit_bindings:
-                    bindings.clear()
-                bindings.append(
-                    BindingsMap(
-                        base.__dict__.get("BINDINGS", []),
-                    )
-                )
-
         keys: dict[str, list[Binding]] = {}
-        for bindings_ in bindings:
-            for key, key_bindings in bindings_.key_to_bindings.items():
-                keys[key] = key_bindings
+        for base in cls._binding_bases():
+            keys.update(base._own_bindings.key_to_bindings)
 
         new_bindings = BindingsMap.from_keys(keys)
         return new_bindings
