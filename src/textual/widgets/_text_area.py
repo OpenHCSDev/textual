@@ -767,7 +767,8 @@ TextArea {
 
     @property
     def allows_application_commands(self) -> bool:
-        return self.editing_mode.allows_application_commands
+        """A read-only area takes no typed text, so the application's shortcuts reach past it."""
+        return self.read_only or self.editing_mode.allows_application_commands
 
     def check_consume_key(self, key: str, character: str | None = None) -> bool:
         """Check if the widget may consume the given key.
