@@ -4761,6 +4761,10 @@ class Widget(ScrollsView):
     async def _dispatch_message(self, message: Message) -> None:
         if message.can_dispatch_to(self):
             await super()._dispatch_message(message)
+        else:
+            # This receiver runs no handlers, but the event still belongs to its
+            # ancestors: a key sent to a hidden focused widget reaches the App.
+            self._bubble_onward(message)
 
     def _on_unmount(self) -> None:
         self._uncover()

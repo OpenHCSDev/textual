@@ -1045,8 +1045,10 @@ class MessagePump(ParentLinks, metaclass=_MessagePumpMeta):
             await invoke(method, message)
         if not dispatched:
             log.event.verbosity(message.verbose)(message, ">>>", self, "method=None")
+        self._bubble_onward(message)
 
-        # Bubble messages up the DOM (if enabled on the message)
+    def _bubble_onward(self, message: Message) -> None:
+        """Pass a bubbling message to the parent, if this node's DOM still links it there."""
         if message.bubble and self._parent and not message._stop_propagation:
             if message._sender is not None and message._sender == self._parent:
                 # parent is sender, so we stop propagation after parent
