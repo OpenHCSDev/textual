@@ -154,10 +154,9 @@ async def record_updates() -> list[str]:
     return app.updates
 
 
-async def test_terminal_output_is_unchanged(monkeypatch):
-    # The recorded bytes are a truecolor terminal's: without COLORTERM the
-    # console downgrades colours and every byte after the first style changes.
-    monkeypatch.setenv("COLORTERM", "truecolor")
+async def test_terminal_output_is_unchanged():
+    # The recorded bytes are a truecolor terminal's; tests/conftest.py makes
+    # every console in the session one.
     updates = await record_updates()
     digest = hashlib.sha256("\0".join(updates).encode("utf-8")).hexdigest()
     assert (digest, len(updates)) == (EXPECTED_DIGEST, EXPECTED_UPDATES)
