@@ -22,7 +22,7 @@ async def test_editor_state_preserves_document_selection_and_undo_redo(language)
 
         second = TextArea()
         await app.mount(second)
-        second.restore_editor_state(state)
+        await second.restore_editor_state(state)
         await pilot.pause()
         assert second.document is state.document
         assert second.history is state.history
@@ -50,7 +50,7 @@ async def test_editor_state_rewraps_at_destination_width_and_retains_scroll():
         await pilot.resize_terminal(40, 15)
         second = TextArea()
         await app.mount(second)
-        second.restore_editor_state(state)
+        await second.restore_editor_state(state)
         await pilot.pause()
         assert second.selection == state.selection
         assert second.scroll_y == state.scroll_y
