@@ -12,16 +12,19 @@ class HandlerArguments(NamedTuple):
     """Information for event handler."""
 
     modifiers: set[str]
-    action: actions.ActionParseResult | None
+    action: actions.StyleAction | None
 
     @classmethod
     def decode(cls, modifiers: set[str], value: Any) -> HandlerArguments:
-        if isinstance(value, str):
-            action = actions.parse(value)
+        """The one boundary where a style's handler meta becomes an action."""
+        if isinstance(value, actions.StyleAction):
+            action: actions.StyleAction | None = value
+        elif isinstance(value, str):
+            action = actions.ParsedAction(actions.parse(value))
         elif isinstance(value, tuple) and len(value) == 2:
             name, parameters = value
             namespace, parsed_name, _ = actions.parse(name)
-            action = namespace, parsed_name, parameters
+            action = actions.ParsedAction((namespace, parsed_name, parameters))
         else:
             action = None
         return cls(modifiers, action)
@@ -32,7 +35,7 @@ class HandlerArguments(NamedTuple):
             if app.debug:
                 log.warning("Can't parse action from style meta; check your console markup syntax")
             return False
-        await app.run_action(self.action, default_namespace)
+        await self.action.run(app, default_namespace)
         return True
 
 

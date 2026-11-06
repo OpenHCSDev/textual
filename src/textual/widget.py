@@ -77,6 +77,7 @@ from textual.content import Content, ContentType
 from textual.css.query import NoMatches, WrongType
 from textual.css.scalar import ScalarOffset
 from textual.dom import DOMNode, NoScreen
+from textual.navigation import ScrollsView
 from textual.geometry import (
     NULL_REGION,
     NULL_SIZE,
@@ -284,7 +285,7 @@ class BadWidgetName(Exception):
 
 
 @rich.repr.auto
-class Widget(DOMNode):
+class Widget(ScrollsView):
     """
     A Widget is the base class for Textual widgets.
 
@@ -4747,56 +4748,6 @@ class Widget(DOMNode):
 
     def _on_unmount(self) -> None:
         self._uncover()
-
-    def action_scroll_home(self) -> None:
-        if not self._allow_scroll:
-            raise SkipAction()
-        self.scroll_home(x_axis=self.scroll_y == 0)
-
-    def action_scroll_end(self) -> None:
-        if not self._allow_scroll:
-            raise SkipAction()
-        self.scroll_end(x_axis=self.scroll_y == self.is_vertical_scroll_end)
-
-    def action_scroll_left(self) -> None:
-        if not self.allow_horizontal_scroll:
-            raise SkipAction()
-        self.scroll_left()
-
-    def action_scroll_right(self) -> None:
-        if not self.allow_horizontal_scroll:
-            raise SkipAction()
-        self.scroll_right()
-
-    def action_scroll_up(self) -> None:
-        if not self.allow_vertical_scroll:
-            raise SkipAction()
-        self.scroll_up()
-
-    def action_scroll_down(self) -> None:
-        if not self.allow_vertical_scroll:
-            raise SkipAction()
-        self.scroll_down()
-
-    def action_page_down(self) -> None:
-        if not self.allow_vertical_scroll:
-            raise SkipAction()
-        self.scroll_page_down()
-
-    def action_page_up(self) -> None:
-        if not self.allow_vertical_scroll:
-            raise SkipAction()
-        self.scroll_page_up()
-
-    def action_page_left(self) -> None:
-        if not self.allow_horizontal_scroll:
-            raise SkipAction()
-        self.scroll_page_left()
-
-    def action_page_right(self) -> None:
-        if not self.allow_horizontal_scroll:
-            raise SkipAction()
-        self.scroll_page_right()
 
     def notify(
         self,

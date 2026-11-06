@@ -53,7 +53,7 @@ if TYPE_CHECKING:
 
 from textual import events, log
 from textual._cells import cell_len, cell_width_to_column_index
-from textual.binding import Binding, MethodBinding
+from textual.binding import MethodBinding
 from textual.events import Message, MouseEvent
 from textual.geometry import Offset, Region, Size, Spacing, clamp
 from textual.reactive import Reactive, reactive
@@ -309,81 +309,6 @@ TextArea {
     | `text-area--placeholder` | Target the placeholder text. |
     """
 
-    BINDINGS = [
-        # Deletion
-        Binding(
-            "backspace",
-            "delete_left",
-            "Delete character left",
-            show=False,
-        ),
-        Binding(
-            "ctrl+w,ctrl+backspace,alt+backspace",
-            "delete_word_left",
-            "Delete left to start of word",
-            show=False,
-        ),
-        Binding(
-            "delete,ctrl+d",
-            "delete_right",
-            "Delete character right",
-            show=False,
-        ),
-        Binding(
-            "alt+delete",
-            "delete_word_right",
-            "Delete right to start of word",
-            show=False,
-        ),
-        Binding(
-            "ctrl+x,super+x",
-            "cut",
-            "Cut",
-            show=False,
-        ),
-        Binding(
-            "ctrl+c,super+c",
-            "copy",
-            "Copy",
-            show=False,
-        ),
-        Binding(
-            "ctrl+v",
-            "paste",
-            "Paste",
-            show=False,
-        ),
-        Binding(
-            "ctrl+u,super+backspace",
-            "delete_to_start_of_line",
-            "Delete to line start",
-            show=False,
-        ),
-        Binding(
-            "ctrl+k",
-            "delete_to_end_of_line_or_delete_line",
-            "Delete to line end",
-            show=False,
-        ),
-        Binding(
-            "ctrl+shift+k",
-            "delete_line",
-            "Delete line",
-            show=False,
-        ),
-        Binding(
-            "ctrl+z,super+z",
-            "undo",
-            "Undo",
-            show=False,
-        ),
-        Binding(
-            "ctrl+y,super+y",
-            "redo",
-            "Redo",
-            show=False,
-        ),
-    ]
     """
     | Key(s)                 | Description                                  |
     | :-                     | :-                                           |
@@ -1794,6 +1719,7 @@ TextArea {
             self._undo_batch(edits)
         self.editing_mode.resume(self)
 
+    @MethodBinding.declare("ctrl+z", "super+z", description="Undo")
     def action_undo(self) -> None:
         """Undo the edits since the last checkpoint (the most recent batch of edits)."""
         self.undo()
@@ -1807,6 +1733,7 @@ TextArea {
             self._redo_batch(edits)
         self.editing_mode.resume(self)
 
+    @MethodBinding.declare("ctrl+y", "super+y", description="Redo")
     def action_redo(self) -> None:
         """Redo the most recently undone batch of edits."""
         self.redo()
@@ -2676,6 +2603,7 @@ TextArea {
             return None
         return self.replace(insert, start, end, maintain_selection_offset=False)
 
+    @MethodBinding.declare("backspace", description="Delete character left")
     def action_delete_left(self) -> None:
         """Deletes the character to the left of the cursor and updates the cursor location.
 
@@ -2692,6 +2620,7 @@ TextArea {
 
         self._delete_via_keyboard(start, end)
 
+    @MethodBinding.declare("delete", "ctrl+d", description="Delete character right")
     def action_delete_right(self) -> None:
         """Deletes the character to the right of the cursor and keeps the cursor at the same location.
 
@@ -2707,6 +2636,7 @@ TextArea {
 
         self._delete_via_keyboard(start, end)
 
+    @MethodBinding.declare("ctrl+shift+k", description="Delete line")
     def action_delete_line(self) -> None:
         """Deletes the lines which intersect with the selection."""
         if self.read_only:
@@ -2733,6 +2663,7 @@ TextArea {
             self.move_cursor_relative(columns=end_column, record_width=False)
         return deletion
 
+    @MethodBinding.declare("ctrl+x", "super+x", description="Cut")
     def action_cut(self) -> None:
         """Cut text (remove and copy to clipboard)."""
         if self.read_only:
@@ -2746,6 +2677,7 @@ TextArea {
         if edit_result is not None:
             self.app.copy_to_clipboard(edit_result.replaced_text)
 
+    @MethodBinding.declare("ctrl+c", "super+c", description="Copy")
     def action_copy(self) -> None:
         """Copy selection to clipboard."""
         selected_text = self.selected_text
@@ -2754,12 +2686,14 @@ TextArea {
         else:
             raise SkipAction()
 
+    @MethodBinding.declare("ctrl+v", description="Paste")
     def action_paste(self) -> None:
         """Paste from local clipboard."""
         if self.read_only:
             return
         self.editing_mode.paste(self, self.app.clipboard)
 
+    @MethodBinding.declare("ctrl+u", "super+backspace", description="Delete to line start")
     def action_delete_to_start_of_line(self) -> None:
         """Deletes from the cursor location to the start of the line."""
         if self.read_only:
@@ -2782,26 +2716,21 @@ TextArea {
         to_location = self.get_cursor_line_end_location()
         self._delete_via_keyboard(from_location, to_location)
 
-    async def action_delete_to_end_of_line_or_delete_line(self) -> None:
+    @MethodBinding.declare("ctrl+k", description="Delete to line end")
+    def action_delete_to_end_of_line_or_delete_line(self) -> None:
         """Deletes from the cursor location to the end of the line, or deletes the line.
 
-        The line will be deleted if the line is empty.
+        The line will be deleted if the line is empty; at the end of a line the kill joins
+        the next line to this one.
         """
-        # Assume we're just going to delete to the end of the line.
-        action = "delete_to_end_of_line"
         if self.get_cursor_line_start_location() == self.get_cursor_line_end_location():
-            # The line is empty, so we'll simply remove the line itself.
-            action = "delete_line"
-        elif (
-            self.selection.start
-            == self.selection.end
-            == self.get_cursor_line_end_location()
-        ):
-            # We're at the end of the line, so the kill delete operation
-            # should join the next line to this.
-            action = "delete_right"
-        await self.run_action(action)
+            self.action_delete_line()
+        elif self.selection.start == self.selection.end == self.get_cursor_line_end_location():
+            self.action_delete_right()
+        else:
+            self.action_delete_to_end_of_line()
 
+    @MethodBinding.declare("ctrl+w", "ctrl+backspace", "alt+backspace", description="Delete left to start of word")
     def action_delete_word_left(self) -> None:
         """Deletes the word to the left of the cursor and updates the cursor location."""
         if self.cursor_at_start_of_text:
@@ -2817,6 +2746,7 @@ TextArea {
         to_location = self.get_cursor_word_left_location()
         self._delete_via_keyboard(self.selection.end, to_location)
 
+    @MethodBinding.declare("alt+delete", description="Delete right to start of word")
     def action_delete_word_right(self) -> None:
         """Deletes the word to the right of the cursor and keeps the cursor at the same location.
 

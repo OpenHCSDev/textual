@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from functools import partial
 from pathlib import Path, PurePath
 from types import MethodType
-from typing import AsyncIterator, Callable, Iterable, Optional, Sequence
+from typing import AsyncIterator, Callable, Iterable, Optional, Sequence, cast
 from urllib.parse import unquote
 
 from markdown_it import MarkdownIt
@@ -17,11 +17,13 @@ from rich.text import Text
 from typing_extensions import TypeAlias
 
 from textual._slug import TrackedSlugs, slug_for_tcss_id
-from textual.app import ComposeResult
+from textual.actions import StyleAction
+from textual.app import App, ComposeResult
 from textual.await_complete import AwaitComplete
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.content import Content, Span
 from textual.css.query import NoMatches
+from textual.dom import DOMNode
 from textual.events import Mount
 from textual.highlight import highlight
 from textual.layout import Layout
@@ -213,7 +215,24 @@ class Navigator:
         return False
 
 
-class MarkdownBlock(Static):
+class OpensMarkdownLinks(DOMNode):
+    """A widget that draws Markdown links: a click on one opens its href here, once."""
+
+    def open_link(self, href: str) -> None:
+        self.post_message(Markdown.LinkClicked(self.query_ancestor(Markdown), href))
+
+
+@dataclass(frozen=True)
+class MarkdownLink(StyleAction):
+    """A Markdown link or image: its click opens the href on the widget that drew it."""
+
+    href: str
+
+    async def run(self, app: App, namespace: DOMNode) -> None:
+        cast(OpensMarkdownLinks, namespace).open_link(self.href)
+
+
+class MarkdownBlock(OpensMarkdownLinks, Static):
     """The base class for a Markdown Element."""
 
     COMPONENT_CLASSES = {"em", "strong", "s", "code_inline"}
@@ -297,10 +316,6 @@ class MarkdownBlock(Static):
         await self.remove()
         await self._markdown.mount(block)
 
-    async def action_link(self, href: str) -> None:
-        """Called on link click."""
-        self.post_message(Markdown.LinkClicked(self._markdown, href))
-
     def build_from_token(self, token: Token) -> None:
         """Build inline block content from its source token.
 
@@ -373,14 +388,10 @@ class MarkdownBlock(Static):
             elif child_type == "s_open":
                 add_style(".s")
             elif child_type == "link_open":
-                href = child.attrs.get("href", "")
-                action = f"link({href!r})"
-                add_style(Style.from_meta({"@click": action}))
+                add_style(Style.from_meta({"@click": MarkdownLink(child.attrs.get("href", ""))}))
             elif child_type == "image":
-                href = child.attrs.get("src", "")
                 alt = child.attrs.get("alt", "")
-                action = f"link({href!r})"
-                add_style(Style.from_meta({"@click": action}))
+                add_style(Style.from_meta({"@click": MarkdownLink(child.attrs.get("src", ""))}))
                 add_content("🖼  ")
                 if alt:
                     add_content(f"({alt})")
@@ -636,18 +647,14 @@ class MarkdownOrderedList(MarkdownList):
         self._blocks.clear()
 
 
-class MarkdownTableCellContents(Static):
+class MarkdownTableCellContents(OpensMarkdownLinks, Static):
     """Widget for table cells.
 
     A shim over a Static which responds to links.
     """
 
-    async def action_link(self, href: str) -> None:
-        """Pass a link action on to the MarkdownTable parent."""
-        self.post_message(Markdown.LinkClicked(self.query_ancestor(Markdown), href))
 
-
-class MarkdownTableContent(Widget):
+class MarkdownTableContent(OpensMarkdownLinks, Widget):
     """Renders a Markdown table."""
 
     DEFAULT_LAYOUT = GridLayout
@@ -742,11 +749,6 @@ class MarkdownTableContent(Widget):
 
     def on_mount(self) -> None:
         self.styles.grid_size_columns = len(self.headers)
-
-    async def action_link(self, href: str) -> None:
-        """Pass a link action on to the MarkdownTable parent."""
-        if isinstance(self.parent, MarkdownTable):
-            await self.parent.action_link(href)
 
 
 class MarkdownTable(MarkdownBlock):

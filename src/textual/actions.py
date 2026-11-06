@@ -2,13 +2,41 @@ from __future__ import annotations
 
 import ast
 import re
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from functools import lru_cache
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from typing_extensions import TypeAlias
 
 ActionParseResult: TypeAlias = "tuple[str, str, tuple[object, ...]]"
 """An action is its name and the arbitrary tuple of its arguments."""
+
+
+if TYPE_CHECKING:
+    from textual.app import App
+    from textual.dom import DOMNode
+
+
+class StyleAction(ABC):
+    """What a style's handler meta carries: an object that runs on the widget that drew it.
+
+    A widget that owns the operation puts the operation itself in the meta; only the string
+    form below goes back through the app's action names.
+    """
+
+    @abstractmethod
+    async def run(self, app: App, namespace: DOMNode) -> None: ...
+
+
+@dataclass(frozen=True)
+class ParsedAction(StyleAction):
+    """An action written as a name, as console markup and older widgets still write it."""
+
+    parsed: ActionParseResult
+
+    async def run(self, app: App, namespace: DOMNode) -> None:
+        await app.run_action(self.parsed, namespace)
 
 
 class SkipAction(Exception):

@@ -4,6 +4,7 @@ from __future__ import annotations
 from abc import abstractmethod
 from typing import ClassVar
 
+from textual.actions import SkipAction
 from textual.binding import Binding, CommandBinding
 from textual.document._editing import EditingMode
 from textual.dom import DOMNode
@@ -130,22 +131,84 @@ class Last(LastNavigation, ListCommand):
     keys = ("end",)
 
 
-class PageUp(ListCommand):
+class ScrollCommand(NavigationCommand):
+    """A key a scrolling view answers by moving its viewport."""
+
+
+class ScrollUp(ScrollCommand):
+    keys = ("up",)
+
+    def apply(self, node: ScrollsView) -> object:
+        return node.action_scroll_up()
+
+
+class ScrollDown(ScrollCommand):
+    keys = ("down",)
+
+    def apply(self, node: ScrollsView) -> object:
+        return node.action_scroll_down()
+
+
+class ScrollLeft(ScrollCommand):
+    keys = ("left",)
+
+    def apply(self, node: ScrollsView) -> object:
+        return node.action_scroll_left()
+
+
+class ScrollRight(ScrollCommand):
+    keys = ("right",)
+
+    def apply(self, node: ScrollsView) -> object:
+        return node.action_scroll_right()
+
+
+class ScrollHome(ScrollCommand):
+    keys = ("home",)
+
+    def apply(self, node: ScrollsView) -> object:
+        return node.action_scroll_home()
+
+
+class ScrollEnd(ScrollCommand):
+    keys = ("end",)
+
+    def apply(self, node: ScrollsView) -> object:
+        return node.action_scroll_end()
+
+
+class PageUp(ListCommand, ScrollCommand):
+    """A list's page and a view's page are one key and one operation."""
+
     keys = ("pageup",)
 
     def apply(self, node):
         return node.action_page_up()
 
 
-class PageDown(ListCommand):
+class PageDown(ListCommand, ScrollCommand):
     keys = ("pagedown",)
 
     def apply(self, node):
         return node.action_page_down()
 
 
-class Navigation(DOMNode):
-    """Compose navigation families with the control's other key capabilities."""
+class PageLeft(ScrollCommand):
+    keys = ("ctrl+pageup",)
+
+    def apply(self, node: ScrollsView) -> object:
+        return node.action_page_left()
+
+
+class PageRight(ScrollCommand):
+    keys = ("ctrl+pagedown",)
+
+    def apply(self, node: ScrollsView) -> object:
+        return node.action_page_right()
+
+
+class Navigable(DOMNode):
+    """A node that answers navigation commands: each command's operation runs on it."""
 
     @property
     def accepts_navigation(self) -> bool:
@@ -153,6 +216,66 @@ class Navigation(DOMNode):
 
     def apply_navigation(self, command: NavigationCommand) -> object:
         return command.apply(self)
+
+
+class Navigation(Navigable):
+    """Compose navigation families with the control's other key capabilities."""
+
+
+class ScrollsView(Navigable):
+    """Every widget's viewport answers the scroll commands; a scrolling container declares
+    their keys (ScrollableContainer's key_families), and a subclass overrides an operation,
+    never a key name."""
+
+    def action_scroll_home(self) -> None:
+        if not self._allow_scroll:
+            raise SkipAction()
+        self.scroll_home(x_axis=self.scroll_y == 0)
+
+    def action_scroll_end(self) -> None:
+        if not self._allow_scroll:
+            raise SkipAction()
+        self.scroll_end(x_axis=self.scroll_y == self.is_vertical_scroll_end)
+
+    def action_scroll_left(self) -> None:
+        if not self.allow_horizontal_scroll:
+            raise SkipAction()
+        self.scroll_left()
+
+    def action_scroll_right(self) -> None:
+        if not self.allow_horizontal_scroll:
+            raise SkipAction()
+        self.scroll_right()
+
+    def action_scroll_up(self) -> None:
+        if not self.allow_vertical_scroll:
+            raise SkipAction()
+        self.scroll_up()
+
+    def action_scroll_down(self) -> None:
+        if not self.allow_vertical_scroll:
+            raise SkipAction()
+        self.scroll_down()
+
+    def action_page_down(self) -> None:
+        if not self.allow_vertical_scroll:
+            raise SkipAction()
+        self.scroll_page_down()
+
+    def action_page_up(self) -> None:
+        if not self.allow_vertical_scroll:
+            raise SkipAction()
+        self.scroll_page_up()
+
+    def action_page_left(self) -> None:
+        if not self.allow_horizontal_scroll:
+            raise SkipAction()
+        self.scroll_page_left()
+
+    def action_page_right(self) -> None:
+        if not self.allow_horizontal_scroll:
+            raise SkipAction()
+        self.scroll_page_right()
 
 
 class MovesHorizontalCursor(Navigation, key_families=(HorizontalCursorCommand,)):
