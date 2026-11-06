@@ -1528,6 +1528,17 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         """
         return ()
 
+    async def _update_now(self) -> None:
+        """Run the update the timer would, and the rest of a layout it splits into steps.
+
+        The update pauses the timer. Work requested while it ran is only seen by the
+        screen's idle check, which resumes the timer for it, so the screen is prompted.
+        """
+        self._on_timer_update()
+        if (remaining := self._stepped_layout_task) is not None:
+            await remaining
+        self.check_idle()
+
     def _refresh_layout(self, size: Size | None = None, scroll: bool = False) -> None:
         """Refresh the layout (can change size and positions of widgets)."""
         self._stop_stepped_layout()

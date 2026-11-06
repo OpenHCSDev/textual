@@ -462,19 +462,18 @@ class Pilot(Generic[ReturnType]):
         await self._app._settle()
         if delay is not None:
             await asyncio.sleep(delay)
-        self.app.screen._on_timer_update()
+            await self._app._settle()
 
     async def wait_for_animation(self) -> None:
         """Wait for any current animation to complete."""
         await self._app.animator.wait_for_idle()
-        self.app.screen._on_timer_update()
+        await self._app._settle()
 
     async def wait_for_scheduled_animations(self) -> None:
         """Wait for any current and scheduled animations to complete."""
         await self._app._settle()
         await self._app.animator.wait_until_complete()
         await self._app._settle()
-        self.app.screen._on_timer_update()
 
     async def exit(self, result: ReturnType) -> None:
         """Exit the app with the given result.

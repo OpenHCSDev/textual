@@ -2143,18 +2143,23 @@ class App(Generic[ReturnType], DOMNode):
         key_tokens = modifiers + [key]
         return "+".join(key_tokens)
 
+    SETTLE_UPDATES: ClassVar[int] = 2
+    """Screen updates one settle runs. A layout's own consequences (the Resize it sends
+    re-measuring content) land in the second; a widget that asks for a layout on every
+    layout never stops asking, so the settle stops there."""
+
     async def _settle(self, timeout: float = 30.0) -> bool:
         """Handle what is posted to the app and its screen, and whatever that handling posts,
         until no pump there owes work.
 
         Two kinds of work are owed. Messages: each round waits behind the work every owing
-        pump has queued, and work it posts makes its target owe again. The frame those
+        pump has queued, and work it posts makes its target owe again. The update those
         messages asked for: layout and painting run on the screen's update timer, not in a
-        queue, so once the queues drain the settle waits for that frame, then looks at the
-        queues again. A key's whole cascade (the app forwarding it, the focused widget
-        handling it, the layout and frame it asks for) is done when a frame leaves nothing
-        owed. A running animation is not owed: it may run for a minute, and callers that
-        need it finished ask the animator (Pilot.wait_for_animation).
+        queue, so once the queues drain the settle runs that update itself, then looks at
+        the queues again. A key's whole cascade (the app forwarding it, the focused widget
+        handling it, the layout and paint it asks for) is done when an update leaves
+        nothing owed. A running animation is not owed: it may run for a minute, and callers
+        that need it finished ask the animator (Pilot.wait_for_animation).
 
         Args:
             timeout: Seconds one round may take.
@@ -2165,8 +2170,11 @@ class App(Generic[ReturnType], DOMNode):
         Raises:
             WaitForScreenTimeout: If one round did not finish within the timeout.
         """
-        framed = False
+        updates = 0
         while True:
+            # Input a driver delivered is posted from a loop callback (call_soon_threadsafe):
+            # one turn of the loop puts everything already handed to it on its queues.
+            await asyncio.sleep(0)
             try:
                 screen = self.screen
             except Exception:
@@ -2178,12 +2186,15 @@ class App(Generic[ReturnType], DOMNode):
             if self._exception_event.is_set() or self._exit:
                 return False
             if owed:
-                framed = False
-            elif framed:
+                continue
+            if self._resize_event is not None:
+                # A terminal resize waits on a debounce timer; deliver it to the screens.
+                self._check_resize()
+                continue
+            if updates == self.SETTLE_UPDATES:
                 return True
-            else:
-                await self._wait_behind([screen.call_after_refresh], timeout)
-                framed = True
+            await screen._update_now()
+            updates += 1
 
     async def _wait_behind(
         self, schedulers: list[Callable[[Callable[[], object]], bool]], timeout: float
@@ -2232,6 +2243,10 @@ class App(Generic[ReturnType], DOMNode):
         import unicodedata
 
         app = self
+        # A typed key arrives after the app handled what it was given before it (a screen
+        # being pushed, a widget mounting): the first key lands on that settled app.
+        if not await app._settle():
+            return
         for key in keys:
             if key.startswith("wait:"):
                 _, wait_ms = key.split(":")
