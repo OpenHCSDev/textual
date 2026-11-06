@@ -2153,7 +2153,8 @@ class App(Generic[ReturnType], DOMNode):
         queue, so once the queues drain the settle waits for that frame, then looks at the
         queues again. A key's whole cascade (the app forwarding it, the focused widget
         handling it, the layout and frame it asks for) is done when a frame leaves nothing
-        owed.
+        owed. A running animation is not owed: it may run for a minute, and callers that
+        need it finished ask the animator (Pilot.wait_for_animation).
 
         Args:
             timeout: Seconds one round may take.
