@@ -91,7 +91,10 @@ async def test_disabled_editor_batches_offscreen_focus_order():
         assert len(compositor.arrangements) == 1
         _, visible, retained, _ = compositor.arrangements[0]
         assert visible and compositor._full_map is full_map
-        assert all(screen.query_one(f"#button-{index}") in retained for index in range(40))
+        # Only the paths the focus order lacks are acquired: the buttons not
+        # already placed in the published viewport.
+        buttons = [screen.query_one(f"#button-{index}") for index in range(40)]
+        assert set(retained) == {button for button in buttons if button not in committed}
         assert screen.query_one("#source-39") not in retained
         # Complete geometry gives the same ordering, rather than treating the
         # viewport as the full focus scope or manufacturing missing positions.
