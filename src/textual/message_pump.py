@@ -111,6 +111,7 @@ class _MessagePumpMeta(AbstractHooksMeta):
         cls._dispatch_declarations = tuple(
             NamedScope.from_class(owner) for owner in cls.__mro__
         )
+        cls._compiled_dispatch = {}
 
 
 class ParentLinks:
@@ -152,6 +153,7 @@ class MessagePump(ParentLinks, metaclass=_MessagePumpMeta):
     """Base class which supplies a message pump."""
 
     _dispatch_declarations: ClassVar[tuple[DispatchScope, ...]]
+    _compiled_dispatch: ClassVar[dict[type[Message], tuple[DispatchScope, ...]]]
 
     def __init__(self, parent: MessagePump | None = None) -> None:
         self._bound_message_scopes: dict[type[Message], tuple[DispatchScope, ...]] = {}
@@ -915,13 +917,25 @@ class MessagePump(ParentLinks, metaclass=_MessagePumpMeta):
             if self._next_callbacks:
                 await self._flush_next_callbacks()
 
+    @classmethod
+    def _compiled_scopes(cls, message_type: type[Message]) -> tuple[DispatchScope, ...]:
+        """The C3 scopes that serve ``message_type`` on this class, resolved once per class."""
+        try:
+            return cls._compiled_dispatch[message_type]
+        except KeyError:
+            compiled = cls._compiled_dispatch[message_type] = tuple(
+                scope for declared in cls._dispatch_declarations
+                for scope in declared.compiled(message_type)
+            )
+            return compiled
+
     def _declared_message_scopes(self, message_type: type[Message]) -> tuple[DispatchScope, ...]:
         """Bind declarations once for this receiving pump and nominal message type."""
         try:
             return self._bound_message_scopes[message_type]
         except KeyError:
             scopes = tuple(
-                scope.bound_for(self, message_type) for scope in self._dispatch_declarations
+                scope.bound_for(self, message_type) for scope in self._compiled_scopes(message_type)
             )
             self._bound_message_scopes[message_type] = scopes
             return scopes
