@@ -9,11 +9,16 @@ from typing import TYPE_CHECKING, Any
 
 from typing_extensions import TypeAlias
 
+from textual import log
+
 ActionParseResult: TypeAlias = "tuple[str, str, tuple[object, ...]]"
 """An action is its name and the arbitrary tuple of its arguments."""
 
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from textual._activation import Activation
     from textual.app import App
     from textual.dom import DOMNode
 
@@ -26,7 +31,29 @@ class StyleAction(ABC):
     """
 
     @abstractmethod
-    async def run(self, app: App, namespace: DOMNode) -> None: ...
+    async def run(self, app: App, namespace: DOMNode) -> bool:
+        """Run the action; whether there was one to run."""
+
+    async def secondary(self, app: App, namespace: DOMNode, event: object) -> bool:
+        """A secondary (right) click on the drawn text; most actions have no secondary use."""
+        return False
+
+    def activations(self, target: Callable[[], Activation]) -> tuple[Activation, ...]:
+        """The click target a cell carrying this action offers."""
+        return (target(),)
+
+
+@dataclass(frozen=True)
+class NoStyleAction(StyleAction):
+    """Meta that names no action: the cell offers no click and a click on it does nothing."""
+
+    async def run(self, app: App, namespace: DOMNode) -> bool:
+        if app.debug:
+            log.warning("Can't parse action from style meta; check your console markup syntax")
+        return False
+
+    def activations(self, target: Callable[[], Activation]) -> tuple[Activation, ...]:
+        return ()
 
 
 @dataclass(frozen=True)
@@ -35,8 +62,9 @@ class ParsedAction(StyleAction):
 
     parsed: ActionParseResult
 
-    async def run(self, app: App, namespace: DOMNode) -> None:
+    async def run(self, app: App, namespace: DOMNode) -> bool:
         await app.run_action(self.parsed, namespace)
+        return True
 
 
 class SkipAction(Exception):

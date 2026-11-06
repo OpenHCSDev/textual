@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, NamedTuple
-from textual import actions, log
+from textual import actions
 
 
 class NoHandler(Exception):
@@ -12,13 +12,13 @@ class HandlerArguments(NamedTuple):
     """Information for event handler."""
 
     modifiers: set[str]
-    action: actions.StyleAction | None
+    action: actions.StyleAction
 
     @classmethod
     def decode(cls, modifiers: set[str], value: Any) -> HandlerArguments:
         """The one boundary where a style's handler meta becomes an action."""
         if isinstance(value, actions.StyleAction):
-            action: actions.StyleAction | None = value
+            action: actions.StyleAction = value
         elif isinstance(value, str):
             action = actions.ParsedAction(actions.parse(value))
         elif isinstance(value, tuple) and len(value) == 2:
@@ -26,17 +26,12 @@ class HandlerArguments(NamedTuple):
             namespace, parsed_name, _ = actions.parse(name)
             action = actions.ParsedAction((namespace, parsed_name, parameters))
         else:
-            action = None
+            action = actions.NoStyleAction()
         return cls(modifiers, action)
 
     async def run(self, app, default_namespace) -> bool:
         """Consumers use the action decoded once at the style boundary."""
-        if self.action is None:
-            if app.debug:
-                log.warning("Can't parse action from style meta; check your console markup syntax")
-            return False
-        await self.action.run(app, default_namespace)
-        return True
+        return await self.action.run(app, default_namespace)
 
 
 def extract_handler_actions(event_name: str, meta: dict[str, Any]) -> HandlerArguments:

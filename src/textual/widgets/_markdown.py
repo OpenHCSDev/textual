@@ -221,6 +221,10 @@ class OpensMarkdownLinks(DOMNode):
     def open_link(self, href: str) -> None:
         self.post_message(Markdown.LinkClicked(self.query_ancestor(Markdown), href))
 
+    async def link_menu(self, href: str, event: object) -> bool:
+        """A secondary click on a link; plain Markdown offers no menu."""
+        return False
+
 
 @dataclass(frozen=True)
 class MarkdownLink(StyleAction):
@@ -228,8 +232,12 @@ class MarkdownLink(StyleAction):
 
     href: str
 
-    async def run(self, app: App, namespace: DOMNode) -> None:
+    async def run(self, app: App, namespace: DOMNode) -> bool:
         cast(OpensMarkdownLinks, namespace).open_link(self.href)
+        return True
+
+    async def secondary(self, app: App, namespace: DOMNode, event: object) -> bool:
+        return await cast(OpensMarkdownLinks, namespace).link_menu(self.href, event)
 
 
 class MarkdownBlock(OpensMarkdownLinks, Static):
