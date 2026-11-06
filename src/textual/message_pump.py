@@ -31,6 +31,7 @@ from typing import (
 from weakref import WeakSet, ref
 
 from textual import Logger, events, log, messages
+from textual.abstract_hooks import AbstractHooksMeta
 from textual._callback import invoke
 from textual._compat import cached_property
 from textual._context import NoActiveAppError, active_app, active_message_pump
@@ -76,7 +77,7 @@ class MessagePumpClosed(Exception):
 _MessagePumpMetaSub = TypeVar("_MessagePumpMetaSub", bound="_MessagePumpMeta")
 
 
-class _MessagePumpMeta(type):
+class _MessagePumpMeta(AbstractHooksMeta):
     """Build message pump classes and their declared dispatch routes."""
 
     def __new__(
