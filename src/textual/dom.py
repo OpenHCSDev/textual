@@ -574,7 +574,7 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump):
     @classmethod
     def method_bindings(cls, mode: type[EditingMode]) -> tuple[Binding, ...]:
         """Keys each class in the MRO declares on its own methods."""
-        return tuple(projected for base in cls.__mro__ if issubclass(base, DOMNode)
+        return tuple(projected for base in cls._dom_bases()
                      for binding in base._declared_key_bindings
                      for projected in binding.for_mode(mode))
 
@@ -593,15 +593,20 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump):
         return keys
 
     @classmethod
+    def _dom_bases(cls) -> tuple[type[DOMNode], ...]:
+        """The MRO's DOMNode classes, most derived first: object and plain mixins never
+        pass DOMNode.__init_subclass__, so they own no bindings."""
+        return tuple(base for base in cls.__mro__ if issubclass(base, DOMNode))
+
+    @classmethod
     def _binding_bases(cls) -> list[type[DOMNode]]:
         """The DOMNode bases whose keys this class inherits, oldest first: the walk restarts
         at any base that does not inherit its ancestors' bindings."""
         bases: list[type[DOMNode]] = []
-        for base in reversed(cls.__mro__):
-            if issubclass(base, DOMNode):
-                if not base._inherit_bindings:
-                    bases.clear()
-                bases.append(base)
+        for base in reversed(cls._dom_bases()):
+            if not base._inherit_bindings:
+                bases.clear()
+            bases.append(base)
         return bases
 
     @classmethod
