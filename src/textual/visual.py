@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from dataclasses import dataclass
 from itertools import islice
 from typing import TYPE_CHECKING, Callable, Protocol
@@ -137,6 +138,14 @@ class Visual(ABC):
         if isinstance(visual, (Text, Content)):
             return selection.extract(str(visual)), "\n"
         return None
+
+    def draws_like(self, other: Visual) -> bool:
+        """Whether both draw the same. A visual that cannot tell answers no, so it redraws."""
+        return False
+
+    def draws_text(self, plain: str, spans: Sequence[object]) -> bool:
+        """Whether this draws exactly this text with these styled spans; only content can."""
+        return False
 
     @abstractmethod
     def render_strips(
