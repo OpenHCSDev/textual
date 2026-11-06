@@ -2,6 +2,7 @@ from textual.app import App, ComposeResult
 from textual.scroll_view import ScrollView
 from textual.strip import Strip
 from rich.segment import Segment
+from textual._paint_state import PaintState
 
 
 class LineWidget(ScrollView):
@@ -18,7 +19,7 @@ class LineWidget(ScrollView):
     }
     """
 
-    def render_line(self, y: int) -> Strip:
+    def render_line(self, y: int, paint: PaintState) -> Strip:
         style = self.get_component_rich_style("faded")
         return Strip([Segment("W" * self.size.width, style)])
 

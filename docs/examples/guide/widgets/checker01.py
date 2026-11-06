@@ -4,12 +4,13 @@ from rich.style import Style
 from textual.app import App, ComposeResult
 from textual.strip import Strip
 from textual.widget import Widget
+from textual._paint_state import PaintState
 
 
 class CheckerBoard(Widget):
     """Render an 8x8 checkerboard."""
 
-    def render_line(self, y: int) -> Strip:
+    def render_line(self, y: int, paint: PaintState) -> Strip:
         """Render a line of the widget. y is relative to the top of the widget."""
 
         row_index = y // 4  # A checkerboard square consists of 4 rows

@@ -6,6 +6,7 @@ from textual.strip import Strip
 from textual.scroll_view import ScrollView
 
 from rich.segment import Segment
+from textual._paint_state import PaintState
 
 
 class CheckerBoard(ScrollView):
@@ -29,7 +30,7 @@ class CheckerBoard(ScrollView):
         # Each square is 4 rows and 8 columns
         self.virtual_size = Size(board_size * 8, board_size * 4)
 
-    def render_line(self, y: int) -> Strip:
+    def render_line(self, y: int, paint: PaintState) -> Strip:
         """Render a line of the widget. y is relative to the top of the widget."""
 
         scroll_x, scroll_y = self.scroll_offset  # The current scroll position
