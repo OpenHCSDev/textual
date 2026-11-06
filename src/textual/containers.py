@@ -7,6 +7,7 @@ With the exception of `Center` and `Middle` containers will fill all of the spac
 
 from __future__ import annotations
 
+from textual.layouts.vertical import VerticalLayout
 from textual.layout import Layout
 from textual.navigation import ScrollCommand
 from textual.layouts.grid import GridLayout
@@ -17,6 +18,8 @@ from textual.widget import Widget
 
 class Container(Widget):
     """Simple container widget, with vertical layout."""
+
+    DEFAULT_LAYOUT = VerticalLayout
 
     DEFAULT_CSS = """
     Container {
@@ -29,6 +32,8 @@ class Container(Widget):
 
 class ScrollableContainer(Widget, can_focus=True, key_families=(ScrollCommand,)):
     """A scrollable container with vertical layout, and auto scrollbars on both axis."""
+
+    DEFAULT_LAYOUT = VerticalLayout
 
     # We don't typically want to maximize scrollable containers,
     # since the user can easily navigate the contents
@@ -90,6 +95,8 @@ class ScrollableContainer(Widget, can_focus=True, key_families=(ScrollCommand,))
 class Vertical(Widget):
     """An expanding container with vertical layout and no scrollbars."""
 
+    DEFAULT_LAYOUT = VerticalLayout
+
     DEFAULT_CSS = """
     Vertical {
         width: 1fr;
@@ -101,6 +108,8 @@ class Vertical(Widget):
 
 class VerticalGroup(Widget):
     """A non-expanding container with vertical layout and no scrollbars."""
+
+    DEFAULT_LAYOUT = VerticalLayout
 
     DEFAULT_CSS = """
     VerticalGroup {
@@ -166,6 +175,8 @@ class HorizontalScroll(ScrollableContainer):
 class Center(Widget):
     """A container which aligns children on the X axis."""
 
+    DEFAULT_LAYOUT = VerticalLayout
+
     DEFAULT_CSS = """
     Center {
         align-horizontal: center;
@@ -177,6 +188,8 @@ class Center(Widget):
 
 class Right(Widget):
     """A container which aligns children on the X axis."""
+
+    DEFAULT_LAYOUT = VerticalLayout
 
     DEFAULT_CSS = """
     Right {
@@ -190,6 +203,8 @@ class Right(Widget):
 class Middle(Widget):
     """A container which aligns children on the Y axis."""
 
+    DEFAULT_LAYOUT = VerticalLayout
+
     DEFAULT_CSS = """
     Middle {
         align-vertical: middle;
@@ -201,6 +216,8 @@ class Middle(Widget):
 
 class CenterMiddle(Widget):
     """A container which aligns its children on both axis."""
+
+    DEFAULT_LAYOUT = VerticalLayout
 
     DEFAULT_CSS = """
     CenterMiddle {
