@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Callable
 
 from textual import events
 from textual._callback import invoke
+from functools import partial
+
 from textual._event_broker import HandlerArguments, NoHandler, extract_handler_actions
 from textual.geometry import Region
 from textual.errors import NoWidget
@@ -40,8 +42,8 @@ class Activation:
                             for owner in widget.ancestors_with_self
                             for target in owner.activation_targets(exposed, meta, button)), 1)
                     else:
-                        if handler.action is not None:
-                            yield StyleTarget(widget, exposed, handler, button=button)
+                        yield from handler.action.activations(
+                            partial(StyleTarget, widget, exposed, handler, button=button))
                 x += width
 
     def available(self) -> bool:
