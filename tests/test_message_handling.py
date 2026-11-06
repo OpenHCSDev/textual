@@ -47,4 +47,6 @@ async def test_message_inheritance_namespace():
         app.query_one(Left).trigger()
         app.query_one(Right).trigger()
 
-    assert handlers_called == ["left", "right"]
+    # Each subclass's Fired reaches its own namespace's handler once. Left and Right are
+    # separate pumps, so the order they reach the app in is scheduling, not the requirement.
+    assert sorted(handlers_called) == ["left", "right"]
