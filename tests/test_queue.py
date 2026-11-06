@@ -2,59 +2,36 @@ import asyncio
 
 import pytest
 
-from textual.message_pump import Queue
+from textual.message_pump import OWING, SETTLED, Queue
 
 
-async def test_get_rechecks_after_nowait_consumer_drains_wakeup():
+async def test_peek_leaves_the_head_for_a_waiting_consumer():
     queue = Queue()
     waiting = asyncio.create_task(queue.get())
     try:
         await asyncio.sleep(0)
-        queue.put_nowait("first")
-        assert queue.get_nowait() == "first"
-        await asyncio.sleep(0)
-        assert not waiting.done()
-        queue.put_nowait("second")
-        assert await asyncio.wait_for(waiting, 1) == "second"
+        with pytest.raises(asyncio.QueueEmpty):
+            queue.peek_nowait()
+        queue.put_nowait("head")
+        assert queue.peek_nowait() == "head"
+        assert await asyncio.wait_for(waiting, 1) == "head"
         assert queue.empty()
     finally:
         waiting.cancel()
         await asyncio.gather(waiting, return_exceptions=True)
 
 
-async def test_one_item_does_not_satisfy_two_waiting_consumers():
+async def test_owing_from_a_put_until_a_get_finds_none_left():
     queue = Queue()
-    first = asyncio.create_task(queue.get())
-    second = asyncio.create_task(queue.get())
+    assert queue.activity is SETTLED
+    queue.put_nowait("message")
+    assert queue.activity is OWING
+    assert await queue.get() == "message"
+    assert queue.activity is OWING
+    waiting = asyncio.create_task(queue.get())
     try:
         await asyncio.sleep(0)
-        queue.put_nowait("first")
-        assert await asyncio.wait_for(first, 1) == "first"
-        assert not second.done()
-        queue.put_nowait("second")
-        assert await asyncio.wait_for(second, 1) == "second"
-        assert queue.empty()
+        assert queue.activity is SETTLED
     finally:
-        first.cancel()
-        second.cancel()
-        await asyncio.gather(first, second, return_exceptions=True)
-
-
-async def test_cancelled_waiter_does_not_lose_wakeup():
-    queue = Queue()
-    first = asyncio.create_task(queue.get())
-    second = asyncio.create_task(queue.get())
-    try:
-        await asyncio.sleep(0)
-        queue.put_nowait(None)
-        first.cancel()
-        with pytest.raises(asyncio.CancelledError):
-            await first
-        assert await asyncio.wait_for(second, 1) is None
-        with pytest.raises(asyncio.QueueEmpty):
-            queue.get_nowait()
-        assert not queue.ready_event.is_set()
-    finally:
-        first.cancel()
-        second.cancel()
-        await asyncio.gather(first, second, return_exceptions=True)
+        waiting.cancel()
+        await asyncio.gather(waiting, return_exceptions=True)

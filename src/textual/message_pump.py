@@ -14,7 +14,6 @@ import asyncio
 import threading
 from abc import ABC, abstractmethod
 from asyncio import CancelledError, QueueEmpty, Task, create_task
-from collections import deque
 from contextlib import contextmanager
 from functools import partial
 from time import perf_counter
@@ -25,7 +24,6 @@ from typing import (
     Callable,
     ClassVar,
     Generator,
-    Generic,
     Iterable,
     Type,
     TypeVar,
@@ -105,55 +103,26 @@ SETTLED = Settled()
 QueueType = TypeVar("QueueType")
 
 
-class Queue(Generic[QueueType]):
-    """A cut-down asyncio.Queue: just enough to run a message pump, and whether it owes work."""
+class Queue(asyncio.Queue[QueueType]):
+    """asyncio's queue, plus a peek at its head and whether the pump owes work."""
 
-    def __init__(self) -> None:
-        self.values: deque[QueueType] = deque()
-        self.ready_event = asyncio.Event()
-        self.activity: QueueActivity = SETTLED
+    activity: QueueActivity = SETTLED
 
-    def put_nowait(self, value: QueueType) -> None:
-        self.values.append(value)
+    def _put(self, item: QueueType) -> None:
+        super()._put(item)
         self.activity = OWING
-        self.ready_event.set()
-
-    def qsize(self) -> int:
-        return len(self.values)
-
-    def empty(self) -> bool:
-        return not self.values
-
-    def task_done(self) -> None:
-        pass
 
     async def get(self) -> QueueType:
-        # An Event wakes every waiter; a synchronous consumer may also drain
-        # the item before an awakened task resumes. Notification is not a
-        # reservation, so recheck the queue after each wait.
-        while not self.values:
+        if self.empty():
             # Asking with none left: every value put before has been handled.
             self.activity = SETTLED
-            self.ready_event.clear()
-            await self.ready_event.wait()
-        value = self.values.popleft()
-        if not self.values:
-            self.ready_event.clear()
-        return value
+        return await super().get()
 
     def peek_nowait(self) -> QueueType:
         """Read the next value without taking it from a waiting consumer."""
-        if not self.values:
+        if self.empty():
             raise QueueEmpty()
-        return self.values[0]
-
-    def get_nowait(self) -> QueueType:
-        if not self.values:
-            raise QueueEmpty()
-        value = self.values.popleft()
-        if not self.values:
-            self.ready_event.clear()
-        return value
+        return self._queue[0]
 
 
 _MessagePumpMetaSub = TypeVar("_MessagePumpMetaSub", bound="_MessagePumpMeta")
