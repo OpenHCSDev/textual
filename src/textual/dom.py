@@ -574,8 +574,8 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump):
     @classmethod
     def method_bindings(cls, mode: type[EditingMode]) -> tuple[Binding, ...]:
         """Keys each class in the MRO declares on its own methods."""
-        return tuple(projected for base in cls.__mro__
-                     for binding in base.__dict__.get("_declared_key_bindings", ())
+        return tuple(projected for base in cls.__mro__ if issubclass(base, DOMNode)
+                     for binding in base._declared_key_bindings
                      for projected in binding.for_mode(mode))
 
     @classmethod
@@ -589,7 +589,7 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump):
         keys: dict[str, list[Binding]] = {}
         for base in cls._binding_bases():
             keys.update(base._own_bindings.project(
-                mode, base.__dict__.get("_declared_key_bindings", ())).key_to_bindings)
+                mode, base._declared_key_bindings).key_to_bindings)
         return keys
 
     @classmethod
@@ -1025,6 +1025,8 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump):
         for base in bases:
             css_type_names.add(base.__name__)
         cls._own_bindings = BindingsMap(cls.__dict__.get("BINDINGS", []))
+        # MethodBinding.__set_name__ has already run for this body; a class without one owns none.
+        cls._declared_key_bindings = cls.__dict__.get("_declared_key_bindings", ())
         cls._merged_bindings = cls._merge_bindings()
         cls._css_type_names = frozenset(css_type_names)
         compute_methods = frozenset(
