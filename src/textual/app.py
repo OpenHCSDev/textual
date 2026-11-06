@@ -88,7 +88,6 @@ from textual._path import (
     _make_path_object_relative,
 )
 from textual._types import AnimationLevel
-from textual._wait import wait_for_idle
 from textual.actions import ActionParseResult, SkipAction
 from textual.ansi_palette import AnsiPalette, MappedAnsiPalette
 from textual.await_complete import AwaitComplete
@@ -241,6 +240,13 @@ class SuspendNotSupported(Exception):
 
 class InvalidThemeError(Exception):
     """Raised when an invalid theme is set."""
+
+
+class WaitForScreenTimeout(Exception):
+    """Exception raised if messages aren't being processed quickly enough.
+
+    If this occurs, the most likely explanation is some kind of deadlock in the app code.
+    """
 
 
 ReturnType = TypeVar("ReturnType")
@@ -2137,13 +2143,94 @@ class App(Generic[ReturnType], DOMNode):
         key_tokens = modifiers + [key]
         return "+".join(key_tokens)
 
+    async def _settle(self, timeout: float = 30.0) -> bool:
+        """Handle what is posted to the app and its screen, and whatever that handling posts,
+        until no pump there owes work.
+
+        Two kinds of work are owed. Messages: each round waits behind the work every owing
+        pump has queued, and work it posts makes its target owe again. The frame those
+        messages asked for: layout and painting run on the screen's update timer, not in a
+        queue, so once the queues drain the settle waits for that frame, then looks at the
+        queues again. A key's whole cascade (the app forwarding it, the focused widget
+        handling it, the layout and frame it asks for) is done when a frame leaves nothing
+        owed.
+
+        Args:
+            timeout: Seconds one round may take.
+
+        Returns:
+            `True` once nothing is owed; `False` if an exception stopped the app first.
+
+        Raises:
+            WaitForScreenTimeout: If one round did not finish within the timeout.
+        """
+        framed = False
+        while True:
+            try:
+                screen = self.screen
+            except Exception:
+                return False
+            pumps = (self, *screen.walk_children(with_self=True))
+            owed = await self._wait_behind(
+                [pump.call_after_pending for pump in pumps], timeout
+            )
+            if self._exception_event.is_set() or self._exit:
+                return False
+            if owed:
+                framed = False
+            elif framed:
+                return True
+            else:
+                await self._wait_behind([screen.call_after_refresh], timeout)
+                framed = True
+
+    async def _wait_behind(
+        self, schedulers: list[Callable[[Callable[[], object]], bool]], timeout: float
+    ) -> int:
+        """Schedule one callback with each scheduler and wait until every scheduled one ran,
+        or an exception stopped the app.
+
+        Returns:
+            How many callbacks were scheduled; a scheduler answering False owed no work.
+
+        Raises:
+            WaitForScreenTimeout: If they did not all run within the timeout.
+        """
+        count = 0
+        handled_all = asyncio.Event()
+
+        def handled() -> None:
+            nonlocal count
+            count -= 1
+            if count == 0:
+                handled_all.set()
+
+        scheduled = sum(schedule(handled) for schedule in schedulers)
+        count += scheduled
+        if not scheduled:
+            return 0
+        waits = [
+            create_task(handled_all.wait()),
+            create_task(self._exception_event.wait()),
+        ]
+        # The app's own loop ending (an exit, a crash) means nothing owed will ever run.
+        loop_ended = [] if self._task is None else [self._task]
+        done, _ = await asyncio.wait(
+            [*waits, *loop_ended], timeout=timeout, return_when=asyncio.FIRST_COMPLETED
+        )
+        for task in waits:
+            task.cancel()
+        if not done:
+            raise WaitForScreenTimeout(
+                "Timed out while waiting for widgets to process pending messages."
+            )
+        return scheduled
+
     async def _press_keys(self, keys: Iterable[str]) -> None:
         """A task to send key events."""
         import unicodedata
 
         app = self
-        driver = app._driver
-        assert driver is not None
         for key in keys:
             if key.startswith("wait:"):
                 _, wait_ms = key.split(":")
@@ -2160,10 +2247,14 @@ class App(Generic[ReturnType], DOMNode):
                     char = key if len(key) == 1 else None
                 key_event = events.Key(key, char)
                 key_event.set_sender(app)
-                driver.send_message(key_event)
-                await wait_for_idle(0)
+                # This runs on the app's loop: post now, so the settle below sees it owed.
+                # The driver's thread-safe ingress would land it one loop turn later.
+                app.post_message(key_event)
+                if not await app._settle():
+                    # The key stopped the app: the rest have nothing to land on.
+                    return
                 await app._animator.wait_until_complete()
-                await wait_for_idle(0)
+                await app._settle()
 
     def _flush(self, stderr: bool = False) -> None:
         """Called when stdout or stderr is flushed.
@@ -2303,7 +2394,7 @@ class App(Generic[ReturnType], DOMNode):
             # Context manager returns pilot object to manipulate the app
             try:
                 pilot = Pilot(app)
-                await pilot._wait_for_screen()
+                await app._settle()
                 yield pilot
             finally:
                 await asyncio.sleep(0)
