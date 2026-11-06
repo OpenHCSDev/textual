@@ -160,7 +160,7 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump):
     @property
     def binding_mode(self) -> type[EditingMode]:
         """The canonical editing mode used to project this node's bindings."""
-        return self.key_mode().binding_mode
+        return self.key_mode.binding_mode()
 
     def _invalidate_subtree_geometry(self) -> None:
         for node in self.walk_ancestors(with_self=True):

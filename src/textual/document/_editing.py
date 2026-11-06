@@ -59,8 +59,10 @@ class EditingMode:
         binding.call(editor)
         return True
 
-    @property
-    def binding_mode(self) -> type[EditingMode]:
+    @classmethod
+    def binding_mode(cls) -> type[EditingMode]:
+        """The editing class this mode's bindings are declared under: a fact of the class,
+        so asking it never builds a mode."""
         return EditingMode
 
     def enter_text(self, editor: TextArea) -> None:

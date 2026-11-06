@@ -169,7 +169,7 @@ class TextArea(FocusActivation, EditableInput, ScrollView):
 
     @property
     def binding_mode(self) -> type[EditingMode]:
-        return self.editing_mode.binding_mode
+        return self.editing_mode.binding_mode()
 
     @property
     def takes_typed_text(self) -> bool:
