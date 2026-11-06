@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import asyncio
 import threading
+from abc import ABC, abstractmethod
 from asyncio import CancelledError, QueueEmpty, Task, create_task
+from collections import deque
 from contextlib import contextmanager
 from functools import partial
 from time import perf_counter
@@ -23,6 +25,7 @@ from typing import (
     Callable,
     ClassVar,
     Generator,
+    Generic,
     Iterable,
     Type,
     TypeVar,
@@ -38,7 +41,6 @@ from textual._context import NoActiveAppError, active_app, active_message_pump
 from textual._context import message_hook as message_hook_context_var
 from textual._context import prevent_message_types_stack
 from textual._on import DispatchScope, MessageHandler, NamedScope
-from textual._queue import Queue
 from textual._time import time
 from textual._types import CallbackType
 from textual.constants import SLOW_THRESHOLD
@@ -72,6 +74,86 @@ class CallbackError(Exception):
 
 class MessagePumpClosed(Exception):
     pass
+
+
+class QueueActivity(ABC):
+    """Whether a pump still owes work for the messages posted to it before now."""
+
+    @abstractmethod
+    def call_after(self, pump: MessagePump, callback: Callable[[], object]) -> bool:
+        """Schedule ``callback`` behind that work, or answer False when none is owed."""
+
+
+class Owing(QueueActivity):
+    """A message was posted since the pump last asked for one and found none."""
+
+    def call_after(self, pump: MessagePump, callback: Callable[[], object]) -> bool:
+        return pump.call_later(callback)
+
+
+class Settled(QueueActivity):
+    """The pump asked for a message with none left: everything posted before is handled,
+    the idle work after it included."""
+
+    def call_after(self, pump: MessagePump, callback: Callable[[], object]) -> bool:
+        return False
+
+
+OWING = Owing()
+SETTLED = Settled()
+
+QueueType = TypeVar("QueueType")
+
+
+class Queue(Generic[QueueType]):
+    """A cut-down asyncio.Queue: just enough to run a message pump, and whether it owes work."""
+
+    def __init__(self) -> None:
+        self.values: deque[QueueType] = deque()
+        self.ready_event = asyncio.Event()
+        self.activity: QueueActivity = SETTLED
+
+    def put_nowait(self, value: QueueType) -> None:
+        self.values.append(value)
+        self.activity = OWING
+        self.ready_event.set()
+
+    def qsize(self) -> int:
+        return len(self.values)
+
+    def empty(self) -> bool:
+        return not self.values
+
+    def task_done(self) -> None:
+        pass
+
+    async def get(self) -> QueueType:
+        # An Event wakes every waiter; a synchronous consumer may also drain
+        # the item before an awakened task resumes. Notification is not a
+        # reservation, so recheck the queue after each wait.
+        while not self.values:
+            # Asking with none left: every value put before has been handled.
+            self.activity = SETTLED
+            self.ready_event.clear()
+            await self.ready_event.wait()
+        value = self.values.popleft()
+        if not self.values:
+            self.ready_event.clear()
+        return value
+
+    def peek_nowait(self) -> QueueType:
+        """Read the next value without taking it from a waiting consumer."""
+        if not self.values:
+            raise QueueEmpty()
+        return self.values[0]
+
+    def get_nowait(self) -> QueueType:
+        if not self.values:
+            raise QueueEmpty()
+        value = self.values.popleft()
+        if not self.values:
+            self.ready_event.clear()
+        return value
 
 
 _MessagePumpMetaSub = TypeVar("_MessagePumpMetaSub", bound="_MessagePumpMeta")
@@ -594,6 +676,16 @@ class MessagePump(ParentLinks, metaclass=_MessagePumpMeta):
         """
         message = events.Callback(callback=partial(callback, *args, **kwargs))
         return self.post_message(message)
+
+    def call_after_pending(self, callback: Callable[[], object]) -> bool:
+        """Schedule a callback after the messages already posted to this pump, the one in
+        dispatch included.
+
+        Returns:
+            `True` if the callback was scheduled; `False` if this pump owes no work (or is
+                closed), so there is nothing to wait for.
+        """
+        return self._message_queue.activity.call_after(self, callback)
 
     def call_next(
         self, callback: Callback | events.Callback, *args: Any, **kwargs: Any

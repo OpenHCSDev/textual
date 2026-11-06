@@ -492,7 +492,7 @@ class Pilot(Generic[ReturnType]):
 
         # Increase the count for every successful call_later
         for child in children:
-            if child.call_later(decrement_counter):
+            if child.call_after_pending(decrement_counter):
                 count += 1
 
         if count:
