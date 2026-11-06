@@ -89,7 +89,7 @@ from textual.geometry import (
     clamp,
 )
 from textual.layout import Layout, WidgetPlacement
-from textual.layouts.vertical import VerticalLayout
+from textual.layouts.vertical import ImplicitVerticalLayout, VerticalLayout
 from textual.message import Message
 from textual.messages import CallbackType, Prune
 from textual.notifications import SeverityLevel
@@ -455,7 +455,7 @@ class Widget(ScrollsView):
     """A title to show in the bottom border (if there is one)."""
 
     # Default sort order, incremented by constructor
-    DEFAULT_LAYOUT: ClassVar[type[Layout]] = VerticalLayout
+    DEFAULT_LAYOUT: ClassVar[type[Layout]] = ImplicitVerticalLayout
 
     _sort_order: ClassVar[int] = 0
 
@@ -2467,13 +2467,13 @@ class Widget(ScrollsView):
     @property
     @height_dependency(NATIVE_CONTAINER_SELECTION)
     def is_container(self) -> bool:
-        """Is this widget a container (contains other widgets)?"""
-        return bool(self._nodes) or self.geometry.child_layout is not None
+        """Is this widget a container: it has children, or its layout declares one?"""
+        return bool(self._nodes) or self.layout.holds_children
 
     @property
     def is_scrollable(self) -> bool:
-        """Can this widget be scrolled?"""
-        return self.geometry.child_layout is not None or bool(self._nodes)
+        """Can this widget be scrolled? Containers can."""
+        return self.is_container
 
     @property
     def is_scrolling(self) -> bool:
