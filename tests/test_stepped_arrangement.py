@@ -590,9 +590,9 @@ async def test_a_repaint_between_steps_publishes_with_the_layout() -> None:
         published = []
         refresh = screen._compositor_refresh
 
-        def publish():
+        def publish(deadline=None):
             published.append(set(compositor._dirty_regions))
-            refresh()
+            yield from refresh(deadline)
 
         screen._compositor_refresh = publish
         try:

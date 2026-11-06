@@ -16,6 +16,7 @@ import hashlib
 from rich.segment import Segment
 from rich.style import Style
 
+from textual._paint_state import PaintState
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, VerticalScroll
 from textual.strip import Strip
@@ -66,7 +67,7 @@ class PageView(Widget):
     def get_content_height(self, container, viewport, width: int) -> int:
         return len(self.lines)
 
-    def render_line(self, y: int) -> Strip:
+    def render_line(self, y: int, paint: PaintState) -> Strip:
         width = self.size.width
         if y >= len(self.lines):
             return Strip.blank(width)
@@ -170,7 +171,7 @@ async def test_plain_widget_paints_its_own_lines():
             super().__init__()
             self.lines = [Strip([Segment(f"{row:<20}", Style(color="red"))], 20) for row in range(5)]
 
-        def render_line(self, y: int) -> Strip:
+        def render_line(self, y: int, paint: PaintState) -> Strip:
             return self.lines[y]
 
     class LinesApp(App):
