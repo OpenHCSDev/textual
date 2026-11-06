@@ -154,7 +154,10 @@ async def record_updates() -> list[str]:
     return app.updates
 
 
-async def test_terminal_output_is_unchanged():
+async def test_terminal_output_is_unchanged(monkeypatch):
+    # The recorded bytes are a truecolor terminal's: without COLORTERM the
+    # console downgrades colours and every byte after the first style changes.
+    monkeypatch.setenv("COLORTERM", "truecolor")
     updates = await record_updates()
     digest = hashlib.sha256("\0".join(updates).encode("utf-8")).hexdigest()
     assert (digest, len(updates)) == (EXPECTED_DIGEST, EXPECTED_UPDATES)
