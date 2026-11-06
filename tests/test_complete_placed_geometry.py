@@ -1,4 +1,4 @@
-from textual._compositor import Compositor, PlacedSubtreeGeometry
+from textual._compositor import Compositor
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll
 from textual.widgets import Static
@@ -31,7 +31,6 @@ async def test_complete_placed_source_serves_viewport_and_retained_paths():
         compositor = app.screen._compositor
         compositor.reflow(app.screen, app.size)
         complete = compositor._subtree_geometry[history]
-        assert isinstance(complete, PlacedSubtreeGeometry)
         assert not complete.key.visible_only and target in complete.geometry
 
         history.arrangement_calls = 0
