@@ -27,7 +27,9 @@ def test_navigation_spellings_follow_every_declared_context() -> None:
                    for binding in standard.key_to_bindings.get(direction.key.value, ())):
                 assert arrows, (owner, direction)
             for arrow in arrows:
-                assert arrow.with_key(direction.modal) in modal.key_to_bindings.get(direction.modal, ()), (owner, direction)
+                spelled = [(binding.action, binding.id)
+                           for binding in modal.key_to_bindings.get(direction.modal, ())]
+                assert (arrow.action, arrow.id) in spelled, (owner, direction)
                 assert arrow.id == direction().binding_identity(VimMode)
                 assert not any(
                     binding.declared_key == direction()

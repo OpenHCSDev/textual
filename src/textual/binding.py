@@ -128,9 +128,18 @@ class Binding:
     def invocations(self) -> tuple[KeyInvocation, ...]:
         return self.declared_key.invocations(self.command_invocations())
 
+    def shared_identity(self, mode: type[EditingMode]) -> str | None:
+        """The arrow preference this binding's key shares in the mode, if its key is an arrow."""
+        return next((invocation.binding_identity(mode) for invocation in self.invocations()), self.id)
+
+    def preference_identity(self, mode: type[EditingMode]) -> str | None:
+        """A named action keeps the id its author declared; without one it joins its arrow's
+        shared preference, so a keymap for that id replaces every key the author listed."""
+        return self.id if self.id is not None else self.shared_identity(mode)
+
     def for_mode(self, mode: type[EditingMode]) -> tuple[Self, ...]:
         """Give native arrows their shared preference identity in the actual mode."""
-        identity = next((invocation.binding_identity(mode) for invocation in self.invocations()), self.id)
+        identity = self.preference_identity(mode)
         return tuple(
             dataclasses.replace(self, key=spelling, id=identity)
             for spelling in self.declared_key.spellings(mode, self.key)
@@ -292,6 +301,10 @@ class ModeBinding(CallBinding, KeyInvocation):
 
     def command_invocations(self) -> tuple[KeyInvocation, ...]:
         return (self.invocation,)
+
+    def preference_identity(self, mode: type[EditingMode]) -> str | None:
+        """Native commands on an arrow always share its preference, whatever id they carry."""
+        return self.shared_identity(mode)
 
     def key_identity(self) -> str:
         return self.qualified(self.action)

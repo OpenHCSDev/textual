@@ -86,8 +86,15 @@ class StyleProperty(NativeProperty, Generic[PropertyGetType]):
     def __get__(self, obj: StylesBase, objtype: type[StylesBase] | None = None) -> PropertyGetType: ...
 
     def __get__(self, obj: StylesBase | None, objtype: type[StylesBase] | None = None):
-        """Read the rule, or the declared default when it is unset."""
-        return self if obj is None else obj.get_rule(self.name, self.default)
+        """Read the rule, or the declared default when it is unset or `initial`.
+
+        The builder stores `initial` as None so it still overrides less specific
+        rules; reading it answers the default, never None.
+        """
+        if obj is None:
+            return self
+        value = obj.get_rule(self.name)
+        return self.default if value is None else value
 
     def __set_name__(self, owner: type[StylesBase], name: str) -> None:
         self.name = name

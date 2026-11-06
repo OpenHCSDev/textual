@@ -91,7 +91,7 @@ async def test_render_only_after_mount():
 
 async def test_mount_completion_is_shared_by_explicit_and_scheduled_awaiters():
     parent = Mock(spec=Widget)
-    parent._closing = parent._closed = parent._pruning = False
+    parent.is_leaving = parent._closed = False
     children = [Widget(), Widget()]
     mounted = AwaitMount(parent, children)
     explicit = asyncio.create_task(mounted())
@@ -109,7 +109,7 @@ async def test_mount_completion_is_shared_by_explicit_and_scheduled_awaiters():
 
 async def test_cancelling_one_mount_awaiter_does_not_cancel_completion():
     parent = Mock(spec=Widget)
-    parent._closing = parent._closed = parent._pruning = False
+    parent.is_leaving = parent._closed = False
     child = Widget()
     mounted = AwaitMount(parent, [child])
     first = asyncio.create_task(mounted())

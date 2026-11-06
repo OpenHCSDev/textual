@@ -118,3 +118,10 @@ class VerticalLayout(Layout):
                 y = next_y + margin
 
         return placements
+
+
+class ImplicitVerticalLayout(VerticalLayout):
+    """The layout of a widget that declares none: it stacks any children it is
+    given, but does not make the widget a container."""
+
+    holds_children = False

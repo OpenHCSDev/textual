@@ -412,9 +412,20 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
         )
         return spatial_map
 
-    @abstractmethod
     def matches(self, key: SubtreeGeometryKey, *, require_complete: bool = False) -> bool:
-        ...
+        """The same arrangement, or a complete one serving a viewport request."""
+        if require_complete and not self.complete:
+            return False
+        mine, wanted = self._comparable(self.key), self._comparable(key)
+        return mine == wanted or (
+            not mine.visible_only and wanted.visible_only
+            and mine._replace(visible_only=True) == wanted
+        )
+
+    @staticmethod
+    @abstractmethod
+    def _comparable(key: SubtreeGeometryKey) -> SubtreeGeometryKey:
+        """The inputs this resource's placements depend on."""
 
     def restore_into(
         self, geometry: CompositorMap, widgets: set[Widget], invisible_widgets: set[Widget],
@@ -515,13 +526,9 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
 class PlacedSubtreeGeometry(SubtreeGeometry[MapGeometry]):
     """A culled or screen-dependent arrangement keeps its exact placement."""
 
-    def matches(self, key: SubtreeGeometryKey, *, require_complete: bool = False) -> bool:
-        if require_complete and not self.complete:
-            return False
-        return self.key == key or (
-            not self.key.visible_only and key.visible_only
-            and self.key._replace(visible_only=True) == key
-        )
+    @staticmethod
+    def _comparable(key: SubtreeGeometryKey) -> SubtreeGeometryKey:
+        return key
 
     def _project_entry(self, entry: MapGeometry, key: SubtreeGeometryKey,
                        clip: SceneClip, *, root: bool) -> tuple[MapGeometry, SceneClip]:
@@ -560,10 +567,9 @@ class IntrinsicSubtreeGeometry(SubtreeGeometry[SubtreeMapGeometry]):
         return super().capture(key, intrinsic, widgets, invisible_widgets,
                                clips, clip, screen_coordinates)
 
-    def matches(self, key: SubtreeGeometryKey, *, require_complete: bool = False) -> bool:
-        if require_complete and not self.complete:
-            return False
-        return self.key.intrinsic() == key.intrinsic()
+    @staticmethod
+    def _comparable(key: SubtreeGeometryKey) -> SubtreeGeometryKey:
+        return key.intrinsic()
 
     def _project_entry(self, entry: SubtreeMapGeometry, key: SubtreeGeometryKey,
                        clip: SceneClip, *, root: bool) -> tuple[MapGeometry, SceneClip]:

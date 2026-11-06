@@ -5,6 +5,11 @@ from textual.widgets import Label
 
 
 class LazyApp(App):
+    def __init__(self) -> None:
+        super().__init__()
+        self.drawn: list[tuple[int, int]] = []
+        """(#foo, #bar) present when each frame was written."""
+
     def compose(self) -> ComposeResult:
         with Vertical():
             with Lazy(Horizontal()):
@@ -12,16 +17,18 @@ class LazyApp(App):
             with Horizontal():
                 yield Label(id="bar")
 
+    def _display(self, screen, renderable) -> None:
+        self.drawn.append((len(self.query("#foo")), len(self.query("#bar"))))
+        super()._display(screen, renderable)
+
 
 async def test_lazy():
     app = LazyApp()
     async with app.run_test() as pilot:
-        # No #foo on initial mount
-        assert len(app.query("#foo")) == 0
-        assert len(app.query("#bar")) == 1
         await pilot.pause()
         await pilot.pause()
-        # #bar mounted after refresh
+        # The first frame is drawn without #foo; it is mounted after that refresh.
+        assert app.drawn[0] == (0, 1)
         assert len(app.query("#foo")) == 1
         assert len(app.query("#bar")) == 1
 

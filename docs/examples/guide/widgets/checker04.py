@@ -9,6 +9,7 @@ from textual.scroll_view import ScrollView
 
 from rich.segment import Segment
 from rich.style import Style
+from textual._paint_state import PaintState
 
 
 class CheckerBoard(ScrollView):
@@ -62,7 +63,7 @@ class CheckerBoard(ScrollView):
         # Refresh the new cursor square
         self.refresh(get_square_region(cursor_square))
 
-    def render_line(self, y: int) -> Strip:
+    def render_line(self, y: int, paint: PaintState) -> Strip:
         """Render a line of the widget. y is relative to the top of the widget."""
 
         scroll_x, scroll_y = self.scroll_offset  # The current scroll position

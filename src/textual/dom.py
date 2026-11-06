@@ -352,7 +352,7 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump):
         """Native container paint, shared independently of scene custody."""
         from textual.renderables.blank import Blank
 
-        if self.geometry.child_layout and self.geometry.keyline[0] != "none":
+        if self.is_container and self.geometry.keyline[0] != "none":
             return self.layout.render_keyline(self)
         return Blank(self.background_colors[1])
 

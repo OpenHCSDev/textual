@@ -4802,7 +4802,7 @@ def test_text_area_paste(snap_compare) -> None:
 
     async def run_before(pilot: Pilot) -> None:
         await pilot.pause()
-        pilot.app._clipboard = "\n".join(["Where there is a Will"] * 100)
+        pilot.app.copy_to_clipboard("\n".join(["Where there is a Will"] * 100))
         await pilot.press("ctrl+v")
 
     assert snap_compare(TextAreaApp(), run_before=run_before)

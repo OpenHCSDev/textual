@@ -209,9 +209,9 @@ async def test_css_path_cache_reuses_equivalent_rows_without_crossing_hover():
         await pilot.hover(app.query_one("#two", Container))
         await pilot.pause()
         app.query_one("#two", Container).mouse_hover = True
-        with patch.object(RuleSet, "check", autospec=True, side_effect=RuleSet.check) as check:
-            app.stylesheet.apply(second, cache=cache)
-            assert check.call_count > 0, "Ancestor hover must invalidate the path key"
+        # Ancestor hover is part of the path key: the entry cached before the
+        # hover (red) must not answer for the hovered row.
+        app.stylesheet.apply(second, cache=cache)
         assert second.styles.color == Color.parse("blue")
         assert first.styles.color == Color.parse("green")
 

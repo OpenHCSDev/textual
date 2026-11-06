@@ -27,7 +27,7 @@ class TargetedScreen(Screen):
 
 @pytest.mark.parametrize("scoped", [False, True])
 async def test_cached_overlay_and_fixed_children_match_the_original_scene(scoped):
-    from textual._compositor import Compositor, PlacedSubtreeGeometry
+    from textual._compositor import Compositor, IntrinsicSubtreeGeometry
 
     class CachedBody(VerticalGroup):
         CACHE_SUBTREE_GEOMETRY = True
@@ -66,8 +66,9 @@ async def test_cached_overlay_and_fixed_children_match_the_original_scene(scoped
                 screen._scrolled_widgets.add(history)
             screen._refresh_layout(app.size, scroll=True)
             # The overlay's clip reaches the outer screen, so this resource
-            # keeps placed geometry rather than manufacturing an intrinsic clip.
-            assert isinstance(compositor._subtree_geometry[body], PlacedSubtreeGeometry)
+            # never manufactures an intrinsic clip. A scroll-only reflow
+            # captures nothing (ScrolledGeometry), so the entry may be absent.
+            assert not isinstance(compositor._subtree_geometry.get(body), IntrinsicSubtreeGeometry)
             expected, _ = Compositor(max_subtree_geometry_entries=0)._arrange_root(
                 screen, app.size, visible_only=False,
             )
