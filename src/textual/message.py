@@ -106,8 +106,8 @@ class Message:
         return None
 
     def _dispatch_scopes(self, receiver: MessagePump) -> tuple[DispatchScope, ...]:
-        """Unmigrated messages retain the receiver's live conventional scopes."""
-        return receiver._dispatch_declarations
+        """Unmigrated messages use the receiver class's compiled scopes, conventional names included."""
+        return receiver._compiled_scopes(type(self))
 
     @property
     def is_forwarded(self) -> bool:
