@@ -3760,13 +3760,16 @@ class App(Generic[ReturnType], DOMNode):
         _rich_traceback_omit = True
         self._compose_screen = self.screen
         try:
-            widgets = [*self.screen._nodes, *await compose_async(self)]
+            widgets = await compose_async(self)
         except TypeError as error:
             raise TypeError(
                 f"{self!r} compose() method returned an invalid result; {error}"
             ) from error
 
-        await self.mount_all(widgets)
+        # The screen's own widgets (tooltip, toasts) are already mounted. The
+        # app's widgets go in front of them, so the app's queries, such as
+        # query_one(Static) in on_mount, find its own widgets first.
+        await self.mount_all(widgets, before=0 if self.screen._nodes else None)
         # The screen resumed before these widgets existed, so its own
         # auto-focus pass found nothing to focus.
         self._compose_screen._update_auto_focus()
