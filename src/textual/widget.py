@@ -2546,16 +2546,19 @@ class Widget(ScrollsView):
             self._styles_cache.set_dirty(*widget_regions)
         else:
             self._dirty_regions.clear()
-            self._repaint_regions.clear()
-            self._styles_cache.clear()
-            # Invalidation must not measure a lazily invalidated compositor.
-            # Mark the last committed local content bounds; the next geometry
-            # commit dirties its new bounds independently.
-            self._styles_cache.set_dirty(self._size.region.shrink(self.geometry.box_gutter).reset_offset)
-            outer_size = self.outer_size
-            self._dirty_regions.add(outer_size.region)
-            if outer_size:
-                self._repaint_regions.add(outer_size.region)
+            self._invalidate_lines()
+            self._dirty_regions.add(self.outer_size.region)
+
+    def _invalidate_lines(self) -> None:
+        """Every line is painted again on the next frame, from whatever content is rendered."""
+        self._repaint_regions.clear()
+        self._styles_cache.clear()
+        # Invalidation must not measure a lazily invalidated compositor.
+        # Mark the last committed local content bounds; the next geometry
+        # commit dirties its new bounds independently.
+        self._styles_cache.set_dirty(self._size.region.shrink(self.geometry.box_gutter).reset_offset)
+        if outer_size := self.outer_size:
+            self._repaint_regions.add(outer_size.region)
 
     def _exchange_repaint_regions(self) -> Collection[Region]:
         """Get a copy of the regions which need a repaint, and clear internal cache.
@@ -4239,6 +4242,19 @@ class Widget(ScrollsView):
             self._rich_style_cache.clear()
             self._repaint_required = True
 
+        self.check_idle()
+        return self
+
+    def refresh_lines(self) -> Self:
+        """Paint every line again from the content already rendered.
+
+        For a change over the lines and not in them: an animation frame tinting the same
+        text. `refresh()` renders the content again; this keeps it and re-runs `render_line`.
+        """
+        if not self._is_mounted:
+            return self.refresh()
+        self._invalidate_lines()
+        self._repaint_required = True
         self.check_idle()
         return self
 
