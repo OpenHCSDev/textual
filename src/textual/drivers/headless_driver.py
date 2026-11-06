@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 
 from textual import events
-from textual.driver import Driver
+from textual.driver import Driver, TerminalColours, TerminalGaveNoPalette
 from textual.geometry import Size
 
 
@@ -40,6 +40,15 @@ class HeadlessDriver(Driver):
             data: Raw data.
         """
         # Nothing to write as this is a headless driver.
+
+    async def query_colours(self, *, timeout: float) -> TerminalColours:
+        """There is no terminal to ask: the query goes nowhere, so no reply can come.
+
+        The inherited query waited out its whole deadline for answers to writes that went
+        nowhere, so every headless app that asked (each of Toad's app tests, at startup)
+        sat idle for the full timeout before getting this same answer.
+        """
+        raise TerminalGaveNoPalette("a headless driver has no terminal to ask for a palette")
 
     def start_application_mode(self) -> None:
         """Start application mode."""
