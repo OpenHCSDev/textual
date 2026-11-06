@@ -41,8 +41,8 @@ def test_navigation_spellings_follow_every_declared_context() -> None:
 class VimProfile(VimMode):
     """A modal scope for native controls, without starting an external editor."""
 
-    @property
-    def binding_mode(self) -> type[EditingMode]:
+    @classmethod
+    def binding_mode(cls) -> type[EditingMode]:
         return VimMode
 
     async def handle_key(self, editor: TextArea, event: Key) -> bool:
