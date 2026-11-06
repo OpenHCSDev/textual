@@ -5,6 +5,7 @@ from textual.widgets import Header, Footer
 from textual.scroll_view import ScrollView
 from textual.strip import Strip
 from textual.geometry import Size
+from textual._paint_state import PaintState
 
 
 class TestScrollView(ScrollView, can_focus=True):
@@ -13,7 +14,7 @@ class TestScrollView(ScrollView, can_focus=True):
         self.virtual_size = Size(0, height)
         self.border_title = border_title
 
-    def render_line(self, y: int) -> Strip:
+    def render_line(self, y: int, paint: PaintState) -> Strip:
         return Strip(
             [
                 Segment(f"Welcome to line {self.scroll_offset.y + y}", self.rich_style),

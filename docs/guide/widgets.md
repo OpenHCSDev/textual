@@ -404,7 +404,7 @@ Textual offers an alternative API which reduces the amount of work required to r
 
 ### Render Line method
 
-To build a widget with the line API, implement a `render_line` method rather than a `render` method. The `render_line` method takes a single integer argument `y` which is an offset from the top of the widget, and should return a [Strip][textual.strip.Strip] object containing that line's content.
+To build a widget with the line API, implement a `render_line` method rather than a `render` method. The `render_line` method takes an integer `y`, which is an offset from the top of the widget, and the widget's resolved `paint` state (its colors, text style and opacity for this frame), and should return a [Strip][textual.strip.Strip] object containing that line's content.
 Textual will call this method as required to get content for every row of characters in the widget.
 
 <div class="excalidraw">
