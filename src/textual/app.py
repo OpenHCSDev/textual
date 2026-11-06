@@ -3047,6 +3047,10 @@ class App(Generic[ReturnType], DOMNode):
         if update:
             self.stylesheet.reparse()
             self.stylesheet.update(self)
+            # The screen was mounted, and styled, before its own CSS was read,
+            # and a pushed screen is not on a stack yet for the source change to
+            # queue it: this screen is the one the new rules are for.
+            self.stylesheet.update(screen)
 
     async def _replace_screen(self, screen: Screen) -> Screen:
         """Handle the replaced screen.
