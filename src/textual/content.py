@@ -523,6 +523,13 @@ class Content(Visual):
             )
         return self
 
+    def draws_like(self, other: Content) -> bool:
+        """Whether both draw the same: the same text with the same styled spans.
+
+        Equality compares text only, for sorting; a changed style or link is a change on screen.
+        """
+        return self.plain == other.plain and list(self._spans) == list(other._spans)
+
     def __eq__(self, other: object) -> bool:
         """Compares text only, so that markup doesn't effect sorting."""
         if isinstance(other, str):
