@@ -38,5 +38,7 @@ async def test_log_from_worker() -> None:
 
     app = LogApp()
     async with app.run_test() as pilot:
+        # The log call runs on the worker's thread: its receipt is the worker finishing.
+        await app.workers.wait_for_complete()
         await pilot.pause()
         assert ("HELLO from do_work",) in log_messages
