@@ -234,7 +234,7 @@ URL](https://example.com)\
         print(paragraph._content.spans)
 
         expected_spans = [
-            Span(8, 20, Style.from_meta({"@click": "link('https://example.com')"})),
+            Span(8, 20, Style.from_meta({"@click": MD.MarkdownLink("https://example.com")})),
         ]
         print(expected_spans)
 

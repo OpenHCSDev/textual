@@ -7,10 +7,8 @@ With the exception of `Center` and `Middle` containers will fill all of the spac
 
 from __future__ import annotations
 
-from typing import ClassVar
-
-from textual.binding import Binding, BindingType
 from textual.layout import Layout
+from textual.navigation import ScrollCommand
 from textual.layouts.grid import GridLayout
 from textual.layouts.horizontal import HorizontalLayout
 from textual.reactive import reactive
@@ -29,7 +27,7 @@ class Container(Widget):
     """
 
 
-class ScrollableContainer(Widget, can_focus=True):
+class ScrollableContainer(Widget, can_focus=True, key_families=(ScrollCommand,)):
     """A scrollable container with vertical layout, and auto scrollbars on both axis."""
 
     # We don't typically want to maximize scrollable containers,
@@ -42,34 +40,6 @@ class ScrollableContainer(Widget, can_focus=True):
         height: 1fr;
         overflow: auto auto;
     }
-    """
-
-    BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("up", "scroll_up", "Scroll Up", show=False),
-        Binding("down", "scroll_down", "Scroll Down", show=False),
-        Binding("left", "scroll_left", "Scroll Left", show=False),
-        Binding("right", "scroll_right", "Scroll Right", show=False),
-        Binding("home", "scroll_home", "Scroll Home", show=False),
-        Binding("end", "scroll_end", "Scroll End", show=False),
-        Binding("pageup", "page_up", "Page Up", show=False),
-        Binding("pagedown", "page_down", "Page Down", show=False),
-        Binding("ctrl+pageup", "page_left", "Page Left", show=False),
-        Binding("ctrl+pagedown", "page_right", "Page Right", show=False),
-    ]
-    """Keyboard bindings for scrollable containers.
-
-    | Key(s) | Description |
-    | :- | :- |
-    | up | Scroll up, if vertical scrolling is available. |
-    | down | Scroll down, if vertical scrolling is available. |
-    | left | Scroll left, if horizontal scrolling is available. |
-    | right | Scroll right, if horizontal scrolling is available. |
-    | home | Scroll to the home position, if scrolling is available. |
-    | end | Scroll to the end position, if scrolling is available. |
-    | pageup | Scroll up one page, if vertical scrolling is available. |
-    | pagedown | Scroll down one page, if vertical scrolling is available. |
-    | ctrl+pageup | Scroll left one page, if horizontal scrolling is available. |
-    | ctrl+pagedown | Scroll right one page, if horizontal scrolling is available. |
     """
 
     def __init__(
