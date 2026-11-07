@@ -631,8 +631,12 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump):
         })
 
     @classmethod
+    @lru_cache(maxsize=None)
     def keymap_claims(cls, mode: type[EditingMode]) -> tuple[KeymapClaim, ...]:
-        """A native scope exposes its declared invocations without constructing controls."""
+        """A native scope exposes its declared invocations without constructing controls.
+
+        A function of the cached defaults it reads, so it is built once per class and mode:
+        a keymap catalog asks every context for every mode it shows."""
         return tuple(KeymapClaim.from_bindings(binding for _, binding in cls.binding_defaults(mode)))
 
     def binding_map(self, mode: type[EditingMode]) -> BindingsMap:
