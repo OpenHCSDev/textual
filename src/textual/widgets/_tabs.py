@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import ClassVar
 
 import rich.repr
 from rich.style import Style
@@ -211,6 +212,9 @@ class Tab(Static):
 
 class Tabs(MovesHorizontalCursor, Widget, can_focus=True):
     """A row of tabs."""
+
+    UNDERLINE_DELAY: ClassVar[float] = 0.02
+    """Seconds after a tab activates before its underline starts moving."""
 
     DEFAULT_CSS = """
     Tabs {
@@ -668,7 +672,7 @@ class Tabs(MovesHorizontalCursor, Widget, can_focus=True):
 
             if animate and self.app.animation_level != "none":
                 self.set_timer(
-                    0.02,
+                    self.UNDERLINE_DELAY,
                     lambda: self.call_after_refresh(move_underline, True),
                 )
             else:

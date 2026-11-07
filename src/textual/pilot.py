@@ -13,7 +13,6 @@ from typing import Any, Generic
 
 import rich.repr
 
-from textual._wait import wait_for_idle
 from textual.app import App, ReturnType
 from textual.drivers.headless_driver import HeadlessDriver
 from textual.events import Click, MouseDown, MouseEvent, MouseMove, MouseUp, Resize
@@ -51,13 +50,6 @@ class OutOfBounds(Exception):
     """Raised when the pilot mouse target is outside of the (visible) screen."""
 
 
-class WaitForScreenTimeout(Exception):
-    """Exception raised if messages aren't being processed quickly enough.
-
-    If this occurs, the most likely explanation is some kind of deadlock in the app code.
-    """
-
-
 @rich.repr.auto(angular=True)
 class Pilot(Generic[ReturnType]):
     """Pilot object to drive an app."""
@@ -81,7 +73,7 @@ class Pilot(Generic[ReturnType]):
         """
         if keys:
             await self._app._press_keys(keys)
-            await self._wait_for_screen()
+            await self._app._settle()
 
     async def resize_terminal(self, width: int, height: int) -> None:
         """Resize the terminal to the given dimensions.
@@ -461,94 +453,27 @@ class Pilot(Generic[ReturnType]):
             landed is not None and landed.widget is target_widget
         )
 
-    async def _wait_for_screen(self, timeout: float = 30.0) -> bool:
-        """Wait for the current screen and its children to have processed all pending events.
-
-        Args:
-            timeout: A timeout in seconds to wait.
-
-        Returns:
-            `True` if all events were processed. `False` if an exception occurred,
-            meaning that not all events could be processed.
-
-        Raises:
-            WaitForScreenTimeout: If the screen and its children didn't finish processing within the timeout.
-        """
-        try:
-            screen = self.app.screen
-        except Exception:
-            return False
-        children = [self.app, *screen.walk_children(with_self=True)]
-        count = 0
-        count_zero_event = asyncio.Event()
-
-        def decrement_counter() -> None:
-            """Decrement internal counter, and set an event if it reaches zero."""
-            nonlocal count
-            count -= 1
-            if count == 0:
-                # When count is zero, all messages queued at the start of the method have been processed
-                count_zero_event.set()
-
-        # Increase the count for every successful call_later
-        for child in children:
-            if child.call_after_pending(decrement_counter):
-                count += 1
-
-        if count:
-            # Wait for the count to return to zero, or a timeout, or an exception
-            wait_for = [
-                asyncio.create_task(count_zero_event.wait()),
-                asyncio.create_task(self.app._exception_event.wait()),
-            ]
-            _, pending = await asyncio.wait(
-                wait_for,
-                timeout=timeout,
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-
-            for task in pending:
-                task.cancel()
-
-            timed_out = len(wait_for) == len(pending)
-            if timed_out:
-                raise WaitForScreenTimeout(
-                    "Timed out while waiting for widgets to process pending messages."
-                )
-
-            # We've either timed out, encountered an exception, or we've finished
-            # decrementing all the counters (all events processed in children).
-            if count > 0:
-                return False
-
-        return True
-
     async def pause(self, delay: float | None = None) -> None:
         """Insert a pause.
 
         Args:
-            delay: Seconds to pause, or None to wait for cpu idle.
+            delay: Seconds to pause after the app settles, or None for no extra time.
         """
-        # These sleep zeros, are to force asyncio to give up a time-slice.
-        await self._wait_for_screen()
-        if delay is None:
-            await wait_for_idle(0)
-        else:
+        await self._app._settle()
+        if delay is not None:
             await asyncio.sleep(delay)
-        self.app.screen._on_timer_update()
+            await self._app._settle()
 
     async def wait_for_animation(self) -> None:
         """Wait for any current animation to complete."""
         await self._app.animator.wait_for_idle()
-        self.app.screen._on_timer_update()
+        await self._app._settle()
 
     async def wait_for_scheduled_animations(self) -> None:
         """Wait for any current and scheduled animations to complete."""
-        await self._wait_for_screen()
+        await self._app._settle()
         await self._app.animator.wait_until_complete()
-        await self._wait_for_screen()
-        await wait_for_idle()
-        self.app.screen._on_timer_update()
+        await self._app._settle()
 
     async def exit(self, result: ReturnType) -> None:
         """Exit the app with the given result.
@@ -556,6 +481,5 @@ class Pilot(Generic[ReturnType]):
         Args:
             result: The app result returned by `run` or `run_async`.
         """
-        await self._wait_for_screen()
-        await wait_for_idle()
+        await self._app._settle()
         self.app.exit(result)

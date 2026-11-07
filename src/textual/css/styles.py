@@ -507,11 +507,13 @@ class StylesBase(BoxGeometry, PaintLayer, TextFormat):
     constrain_y: StringEnumProperty[Constrain] = StringEnumProperty(
         VALID_CONSTRAIN, "none"
     )
+    # Wrapping and overflow decide how many lines the content measures, so an auto-sized
+    # widget lays out again, like line_pad below.
     text_wrap: StringEnumProperty[TextWrap] = StringEnumProperty(
-        VALID_TEXT_WRAP, TextFormat().line_wrap
+        VALID_TEXT_WRAP, TextFormat().line_wrap, layout=True
     )
     text_overflow: StringEnumProperty[TextOverflow] = StringEnumProperty(
-        VALID_TEXT_OVERFLOW, TextFormat().line_overflow
+        VALID_TEXT_OVERFLOW, TextFormat().line_overflow, layout=True
     )
     expand: StringEnumProperty[Expand] = StringEnumProperty(VALID_EXPAND, "greedy")
     line_pad = IntegerProperty(default=TextFormat().line_pad, layout=True)

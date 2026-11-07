@@ -4,7 +4,6 @@ import pytest
 from rich.panel import Panel
 from rich.text import Text
 
-from textual._wait import wait_for_idle
 from textual.actions import SkipAction
 from textual.app import App, ComposeResult, RenderableType
 from textual.coordinate import Coordinate
@@ -425,19 +424,19 @@ async def test_column_labels() -> None:
 
 async def test_initial_column_widths() -> None:
     app = DataTableApp()
-    async with app.run_test():
+    async with app.run_test() as pilot:
         table = app.query_one(DataTable)
         foo, bar = table.add_columns("foo", "bar")
 
         assert table.columns[foo].width == 3
         assert table.columns[bar].width == 3
         table.add_row("Hello", "World!")
-        await wait_for_idle()
+        await pilot.pause()
         assert table.columns[foo].content_width == 5
         assert table.columns[bar].content_width == 6
 
         table.add_row("Hello World!!!", "fo")
-        await wait_for_idle()
+        await pilot.pause()
         assert table.columns[foo].content_width == 14
         assert table.columns[bar].content_width == 6
 
@@ -753,14 +752,14 @@ async def test_update_cell_at_column_width(label, new_value, new_content_width):
     # that the width of the column is correct given the new cell content widths
     # and the label of the column the cell is in.
     app = DataTableApp()
-    async with app.run_test():
+    async with app.run_test() as pilot:
         table = app.query_one(DataTable)
         key, _ = table.add_columns(label, "Column2")
         table.add_rows(ROWS)
         first_column = table.columns.get(key)
 
         table.update_cell_at(Coordinate(0, 0), new_value, update_width=True)
-        await wait_for_idle()
+        await pilot.pause()
         assert first_column.content_width == new_content_width
         assert (
             first_column.get_render_width(table)
