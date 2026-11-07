@@ -417,9 +417,17 @@ class Button(PrimaryActivation, Widget, can_focus=True):
     def primary_activation(self):
         return self.action_press
 
+    @property
+    def accepts_press(self) -> bool:
+        """Whether a click or Enter presses the button now.
+
+        A press is refused while the active effect of the previous one shows, so one
+        gesture cannot press twice; a caller pressing again waits for this."""
+        return not self.has_class("-active")
+
     async def _on_click(self, event: events.Click) -> None:
         event.stop()
-        if not self.has_class("-active"):
+        if self.accepts_press:
             self.press()
 
     def press(self) -> Self:
@@ -454,7 +462,7 @@ class Button(PrimaryActivation, Widget, can_focus=True):
     @MethodBinding.declare("enter")
     def action_press(self) -> None:
         """Activate a press of the button."""
-        if not self.has_class("-active"):
+        if self.accepts_press:
             self.press()
 
     @classmethod
