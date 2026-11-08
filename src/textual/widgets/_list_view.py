@@ -392,6 +392,7 @@ class ListView(ListNavigation, VerticalScroll, can_focus=True, can_focus_childre
                     self.index = index
                     break
 
+    @on(ListItem._ChildClicked)
     def _on_list_item__child_clicked(self, event: ListItem._ChildClicked) -> None:
         event.stop()
         self.focus()

@@ -18,6 +18,7 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets._content_switcher import ContentSwitcher
 from textual.widgets._tabs import Tab, Tabs
+from textual._on import on
 
 __all__ = [
     "ContentTab",
@@ -230,6 +231,7 @@ class TabPane(Widget):
         """Notify the parent `TabbedContent` that a tab pane was enabled/disabled."""
         self.post_message(self.Disabled(self) if disabled else self.Enabled(self))
 
+    @on(events.DescendantFocus)
     def _on_descendant_focus(self, event: events.DescendantFocus):
         """Tell TabbedContent parent something is focused in this pane."""
         self.post_message(self.Focused(self))
@@ -501,6 +503,7 @@ class TabbedContent(Widget):
         """
         self._tab_content.append(widget)
 
+    @on(Tabs.TabActivated)
     def _on_tabs_tab_activated(self, event: Tabs.TabActivated) -> None:
         """User clicked a tab."""
         if self._is_associated_tabs(event.tabs):
@@ -525,12 +528,14 @@ class TabbedContent(Widget):
                 )
             )
 
+    @on(TabPane.Focused)
     def _on_tab_pane_focused(self, event: TabPane.Focused) -> None:
         """One of the panes contains a widget that was programmatically focused."""
         event.stop()
         if event.tab_pane.id is not None:
             self.active = event.tab_pane.id
 
+    @on(Tabs.Cleared)
     def _on_tabs_cleared(self, event: Tabs.Cleared) -> None:
         """Called when there are no active tabs. The tabs may have been cleared,
         or they may all be hidden."""
@@ -621,6 +626,7 @@ class TabbedContent(Widget):
             "'pane_id' must be a non-empty string or a ContentTab with an id."
         )
 
+    @on(Tabs.TabDisabled)
     def _on_tabs_tab_disabled(self, event: Tabs.TabDisabled) -> None:
         """Disable the corresponding tab pane."""
         if event.tabs.parent is not self:
@@ -635,6 +641,7 @@ class TabbedContent(Widget):
         except NoMatches:
             return
 
+    @on(TabPane.Disabled)
     def _on_tab_pane_disabled(self, event: TabPane.Disabled) -> None:
         """Disable the corresponding tab."""
         event.stop()
@@ -644,6 +651,7 @@ class TabbedContent(Widget):
         except NoMatches:
             return
 
+    @on(Tabs.TabEnabled)
     def _on_tabs_tab_enabled(self, event: Tabs.TabEnabled) -> None:
         """Enable the corresponding tab pane."""
         if event.tabs.parent is not self:
@@ -658,6 +666,7 @@ class TabbedContent(Widget):
         except NoMatches:
             return
 
+    @on(TabPane.Enabled)
     def _on_tab_pane_enabled(self, event: TabPane.Enabled) -> None:
         """Enable the corresponding tab."""
         event.stop()

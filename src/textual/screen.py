@@ -1307,6 +1307,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
             self._refresh_requested or self._dirty_widgets or self._compositor._dirty_regions
         )
 
+    @on(events.Idle)
     async def _on_idle(self, event: events.Idle) -> None:
         # Check for any widgets marked as 'dirty' (needs a repaint)
         event.prevent_default()
@@ -1731,6 +1732,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
                 widget.post_message(Show())
 
 
+    @on(messages.Update)
     async def _on_update(self, message: messages.Update) -> None:
         message.stop()
         message.prevent_default()
@@ -1794,6 +1796,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
             return None
         return boundaries
 
+    @on(messages.UpdateScroll)
     async def _on_update_scroll(self, message: messages.UpdateScroll) -> None:
         message.stop()
         message.prevent_default()
@@ -1882,6 +1885,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         if self.stack_updates and self.is_attached:
             self._refresh_layout(size)
 
+    @on(events.ScreenResume)
     def _on_screen_resume(self, event: events.ScreenResume) -> None:
         """Screen has resumed."""
         if self.app.SUSPENDED_SCREEN_CLASS:
@@ -1978,6 +1982,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
     Lower values trade reuse for memory without changing geometry or content.
     """
 
+    @on(messages.ResizeScreen)
     def _on_resize_screen(self, message: messages.ResizeScreen) -> None:
         self.dismiss_hints()
         self._screen_resized(self.app.size)

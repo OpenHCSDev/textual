@@ -216,6 +216,7 @@ class RadioSet(
             self._nodes[self._selected].add_class("-selected")
             self._scroll_to_selected()
 
+    @on(RadioButton.Changed)
     def _on_radio_button_changed(self, event: RadioButton.Changed) -> None:
         """Respond to the value of a button in the set being changed.
 

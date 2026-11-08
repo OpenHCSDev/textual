@@ -1664,6 +1664,7 @@ class MarkdownTableOfContents(Widget, can_focus_children=True):
             node_label = Text.assemble((f"{NUMERALS[level]} ", "dim"), name)
             node.add_leaf(node_label, {"block_id": block_id})
 
+    @on(Tree.NodeSelected)
     async def _on_tree_node_selected(self, message: Tree.NodeSelected) -> None:
         node_data = message.node.data
         if node_data is not None:
@@ -1768,6 +1769,7 @@ class MarkdownViewer(VerticalScroll, can_focus=False, can_focus_children=True):
             await self.document.load(self.navigator.location)
             self.post_message(self.NavigatorUpdated())
 
+    @on(Markdown.LinkClicked)
     async def _on_markdown_link_clicked(self, message: Markdown.LinkClicked) -> None:
         message.stop()
         await self.go(message.href)
@@ -1783,6 +1785,7 @@ class MarkdownViewer(VerticalScroll, can_focus=False, can_focus_children=True):
         yield markdown
         yield MarkdownTableOfContents(markdown)
 
+    @on(Markdown.TableOfContentsUpdated)
     def _on_markdown_table_of_contents_updated(
         self, message: Markdown.TableOfContentsUpdated
     ) -> None:
@@ -1791,6 +1794,7 @@ class MarkdownViewer(VerticalScroll, can_focus=False, can_focus_children=True):
         )
         message.stop()
 
+    @on(Markdown.TableOfContentsSelected)
     def _on_markdown_table_of_contents_selected(
         self, message: Markdown.TableOfContentsSelected
     ) -> None:

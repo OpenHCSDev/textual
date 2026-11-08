@@ -1223,6 +1223,7 @@ class Tree(MovesCursor, Generic[TreeDataType], ScrollView, can_focus=True,
         assert self._tree_lines_cached is not None
         return self._tree_lines_cached
 
+    @on(events.Idle)
     async def _on_idle(self, event: events.Idle) -> None:
         """Check tree needs a rebuild on idle."""
         # Property calls build if required

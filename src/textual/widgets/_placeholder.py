@@ -138,6 +138,7 @@ class Placeholder(Widget):
         while next(self._variants_cycle) != self.variant:
             pass
 
+    @on(events.Compose)
     async def _on_compose(self, event: events.Compose) -> None:
         """Set the color for this placeholder."""
         color_count = len(_PLACEHOLDER_BACKGROUND_COLORS)

@@ -801,6 +801,7 @@ class Input(NativeTextKeys, FocusActivation, EditableInput, ScrollView):
                 selection_start, self._cell_offset_to_index(offset.x)
             )
 
+    @on(SuggestionReady)
     async def _on_suggestion_ready(self, event: SuggestionReady) -> None:
         """Handle suggestion messages and set the suggestion when relevant."""
         if event.value == self.value:

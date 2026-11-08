@@ -568,6 +568,7 @@ class SelectionList(Generic[SelectionType], OptionList, key_families=(ActivateSe
             ]
         )
 
+    @on(OptionList.OptionHighlighted)
     def _on_option_list_option_highlighted(
         self, event: OptionList.OptionHighlighted
     ) -> None:
@@ -579,6 +580,7 @@ class SelectionList(Generic[SelectionType], OptionList, key_families=(ActivateSe
         event.stop()
         self.post_message(self.SelectionHighlighted(self, event.option_index))
 
+    @on(OptionList.OptionSelected)
     def _on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
         """Capture the `OptionList` selected event and turn it into a [`SelectionList`][textual.widgets.SelectionList] event.
 

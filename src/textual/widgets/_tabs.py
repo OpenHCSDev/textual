@@ -682,6 +682,7 @@ class Tabs(MovesHorizontalCursor, Widget, can_focus=True):
             else:
                 self.call_after_refresh(move_underline, False)
 
+    @on(Tab.Clicked)
     async def _on_tab_clicked(self, event: Tab.Clicked) -> None:
         """Activate a tab that was clicked."""
         self.focus()
@@ -698,6 +699,7 @@ class Tabs(MovesHorizontalCursor, Widget, can_focus=True):
         tab.add_class("-active")
         self.active = tab.id or ""
 
+    @on(Underline.Clicked)
     def _on_underline_clicked(self, event: Underline.Clicked) -> None:
         """The underline was clicked.
 
@@ -758,16 +760,19 @@ class Tabs(MovesHorizontalCursor, Widget, can_focus=True):
         new_tab_index = (tabs.index(active_tab) + direction) % tab_count
         self.active = tabs[new_tab_index].id or ""
 
+    @on(Tab.Disabled)
     def _on_tab_disabled(self, event: Tab.Disabled) -> None:
         """Re-post the disabled message."""
         event.stop()
         self.post_message(self.TabDisabled(self, event.tab))
 
+    @on(Tab.Enabled)
     def _on_tab_enabled(self, event: Tab.Enabled) -> None:
         """Re-post the enabled message."""
         event.stop()
         self.post_message(self.TabEnabled(self, event.tab))
 
+    @on(Tab.Relabelled)
     def _on_tab_relabelled(self, event: Tab.Relabelled) -> None:
         """Redraw the highlight when tab is relabelled."""
         event.stop()

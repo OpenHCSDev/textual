@@ -172,11 +172,13 @@ class SelectOverlay(OptionList):
         self.post_message(self.Dismiss(lost_focus=True))
         self.suppress_click()
 
+    @on(OptionList.OptionSelected)
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
         """Inform parent when an option is selected."""
         event.stop()
         self.post_message(self.UpdateSelection(event.option_index))
 
+    @on(OptionList.OptionHighlighted)
     def on_option_list_option_highlighted(
         self, event: OptionList.OptionHighlighted
     ) -> None:

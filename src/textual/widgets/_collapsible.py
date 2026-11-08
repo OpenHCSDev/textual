@@ -224,6 +224,7 @@ class Collapsible(Widget):
         self._contents_list: list[Widget] = list(children)
         self.collapsed = collapsed
 
+    @on(CollapsibleTitle.Toggle)
     def _on_collapsible_title_toggle(self, event: CollapsibleTitle.Toggle) -> None:
         event.stop()
         self.collapsed = not self.collapsed
