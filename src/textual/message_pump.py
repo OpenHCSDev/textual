@@ -38,7 +38,7 @@ from textual._compat import cached_property
 from textual._context import NoActiveAppError, active_app, active_message_pump
 from textual._context import message_hook as message_hook_context_var
 from textual._context import prevent_message_types_stack
-from textual._on import DispatchScope, MessageHandler, NamedScope
+from textual._on import DispatchScope, MessageHandler, NamedScope, on
 from textual._time import time
 from textual._types import CallbackType
 from textual.constants import SLOW_THRESHOLD
@@ -699,7 +699,8 @@ class MessagePump(ParentLinks, metaclass=_MessagePumpMeta):
         # An abandoned, never-started receiver still owns those deliveries.
         self._discard_pending_messages()
 
-    def _on_invoke_later(self, message: messages.InvokeLater) -> None:
+    @on(messages.InvokeLater)
+    def _forward_invoke_later(self, message: messages.InvokeLater) -> None:
         # Forward InvokeLater message to the Screen
         if self.app._running:
             # call_after_refresh posts to this owner's queue first. That owner,
@@ -840,7 +841,8 @@ class MessagePump(ParentLinks, metaclass=_MessagePumpMeta):
         finally:
             active_message_pump.reset(reset_token)
 
-    async def _on_close_messages(self, message: messages.CloseMessages) -> None:
+    @on(messages.CloseMessages)
+    async def _close_on_request(self, message: messages.CloseMessages) -> None:
         await self._close_messages()
 
     async def _process_messages_loop(self) -> None:
