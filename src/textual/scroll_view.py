@@ -11,6 +11,8 @@ from textual._measurement import NATIVE_CONTAINER_SELECTION, STORED_VIRTUAL_SIZE
 from textual._types import AnimationLevel, CallbackType
 from textual.containers import ScrollableContainer
 from textual.geometry import Region, Size
+from textual.events import Mount
+from textual._on import on
 
 
 class ScrollView(ScrollableContainer):
@@ -57,6 +59,7 @@ class ScrollView(ScrollableContainer):
         if round(old_value) != round(new_value):
             self.refresh(self.size.region)
 
+    @on(Mount)
     def on_mount(self):
         self._refresh_scrollbars()
 

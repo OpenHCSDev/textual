@@ -246,6 +246,7 @@ class Collapsible(Widget):
         except NoMatches:
             pass
 
+    @on(events.Mount)
     def _on_mount(self, event: events.Mount) -> None:
         """Initialise collapsed state."""
         self._update_collapsed(self.collapsed)

@@ -4675,6 +4675,7 @@ class Widget(ScrollsView):
             widgets: Widgets to be mounted.
         """
 
+    @on(events.Mount)
     def _on_mount(self, event: events.Mount) -> None:
         if self.geometry.overflow_y == "scroll":
             self.show_vertical_scrollbar = True

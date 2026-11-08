@@ -61,6 +61,7 @@ from textual.scroll_view import ScrollView
 from textual.editable_input import EditableInput
 from textual._paint_state import PaintState
 from textual.strip import Strip
+from textual._on import on
 
 _OPENING_BRACKETS = {"{": "}", "[": "]", "(": ")"}
 _CLOSING_BRACKETS = {v: k for k, v in _OPENING_BRACKETS.items()}
@@ -1927,6 +1928,7 @@ TextArea {
         )
         return gutter_width
 
+    @on(events.Mount)
     def _on_mount(self, event: events.Mount) -> None:
         def text_selection_started(screen: Screen) -> None:
             """Signal callback to unselect when arbitrary text selection starts."""

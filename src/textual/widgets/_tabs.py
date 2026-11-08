@@ -583,6 +583,7 @@ class Tabs(MovesHorizontalCursor, Widget, can_focus=True):
         except NoMatches:
             return None
 
+    @on(events.Mount)
     def _on_mount(self, _: Mount) -> None:
         """Make the first tab active."""
         if self._first_active is not None:

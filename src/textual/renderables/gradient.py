@@ -8,6 +8,8 @@ from rich.segment import Segment
 from rich.style import Style
 
 from textual.color import Color, Gradient
+from textual.events import Mount
+from textual._on import on
 
 
 class VerticalGradient:
@@ -163,6 +165,7 @@ if __name__ == "__main__":
         def render(self):
             return LinearGradient(time() * 90, stops)
 
+        @on(Mount)
         def on_mount(self) -> None:
             self.set_interval(1 / 30, self.refresh)
 

@@ -16,6 +16,7 @@ from textual.css.native import Component
 from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Label
+from textual._on import on
 
 if TYPE_CHECKING:
     from textual.screen import Screen
@@ -516,6 +517,7 @@ class Footer(HorizontalContainer, ScrollableContainer, can_focus=False, can_focu
                 event.stop()
                 event.prevent_default()
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.screen.bindings_updated_signal.subscribe(self, self.bindings_changed)
         # The screen may have announced its bindings before this footer

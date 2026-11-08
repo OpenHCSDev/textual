@@ -14,6 +14,7 @@ from textual.navigation import ListNavigation
 from textual.reactive import reactive
 from textual.widget import AwaitMount
 from textual.widgets._list_item import ListItem
+from textual._on import on
 
 
 class ListView(ListNavigation, VerticalScroll, can_focus=True, can_focus_children=False):
@@ -151,6 +152,7 @@ class ListView(ListNavigation, VerticalScroll, can_focus=True, can_focus_childre
         )
         self._initial_index = initial_index
 
+    @on(Mount)
     def _on_mount(self, _: Mount) -> None:
         """Ensure the ListView is fully-settled after mounting."""
 

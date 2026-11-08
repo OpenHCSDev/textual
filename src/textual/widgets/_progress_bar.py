@@ -17,6 +17,8 @@ from textual.reactive import reactive
 from textual.renderables.bar import Bar as BarRenderable
 from textual.widget import Widget
 from textual.widgets import Label
+from textual.events import Mount
+from textual._on import on
 
 UNUSED = UnusedParameter()
 """Sentinel for method signatures."""
@@ -285,6 +287,7 @@ class ProgressBar(HorizontalContainer, can_focus=False):
         self.show_eta = show_eta
         self.set_reactive(ProgressBar.gradient, gradient)
 
+    @on(Mount)
     def on_mount(self) -> None:
         self.update()
         self.set_interval(1, self.update)

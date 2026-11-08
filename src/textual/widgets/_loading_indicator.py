@@ -13,6 +13,7 @@ from textual import on
 from textual.color import Gradient
 from textual.events import InputEvent, Mount
 from textual.widget import Widget
+from textual._on import on
 
 
 class LoadingIndicator(Widget):
@@ -54,6 +55,7 @@ class LoadingIndicator(Widget):
         self._start_time: float = 0.0
         """The time the loading indicator was mounted (a Unix timestamp)."""
 
+    @on(Mount)
     def _on_mount(self, _: Mount) -> None:
         self._start_time = time()
         self.auto_refresh = 1 / 16

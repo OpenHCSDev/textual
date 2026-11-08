@@ -10,6 +10,7 @@ from textual.css.query import NoMatches
 from textual.events import Mount
 from textual.reactive import reactive
 from textual.widget import Widget
+from textual._on import on
 
 
 class ContentSwitcher(Container):
@@ -68,6 +69,7 @@ class ContentSwitcher(Container):
         )
         self._initial = initial
 
+    @on(Mount)
     def _on_mount(self, _: Mount) -> None:
         """Perform the initial setup of the widget once the DOM is ready."""
         initial = self._initial

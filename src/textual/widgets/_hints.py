@@ -13,6 +13,7 @@ from textual.containers import HorizontalScroll
 from textual.content import Content
 from textual.document._editing import VimMode
 from textual.widget import Widget
+from textual._on import on
 
 
 class HintClick(IntEnum):
@@ -206,6 +207,7 @@ class HintSession(HintOverlay, HorizontalScroll, can_focus=True):
     def render(self) -> Content:
         return Content.empty()
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.screen.bindings_updated_signal.subscribe(self, self._bindings_changed)
 

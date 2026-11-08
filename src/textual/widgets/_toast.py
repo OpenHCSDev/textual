@@ -12,6 +12,7 @@ from textual.css.query import NoMatches
 from textual.events import Click, Mount
 from textual.notifications import Notification, Notifications
 from textual.widgets._static import Static
+from textual._on import on
 
 
 class ToastHolder(Container, inherit_css=False):
@@ -126,6 +127,7 @@ class Toast(Static, inherit_css=False):
 
         return message_content
 
+    @on(Mount)
     def _on_mount(self, _: Mount) -> None:
         """Set the time running once the toast is mounted."""
         self.set_timer(self._timeout, self._expire)
