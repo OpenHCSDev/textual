@@ -1107,6 +1107,7 @@ class DataTable(
         self._get_styles_to_render_cell.cache_clear()
         self.refresh()
 
+    @on(events.Resize)
     def _on_resize(self, _: events.Resize) -> None:
         self._update_count += 1
 

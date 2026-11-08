@@ -134,6 +134,7 @@ from textual.widget import AwaitMount, Widget
 from textual.widgets._toast import ToastRack
 from textual.worker import NoActiveWorker, get_current_worker
 from textual.worker_manager import WorkerManager
+from textual._on import on
 
 if TYPE_CHECKING:
     from textual_dev.client import DevtoolsClient
@@ -4595,6 +4596,7 @@ class App(Generic[ReturnType], DOMNode):
         if not (await self._check_bindings(event.key)):
             await dispatch_key(self, event)
 
+    @on(events.Resize)
     async def _on_resize(self, event: events.Resize) -> None:
         event.stop()
         self._resize_event = event

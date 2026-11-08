@@ -1188,6 +1188,7 @@ TextArea {
         self.post_message(self.Changed(self).set_sender(self))
         self.update_suggestion()
 
+    @on(events.Resize)
     def _on_resize(self) -> None:
         self._rewrap_and_refresh_virtual_size()
         self.editing_mode.resize(self)
