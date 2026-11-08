@@ -92,7 +92,15 @@ from textual.geometry import (
 from textual.layout import Layout, WidgetPlacement
 from textual.layouts.vertical import ImplicitVerticalLayout, VerticalLayout
 from textual.message import Message
-from textual.messages import CallbackType, Prune
+from textual.messages import (
+    CallbackType,
+    Prune,
+    ScrollDown,
+    ScrollLeft,
+    ScrollRight,
+    ScrollTo,
+    ScrollUp,
+)
 from textual.notifications import SeverityLevel
 from textual.reactive import Reactive
 from textual.rlock import RLock
@@ -106,15 +114,7 @@ if TYPE_CHECKING:
     from textual.css.query import QueryType
     from textual.filter import LineFilter
     from textual.screen import Screen
-    from textual.scrollbar import (
-        ScrollBar,
-        ScrollBarCorner,
-        ScrollDown,
-        ScrollLeft,
-        ScrollRight,
-        ScrollTo,
-        ScrollUp,
-    )
+    from textual.scrollbar import ScrollBar, ScrollBarCorner
 
 _JUSTIFY_MAP: dict[str, JustifyMethod] = {
     "start": "left",
@@ -4740,26 +4740,31 @@ class Widget(ScrollsView):
             if self._scroll_left_for_pointer():
                 event.stop()
 
+    @on(ScrollTo)
     def _on_scroll_to(self, message: ScrollTo) -> None:
         if self._allow_scroll:
             self.scroll_to(message.x, message.y, animate=message.animate, duration=0.1)
             message.stop()
 
+    @on(ScrollUp)
     def _on_scroll_up(self, event: ScrollUp) -> None:
         if self.allow_vertical_scroll:
             self.scroll_page_up()
             event.stop()
 
+    @on(ScrollDown)
     def _on_scroll_down(self, event: ScrollDown) -> None:
         if self.allow_vertical_scroll:
             self.scroll_page_down()
             event.stop()
 
+    @on(ScrollLeft)
     def _on_scroll_left(self, event: ScrollLeft) -> None:
         if self.allow_horizontal_scroll:
             self.scroll_page_left()
             event.stop()
 
+    @on(ScrollRight)
     def _on_scroll_right(self, event: ScrollRight) -> None:
         if self.allow_horizontal_scroll:
             self.scroll_page_right()
