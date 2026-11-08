@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import ClassVar
 
 from textual import on
+from textual.layouts.vertical import VerticalLayout
 from textual.containers import Container
 from textual.content import Content
 from textual.css.query import NoMatches
@@ -145,6 +146,8 @@ class Toast(Static, inherit_css=False):
 
 class ToastRack(Container, inherit_css=False):
     """A container for holding toasts."""
+
+    DEFAULT_LAYOUT = VerticalLayout
 
     DEFAULT_CSS = """
     ToastRack {

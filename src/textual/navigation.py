@@ -15,7 +15,6 @@ class NavigationCommand(KeyDeclaration["Navigation"]):
     """A list command owns its keys; controls own the operation it requests."""
 
     keys: ClassVar[tuple[str, ...]] = ()
-    priority: ClassVar[bool] = False
     declared_key: ClassVar[DeclaredKey] = UndecodedKey()
 
     @classmethod
@@ -26,7 +25,7 @@ class NavigationCommand(KeyDeclaration["Navigation"]):
         return tuple(
             CommandBinding(key=key, action=command, description=cls.title,
                            available=cls.available, mode=EditingMode,
-                           id=cls.binding_id(mode), show=False, priority=cls.priority,
+                           id=cls.binding_id(mode), show=False,
                            declared_key=cls.declared_key)
             for key in cls.keys
         )
@@ -43,9 +42,13 @@ class NavigationCommand(KeyDeclaration["Navigation"]):
 
 
 class CursorCommand(NavigationCommand):
-    """Move the selected row before a list's optional type-to-search handler."""
+    """Move the selected row of the focused list.
 
-    priority = True
+    Not a priority binding: priority resolves from the App inward, so a list
+    nested in another (a Select overlay in a ListView) lost its arrows to the
+    outer one. Type-to-search consumes printable keys only; printable cursor
+    aliases precede it through NavigationKey.preempts.
+    """
 
 
 class VerticalCursorCommand(CursorCommand):

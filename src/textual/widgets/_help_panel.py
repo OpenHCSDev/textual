@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from textwrap import dedent
 
+from textual.layouts.vertical import VerticalLayout
 from textual.app import ComposeResult
 from textual.css.query import NoMatches
 from textual.widget import Widget
@@ -12,6 +13,8 @@ class HelpPanel(Widget):
     """
     Shows context sensitive help for the currently focused widget.
     """
+
+    DEFAULT_LAYOUT = VerticalLayout
 
     DEFAULT_CSS = """
 

@@ -3047,6 +3047,10 @@ class App(Generic[ReturnType], DOMNode):
         if update:
             self.stylesheet.reparse()
             self.stylesheet.update(self)
+            # The screen was mounted, and styled, before its own CSS was read,
+            # and a pushed screen is not on a stack yet for the source change to
+            # queue it: this screen is the one the new rules are for.
+            self.stylesheet.update(screen)
 
     async def _replace_screen(self, screen: Screen) -> Screen:
         """Handle the replaced screen.
@@ -3756,13 +3760,16 @@ class App(Generic[ReturnType], DOMNode):
         _rich_traceback_omit = True
         self._compose_screen = self.screen
         try:
-            widgets = [*self.screen._nodes, *await compose_async(self)]
+            widgets = await compose_async(self)
         except TypeError as error:
             raise TypeError(
                 f"{self!r} compose() method returned an invalid result; {error}"
             ) from error
 
-        await self.mount_all(widgets)
+        # The screen's own widgets (tooltip, toasts) are already mounted. The
+        # app's widgets go in front of them, so the app's queries, such as
+        # query_one(Static) in on_mount, find its own widgets first.
+        await self.mount_all(widgets, before=0 if self.screen._nodes else None)
         # The screen resumed before these widgets existed, so its own
         # auto-focus pass found nothing to focus.
         self._compose_screen._update_auto_focus()

@@ -259,6 +259,8 @@ class Layout(ABC):
     """Base class of the object responsible for arranging Widgets within a container."""
 
     name: ClassVar[str] = ""
+    holds_children: ClassVar[bool] = True
+    """A declared layout makes its widget a container, with or without children."""
     _content_width_dependency: ClassVar[HeightDependency]
     _content_height_dependency: ClassVar[HeightDependency]
     _arrangement_height_dependency: ClassVar[HeightDependency]

@@ -36,6 +36,7 @@ from rich.console import RenderableType
 from rich.style import Style
 
 from textual import constants, errors, events, messages, on
+from textual.layouts.vertical import VerticalLayout
 from textual._arrange import arrange
 from textual._auto_scroll import get_auto_scroll_regions
 from textual._callback import invoke
@@ -149,6 +150,8 @@ class ResultCallback(Generic[ScreenResultType]):
 @rich.repr.auto
 class Screen(HintHost, Generic[ScreenResultType], Widget):
     """The base class for screens."""
+
+    DEFAULT_LAYOUT = VerticalLayout
 
     @property
     def key_mode(self) -> type[EditingMode]:

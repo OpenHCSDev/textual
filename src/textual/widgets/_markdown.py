@@ -16,6 +16,7 @@ from markdown_it.token import Token
 from rich.text import Text
 from typing_extensions import TypeAlias
 
+from textual.layouts.vertical import VerticalLayout
 from textual._slug import TrackedSlugs, slug_for_tcss_id
 from textual.actions import StyleAction
 from textual.app import App, ComposeResult
@@ -1024,6 +1025,8 @@ NUMERALS = " ⅠⅡⅢⅣⅤⅥ"
 
 
 class Markdown(Widget):
+
+    DEFAULT_LAYOUT = VerticalLayout
     DEFAULT_CSS = """
     Markdown {
         height: auto;
