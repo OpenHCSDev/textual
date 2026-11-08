@@ -83,6 +83,21 @@ async def test_native_hints_focus_inputs_and_activate_control_owners():
         await pilot.press('escape')
 
 
+async def test_native_control_hint_preview_contains_its_label_not_only_its_marker():
+    app = NativeControlsApp()
+    async with app.run_test(size=(90, 40)) as pilot:
+        await pilot.pause()
+        checkbox = app.query_one(Checkbox)
+        await app.screen.action_show_hints()
+        await pilot.pause()
+        previews = {label.target.widget: label.preview.text
+                    for label in app.screen.query(HintLabel)}
+        assert checkbox.label.plain in previews[checkbox]
+        search = app.query_one(Input)
+        assert search.value in previews[search]
+        await pilot.press("escape")
+
+
 @dataclass(frozen=True)
 class HintCaptionMode(EditingMode):
     """A label-only mode leaves native editing and binding behavior unchanged."""

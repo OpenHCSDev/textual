@@ -144,7 +144,7 @@ class HintSession(HintOverlay, HorizontalScroll, can_focus=True):
 
     @classmethod
     def for_scene(cls, screen, scene: ActivationScene, click: HintClick):
-        targets = sorted(scene.targets, key=lambda item: (
+        targets = sorted(scene.targets.values(), key=lambda item: (
             item.activation.region.y, item.activation.region.x))
         return cls(screen, targets, click)
 

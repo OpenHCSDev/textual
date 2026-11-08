@@ -63,23 +63,54 @@ class PaintedActivation:
 
     activation: Activation
     preview: Strip
+    preview_region: Region
+
+    def including(self, region: Region, fragment: Strip) -> PaintedActivation:
+        """Join this target's original-row cells without changing its click anchor."""
+        if not fragment.cell_length:
+            return self
+        if not self.preview.cell_length:
+            return replace(self, preview=fragment, preview_region=region)
+        if region.y != self.preview_region.y:
+            return self
+        if region.x < self.preview_region.x:
+            first_region, first = region, fragment
+            second_region, second = self.preview_region, self.preview
+        else:
+            first_region, first = self.preview_region, self.preview
+            second_region, second = region, fragment
+        prefix_width = second_region.x - first_region.x
+        prefix = first.crop(0, prefix_width).extend_cell_length(prefix_width)
+        tail = first.crop(
+            min(first.cell_length, second_region.right - first_region.x), first.cell_length)
+        preview = Strip.join((prefix, second, tail))
+        bounds = Region(first_region.x, region.y, preview.cell_length, 1)
+        return replace(self, preview=preview, preview_region=bounds)
 
 
 @dataclass
 class ActivationScene:
     """Click effects and styled body-cell previews from one accepted scene."""
 
-    targets: list[PaintedActivation] = field(default_factory=list)
+    targets: dict[object, PaintedActivation] = field(default_factory=dict)
 
-    def capture(self, widget: Widget, region: Region, strips: list[Strip], button: int) -> None:
+    def capture(
+        self, widget: Widget, region: Region, strips: list[Strip], button: int,
+        geometry: Mapping[Widget, MapGeometry],
+    ) -> None:
         for target in Activation.from_paint(widget, region, strips, button):
-            if any(item.activation.identity == target.identity for item in self.targets):
-                continue
-            if target.available():
-                preview = strips[target.region.y - region.y].crop(
-                    target.region.x - region.x, target.region.right - region.x
-                )
-                self.targets.append(PaintedActivation(target, preview))
+            # Borders may be valid click anchors, but the target's acquired
+            # content inset determines which original cells describe it.
+            preview_region = target.region.intersection(geometry[target.widget].content_region)
+            fragment = (strips[preview_region.y - region.y].crop(
+                preview_region.x - region.x, preview_region.right - region.x)
+                if preview_region else Strip([]))
+            existing = self.targets.get(target.identity)
+            if existing is not None:
+                self.targets[target.identity] = existing.including(preview_region, fragment)
+            elif target.available():
+                self.targets[target.identity] = PaintedActivation(
+                    target, fragment, preview_region)
 
 
 class ReflowResult(NamedTuple):
@@ -2258,7 +2289,8 @@ class Compositor:
         with self._using_geometry(self.root, self._published_map):
             self._render_chops(
                 bounds, self._regions_to_spans((bounds,)), widgets=widgets,
-                cuts=cuts, bounds=bounds, on_render=partial(scene.capture, button=button),
+                cuts=cuts, bounds=bounds,
+                on_render=partial(scene.capture, button=button, geometry=self._published_map),
             )
         return scene
 
