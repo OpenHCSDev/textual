@@ -4,12 +4,11 @@ from itertools import combinations
 import pytest
 
 from textual.app import App, ComposeResult
-from textual.css.scalar import Scalar
 from textual.document._editing import EditingMode
 from textual.geometry import Region
 from textual.widgets import Static, Input, TextArea, Checkbox, RadioButton, Switch, Collapsible, Select
 from textual.widgets._collapsible import CollapsibleTitle
-from textual.widgets._hints import HintClick, HintLabel, HintSession
+from textual.widgets._hints import HintCaption, HintClick, HintLabel, HintSession
 
 
 class DenseLinksApp(App):
@@ -27,7 +26,8 @@ async def test_hint_labels_are_separated():
         await pilot.pause()
         await app.screen.action_show_hints()
         await pilot.pause()
-        regions = [label.region for label in app.screen.query_children(HintLabel)]
+        regions = [Region(label.region.x, label.region.y, len(label.text), 1)
+                   for label in app.screen.query(HintLabel)]
         assert len(regions) == 27
         for first, second in combinations(regions, 2):
             assert first.y != second.y or first.right < second.x or second.right < first.x, (first, second)
@@ -55,7 +55,7 @@ async def test_native_hints_focus_inputs_and_activate_control_owners():
         async def choose(widget):
             await app.screen.action_show_hints()
             await pilot.pause()
-            labels = [label for label in app.screen.query_children(HintLabel)
+            labels = [label for label in app.screen.query(HintLabel)
                       if label.target.widget is widget and label.display]
             assert len(labels) == 1, (widget, labels)
             await pilot.press(*labels[0].text)
@@ -81,6 +81,21 @@ async def test_native_hints_focus_inputs_and_activate_control_owners():
         await choose(select)
         assert select.expanded
         await pilot.press('escape')
+
+
+async def test_native_control_hint_preview_contains_its_label_not_only_its_marker():
+    app = NativeControlsApp()
+    async with app.run_test(size=(90, 40)) as pilot:
+        await pilot.pause()
+        checkbox = app.query_one(Checkbox)
+        await app.screen.action_show_hints()
+        await pilot.pause()
+        previews = {label.target.widget: label.preview.text
+                    for label in app.screen.query(HintLabel)}
+        assert checkbox.label.plain in previews[checkbox]
+        search = app.query_one(Input)
+        assert search.value in previews[search]
+        await pilot.press("escape")
 
 
 @dataclass(frozen=True)
@@ -110,22 +125,24 @@ async def test_hint_caption_initial_unset_width_mount(click: HintClick) -> None:
         editor.editing_mode = HintCaptionMode("NORMAL")
         editor.focus()
         await pilot.pause()
-        targets = app.screen._compositor.activation_targets(click)
-        assert targets, "The session must borrow actual published targets"
-        session = HintSession(app.screen, targets, click)
+        scene = app.screen._compositor.activation_scene(click)
+        assert scene.targets, "The session must borrow actual published targets"
+        session = HintSession.for_scene(app.screen, scene, click)
         assert session.styles.width is None
 
-        await app.screen.mount(*session.labels, session)
+        await app.screen.mount(session)
         session.focus_on_host()
         await pilot.pause()
 
         assert app.screen.query_one(HintSession) is session
         assert app.screen.focused is session
         assert session.original_focus is editor
-        assert session.styles.width == Scalar.from_number(
-            min(app.screen.size.width, session.caption.cell_length)
-        )
-        assert session.render().plain == f"{editor.editing_mode.label} · {click.caption}"
+        assert session.region.width == app.screen.size.width
+        assert session.region.y == app.screen.size.height - 1
+        caption = session.query_one(HintCaption)
+        assert caption.region.width <= app.screen.size.width // 2
+        assert caption.render().plain == f"{editor.editing_mode.label} · {click.caption}"
+        assert all(label.region.x >= caption.region.right for label in session.labels)
         await pilot.press("escape")
         await pilot.pause()
         assert not app.screen.query_children(HintSession)
@@ -142,15 +159,16 @@ async def test_hint_caption_same_width_mode_change(click: HintClick) -> None:
         editor.editing_mode = original_mode
         editor.focus()
         await pilot.pause()
-        assert app.screen._compositor.activation_targets(click)
+        assert app.screen._compositor.activation_scene(click).targets
         await app.screen._show_hints(click)
         await pilot.pause()
         session = app.screen.query_one(HintSession)
-        width, offset = session.styles.width, session.absolute_offset
-        positions = tuple(label.absolute_offset for label in session.labels)
-        crop = Region(0, 0, session.size.width, 1)
+        region = session.region
+        positions = tuple(label.region for label in session.labels)
+        caption = session.query_one(HintCaption)
+        crop = Region(0, 0, caption.size.width, 1)
         assert original_mode.label in "".join(
-            strip.text for strip in session.render_lines(crop)
+            strip.text for strip in caption.render_lines(crop)
         )
 
         editor.editing_mode = replacement_mode
@@ -159,13 +177,12 @@ async def test_hint_caption_same_width_mode_change(click: HintClick) -> None:
         assert app.screen.query_one(HintSession) is session
         assert app.screen.focused is session
         assert session.original_focus is editor
-        assert session.styles.width == width
-        assert session.absolute_offset == offset
-        assert tuple(label.absolute_offset for label in session.labels) == positions
-        painted = "".join(strip.text for strip in session.render_lines(crop))
+        assert session.region == region
+        assert tuple(label.region for label in session.labels) == positions
+        painted = "".join(strip.text for strip in caption.render_lines(crop))
         assert replacement_mode.label in painted
         assert original_mode.label not in painted
-        assert session.render().plain == f"{replacement_mode.label} · {click.caption}"
+        assert caption.render().plain == f"{replacement_mode.label} · {click.caption}"
         await pilot.press("escape")
         await pilot.pause()
         assert not app.screen.query_children(HintSession)
