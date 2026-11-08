@@ -17,6 +17,7 @@ from textual._context import NoActiveAppError
 from textual.css._error_tools import friendly_list
 from textual.reactive import Reactive, reactive
 from textual.widget import Widget
+from textual._on import on
 
 if TYPE_CHECKING:
     from textual.app import App
@@ -175,6 +176,7 @@ class Placeholder(Widget):
             )
         return variant
 
+    @on(events.Click)
     async def _on_click(self, _: events.Click) -> None:
         """Click handler to cycle through the placeholder variants."""
         self.cycle_variant()

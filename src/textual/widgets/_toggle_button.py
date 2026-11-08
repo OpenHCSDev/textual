@@ -19,6 +19,7 @@ from textual.message import Message
 from textual.reactive import reactive
 from textual.style import Style
 from textual.widgets._static import Static
+from textual._on import on
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -258,6 +259,7 @@ class ToggleButton(PrimaryActivation, Static, can_focus=True):
         """
         self.toggle()
 
+    @on(Click)
     async def _on_click(self, _: Click) -> None:
         """Toggle the value of the widget when clicked with the mouse."""
         self.toggle()

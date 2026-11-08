@@ -14,6 +14,7 @@ from textual.message import Message
 from textual.navigation import ActivateSelection, MovesCursor, MovesHorizontalCursor, SelectCursor
 from textual.reactive import reactive, var
 from textual.widgets._radio_button import RadioButton
+from textual._on import on
 
 
 class RadioSet(
@@ -251,6 +252,7 @@ class RadioSet(
         """
         self._selected = event.index
 
+    @on(Click)
     async def _on_click(self, _: Click) -> None:
         """Handle a click on or within the radio set.
 

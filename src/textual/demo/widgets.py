@@ -610,6 +610,7 @@ Switches {
                     yield Switch(id=theme)
                     yield Label(theme, name=theme)
 
+    @on(events.Click)
     @on(events.Click, "Label")
     def on_click(self, event: events.Click) -> None:
         """Make the label toggle the switch."""
@@ -720,6 +721,7 @@ A powerful and highly configurable text area that supports syntax highlighting, 
     DEFAULT_TEXT = """\
 # Start building!
 from textual import App, ComposeResult
+from textual._on import on
 """
 
     def compose(self) -> ComposeResult:

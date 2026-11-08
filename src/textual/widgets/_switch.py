@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from textual.app import RenderResult
     from typing_extensions import Self
 
+from textual._on import on
 from textual.binding import MethodBinding
 from textual.events import Click
 from textual.geometry import Size
@@ -198,7 +199,8 @@ class Switch(PrimaryActivation, Widget, can_focus=True):
     def get_content_height(self, container: Size, viewport: Size, width: int) -> int:
         return 1
 
-    async def _on_click(self, event: Click) -> None:
+    @on(Click)
+    async def toggle_on_click(self, event: Click) -> None:
         """Toggle the state of the switch."""
         event.stop()
         self.toggle()

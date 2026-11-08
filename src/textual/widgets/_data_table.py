@@ -42,6 +42,7 @@ from textual.scroll_view import ScrollView
 from textual._paint_state import PaintState
 from textual.strip import Strip
 from textual.widget import PseudoClasses
+from textual._on import on
 
 CellCacheKey: TypeAlias = (
     "tuple[RowKey, ColumnKey, Style, bool, bool, bool, int, PseudoClasses]"
@@ -2623,6 +2624,7 @@ class DataTable(
         elif cursor_type == "cell":
             self.refresh_coordinate(self.hover_coordinate)
 
+    @on(events.Click)
     async def _on_click(self, event: events.Click) -> None:
         self._set_hover_cursor(True)
         meta = event.style.meta

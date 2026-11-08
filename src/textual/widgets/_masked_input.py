@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 from textual.reactive import Reactive, var
 from textual.validation import ValidationResult, Validator
 from textual.widgets._input import Input
+from textual._on import on
 
 InputValidationOn = Literal["blur", "changed", "submitted"]
 """Possible messages that trigger input validation."""
@@ -595,6 +596,7 @@ class MaskedInput(Input, can_focus=True):
         value = self._template.display(self.value)
         return Text(value, no_wrap=True, overflow="ignore", end="")
 
+    @on(events.Click)
     async def _on_click(self, event: events.Click) -> None:
         """Ensure clicking on value does not leave cursor on a separator."""
         await super()._on_click(event)

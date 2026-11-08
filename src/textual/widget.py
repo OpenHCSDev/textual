@@ -99,6 +99,7 @@ from textual.rlock import RLock
 from textual.selection import Selection
 from textual.strip import Strip
 from textual.visual import Visual, VisualType, visualize
+from textual._on import on
 
 if TYPE_CHECKING:
     from textual.app import App, ComposeResult
@@ -4614,6 +4615,7 @@ class Widget(ScrollsView):
     async def _on_mouse_up(self, event: events.MouseUp) -> None:
         await self.broker_event("mouse.up", event)
 
+    @on(events.Click)
     async def _on_click(self, event: events.Click) -> None:
         if event.widget is self:
             if self.allow_select and self.screen.allow_select and self.app.ALLOW_SELECT:

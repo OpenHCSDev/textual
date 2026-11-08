@@ -22,6 +22,7 @@ from textual.reactive import reactive, var
 from textual.scroll_view import ScrollView
 from textual._paint_state import PaintState
 from textual.strip import Strip
+from textual._on import on
 
 if TYPE_CHECKING:
     from typing_extensions import Self, TypeAlias
@@ -1427,6 +1428,7 @@ class Tree(MovesCursor, Generic[TreeDataType], ScrollView, can_focus=True,
         else:
             node.expand()
 
+    @on(events.Click)
     async def _on_click(self, event: events.Click) -> None:
         async with self.lock:
             meta = event.style.meta

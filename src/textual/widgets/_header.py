@@ -13,6 +13,7 @@ from textual.events import Click, Mount
 from textual.reactive import Reactive
 from textual.widget import Widget
 from textual.widgets import Static
+from textual._on import on
 
 
 class HeaderIcon(Widget):
@@ -40,6 +41,7 @@ class HeaderIcon(Widget):
         else:
             self.disabled = True
 
+    @on(Click)
     async def on_click(self, event: Click) -> None:
         """Launch the command palette when icon is clicked."""
         event.stop()
@@ -179,6 +181,7 @@ class Header(Widget):
     def watch_tall(self, tall: bool) -> None:
         self.set_class(tall, "-tall")
 
+    @on(Click)
     def _on_click(self):
         self.toggle_class("-tall")
 
