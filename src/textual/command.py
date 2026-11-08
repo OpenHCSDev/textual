@@ -60,6 +60,7 @@ from textual.widgets import Button, Input, LoadingIndicator, OptionList, Static
 from textual.widgets.option_list import Option
 from textual.worker import get_current_worker
 from textual._on import on
+from textual.events import Unmount
 
 if TYPE_CHECKING:
     from textual.app import App, ComposeResult
@@ -839,6 +840,7 @@ class CommandPalette(
             provider._post_init()
         self._gather_commands("")
 
+    @on(Unmount)
     async def _on_unmount(self) -> None:  # type: ignore[override]
         """Shutdown providers when command palette is closed."""
         if self._providers:

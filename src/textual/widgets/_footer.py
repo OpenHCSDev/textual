@@ -524,5 +524,6 @@ class Footer(HorizontalContainer, ScrollableContainer, can_focus=False, can_focu
         # existed, so show the current ones without waiting for a change.
         self.bindings_changed(self.screen)
 
+    @on(events.Unmount)
     def on_unmount(self) -> None:
         self.screen.bindings_updated_signal.unsubscribe(self)

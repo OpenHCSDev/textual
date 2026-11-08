@@ -2530,6 +2530,7 @@ class DataTable(
             except KeyError:
                 pass
 
+    @on(events.Leave)
     def _on_leave(self, _: events.Leave) -> None:
         self._set_hover_cursor(False)
 

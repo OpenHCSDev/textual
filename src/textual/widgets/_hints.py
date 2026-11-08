@@ -211,6 +211,7 @@ class HintSession(HintOverlay, HorizontalScroll, can_focus=True):
     def on_mount(self) -> None:
         self.screen.bindings_updated_signal.subscribe(self, self._bindings_changed)
 
+    @on(events.Unmount)
     def on_unmount(self) -> None:
         self.screen.bindings_updated_signal.unsubscribe(self)
 
@@ -254,6 +255,7 @@ class HintSession(HintOverlay, HorizontalScroll, can_focus=True):
         if remaining and remaining[0].is_attached:
             remaining[0].scroll_visible(animate=False, force=True)
 
+    @on(events.Paste)
     def on_paste(self, event: events.Paste):
         original = self.original_focus
         self.dismiss()
@@ -281,6 +283,7 @@ class HintSession(HintOverlay, HorizontalScroll, can_focus=True):
         if target is not None:
             await target.activate()
 
+    @on(events.Blur)
     def on_blur(self):
         self.dismiss(restore=False)
 

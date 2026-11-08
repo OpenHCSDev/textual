@@ -1062,6 +1062,7 @@ class Tree(MovesCursor, Generic[TreeDataType], ScrollView, can_focus=True,
         else:
             self.hover_line = -1
 
+    @on(events.Leave)
     def _on_leave(self, _: events.Leave) -> None:
         # Ensure the hover effect doesn't linger after the mouse leaves.
         self.hover_line = -1

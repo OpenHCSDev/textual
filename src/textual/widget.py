@@ -4682,16 +4682,19 @@ class Widget(ScrollsView):
         if self.geometry.overflow_x == "scroll":
             self.show_horizontal_scrollbar = True
 
+    @on(events.Leave)
     def _on_leave(self, event: events.Leave) -> None:
         if event.node is self:
             self.hover_style = Style()
 
+    @on(events.Focus)
     def _on_focus(self, event: events.Focus) -> None:
         self.has_focus = True
         self.refresh()
         if self.parent is not None:
             self.parent.post_message(events.DescendantFocus(self))
 
+    @on(events.Blur)
     def _on_blur(self, event: events.Blur) -> None:
         self.has_focus = False
         self.refresh()
@@ -4753,12 +4756,14 @@ class Widget(ScrollsView):
             self.scroll_page_right()
             event.stop()
 
+    @on(events.Show)
     def _on_show(self, event: events.Show) -> None:
         if self.show_horizontal_scrollbar:
             self.horizontal_scrollbar.post_message(event)
         if self.show_vertical_scrollbar:
             self.vertical_scrollbar.post_message(event)
 
+    @on(events.Hide)
     def _on_hide(self, event: events.Hide) -> None:
         if self.show_horizontal_scrollbar:
             self.horizontal_scrollbar.post_message(event)
@@ -4778,6 +4783,7 @@ class Widget(ScrollsView):
             # ancestors: a key sent to a hidden focused widget reaches the App.
             self._bubble_onward(message)
 
+    @on(events.Unmount)
     def _on_unmount(self) -> None:
         self._uncover()
 

@@ -734,6 +734,7 @@ class OptionList(ListNavigation, ScrollView, can_focus=True):
     def _on_resize(self):
         self._clear_caches()
 
+    @on(events.Show)
     def on_show(self) -> None:
         self.scroll_to_highlight()
 
@@ -795,6 +796,7 @@ class OptionList(ListNavigation, ScrollView, can_focus=True):
             None if option is None else self._option_to_index[option]
         )
 
+    @on(events.Leave)
     def _on_leave(self, _: events.Leave) -> None:
         """React to the mouse leaving the widget."""
         self._mouse_hovering_over = None
