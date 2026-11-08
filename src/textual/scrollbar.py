@@ -354,16 +354,19 @@ class ScrollBar(Widget):
         """Begin capturing the mouse cursor."""
         self.capture_mouse()
 
+    @on(events.MouseDown)
     async def _on_mouse_down(self, event: events.MouseDown) -> None:
         # We don't want mouse events on the scrollbar bubbling
         event.stop()
 
+    @on(events.MouseUp)
     async def _on_mouse_up(self, event: events.MouseUp) -> None:
         if self.grabbed:
             self.release_mouse()
             self.grabbed = None
         event.stop()
 
+    @on(events.MouseCapture)
     def _on_mouse_capture(self, event: events.MouseCapture) -> None:
         self.app._realtime_animation_begin()
         self.styles.pointer = "grabbing"
@@ -372,6 +375,7 @@ class ScrollBar(Widget):
         self.grabbed = event.mouse_position
         self.grabbed_position = self.position
 
+    @on(events.MouseRelease)
     def _on_mouse_release(self, event: events.MouseRelease) -> None:
         self.app._realtime_animation_complete()
         self.styles.pointer = "default"
@@ -380,6 +384,7 @@ class ScrollBar(Widget):
             self.parent._check_anchor()
         event.stop()
 
+    @on(events.MouseMove)
     async def _on_mouse_move(self, event: events.MouseMove) -> None:
         if self.grabbed and self.window_size:
             x: float | None = None

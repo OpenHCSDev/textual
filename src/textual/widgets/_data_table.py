@@ -2511,6 +2511,7 @@ class DataTable(
                 row_style = base_style
         return row_style
 
+    @on(events.MouseMove)
     def _on_mouse_move(self, event: events.MouseMove):
         """If the hover cursor is visible, display it by extracting the row
         and column metadata from the segments present in the cells."""

@@ -4609,9 +4609,11 @@ class Widget(ScrollsView):
         self._rich_style_cache.clear()
         super().notify_style_update()
 
+    @on(events.MouseDown)
     async def _on_mouse_down(self, event: events.MouseDown) -> None:
         await self.broker_event("mouse.down", event)
 
+    @on(events.MouseUp)
     async def _on_mouse_up(self, event: events.MouseUp) -> None:
         await self.broker_event("mouse.up", event)
 
@@ -4701,6 +4703,7 @@ class Widget(ScrollsView):
         if self.parent is not None:
             self.parent.post_message(events.DescendantBlur(self))
 
+    @on(events.MouseScrollDown)
     def _on_mouse_scroll_down(self, event: events.MouseScrollDown) -> None:
         if event.ctrl or event.shift:
             if self.allow_horizontal_scroll:
@@ -4711,6 +4714,7 @@ class Widget(ScrollsView):
                 if self._scroll_down_for_pointer(animate=False):
                     event.stop()
 
+    @on(events.MouseScrollUp)
     def _on_mouse_scroll_up(self, event: events.MouseScrollUp) -> None:
         if event.ctrl or event.shift:
             if self.allow_horizontal_scroll:
@@ -4721,11 +4725,13 @@ class Widget(ScrollsView):
                 if self._scroll_up_for_pointer(animate=False):
                     event.stop()
 
+    @on(events.MouseScrollRight)
     def _on_mouse_scroll_right(self, event: events.MouseScrollRight) -> None:
         if self.allow_horizontal_scroll:
             if self._scroll_right_for_pointer():
                 event.stop()
 
+    @on(events.MouseScrollLeft)
     def _on_mouse_scroll_left(self, event: events.MouseScrollLeft) -> None:
         if self.allow_horizontal_scroll:
             if self._scroll_left_for_pointer():

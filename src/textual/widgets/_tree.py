@@ -1055,6 +1055,7 @@ class Tree(MovesCursor, Generic[TreeDataType], ScrollView, can_focus=True,
         self.root._reset()
         self.refresh(layout=True)
 
+    @on(events.MouseMove)
     def _on_mouse_move(self, event: events.MouseMove) -> None:
         meta = event.style.meta
         if meta and "line" in meta:

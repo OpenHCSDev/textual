@@ -194,6 +194,7 @@ class FooterKey(Widget):
         label_text.stylize_before(self.rich_style)
         return label_text
 
+    @on(events.MouseDown)
     def on_mouse_down(self) -> None:
         if self._disabled:
             self.app.bell()
@@ -503,6 +504,7 @@ class Footer(HorizontalContainer, ScrollableContainer, can_focus=False, can_focu
             positions = {child: index for index, child in enumerate(ordered)}
             parent.sort_children(key=positions.__getitem__)
 
+    @on(events.MouseScrollDown)
     def _on_mouse_scroll_down(self, event: events.MouseScrollDown) -> None:
         if self.allow_horizontal_scroll:
             self.release_anchor()
@@ -510,6 +512,7 @@ class Footer(HorizontalContainer, ScrollableContainer, can_focus=False, can_focu
                 event.stop()
                 event.prevent_default()
 
+    @on(events.MouseScrollUp)
     def _on_mouse_scroll_up(self, event: events.MouseScrollUp) -> None:
         if self.allow_horizontal_scroll:
             self.release_anchor()

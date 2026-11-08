@@ -1975,6 +1975,7 @@ TextArea {
         if self.is_mounted:
             self.blink_timer.pause()
 
+    @on(events.MouseDown)
     async def _on_mouse_down(self, event: events.MouseDown) -> None:
         """Update the cursor position, and begin a selection using the mouse."""
         target = self.get_target_document_location(event)
@@ -1986,6 +1987,7 @@ TextArea {
         self._pause_blink(visible=False)
         self.history.checkpoint()
 
+    @on(events.MouseMove)
     async def _on_mouse_move(self, event: events.MouseMove) -> None:
         """Handles click and drag to expand and contract the selection."""
         if self._selecting:
@@ -2001,6 +2003,7 @@ TextArea {
             self.record_cursor_width()
             self._restart_blink()
 
+    @on(events.MouseUp)
     async def _on_mouse_up(self, event: events.MouseUp) -> None:
         """Finalize the selection that has been made using the mouse."""
         self._end_mouse_selection()

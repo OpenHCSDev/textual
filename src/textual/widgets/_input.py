@@ -767,6 +767,7 @@ class Input(NativeTextKeys, FocusActivation, EditableInput, ScrollView):
             cell_offset += cell_width
         return clamp(offset, 0, len(self.value))
 
+    @on(events.MouseDown)
     async def _on_mouse_down(self, event: events.MouseDown) -> None:
         self._pause_blink(visible=True)
         offset_x, _ = event.get_content_offset_capture(self)
@@ -781,12 +782,15 @@ class Input(NativeTextKeys, FocusActivation, EditableInput, ScrollView):
             self.release_mouse()
             self._restart_blink()
 
+    @on(events.MouseRelease)
     async def _on_mouse_release(self, _event: events.MouseRelease) -> None:
         self._end_selecting()
 
+    @on(events.MouseUp)
     async def _on_mouse_up(self, _event: events.MouseUp) -> None:
         self._end_selecting()
 
+    @on(events.MouseMove)
     async def _on_mouse_move(self, event: events.MouseMove) -> None:
         if self._selecting:
             # As we drag the mouse, we update the end position of the selection,
