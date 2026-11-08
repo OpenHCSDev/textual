@@ -785,6 +785,7 @@ class OptionList(ListNavigation, ScrollView, can_focus=True):
         """
         return 0
 
+    @on(events.MouseMove)
     def _on_mouse_move(self, event: events.MouseMove) -> None:
         """React to the mouse moving.
 
