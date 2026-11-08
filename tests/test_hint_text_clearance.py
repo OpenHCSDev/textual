@@ -96,7 +96,7 @@ class PublishedHintScreen(Screen):
 
     def _on_frame_published(self) -> None:
         # Observe admission before HintHost's later reconciliation can move paint.
-        self.frames.append(tuple(strip.text for strip in self._compositor.render_published_strips()))
+        self.frames.append(tuple(strip.text for strip in self._compositor.render_strips()))
         super()._on_frame_published()
 
 
@@ -121,3 +121,58 @@ async def test_new_body_glyphs_are_clear_in_every_published_hint_frame():
         changed_rows = [frame[0] for frame in screen.frames if frame[0].startswith("Expanded")]
         assert changed_rows
         assert all(row.startswith(expanded) for row in changed_rows), changed_rows
+
+
+async def test_filling_body_does_not_switch_hint_presentation_or_overpaint():
+    app = ChangingHintsApp()
+    async with app.run_test(size=(70, 28)) as pilot:
+        await pilot.pause()
+        await app.screen.action_show_hints()
+        await pilot.pause()
+        session = app.screen.query_one(HintSession)
+        targets = tuple(label.target for label in session.labels)
+        screen = app.screen
+        assert isinstance(screen, PublishedHintScreen)
+        screen.frames.clear()
+        expected = tuple(f"Filled {index:02} " + "x" * 60 for index in range(27))
+        with app.batch_update():
+            for index, text in enumerate(expected):
+                app.query_one(f"#target-{index}", Static).update(
+                    f"[@click=app.pick({index})]{text}[/]")
+        await pilot.pause()
+        frames = [frame for frame in screen.frames if frame[0].startswith("Filled")]
+        assert frames
+        assert all(frame[:27] == expected for frame in frames)
+        assert app.screen.query_one(HintSession) is session
+        assert tuple(label.target for label in session.labels) == targets
+        await pilot.press(*session.labels[-1].text)
+        await pilot.pause()
+        assert app.picked == 26
+
+
+async def test_footer_browsing_and_resize_cancellation_follow_native_owners():
+    app = ReadableHintsApp()
+    async with app.run_test(size=(70, 35)) as pilot:
+        await pilot.pause()
+        await app.screen.action_show_hints()
+        await pilot.pause()
+        session = app.screen.query_one(HintSession)
+        await pilot.press("right")
+        await pilot.pause()
+        assert session.scroll_x > 0
+        await pilot.resize_terminal(54, 30)
+        await pilot.pause()
+        assert not app.screen.query(HintSession)
+        assert app.picked is None
+        await app.screen.action_show_hints()
+        await pilot.pause()
+        reopened = app.screen.query_one(HintSession)
+        assert reopened is not session
+        assert reopened.region.y == 29
+        assert reopened.region.width == 54
+        assert all(label.display for label in reopened.labels)
+        for index in range(27):
+            assert screen_rows(app)[index].startswith(f"Target {index:02}")
+        await pilot.press("escape")
+        await pilot.pause()
+        assert not app.screen.query(HintSession)
