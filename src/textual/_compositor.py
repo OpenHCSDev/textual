@@ -890,7 +890,6 @@ class ChopsUpdate(CompositorUpdate):
         yield from ()
 
 
-@rich.repr.auto(angular=True)
 class ExposedSpans:
     """The unclaimed cells in a front-to-back paint pass.
 
@@ -960,6 +959,7 @@ class ExposedSpans:
             yield Region(left, start_y, right - left, region.bottom - start_y)
 
 
+@rich.repr.auto(angular=True)
 class Compositor:
     """Responsible for storing information regarding the relative positions of Widgets and rendering them."""
 
