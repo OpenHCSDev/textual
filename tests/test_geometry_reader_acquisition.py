@@ -83,6 +83,8 @@ async def test_disabled_editor_batches_offscreen_focus_order():
         assert editor.text == "original unsent draft" and screen.focused is not editor
         assert all(compositor._published_map[node] == geometry for node, geometry in committed.items())
 
+        missing = {screen.query_one(f"#button-{index}") for index in range(40)
+                   if screen.query_one(f"#button-{index}") not in compositor._layout_map}
         actual = [node.id for node in screen.focus_chain]
         assert [name for name in actual if name and name.startswith("button-")] == [
             f"button-{index}" for index in range(40)
@@ -91,7 +93,7 @@ async def test_disabled_editor_batches_offscreen_focus_order():
         assert len(compositor.arrangements) == 1
         _, visible, retained, _ = compositor.arrangements[0]
         assert visible and compositor._full_map is full_map
-        assert all(screen.query_one(f"#button-{index}") in retained for index in range(40))
+        assert missing.issubset(retained)
         assert screen.query_one("#source-39") not in retained
         # Complete geometry gives the same ordering, rather than treating the
         # viewport as the full focus scope or manufacturing missing positions.

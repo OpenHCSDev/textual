@@ -21,7 +21,6 @@ from functools import cached_property
 from time import perf_counter_ns
 from types import MappingProxyType
 from typing import (
-    TYPE_CHECKING,
     AbstractSet,
     Callable,
     ClassVar,
@@ -54,10 +53,8 @@ from textual.layout import DockArrangeResult, WidgetPlacement
 from textual.strip import Strip, StripRenderable
 from textual.widget import Widget
 
-if TYPE_CHECKING:
-    from typing_extensions import TypeAlias
-
-    from textual.dom import DOMNode
+from typing_extensions import TypeAlias
+from textual.dom import DOMNode
 
 
 class ReflowResult(NamedTuple):
@@ -101,7 +98,7 @@ class GeometryDemand(ABC):
 
     @classmethod
     def cache_subtree(cls, widget: Widget, capacity: int, capturing_source: bool) -> bool:
-        return cls.capture_subtrees and bool(capacity and widget._is_mounted and (
+        return bool(capacity and widget._is_mounted and (
             widget.CACHE_SUBTREE_GEOMETRY or (capturing_source and widget.is_container)))
 
     @staticmethod
@@ -168,6 +165,13 @@ class SubtreeGeometryKey(NamedTuple):
                    virtual_region, region, order,
                    layer_order, clip, visible, dock_gutter, screen_size,
                    visible_only, widget.scroll_offset, inherited_layers)
+
+    def covers(self, requested: SubtreeGeometryKey) -> bool:
+        """A complete acquisition also supplies its requested viewport."""
+        return self == requested or (
+            not self.visible_only and requested.visible_only
+            and self._replace(visible_only=True) == requested
+        )
 
     def intrinsic(self) -> SubtreeGeometryKey:
         """Separate placement from the same declared native arrangement inputs."""
@@ -412,9 +416,13 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
         )
         return spatial_map
 
-    @abstractmethod
+    @staticmethod
+    def matching_key(key: SubtreeGeometryKey) -> SubtreeGeometryKey:
+        return key
+
     def matches(self, key: SubtreeGeometryKey, *, require_complete: bool = False) -> bool:
-        ...
+        return (not require_complete or self.complete) and self.matching_key(self.key).covers(
+            self.matching_key(key))
 
     def restore_into(
         self, geometry: CompositorMap, widgets: set[Widget], invisible_widgets: set[Widget],
@@ -515,14 +523,6 @@ class SubtreeGeometry(ABC, Generic[GeometryEntry]):
 class PlacedSubtreeGeometry(SubtreeGeometry[MapGeometry]):
     """A culled or screen-dependent arrangement keeps its exact placement."""
 
-    def matches(self, key: SubtreeGeometryKey, *, require_complete: bool = False) -> bool:
-        if require_complete and not self.complete:
-            return False
-        return self.key == key or (
-            not self.key.visible_only and key.visible_only
-            and self.key._replace(visible_only=True) == key
-        )
-
     def _project_entry(self, entry: MapGeometry, key: SubtreeGeometryKey,
                        clip: SceneClip, *, root: bool) -> tuple[MapGeometry, SceneClip]:
         return entry, RootSceneClip(entry.clip)
@@ -560,10 +560,9 @@ class IntrinsicSubtreeGeometry(SubtreeGeometry[SubtreeMapGeometry]):
         return super().capture(key, intrinsic, widgets, invisible_widgets,
                                clips, clip, screen_coordinates)
 
-    def matches(self, key: SubtreeGeometryKey, *, require_complete: bool = False) -> bool:
-        if require_complete and not self.complete:
-            return False
-        return self.key.intrinsic() == key.intrinsic()
+    @staticmethod
+    def matching_key(key: SubtreeGeometryKey) -> SubtreeGeometryKey:
+        return key.intrinsic()
 
     def _project_entry(self, entry: SubtreeMapGeometry, key: SubtreeGeometryKey,
                        clip: SceneClip, *, root: bool) -> tuple[MapGeometry, SceneClip]:
@@ -1584,7 +1583,7 @@ class Compositor:
                 return
             if inherited_layers is None and (order_names := widget._get_layer_order((widget,))) is not None:
                 inherited_layers = {name: index for index, name in enumerate(order_names)}
-            if not demand.cache_subtree(
+            if source is None and not demand.cache_subtree(
                     widget, self.max_subtree_geometry_entries, capturing_source):
                 yield from arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
                                complete, inherited_layers, source)  # noqa: F821 -- closure cleared after traversal
@@ -1609,6 +1608,11 @@ class Compositor:
             if require_complete and not matches:
                 yield from arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
                                complete, inherited_layers, resource)  # noqa: F821 -- closure cleared after traversal
+                return
+            if not matches and not demand.capture_subtrees:
+                yield from arrange_widget(
+                    widget, virtual_region, region, order, layer_order, clip, visible,
+                    dock_gutter, enclosing_complete, inherited_layers, resource)
                 return
             if not matches:
                 # Capture complete source geometry before its viewport publication.
