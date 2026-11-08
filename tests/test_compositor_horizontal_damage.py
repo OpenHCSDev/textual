@@ -59,4 +59,3 @@ async def test_horizontal_occlusion_skips_covered_cells_with_native_render_parit
         assert authored
         assert all(style.link == "https://example.com/original-row"
                    and style.meta["@click"] == "original_row" for style in authored)
-
