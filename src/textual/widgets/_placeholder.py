@@ -181,6 +181,7 @@ class Placeholder(Widget):
         """Click handler to cycle through the placeholder variants."""
         self.cycle_variant()
 
+    @on(events.Resize)
     def _on_resize(self, event: events.Resize) -> None:
         """Update the placeholder "size" variant with the new placeholder size."""
         self._renderables["size"] = self._SIZE_RENDER_TEMPLATE.format(*event.size)

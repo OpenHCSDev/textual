@@ -724,6 +724,7 @@ class Tabs(MovesHorizontalCursor, Widget, can_focus=True):
             except NoMatches:
                 pass
 
+    @on(events.Resize)
     def _on_resize(self):
         """Make the active tab visible on resize."""
         self._highlight_active(animate=False)

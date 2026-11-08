@@ -730,6 +730,7 @@ class OptionList(ListNavigation, ScrollView, can_focus=True):
         self.refresh()
         super().notify_style_update()
 
+    @on(events.Resize)
     def _on_resize(self):
         self._clear_caches()
 

@@ -20,6 +20,7 @@ from textual.reactive import var
 from textual.scroll_view import ScrollView
 from textual._paint_state import PaintState
 from textual.strip import Strip
+from textual._on import on
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -130,6 +131,7 @@ class RichLog(ScrollView, can_focus=True):
         super().notify_style_update()
         self._line_cache.clear()
 
+    @on(Resize)
     def on_resize(self, event: Resize) -> None:
         if event.size.width and not self._size_known:
             # This size is known for the first time.

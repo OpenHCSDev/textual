@@ -1416,6 +1416,7 @@ class Tree(MovesCursor, Generic[TreeDataType], ScrollView, can_focus=True,
         strip = strip.crop(x1, x2)
         return strip
 
+    @on(events.Resize)
     def _on_resize(self, event: events.Resize) -> None:
         self._line_cache.grow(event.size.height)
         self._invalidate()
