@@ -1043,19 +1043,10 @@ class Compositor:
         old_map = previous_map
         old_widgets = old_map.keys()
 
-        discarded = self._discarded_between_steps = set()
-        try:
-            map, widgets = yield from self._arrange_steps(
-                parent, size, visible_only=visible_only, retain_geometry=retain_geometry,
-                deadline=deadline,
-            )
-            yield from self._pause_before_commit(deadline)
-        finally:
-            self._discarded_between_steps = None
-        # Widgets removed while this reflow was paused are not in its scene.
-        for widget in discarded:
-            map.pop(widget, None)
-        widgets.difference_update(discarded)
+        map, widgets = yield from self._reflow_scene_steps(
+            parent, size, visible_only=visible_only,
+            retain_geometry=retain_geometry, deadline=deadline,
+        )
         self.root = parent
         self._resize(size)
 
@@ -1097,19 +1088,28 @@ class Compositor:
         Returns:
             Set of widgets that were exposed by the scroll.
         """
+        return run_steps(self.reflow_visible_steps(
+            parent, size, retain_geometry=retain_geometry))
+
+    def reflow_visible_steps(
+        self, parent: Widget, size: Size, *, retain_geometry: Iterable[Widget] = (),
+        deadline: StepDeadline | None = None,
+    ) -> Generator[None, None, set[Widget]]:
+        """The whole-viewport scroll path, retaining the scene until its final step."""
         self._invalidate_render_projection()
         previous_scene = self._layout_map
-        self._full_map_invalidated = True
-        self.root = parent
-        self._resize(size)
 
         # Keep a copy of the old map because we're going to compare it with the update
         old_map = self._visible_map or {}
-        map, widgets = self._arrange_root(
+        map, widgets = yield from self._reflow_scene_steps(
             parent, size, visible_only=True, retain_geometry=retain_geometry,
+            deadline=deadline,
         )
 
         # Replace map and widgets
+        self.root = parent
+        self._resize(size)
+        self._full_map_invalidated = True
         self._visible_map = map
         self._invalidate_render_projection()
         self.widgets = widgets
@@ -1119,6 +1119,25 @@ class Compositor:
         self._damage_geometry(previous_scene, map, parent)
 
         return exposed_widgets
+
+    def _reflow_scene_steps(
+        self, parent: Widget, size: Size, *, visible_only: bool,
+        retain_geometry: Iterable[Widget], deadline: StepDeadline | None,
+    ) -> Generator[None, None, tuple[CompositorMap, set[Widget]]]:
+        """Acquire one scene, excluding widgets retired before its atomic commit."""
+        discarded = self._discarded_between_steps = set()
+        try:
+            map, widgets = yield from self._arrange_steps(
+                parent, size, visible_only=visible_only, retain_geometry=retain_geometry,
+                deadline=deadline,
+            )
+            yield from self._pause_before_commit(deadline)
+        finally:
+            self._discarded_between_steps = None
+        for widget in discarded:
+            map.pop(widget, None)
+        widgets.difference_update(discarded)
+        return map, widgets
 
     def reflow_subtrees(
         self, parent: Widget, size: Size, roots: Iterable[Widget], *,
