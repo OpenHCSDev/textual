@@ -7,7 +7,7 @@ from typing import ClassVar
 from rich.text import Text
 
 from textual import events
-from textual._compositor import ActivationScene, PaintedActivation
+from textual._compositor import ActivationScene, FrameOverlay, PaintedActivation
 from textual.containers import HorizontalScroll
 from textual.binding import ModeBinding
 from textual.document._editing import VimMode
@@ -109,7 +109,7 @@ class HintLabel(HintOverlay):
         return Content(self.text).stylize(typed, 0, len(self.session.prefix))
 
 
-class HintSession(HintOverlay, can_focus=True):
+class HintSession(HintOverlay, FrameOverlay, can_focus=True):
     """Own label input and its short-lived paint; never copy navigation state."""
 
     DEFAULT_CSS = """
@@ -223,17 +223,24 @@ class HintSession(HintOverlay, can_focus=True):
         offset = Offset(0, size.height - 1)
         self.styles.width = desired_width
         self.absolute_offset = offset
-        scene = self.screen._compositor.activation_scene(
-            self.click, self.screen.query(HintOverlay))
+
+    def frame_regions(self, compositor, geometry):
+        overlays = tuple(
+            descendant
+            for overlay in self.screen.query_children(HintOverlay)
+            for descendant in overlay.walk_children(with_self=True)
+        )
+        scene = compositor.activation_scene_from(geometry, self.click, overlays)
         targets = [PaintedActivation(label.target, label.preview) for label in self.labels]
-        offsets = self.offsets(scene, size, targets)
+        offsets = self.offsets(scene, self.screen.size, targets)
         if offsets is None:
             self.disabled = True
             self.screen.run_worker(self._become_legend(targets), group="hint-retirement")
-            return
-        for label, offset in zip(self.labels, offsets):
-            if label.absolute_offset != offset:
-                label.absolute_offset = offset
+            return ()
+        return tuple(
+            (label, label.region.at_offset(offset))
+            for label, offset in zip(self.labels, offsets)
+        )
 
     async def _become_legend(self, targets):
         screen = self.screen
@@ -404,6 +411,9 @@ class LegendHintSession(HintSession, HorizontalScroll):
         self.styles.width = size.width
         self.styles.scrollbar_size_horizontal = 0
         self.absolute_offset = Offset(0, size.height - 1)
+
+    def frame_regions(self, compositor, geometry):
+        return ()
 
     def reveal(self, labels):
         if labels and labels[0].is_attached:

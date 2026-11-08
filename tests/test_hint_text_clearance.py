@@ -1,6 +1,7 @@
 """Hints preserve the displayed target text, not only separation between keys."""
 
 from textual.app import App, ComposeResult
+from textual.screen import Screen
 from textual.widgets import Static
 from textual.widgets._hints import HintLabel, HintSession
 
@@ -86,3 +87,37 @@ async def test_hints_preserve_wide_combining_text_and_escape():
         assert not app.screen.query(HintSession)
         assert app.screen.focused is original_focus
         assert app.picked is None
+
+
+class PublishedHintScreen(Screen):
+    def __init__(self):
+        super().__init__()
+        self.frames: list[tuple[str, ...]] = []
+
+    def _on_frame_published(self) -> None:
+        # Observe admission before HintHost's later reconciliation can move paint.
+        self.frames.append(tuple(strip.text for strip in self._compositor.render_published_strips()))
+        super()._on_frame_published()
+
+
+class ChangingHintsApp(ReadableHintsApp):
+    def get_default_screen(self) -> Screen:
+        return PublishedHintScreen()
+
+
+async def test_new_body_glyphs_are_clear_in_every_published_hint_frame():
+    app = ChangingHintsApp()
+    async with app.run_test(size=(70, 35)) as pilot:
+        await pilot.pause()
+        await app.screen.action_show_hints()
+        await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, PublishedHintScreen)
+        screen.frames.clear()
+        expanded = "Expanded target zero label"
+        app.query_one("#target-0", Static).update(
+            f"[@click=app.pick(0)]{expanded}[/]")
+        await pilot.pause()
+        changed_rows = [frame[0] for frame in screen.frames if frame[0].startswith("Expanded")]
+        assert changed_rows
+        assert all(row.startswith(expanded) for row in changed_rows), changed_rows
