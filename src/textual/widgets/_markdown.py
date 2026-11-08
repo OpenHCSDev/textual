@@ -1274,7 +1274,8 @@ class Markdown(VerticalContainer):
         updater.start()
         return updater
 
-    def on_markdown_link_clicked(self, event: LinkClicked) -> None:
+    @on(LinkClicked)
+    def _open_clicked_link(self, event: LinkClicked) -> None:
         if self._open_links:
             self.app.open_url(event.href)
 
