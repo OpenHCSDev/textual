@@ -4255,6 +4255,19 @@ class Widget(ScrollsView):
         self.check_idle()
         return self
 
+    def repaint_region(self, region: Region) -> Self:
+        """Paint one region again from the content already rendered.
+
+        Like `repaint_lines`, the rendered content is kept; unlike it, only `region` is
+        marked dirty, so the other lines are not painted again.
+        """
+        if not self._is_mounted:
+            return self.refresh()
+        self._set_dirty(region)
+        self._repaint_required = True
+        self.check_idle()
+        return self
+
     def repaint_lines(self) -> Self:
         """Paint every line again from the content already rendered.
 
