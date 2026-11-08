@@ -16,10 +16,27 @@ from textual.reactive import reactive
 from textual.widget import Widget
 
 
-class Container(Widget):
-    """Simple container widget, with vertical layout."""
+class VerticalContainer(Widget):
+    """A widget that stacks its children vertically, and is a container even while empty."""
 
     DEFAULT_LAYOUT = VerticalLayout
+
+
+class HorizontalContainer(Widget):
+    """A widget that lays its children out in a row, and is a container even while empty."""
+
+    DEFAULT_LAYOUT = HorizontalLayout
+
+
+class GridContainer(Widget):
+    """A widget that places its children on a grid, and is a container even while empty."""
+
+    DEFAULT_LAYOUT = GridLayout
+
+
+class Container(VerticalContainer):
+    """Simple container widget, with vertical layout."""
+
 
     DEFAULT_CSS = """
     Container {
@@ -30,10 +47,9 @@ class Container(Widget):
     """
 
 
-class ScrollableContainer(Widget, can_focus=True, key_families=(ScrollCommand,)):
+class ScrollableContainer(VerticalContainer, can_focus=True, key_families=(ScrollCommand,)):
     """A scrollable container with vertical layout, and auto scrollbars on both axis."""
 
-    DEFAULT_LAYOUT = VerticalLayout
 
     # We don't typically want to maximize scrollable containers,
     # since the user can easily navigate the contents
@@ -92,10 +108,9 @@ class ScrollableContainer(Widget, can_focus=True, key_families=(ScrollCommand,))
         return self.can_maximize
 
 
-class Vertical(Widget):
+class Vertical(VerticalContainer):
     """An expanding container with vertical layout and no scrollbars."""
 
-    DEFAULT_LAYOUT = VerticalLayout
 
     DEFAULT_CSS = """
     Vertical {
@@ -106,10 +121,9 @@ class Vertical(Widget):
     """
 
 
-class VerticalGroup(Widget):
+class VerticalGroup(VerticalContainer):
     """A non-expanding container with vertical layout and no scrollbars."""
 
-    DEFAULT_LAYOUT = VerticalLayout
 
     DEFAULT_CSS = """
     VerticalGroup {
@@ -131,10 +145,9 @@ class VerticalScroll(ScrollableContainer):
     """
 
 
-class Horizontal(Widget):
+class Horizontal(HorizontalContainer):
     """An expanding container with horizontal layout and no scrollbars."""
 
-    DEFAULT_LAYOUT = HorizontalLayout
 
     DEFAULT_CSS = """
     Horizontal {
@@ -145,10 +158,9 @@ class Horizontal(Widget):
     """
 
 
-class HorizontalGroup(Widget):
+class HorizontalGroup(HorizontalContainer):
     """A non-expanding container with horizontal layout and no scrollbars."""
 
-    DEFAULT_LAYOUT = HorizontalLayout
 
     DEFAULT_CSS = """
     HorizontalGroup {
@@ -159,10 +171,9 @@ class HorizontalGroup(Widget):
     """
 
 
-class HorizontalScroll(ScrollableContainer):
+class HorizontalScroll(HorizontalContainer, ScrollableContainer):
     """A container with horizontal layout and an automatic scrollbar on the X axis."""
 
-    DEFAULT_LAYOUT = HorizontalLayout
 
     DEFAULT_CSS = """
     HorizontalScroll {
@@ -172,10 +183,9 @@ class HorizontalScroll(ScrollableContainer):
     """
 
 
-class Center(Widget):
+class Center(VerticalContainer):
     """A container which aligns children on the X axis."""
 
-    DEFAULT_LAYOUT = VerticalLayout
 
     DEFAULT_CSS = """
     Center {
@@ -186,10 +196,9 @@ class Center(Widget):
     """
 
 
-class Right(Widget):
+class Right(VerticalContainer):
     """A container which aligns children on the X axis."""
 
-    DEFAULT_LAYOUT = VerticalLayout
 
     DEFAULT_CSS = """
     Right {
@@ -200,10 +209,9 @@ class Right(Widget):
     """
 
 
-class Middle(Widget):
+class Middle(VerticalContainer):
     """A container which aligns children on the Y axis."""
 
-    DEFAULT_LAYOUT = VerticalLayout
 
     DEFAULT_CSS = """
     Middle {
@@ -214,10 +222,9 @@ class Middle(Widget):
     """
 
 
-class CenterMiddle(Widget):
+class CenterMiddle(VerticalContainer):
     """A container which aligns its children on both axis."""
 
-    DEFAULT_LAYOUT = VerticalLayout
 
     DEFAULT_CSS = """
     CenterMiddle {
@@ -228,10 +235,9 @@ class CenterMiddle(Widget):
     """
 
 
-class Grid(Widget):
+class Grid(GridContainer):
     """A container with grid layout."""
 
-    DEFAULT_LAYOUT = GridLayout
 
     DEFAULT_CSS = """
     Grid {
@@ -241,10 +247,9 @@ class Grid(Widget):
     """
 
 
-class ItemGrid(Widget):
+class ItemGrid(GridContainer):
     """A container with grid layout and automatic columns."""
 
-    DEFAULT_LAYOUT = GridLayout
 
     DEFAULT_CSS = """
     ItemGrid {

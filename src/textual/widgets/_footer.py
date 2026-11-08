@@ -11,11 +11,10 @@ from rich.text import Text
 from textual import events
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import HorizontalGroup, ScrollableContainer
+from textual.containers import HorizontalContainer, HorizontalGroup, ScrollableContainer
 from textual.css.native import Component
 from textual.reactive import reactive
 from textual.widget import Widget
-from textual.layouts.horizontal import HorizontalLayout
 from textual.widgets import Label
 
 if TYPE_CHECKING:
@@ -206,9 +205,8 @@ class FooterLabel(Label):
 
 
 @rich.repr.auto
-class Footer(ScrollableContainer, can_focus=False, can_focus_children=False):
+class Footer(HorizontalContainer, ScrollableContainer, can_focus=False, can_focus_children=False):
     ALLOW_SELECT = False
-    DEFAULT_LAYOUT = HorizontalLayout
     DEFAULT_CSS = """
     Footer {
         color: $footer-foreground;

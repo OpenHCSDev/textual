@@ -16,12 +16,11 @@ from markdown_it.token import Token
 from rich.text import Text
 from typing_extensions import TypeAlias
 
-from textual.layouts.vertical import VerticalLayout
 from textual._slug import TrackedSlugs, slug_for_tcss_id
 from textual.actions import StyleAction
 from textual.app import App, ComposeResult
 from textual.await_complete import AwaitComplete
-from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.containers import GridContainer, Horizontal, Vertical, VerticalContainer, VerticalScroll
 from textual.content import Content, Span
 from textual.css.query import NoMatches
 from textual.dom import DOMNode
@@ -663,10 +662,9 @@ class MarkdownTableCellContents(OpensMarkdownLinks, Static):
     """
 
 
-class MarkdownTableContent(OpensMarkdownLinks, Widget):
+class MarkdownTableContent(OpensMarkdownLinks, GridContainer):
     """Renders a Markdown table."""
 
-    DEFAULT_LAYOUT = GridLayout
 
     DEFAULT_CSS = """
     MarkdownTableContent {
@@ -1024,9 +1022,8 @@ class MarkdownFence(MarkdownBlock):
 NUMERALS = " ⅠⅡⅢⅣⅤⅥ"
 
 
-class Markdown(Widget):
+class Markdown(VerticalContainer):
 
-    DEFAULT_LAYOUT = VerticalLayout
     DEFAULT_CSS = """
     Markdown {
         height: auto;

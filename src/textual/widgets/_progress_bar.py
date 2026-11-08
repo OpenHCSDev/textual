@@ -6,6 +6,7 @@ from typing import Optional, Type
 
 from rich.style import Style
 
+from textual.containers import HorizontalContainer
 from textual._types import UnusedParameter
 from textual.app import ComposeResult, RenderResult
 from textual.clock import Clock
@@ -15,7 +16,6 @@ from textual.geometry import clamp
 from textual.reactive import reactive
 from textual.renderables.bar import Bar as BarRenderable
 from textual.widget import Widget
-from textual.layouts.horizontal import HorizontalLayout
 from textual.widgets import Label
 
 UNUSED = UnusedParameter()
@@ -195,10 +195,9 @@ class ETAStatus(Label):
                 return f"{hours:02}:{minutes:02}:{seconds:02}"
 
 
-class ProgressBar(Widget, can_focus=False):
+class ProgressBar(HorizontalContainer, can_focus=False):
     """A progress bar widget."""
 
-    DEFAULT_LAYOUT = HorizontalLayout
 
     DEFAULT_CSS = """
     ProgressBar {

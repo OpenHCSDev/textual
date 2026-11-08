@@ -147,7 +147,6 @@ class Toast(Static, inherit_css=False):
 class ToastRack(Container, inherit_css=False):
     """A container for holding toasts."""
 
-    DEFAULT_LAYOUT = VerticalLayout
 
     DEFAULT_CSS = """
     ToastRack {
