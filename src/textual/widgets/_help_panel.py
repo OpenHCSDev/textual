@@ -2,19 +2,18 @@ from __future__ import annotations
 
 from textwrap import dedent
 
-from textual.layouts.vertical import VerticalLayout
+from textual.containers import VerticalContainer
 from textual.app import ComposeResult
 from textual.css.query import NoMatches
 from textual.widget import Widget
 from textual.widgets import KeyPanel, Markdown
 
 
-class HelpPanel(Widget):
+class HelpPanel(VerticalContainer):
     """
     Shows context sensitive help for the currently focused widget.
     """
 
-    DEFAULT_LAYOUT = VerticalLayout
 
     DEFAULT_CSS = """
 
