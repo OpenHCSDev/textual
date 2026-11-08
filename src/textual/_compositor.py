@@ -891,6 +891,75 @@ class ChopsUpdate(CompositorUpdate):
 
 
 @rich.repr.auto(angular=True)
+class ExposedSpans:
+    """The unclaimed cells in a front-to-back paint pass.
+
+    Rendering and published-scene readers use the same span ownership. This
+    temporary calculation retains no second scene and never arranges widgets.
+    """
+
+    def __init__(self, spans: Iterable[tuple[int, int, int]],
+                 cuts: list[list[int]], bounds: Region) -> None:
+        self.cuts, self.bounds = cuts, bounds
+        self.remaining: dict[int, dict[int, int]] = {}
+        for y, x, end in ChopsUpdate._span_cuts(spans, cuts, bounds.y):
+            self.remaining.setdefault(y - bounds.y, {})[x] = end
+
+    def take(self, y: int, x: int) -> bool:
+        """Claim a cut once; a lower widget cannot paint over its owner."""
+        row = y - self.bounds.y
+        pending = self.remaining.get(row)
+        if pending is None or x not in pending:
+            return False
+        del pending[x]
+        if not pending:
+            del self.remaining[row]
+        return True
+
+    def cover(self, region: Region) -> None:
+        """Claim every cut in an exposed rectangle."""
+        for y in region.line_range:
+            cuts = self.cuts[y - self.bounds.y]
+            for x in cuts[bisect_left(cuts, region.x):bisect_left(cuts, region.right)]:
+                self.take(y, x)
+
+    def regions(self, region: Region) -> Iterable[Region]:
+        """Request exposed chop spans, coalesced across adjacent rows.
+
+        Parent backgrounds often have narrow margins beside foreground
+        children. Dividing their whole width materializes and discards the
+        covered segments. Resolve exposure before asking widgets to paint.
+        """
+        first, last = region.column_span
+        runs: dict[tuple[int, int], int] = {}
+        for y in region.line_range:
+            row = y - self.bounds.y
+            spans: set[tuple[int, int]] = set()
+            start_x = None
+            end_x = first
+            # _regions_to_spans supplies ordered damage; deleting painted
+            # cells preserves that order. Covered cuts are never revisited.
+            for x, end in self.remaining.get(row, {}).items():
+                if first <= x < last:
+                    if start_x is not None and x != end_x:
+                        spans.add((start_x, end_x))
+                        start_x = None
+                    if start_x is None:
+                        start_x = x
+                    end_x = end
+            if start_x is not None:
+                spans.add((start_x, end_x))
+            for span in tuple(runs):
+                if span not in spans:
+                    start_y = runs.pop(span)
+                    left, right = span
+                    yield Region(left, start_y, right - left, y - start_y)
+            for span in spans:
+                runs.setdefault(span, y)
+        for (left, right), start_y in runs.items():
+            yield Region(left, start_y, right - left, region.bottom - start_y)
+
+
 class Compositor:
     """Responsible for storing information regarding the relative positions of Widgets and rendering them."""
 
@@ -1373,6 +1442,32 @@ class Compositor:
             self._published_widgets = self._paint_regions(
                 self._ordered_geometry(self._published_map), self.size.region)
         return self._published_widgets
+
+    def exposed_regions(self, widgets: Iterable[Widget]) -> dict[Widget, tuple[Region, ...]]:
+        """The requested widgets' uncovered cells in the accepted scene.
+
+        Use the painter's span ownership without rendering, hit-testing or
+        discovering pending geometry. Overlays cover text even when they let
+        pointer events through.
+        """
+        wanted = set(widgets)
+        if not wanted:
+            return {}
+        published = self.published_widgets
+        bounds = self.size.region
+        exposure = ExposedSpans(self._regions_to_spans((bounds,)),
+                                self._cuts_for_regions(bounds, published), bounds)
+        exposed = {}
+        for widget, (_origin, clip) in published.items():
+            regions = tuple(exposure.regions(clip))
+            if widget in wanted and regions:
+                exposed[widget] = regions
+                wanted.remove(widget)
+            for region in regions:
+                exposure.cover(region)
+            if not wanted or not exposure.remaining:
+                break
+        return exposed
 
     @staticmethod
     def _ordered_geometry(geometry: Mapping[Widget, MapGeometry]
@@ -2347,55 +2442,17 @@ class Compositor:
         Returns:
             Chops structure.
         """
-        chops: list[dict[int, Strip | None]] = [{} for _ in cuts]
-        remaining: dict[int, dict[int, int]] = {}
-        for y, x, end in ChopsUpdate._span_cuts(spans, cuts, bounds.y):
-            row = y - bounds.y
-            chops[row][x] = None
-            remaining.setdefault(row, {})[x] = end
-        if not remaining:
+        exposure = ExposedSpans(spans, cuts, bounds)
+        chops: list[dict[int, Strip | None]] = [
+            dict.fromkeys(exposure.remaining.get(row, {})) for row in range(len(cuts))
+        ]
+        if not exposure.remaining:
             return cast("Sequence[Mapping[int, Strip]]", chops)
-
-        def render_regions(region: Region) -> Iterable[Region]:
-            """Request exposed chop spans, coalesced across adjacent rows.
-
-            Parent backgrounds often have narrow margins beside foreground
-            children. Dividing their whole width materializes and discards the
-            covered segments. Resolve exposure before asking widgets to paint.
-            """
-            first, last = region.column_span
-            runs: dict[tuple[int, int], int] = {}
-            for y in region.line_range:
-                row = y - bounds.y
-                spans: set[tuple[int, int]] = set()
-                start_x = None
-                end_x = first
-                # _regions_to_spans supplies ordered damage; deleting painted
-                # cells preserves that order. Covered cuts are never revisited.
-                for x, end in remaining.get(row, {}).items():
-                    if first <= x < last:
-                        if start_x is not None and x != end_x:
-                            spans.add((start_x, end_x))
-                            start_x = None
-                        if start_x is None:
-                            start_x = x
-                        end_x = end
-                if start_x is not None:
-                    spans.add((start_x, end_x))
-                for span in tuple(runs):
-                    if span not in spans:
-                        start_y = runs.pop(span)
-                        left, right = span
-                        yield Region(left, start_y, right - left, y - start_y)
-                for span in spans:
-                    runs.setdefault(span, y)
-            for (left, right), start_y in runs.items():
-                yield Region(left, start_y, right - left, region.bottom - start_y)
 
         cut_strips: Iterable[Strip]
 
         # Go through all the renders in reverse order and fill buckets with no render
-        renders = self._get_renders(crop, render_regions, widgets=widgets)
+        renders = self._get_renders(crop, exposure.regions, widgets=widgets)
 
         for widget, render_region, strips in renders:
             if on_render is not None:
@@ -2406,7 +2463,7 @@ class Compositor:
             for y, strip in zip(render_region.line_range, strips):
                 row = y - bounds.y
                 chops_line = chops[row]
-                pending = remaining.get(row)
+                pending = exposure.remaining.get(row)
                 if pending is None:
                     continue
                 row_cuts = cuts[row]
@@ -2415,15 +2472,12 @@ class Compositor:
 
                 # Since we are painting front to back, the first segments for a cut "wins"
                 for cut, strip in zip(final_cuts, cut_strips):
-                    if cut in pending:
+                    if exposure.take(y, cut):
                         chops_line[cut] = strip
-                        del pending[cut]
-                if not pending:
-                    del remaining[row]
             # These are the original pending chop rows, not widget readiness.
             # Once foreground paint has supplied every requested cut, no lower
             # widget can contribute. Do not scan its covered exposure again.
-            if not remaining:
+            if not exposure.remaining:
                 break
         return cast("Sequence[Mapping[int, Strip]]", chops)
 
