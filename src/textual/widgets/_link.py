@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from textual._on import on
 from textual.binding import MethodBinding
+from textual.events import Click
 from textual.reactive import reactive
 from textual.widgets import Static
 
@@ -62,7 +64,8 @@ class Link(Static, can_focus=True):
     def watch_text(self, text: str) -> None:
         self.update(text)
 
-    def on_click(self) -> None:
+    @on(Click)
+    def open_on_click(self) -> None:
         self.action_open_link()
 
     @MethodBinding.declare("enter", description="Open link", show=True)
