@@ -106,7 +106,7 @@ async def test_offscreen_targets_match_full_geometry_without_full_tree_traversal
             compositor = screen._compositor
             # Scrolling consumes the same original target declaration. Its
             # fast path must not discard the offscreen box just established.
-            with patch.object(compositor, "reflow_visible", wraps=compositor.reflow_visible) as scroll_reflow:
+            with patch.object(compositor, "reflow_visible_steps", wraps=compositor.reflow_visible_steps) as scroll_reflow:
                 screen._refresh_layout(app.size, scroll=True)
                 assert scroll_reflow.call_count == 1
             assert target in compositor._visible_map

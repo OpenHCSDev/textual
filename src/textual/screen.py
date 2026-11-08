@@ -1678,8 +1678,9 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
                 retain_geometry=self._layout_geometry_targets(), deadline=deadline,
                 demand=ScrolledGeometry)
             if scoped is None:
-                self._compositor.reflow_visible(
-                    self, size, retain_geometry=self._layout_geometry_targets())
+                yield from self._compositor.reflow_visible_steps(
+                    self, size, retain_geometry=self._layout_geometry_targets(),
+                    deadline=deadline)
                 layers = self._compositor.layers
             else:
                 layers = scoped.placed.items()

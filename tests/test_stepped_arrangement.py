@@ -334,6 +334,33 @@ async def test_input_between_steps_is_handled(monkeypatch) -> None:
         assert outcome(screen)["layout_map"] == one_shot["layout_map"]
 
 
+async def test_unscoped_scroll_yields_before_replacing_its_scene() -> None:
+    """A full geometry read cannot turn the next scroll into one blocking layout."""
+    async with Tree().run_test(size=(100, 30)) as pilot:
+        app = pilot.app
+        screen = app.screen
+        await pilot.pause()
+        compositor = screen._compositor
+        # A native full geometry acquisition leaves no scoped viewport map.
+        compositor.reflow(screen, screen.size)
+        previous = compositor._layout_map
+        body = screen.query_one("#body", VerticalScroll)
+        with screen.hold_frames():
+            body.scroll_to(y=20, animate=False, immediate=True)
+            assert not any(screen._layout_widgets.values())
+            layout = asyncio.create_task(screen.layout_in_steps(scroll=True, step_ns=0))
+            await asyncio.sleep(0)
+            assert not layout.done(), "the whole scroll ran without yielding to input"
+            assert compositor._layout_map is previous
+            app.post_message(events.Key("x", "x"))
+            await layout
+        assert app.handled_during_layout == [True]
+        reference = Compositor(max_subtree_geometry_entries=0)
+        reference.reflow_visible(screen, screen.size)
+        assert compositor._layout_map == reference._layout_map
+        assert tuple(compositor.render_strips()) == tuple(reference.render_strips())
+
+
 async def test_request_between_steps_waits_for_next_layout() -> None:
     async with Tree().run_test(size=(100, 30)) as pilot:
         screen = pilot.app.screen
