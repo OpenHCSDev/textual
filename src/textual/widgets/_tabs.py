@@ -22,6 +22,7 @@ from textual.renderables.bar import Bar
 from textual.visual import VisualType
 from textual.widget import Widget
 from textual.widgets import Static
+from textual._on import on
 
 
 class Underline(Widget):
@@ -86,6 +87,7 @@ class Underline(Widget):
             background_style=Style.from_color(bar_style.bgcolor),
         )
 
+    @on(events.Click)
     def _on_click(self, event: events.Click):
         """Catch clicks, so that the underline can activate the tabs."""
         event.stop()
@@ -201,6 +203,7 @@ class Tab(Static):
         """Undecorated text of the label."""
         return self.label.plain
 
+    @on(events.Click)
     def _on_click(self):
         """Inform the message that the tab was clicked."""
         self.post_message(self.Clicked(self))

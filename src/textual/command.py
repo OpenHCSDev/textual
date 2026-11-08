@@ -59,6 +59,7 @@ from textual.widget import Widget
 from textual.widgets import Button, Input, LoadingIndicator, OptionList, Static
 from textual.widgets.option_list import Option
 from textual.worker import get_current_worker
+from textual._on import on
 
 if TYPE_CHECKING:
     from textual.app import App, ComposeResult
@@ -805,6 +806,7 @@ class CommandPalette(
                 yield CommandList()
                 yield LoadingIndicator()
 
+    @on(Click)
     def _on_click(self, event: Click) -> None:  # type: ignore[override]
         """Handle the click event.
 

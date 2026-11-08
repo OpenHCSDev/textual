@@ -19,6 +19,7 @@ from textual.reactive import reactive, var
 from textual.timer import Timer
 from textual.widgets import Static
 from textual.widgets._option_list import Option, OptionList
+from textual._on import on
 
 if TYPE_CHECKING:
     from typing_extensions import TypeAlias
@@ -269,6 +270,7 @@ class SelectCurrent(Horizontal):
         """Toggle the class."""
         self.set_class(has_value, "-has-value")
 
+    @on(events.Click)
     def _on_click(self, event: events.Click) -> None:
         """Inform ancestor we want to toggle."""
         event.stop()

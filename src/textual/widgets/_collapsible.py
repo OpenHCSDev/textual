@@ -13,6 +13,7 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.view import AUTO
 from textual.widgets import Static
+from textual._on import on
 
 __all__ = ["Collapsible", "CollapsibleTitle"]
 
@@ -73,6 +74,7 @@ class CollapsibleTitle(PrimaryActivation, Static, can_focus=True):
     class Toggle(Message):
         """Request toggle."""
 
+    @on(events.Click)
     async def _on_click(self, event: events.Click) -> None:
         """Inform ancestor we want to toggle."""
         event.stop()

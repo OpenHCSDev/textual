@@ -24,6 +24,7 @@ from textual.message import Message
 from textual.reactive import Reactive
 from textual.renderables.blank import Blank
 from textual.widget import Widget
+from textual._on import on
 
 
 class ScrollMessage(Message, bubble=False):
@@ -397,6 +398,7 @@ class ScrollBar(Widget):
             )
         event.stop()
 
+    @on(events.Click)
     async def _on_click(self, event: events.Click) -> None:
         event.stop()
 

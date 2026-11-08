@@ -11,9 +11,11 @@ except ImportError:
     HTTPX_AVAILABLE = False
 
 from textual import work
+from textual._on import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.demo.page import PageScreen
+from textual.events import Click
 from textual.reactive import reactive
 from textual.widgets import Collapsible, Digits, Footer, Label, Markdown
 
@@ -214,6 +216,7 @@ class StarCount(Horizontal):
         self.tooltip = "Click to refresh"
         self.get_stars()
 
+    @on(Click)
     def on_click(self) -> None:
         self.get_stars()
 

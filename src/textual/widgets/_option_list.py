@@ -21,6 +21,7 @@ from textual._paint_state import PaintState
 from textual.strip import Strip
 from textual.style import Style
 from textual.visual import Padding, Visual, VisualType, visualize
+from textual._on import on
 
 if TYPE_CHECKING:
     from typing_extensions import Self, TypeAlias
@@ -738,6 +739,7 @@ class OptionList(ListNavigation, ScrollView, can_focus=True):
     def on_mount(self) -> None:
         self._update_lines()
 
+    @on(events.Click)
     async def _on_click(self, event: events.Click) -> None:
         """React to the mouse being clicked on an item.
 

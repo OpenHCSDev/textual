@@ -23,6 +23,7 @@ from textual.message import Message
 from textual.reactive import reactive
 from textual._activation import PrimaryActivation
 from textual.widget import Widget
+from textual._on import on
 
 ButtonVariant = Literal["default", "primary", "success", "warning", "error"]
 """The names of the valid button variants.
@@ -425,6 +426,7 @@ class Button(PrimaryActivation, Widget, can_focus=True):
         gesture cannot press twice; a caller pressing again waits for this."""
         return not self.has_class("-active")
 
+    @on(events.Click)
     async def _on_click(self, event: events.Click) -> None:
         event.stop()
         if self.accepts_press:

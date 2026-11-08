@@ -6,6 +6,7 @@ from textual import events, on
 from textual.message import Message
 from textual.reactive import reactive
 from textual.widget import Widget
+from textual._on import on
 
 
 class ListItem(Widget, can_focus=False):
@@ -26,6 +27,7 @@ class ListItem(Widget, can_focus=False):
             self.item = item
             super().__init__()
 
+    @on(events.Click)
     def _on_click(self, _: events.Click) -> None:
         self.post_message(self._ChildClicked(self))
 
