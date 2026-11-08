@@ -10,6 +10,7 @@ from rich.style import Style
 from rich.text import Text, TextType
 
 from textual import work
+from textual._on import on
 from textual.await_complete import AwaitComplete
 from textual.message import Message
 from textual.reactive import var
@@ -567,7 +568,8 @@ class DirectoryTree(Tree[DirEntry]):
                 finally:
                     load_queue.task_done()
 
-    async def _on_tree_node_expanded(self, event: Tree.NodeExpanded[DirEntry]) -> None:
+    @on(Tree.NodeExpanded)
+    async def _load_expanded_directory(self, event: Tree.NodeExpanded[DirEntry]) -> None:
         event.stop()
         dir_entry = event.node.data
         if dir_entry is None:
@@ -579,7 +581,8 @@ class DirectoryTree(Tree[DirEntry]):
             if event.node.data is not None:
                 self.post_message(self.FileSelected(event.node, dir_entry.path))
 
-    async def _on_tree_node_selected(self, event: Tree.NodeSelected[DirEntry]) -> None:
+    @on(Tree.NodeSelected)
+    async def _select_directory_node(self, event: Tree.NodeSelected[DirEntry]) -> None:
         event.stop()
         dir_entry = event.node.data
         if dir_entry is None:
