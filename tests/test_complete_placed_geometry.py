@@ -8,6 +8,11 @@ class CapturedScroll(VerticalScroll):
     CACHE_SUBTREE_GEOMETRY = True
     arrangement_calls = 0
 
+    def subtree_geometry_resource(self, *, visible_only):
+        # This scenario exercises a complete *placed* resource, independent
+        # of an earlier implicit conversion from complete to viewport data.
+        return PlacedSubtreeGeometry
+
     def arrange(self, size, optimal=False):
         self.arrangement_calls += 1
         return super().arrange(size, optimal=optimal)

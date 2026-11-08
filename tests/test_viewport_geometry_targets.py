@@ -57,6 +57,9 @@ async def test_cached_overlay_and_fixed_children_match_the_original_scene(scoped
         await pilot.pause()
         history = screen.query_one("#history", VerticalScroll)
         compositor = screen._compositor
+        # Acquire the resource whose screen-dependent placement this case
+        # exercises, rather than relying on an incidental geometry query.
+        compositor.reflow(screen, app.size)
         for position in (0, 30, 0):
             history.scroll_to(y=position, immediate=True, animate=False)
             if scoped:
