@@ -6,8 +6,8 @@ is laid out at once (`_refresh_layout`), the other a step at a time
 times. The arrangement, the widget set, the retained subtree geometry and the
 Resize/Show/Hide events must be identical. Until the step that commits the
 arrangement, readers see the previous scene and nothing is posted; the
-events are posted at the commit; the steps after it render the visible
-widgets, and nothing is published before the last step.
+events are posted at the commit; painting pauses before its atomic composition,
+and nothing is published before the last step.
 """
 
 from __future__ import annotations
@@ -273,49 +273,48 @@ async def test_readers_between_steps_see_the_previous_scene(monkeypatch) -> None
         await change(screen)
         with monkeypatch.context() as patch:
             refuse_full_reflow(patch)
-            with screen.hold_frames():
-                steps = drive(screen)
-                pauses = 0
-                rendering = 0
-                try:
-                    while True:
-                        if compositor._visible_map is not maps[1]:
-                            # Committed: the remaining steps only render.
-                            committed = compositor._visible_map
-                            rendering += 1
-                            assert compositor._published_map is maps[2]
-                            next(steps)
-                            assert compositor._visible_map is committed
-                            continue
-                        # Readers that could arrange lazily must not.
-                        try:
-                            screen.find_widget(offscreen)
-                        except Exception:
-                            pass
-                        compositor.full_map
-                        screen.focus_next()
-                        assert (compositor._layout_map, compositor._visible_map,
-                                compositor._published_map) == maps
-                        assert all(scene is kept for scene, kept in zip(
-                            (compositor._layout_map, compositor._visible_map,
-                             compositor._published_map), maps))
-                        assert tuple(dict(scene) for scene in maps) == copies
-                        assert compositor.visible_widgets == visible
-                        assert compositor.published_widgets == published
-                        if pauses % 25 == 0:
-                            assert [screen.get_widget_at(x, y) for x, y in points] == hits
-                            assert [screen.get_widget_and_offset_at(x, y)
-                                    for x, y in points] == offsets
-                            assert {widget: widget.region for widget in regions} == regions
-                        pauses += 1
+            steps = drive(screen)
+            pauses = 0
+            rendering = 0
+            try:
+                while True:
+                    if compositor._visible_map is not maps[1]:
+                        # Committed: the remaining steps only render.
+                        committed = compositor._visible_map
+                        rendering += 1
+                        assert compositor._published_map is maps[2]
                         next(steps)
-                except StopIteration:
-                    screen._stepped_layout = None
-                assert pauses > 40
-                assert rendering > 3, "the visible widgets render in steps after the commit"
-                assert not compositor._arranging
-                assert outcome(screen)["layout_map"] == one_shot["layout_map"]
-                assert compositor._visible_map is not maps[1]
+                        assert compositor._visible_map is committed
+                        continue
+                    # Readers that could arrange lazily must not.
+                    try:
+                        screen.find_widget(offscreen)
+                    except Exception:
+                        pass
+                    compositor.full_map
+                    screen.focus_next()
+                    assert (compositor._layout_map, compositor._visible_map,
+                            compositor._published_map) == maps
+                    assert all(scene is kept for scene, kept in zip(
+                        (compositor._layout_map, compositor._visible_map,
+                         compositor._published_map), maps))
+                    assert tuple(dict(scene) for scene in maps) == copies
+                    assert compositor.visible_widgets == visible
+                    assert compositor.published_widgets == published
+                    if pauses % 25 == 0:
+                        assert [screen.get_widget_at(x, y) for x, y in points] == hits
+                        assert [screen.get_widget_and_offset_at(x, y)
+                                for x, y in points] == offsets
+                        assert {widget: widget.region for widget in regions} == regions
+                    pauses += 1
+                    next(steps)
+            except StopIteration:
+                screen._stepped_layout = None
+            assert pauses > 40
+            assert rendering == 1, "one budget pause precedes atomic paint composition"
+            assert not compositor._arranging
+            assert outcome(screen)["layout_map"] == one_shot["layout_map"]
+            assert compositor._visible_map is not maps[1]
 
 
 async def test_input_between_steps_is_handled(monkeypatch) -> None:
@@ -588,13 +587,14 @@ async def test_a_repaint_between_steps_publishes_with_the_layout() -> None:
         top = screen.query_one("#top", Static)
         compositor = screen._compositor
         published = []
-        refresh = screen._compositor_refresh
+        render = compositor.render_update
 
-        def publish():
+        def publish(*args, **kwargs):
+            update = yield from render(*args, **kwargs)
             published.append(set(compositor._dirty_regions))
-            refresh()
+            return update
 
-        screen._compositor_refresh = publish
+        compositor.render_update = publish
         try:
             steps = drive(screen)
             # The widget's refresh, delivered to the screen between steps.
@@ -604,7 +604,7 @@ async def test_a_repaint_between_steps_publishes_with_the_layout() -> None:
             assert top in screen._dirty_widgets
             finish(screen, steps)
         finally:
-            del screen._compositor_refresh
+            del compositor.render_update
         # The publication covers the widget repainted between the steps;
         # publishing cleared its request, so it is not left for later.
         [damage] = published

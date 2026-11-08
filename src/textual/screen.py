@@ -1647,63 +1647,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         self._compositor.update_widgets(self._dirty_widgets)
         self._update_timer.pause()
         try:
-            if scroll and not any(self._layout_widgets.values()):
-                # Only scrolls changed: re-arrange just the scrolled
-                # containers when they can be scoped, else the viewport.
-                taken_scrolled = set(self._scrolled_widgets)
-                scoped = yield from self._compositor.reflow_subtrees_steps(
-                    self, size, taken_scrolled,
-                    retain_geometry=self._layout_geometry_targets(), deadline=deadline,
-                    demand=ScrolledGeometry)
-                if scoped is None:
-                    self._compositor.reflow_visible(
-                        self, size, retain_geometry=self._layout_geometry_targets())
-                    layers = self._compositor.layers
-                else:
-                    layers = scoped.placed.items()
-                self._scrolled_widgets.difference_update(taken_scrolled)
-                self._compositor.update_sizes(layers, layout=False)
-
-            else:
-                viewport_layout = self._use_viewport_layout()
-                # What this layout consumes; requests made between its steps
-                # stay for the next one.
-                taken_layout = {ancestor: set(requesters)
-                                for ancestor, requesters in self._layout_widgets.items()}
-                taken_scrolled = set(self._scrolled_widgets)
-                boundaries = self._layout_boundaries() if viewport_layout else None
-                scoped = None if boundaries is None else (
-                    yield from self._compositor.reflow_subtrees_steps(
-                        self, size, boundaries | taken_scrolled,
-                        layout_widgets={widget for ancestor, requesters in taken_layout.items()
-                                        for widget in requesters
-                                        if widget not in taken_layout or widget is ancestor},
-                        retain_geometry=self._layout_geometry_targets(), deadline=deadline,
-                    ))
-                if scoped is not None:
-                    hidden, shown, placed = scoped
-                    layers = placed.items()
-                else:
-                    hidden, shown = yield from self._compositor.reflow_steps(
-                        self, size, visible_only=viewport_layout,
-                        retain_geometry=self._layout_geometry_targets() if viewport_layout else (),
-                        deadline=deadline,
-                    )
-                    layers = self._compositor.layers
-                if self._layout_widgets == taken_layout:
-                    self._layout_widgets.clear()
-                self._scrolled_widgets.difference_update(taken_scrolled)
-                Hide = events.Hide
-                Show = events.Show
-
-                for widget in hidden:
-                    widget.post_message(Hide())
-
-                self._compositor.update_sizes(layers, shown=shown)
-
-                for widget in shown:
-                    widget.post_message(Show())
-
+            yield from self._arrange_steps(size, scroll, deadline)
         except Exception as error:
             self.app._handle_exception(error)
             return
@@ -1716,6 +1660,72 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         else:
             self.app.post_message(events.Ready())
             self.app._dom_ready = True
+
+    def _arrange_steps(
+        self, size: Size, scroll: bool, deadline: StepDeadline | None,
+    ) -> Generator[None, None, None]:
+        """Prepare geometry before the owning layout publishes its single frame.
+
+        A screen may extend this stage to place its reader against new geometry.
+        Both stages share the layout deadline; no app-wide paint hold survives a yield.
+        """
+        if scroll and not any(self._layout_widgets.values()):
+            # Only scrolls changed: re-arrange just the scrolled
+            # containers when they can be scoped, else the viewport.
+            taken_scrolled = set(self._scrolled_widgets)
+            scoped = yield from self._compositor.reflow_subtrees_steps(
+                self, size, taken_scrolled,
+                retain_geometry=self._layout_geometry_targets(), deadline=deadline,
+                demand=ScrolledGeometry)
+            if scoped is None:
+                self._compositor.reflow_visible(
+                    self, size, retain_geometry=self._layout_geometry_targets())
+                layers = self._compositor.layers
+            else:
+                layers = scoped.placed.items()
+            self._scrolled_widgets.difference_update(taken_scrolled)
+            self._compositor.update_sizes(layers, layout=False)
+
+        else:
+            viewport_layout = self._use_viewport_layout()
+            # What this layout consumes; requests made between its steps
+            # stay for the next one.
+            taken_layout = {ancestor: set(requesters)
+                            for ancestor, requesters in self._layout_widgets.items()}
+            taken_scrolled = set(self._scrolled_widgets)
+            boundaries = self._layout_boundaries() if viewport_layout else None
+            scoped = None if boundaries is None else (
+                yield from self._compositor.reflow_subtrees_steps(
+                    self, size, boundaries | taken_scrolled,
+                    layout_widgets={widget for ancestor, requesters in taken_layout.items()
+                                    for widget in requesters
+                                    if widget not in taken_layout or widget is ancestor},
+                    retain_geometry=self._layout_geometry_targets(), deadline=deadline,
+                ))
+            if scoped is not None:
+                hidden, shown, placed = scoped
+                layers = placed.items()
+            else:
+                hidden, shown = yield from self._compositor.reflow_steps(
+                    self, size, visible_only=viewport_layout,
+                    retain_geometry=self._layout_geometry_targets() if viewport_layout else (),
+                    deadline=deadline,
+                )
+                layers = self._compositor.layers
+            if self._layout_widgets == taken_layout:
+                self._layout_widgets.clear()
+            self._scrolled_widgets.difference_update(taken_scrolled)
+            Hide = events.Hide
+            Show = events.Show
+
+            for widget in hidden:
+                widget.post_message(Hide())
+
+            self._compositor.update_sizes(layers, shown=shown)
+
+            for widget in shown:
+                widget.post_message(Show())
+
 
     async def _on_update(self, message: messages.Update) -> None:
         message.stop()
