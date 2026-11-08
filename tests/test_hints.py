@@ -110,12 +110,12 @@ async def test_hint_caption_initial_unset_width_mount(click: HintClick) -> None:
         editor.editing_mode = HintCaptionMode("NORMAL")
         editor.focus()
         await pilot.pause()
-        targets = app.screen._compositor.activation_targets(click)
-        assert targets, "The session must borrow actual published targets"
-        session = HintSession(app.screen, targets, click)
+        scene = app.screen._compositor.activation_scene(click)
+        assert scene.targets, "The session must borrow actual published targets"
+        session = HintSession.for_scene(app.screen, scene, click)
         assert session.styles.width is None
 
-        await app.screen.mount(*session.labels, session)
+        await app.screen.mount(*session.overlay_labels, session)
         session.focus_on_host()
         await pilot.pause()
 
@@ -142,7 +142,7 @@ async def test_hint_caption_same_width_mode_change(click: HintClick) -> None:
         editor.editing_mode = original_mode
         editor.focus()
         await pilot.pause()
-        assert app.screen._compositor.activation_targets(click)
+        assert app.screen._compositor.activation_scene(click).targets
         await app.screen._show_hints(click)
         await pilot.pause()
         session = app.screen.query_one(HintSession)

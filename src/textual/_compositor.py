@@ -12,12 +12,12 @@ without having to render the entire screen.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from abc import ABC, abstractmethod
 from bisect import bisect_left, bisect_right
 from collections import Counter
 from contextlib import contextmanager
-from functools import cached_property
+from functools import cached_property, partial
 from time import perf_counter_ns
 from types import MappingProxyType
 from typing import (
@@ -55,6 +55,39 @@ from textual.widget import Widget
 
 from typing_extensions import TypeAlias
 from textual.dom import DOMNode
+
+
+@dataclass(frozen=True)
+class PaintedActivation:
+    """An original click effect and its original styled displayed cells."""
+
+    activation: Activation
+    preview: Strip
+
+
+@dataclass
+class ActivationScene:
+    """Targets and occupied glyph spans captured by one accepted-scene traversal."""
+
+    targets: list[PaintedActivation] = field(default_factory=list)
+    occupied: list[Region] = field(default_factory=list)
+
+    def capture(self, widget: Widget, region: Region, strips: list[Strip], button: int) -> None:
+        for y, strip in zip(region.line_range, strips):
+            x = region.x
+            for segment in strip:
+                width = segment.cell_length
+                if width and segment.text.strip():
+                    self.occupied.append(Region(x, y, width, 1))
+                x += width
+        for target in Activation.from_paint(widget, region, strips, button):
+            if any(item.activation.identity == target.identity for item in self.targets):
+                continue
+            if target.available():
+                preview = strips[target.region.y - region.y].crop(
+                    target.region.x - region.x, target.region.right - region.x
+                )
+                self.targets.append(PaintedActivation(target, preview))
 
 
 class ReflowResult(NamedTuple):
@@ -2220,26 +2253,22 @@ class Compositor:
         ) for y, chop in enumerate(chops[: size.height])]
         return render_strips
 
-    def activation_targets(self, button=1):
-        """Borrow the selected click effect from exposed published rows."""
-        targets = []
-        seen = []
-        widgets = self.published_widgets
+    def activation_scene(self, button=1, exclude: Iterable[Widget] = ()) -> ActivationScene:
+        """Borrow click effects and glyph occupancy from the same published rows."""
+        scene = ActivationScene()
+        excluded = set(exclude)
+        widgets = {widget: geometry for widget, geometry in self.published_widgets.items()
+                   if widget not in excluded}
         bounds = self.size.region
         if self.root is None or not widgets:
-            return targets
-
-        def collect(widget, region, strips):
-            for target in Activation.from_paint(widget, region, strips, button):
-                if target.identity not in seen and target.available():
-                    seen.append(target.identity)
-                    targets.append(target)
-
+            return scene
         cuts = self._cuts_for_regions(bounds, widgets)
         with self._using_geometry(self.root, self._published_map):
-            self._render_chops(bounds, self._regions_to_spans((bounds,)), widgets=widgets,
-                               cuts=cuts, bounds=bounds, on_render=collect)
-        return targets
+            self._render_chops(
+                bounds, self._regions_to_spans((bounds,)), widgets=widgets,
+                cuts=cuts, bounds=bounds, on_render=partial(scene.capture, button=button),
+            )
+        return scene
 
     def published_geometry(
         self, roots: Iterable[Widget],

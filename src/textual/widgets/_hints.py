@@ -4,12 +4,16 @@ from __future__ import annotations
 from enum import IntEnum
 from typing import ClassVar
 
+from rich.text import Text
+
 from textual import events
+from textual._compositor import ActivationScene, PaintedActivation
+from textual.containers import HorizontalScroll
 from textual.binding import ModeBinding
 from textual.document._editing import VimMode
 from textual.content import Content
 from textual.css.scalar import Scalar
-from textual.geometry import Offset
+from textual.geometry import NULL_OFFSET, Offset
 from textual.widget import Widget
 
 
@@ -39,11 +43,11 @@ class HintHost:
 
     async def _show_hints(self, click: HintClick) -> None:
         self.dismiss_hints()
-        targets = self._compositor.activation_targets(click)
-        if not targets:
+        scene = self._compositor.activation_scene(click, self.query(HintOverlay))
+        if not scene.targets:
             return
-        session = HintSession(self, targets, click)
-        await self.mount(*session.labels, session)
+        session = HintSession.for_scene(self, scene, click)
+        await self.mount(*session.overlay_labels, session)
         session.focus_on_host()
 
     MODE_BINDINGS: ClassVar[tuple[ModeBinding, ...]] = (
@@ -62,7 +66,14 @@ class HintHost:
             session.reconcile_publication()
 
 
-class HintLabel(Widget):
+class HintOverlay(Widget):
+    """Transient hint paint, excluded when borrowing the underlying body scene."""
+
+    hit_test_transparent = True
+    ALLOW_SELECT = False
+
+
+class HintLabel(HintOverlay):
     """One target's key; the typed span is read from the session that owns the prefix."""
 
     DEFAULT_CSS = """
@@ -77,16 +88,20 @@ class HintLabel(Widget):
     hit_test_transparent = True
     ALLOW_SELECT = False
 
-    def __init__(self, session, text, target, offset):
+    def __init__(self, session, text, painted: PaintedActivation, offset):
         super().__init__()
         self.session = session
         self.text = text
-        self.target = target
+        self.target = painted.activation
+        self.preview = painted.preview
+        self.styles.height = 1
+        self.place(offset)
+
+    def place(self, offset: Offset) -> None:
         self.styles.position = "absolute"
         self.styles.overlay = "screen"
         self.styles.layer = "_tooltips"
-        self.styles.width = len(text)
-        self.styles.height = 1
+        self.styles.width = len(self.text)
         self.absolute_offset = offset
 
     def render(self) -> Content:
@@ -94,7 +109,7 @@ class HintLabel(Widget):
         return Content(self.text).stylize(typed, 0, len(self.session.prefix))
 
 
-class HintSession(Widget, can_focus=True):
+class HintSession(HintOverlay, can_focus=True):
     """Own label input and its short-lived paint; never copy navigation state."""
 
     DEFAULT_CSS = """
@@ -106,24 +121,58 @@ class HintSession(Widget, can_focus=True):
     ALLOW_SELECT = False
     hit_test_transparent = True
 
-    def __init__(self, screen, targets, click: HintClick):
+    label_type: ClassVar[type[HintLabel]] = HintLabel
+
+    @classmethod
+    def for_scene(cls, screen, scene: ActivationScene, click: HintClick):
+        targets = sorted(scene.targets, key=lambda item: (
+            item.activation.region.y, item.activation.region.x))
+        offsets = cls.offsets(scene, screen.size, targets)
+        if offsets is None:
+            return LegendHintSession(screen, targets, click, (NULL_OFFSET,) * len(targets))
+        return cls(screen, targets, click, offsets)
+
+    @classmethod
+    def label_width(cls, count: int) -> int:
+        width = 1
+        while len(cls.alphabet) ** width < count:
+            width += 1
+        return width
+
+    @classmethod
+    def offsets(cls, scene: ActivationScene, size, targets):
+        placed: dict[int, list[tuple[int, int]]] = {}
+        for region in scene.occupied:
+            placed.setdefault(region.y, []).append((region.x, region.right))
+        # The interaction owns its existing footer row, including a dense legend.
+        placed[size.height - 1] = [(0, size.width)]
+        width = cls.label_width(len(targets))
+        offsets = []
+        for painted in targets:
+            offset = cls.free_offset(placed, size, painted.activation.region.offset, width)
+            if offset is None:
+                return None
+            offsets.append(offset)
+        return tuple(offsets)
+
+    def __init__(self, screen, targets, click: HintClick, offsets):
         super().__init__()
         self.click = click
         self.original_focus: Widget | None = screen.focused
-        targets = sorted(targets, key=lambda target: (target.region.y, target.region.x))
         self.prefix = ""
-        width = 1
-        while len(self.alphabet) ** width < len(targets):
-            width += 1
-        labels = []
-        for index, target in enumerate(targets):
-            text = self.label(index, width)
-            labels.append(HintLabel(self, text, target, target.region.offset))
-        self.labels = tuple(labels)
+        width = self.label_width(len(targets))
+        self.labels = tuple(
+            self.label_type(self, self.label(index, width), painted, offset)
+            for index, (painted, offset) in enumerate(zip(targets, offsets))
+        )
         self.styles.position = "absolute"
         self.styles.overlay = "screen"
         self.styles.layer = "_tooltips"
         self.styles.height = 1
+
+    @property
+    def overlay_labels(self):
+        return self.labels
 
     @property
     def _current_original_focus(self) -> Widget | None:
@@ -172,22 +221,36 @@ class HintSession(Widget, can_focus=True):
         width = min(size.width, self.caption.cell_length)
         desired_width = Scalar.from_number(width)
         offset = Offset(0, size.height - 1)
-        if self.styles.width == desired_width and self.absolute_offset == offset:
-            return
         self.styles.width = desired_width
         self.absolute_offset = offset
-        placed: dict[int, list[tuple[int, int]]] = {offset.y: [(0, width)]}
-        for label in self.labels:
-            label.absolute_offset = self.free_offset(
-                placed, size, label.target.region.offset, len(label.text)
-            )
+        scene = self.screen._compositor.activation_scene(
+            self.click, self.screen.query(HintOverlay))
+        targets = [PaintedActivation(label.target, label.preview) for label in self.labels]
+        offsets = self.offsets(scene, size, targets)
+        if offsets is None:
+            self.disabled = True
+            self.screen.run_worker(self._become_legend(targets), group="hint-retirement")
+            return
+        for label, offset in zip(self.labels, offsets):
+            if label.absolute_offset != offset:
+                label.absolute_offset = offset
+
+    async def _become_legend(self, targets):
+        screen = self.screen
+        replacement = LegendHintSession(
+            screen, targets, self.click, (NULL_OFFSET,) * len(targets))
+        replacement.original_focus = self.original_focus
+        replacement.prefix = self.prefix
+        replacement._filter_labels()
+        await self._retire(screen, None)
+        await screen.mount(replacement)
+        replacement.focus_on_host()
 
     @staticmethod
     def free_offset(placed, size, origin, width):
-        """Nearest cell to origin where a label keeps one blank cell beside every placed label.
+        """Nearest bounded gap clear of body glyphs, other labels and the footer.
 
-        Labels are placed in target order; placed maps each row to the spans already taken
-        on it and is extended here. A full screen leaves the label on its target.
+        A failed packing selects the shared footer legend; it never overwrites a target.
         """
         for distance in range(size.width + size.height):
             for dy in sorted(range(-distance, distance + 1), key=abs):
@@ -201,7 +264,7 @@ class HintSession(Widget, can_focus=True):
                     ):
                         placed.setdefault(y, []).append((x, x + width))
                         return Offset(x, y)
-        return origin
+        return None
 
     @classmethod
     def label(cls, index, width):
@@ -236,10 +299,19 @@ class HintSession(Widget, can_focus=True):
             elif len(remaining) == 1 and remaining[0].text == self.prefix:
                 self.dismiss(target=remaining[0].target)
             else:
-                for label in self.labels:
-                    label.display = label in remaining
-                for label in remaining:
-                    label.refresh()
+                self._filter_labels()
+
+    def _filter_labels(self):
+        remaining = []
+        for label in self.labels:
+            label.display = label.text.startswith(self.prefix)
+            if label.display:
+                label.refresh()
+                remaining.append(label)
+        self.reveal(remaining)
+
+    def reveal(self, labels):
+        """Floating keys already point at their source cells."""
 
     def on_paste(self, event: events.Paste):
         original = self.original_focus
@@ -265,7 +337,7 @@ class HintSession(Widget, can_focus=True):
         screen.run_worker(self._retire(screen, target), group="hint-retirement")
 
     async def _retire(self, screen, target):
-        await screen.remove_children(self.labels)
+        await screen.remove_children(self.overlay_labels)
         await self.remove()
         if target is not None:
             await target.activate()
@@ -286,3 +358,53 @@ class HintSession(Widget, can_focus=True):
                 label.display = False
         if not any(label.display for label in self.labels):
             self.dismiss()
+
+
+class LegendHintLabel(HintLabel):
+    """A dense-scene key and its original styled target cells in the footer."""
+
+    def place(self, offset: Offset) -> None:
+        self.styles.width = len(self.text) + self.preview.cell_length + 3
+
+    def render(self) -> Content:
+        preview = Content.from_rich_text(Text.assemble(
+            *((segment.text, segment.style or "") for segment in self.preview)))
+        return super().render() + Content(" ") + preview + Content("  ")
+
+
+class HintCaption(HintOverlay):
+    def __init__(self, session):
+        super().__init__()
+        self.session = session
+        self.styles.width = "auto"
+        self.styles.height = 1
+
+    def render(self) -> Content:
+        return self.session.caption + Content(" · ")
+
+
+class LegendHintSession(HintSession, HorizontalScroll):
+    """A scrollable legend uses only the interaction's already-owned footer row."""
+
+    label_type = LegendHintLabel
+
+    @property
+    def overlay_labels(self):
+        return ()
+
+    def compose(self):
+        yield HintCaption(self)
+        yield from self.labels
+
+    def render(self) -> Content:
+        return Content.empty()
+
+    def _reconcile_caption_geometry(self) -> None:
+        size = self.screen.size
+        self.styles.width = size.width
+        self.styles.scrollbar_size_horizontal = 0
+        self.absolute_offset = Offset(0, size.height - 1)
+
+    def reveal(self, labels):
+        if labels and labels[0].is_attached:
+            labels[0].scroll_visible(animate=False, force=True)
