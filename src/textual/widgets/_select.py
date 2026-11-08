@@ -79,6 +79,7 @@ class SelectOverlay(OptionList):
         self._search_reset_delay: float = 0.7
         """The number of seconds to wait after the most recent key press before resetting the search query."""
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         def reset_query() -> None:
             self._search_query = ""
@@ -628,6 +629,7 @@ class Select(MovesCursor, PrimaryActivation, Generic[SelectType], Vertical,
             compact=Select.compact
         )
 
+    @on(events.Mount)
     def _on_mount(self, _event: events.Mount) -> None:
         """Set initial values."""
         self._setup_options_renderables()

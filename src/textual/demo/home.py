@@ -15,7 +15,7 @@ from textual._on import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.demo.page import PageScreen
-from textual.events import Click
+from textual.events import Click, Mount
 from textual.reactive import reactive
 from textual.widgets import Collapsible, Digits, Footer, Label, Markdown
 
@@ -212,6 +212,7 @@ class StarCount(Horizontal):
                 yield Label("Forks")
                 yield Digits(str(self.forks)).with_tooltip(f"{self.forks} Forks")
 
+    @on(Mount)
     def on_mount(self) -> None:
         self.tooltip = "Click to refresh"
         self.get_stars()

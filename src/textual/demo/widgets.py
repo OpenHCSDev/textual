@@ -41,6 +41,7 @@ from textual.widgets import (
     TextArea,
     Tree,
 )
+from textual._on import on
 
 WIDGETS_MD = """\
 # Widgets
@@ -184,6 +185,7 @@ Cells may be individually styled, and may include Rich renderables.
         with containers.Center():
             yield DataTable(fixed_columns=1)
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         ROWS = list(csv.reader(io.StringIO(MOVIES)))
         table = self.query_one(DataTable)
@@ -359,6 +361,7 @@ def loop_first_last(values: Iterable[T]) -> Iterable[tuple[bool, bool, T]]:
             yield Log(max_lines=10_000, highlight=True)
             yield RichLog(max_lines=10_000)
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         log = self.query_one(Log)
         rich_log = self.query_one(RichLog)
@@ -564,6 +567,7 @@ For detailed graphs, see [textual-plotext](https://github.com/Textualize/textual
                 Sparklines.data,
             )
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.set_interval(0.1, self.update_sparks)
 

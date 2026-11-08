@@ -736,6 +736,7 @@ class OptionList(ListNavigation, ScrollView, can_focus=True):
     def on_show(self) -> None:
         self.scroll_to_highlight()
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self._update_lines()
 

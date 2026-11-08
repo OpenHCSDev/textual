@@ -13,6 +13,8 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import VerticalScroll
 from textual.widgets import Static
+from textual.events import Mount
+from textual._on import on
 
 if TYPE_CHECKING:
     from textual.screen import Screen
@@ -162,6 +164,7 @@ class KeyPanel(VerticalScroll, can_focus=False):
     def compose(self) -> ComposeResult:
         yield BindingsTable(shrink=True, expand=False)
 
+    @on(Mount)
     async def on_mount(self) -> None:
         mount_screen = self.screen
 

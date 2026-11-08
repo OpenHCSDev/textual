@@ -37,6 +37,7 @@ from textual.reactive import Reactive, reactive, var
 from textual.suggester import Suggester, SuggestionReady
 from textual.timer import Timer
 from textual.validation import ValidationResult, Validator
+from textual._on import on
 
 InputValidationOn = Literal["blur", "changed", "submitted"]
 """Possible messages that trigger input validation."""
@@ -687,6 +688,7 @@ class Input(NativeTextKeys, FocusActivation, EditableInput, ScrollView):
         else:
             self._cursor_visible = True
 
+    @on(events.Mount)
     def _on_mount(self, event: Mount) -> None:
         def text_selection_started(screen: Screen) -> None:
             """Signal callback to unselect when arbitrary text selection starts."""

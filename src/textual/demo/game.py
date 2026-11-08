@@ -27,6 +27,7 @@ from textual.reactive import reactive
 from textual.screen import ModalScreen, Screen
 from textual.timer import Timer
 from textual.widgets import Button, Digits, Footer, Markdown, Select, Static
+from textual._on import on
 
 
 @dataclass
@@ -218,6 +219,7 @@ class Tile(containers.Vertical):
         static.styles.height = self.parent.styles.height
         yield static
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         if self.tile is not None:
             width, height = self.tile_size

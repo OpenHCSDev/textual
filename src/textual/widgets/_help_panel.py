@@ -7,6 +7,8 @@ from textual.app import ComposeResult
 from textual.css.query import NoMatches
 from textual.widget import Widget
 from textual.widgets import KeyPanel, Markdown
+from textual.events import Mount
+from textual._on import on
 
 
 class HelpPanel(VerticalContainer):
@@ -79,6 +81,7 @@ class HelpPanel(VerticalContainer):
 
     DEFAULT_CLASSES = "-textual-system"
 
+    @on(Mount)
     def on_mount(self):
         def update_help(focused_widget: Widget | None):
             self.update_help(focused_widget)

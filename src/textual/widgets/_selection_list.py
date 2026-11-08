@@ -23,6 +23,7 @@ from textual.widgets._option_list import (
     OptionListContent,
 )
 from textual.widgets._toggle_button import ToggleButton
+from textual._on import on
 
 SelectionType = TypeVar("SelectionType")
 """The type for the value of a [`Selection`][textual.widgets.selection_list.Selection] in a [`SelectionList`][textual.widgets.SelectionList]"""
@@ -256,6 +257,7 @@ class SelectionList(Generic[SelectionType], OptionList, key_families=(ActivateSe
         """
         return list(self._selected.keys())
 
+    @on(events.Mount)
     def _on_mount(self, _event: events.Mount) -> None:
         """Configure the list once the DOM is ready."""
         self._send_messages = True

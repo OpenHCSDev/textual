@@ -821,6 +821,7 @@ class CommandPalette(
             self.app.post_message(CommandPalette.Closed(option_selected=False))
             self.dismiss()
 
+    @on(Mount)
     def _on_mount(self, _: Mount) -> None:
         """Configure the command palette once the DOM is ready."""
 

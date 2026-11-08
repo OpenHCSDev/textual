@@ -179,6 +179,7 @@ class RadioSet(
             self.tooltip = tooltip
         self.compact = compact
 
+    @on(Mount)
     def _on_mount(self, _: Mount) -> None:
         """Perform some processing once mounted in the DOM."""
 

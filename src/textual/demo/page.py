@@ -10,6 +10,8 @@ from textual.binding import Binding
 from textual.containers import ScrollableContainer
 from textual.screen import ModalScreen, Screen
 from textual.widgets import Static
+from textual.events import Mount
+from textual._on import on
 
 
 class CodeScreen(ModalScreen):
@@ -41,6 +43,7 @@ class CodeScreen(ModalScreen):
                 expand=True,
             )
 
+    @on(Mount)
     def on_mount(self):
         code_widget = self.query_one("#code")
         code_widget.border_title = self.title

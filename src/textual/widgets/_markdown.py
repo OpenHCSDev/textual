@@ -35,6 +35,7 @@ from textual.style import Style
 from textual.widget import Widget
 from textual.widgets import Static, Tree
 from textual.widgets._label import Label
+from textual._on import on
 
 TableOfContentsType: TypeAlias = "list[tuple[int, str, str | None]]"
 """Information about the table of contents of a markdown document.
@@ -754,6 +755,7 @@ class MarkdownTableContent(OpensMarkdownLinks, GridContainer):
         self.last_row = row_index
         await self.mount_all(new_cells)
 
+    @on(Mount)
     def on_mount(self) -> None:
         self.styles.grid_size_columns = len(self.headers)
 
@@ -1202,6 +1204,7 @@ class Markdown(VerticalContainer):
         """
         return self.BLOCKS[block_name]
 
+    @on(Mount)
     async def _on_mount(self, _: Mount) -> None:
         initial_markdown = self._initial_markdown
         self._initial_markdown = None
@@ -1738,6 +1741,7 @@ class MarkdownViewer(VerticalScroll, can_focus=False, can_focus_children=True):
         """The [table of contents][textual.widgets.markdown.MarkdownTableOfContents] widget."""
         return self.query_one(MarkdownTableOfContents)
 
+    @on(Mount)
     async def _on_mount(self, _: Mount) -> None:
         await self.document.update(self._markdown or "")
 
