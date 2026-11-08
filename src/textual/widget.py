@@ -64,6 +64,7 @@ from textual._measurement import (
 )
 from textual.message_pump import MessagePump
 from textual._paint_state import PaintState
+from textual._render_publication import NO_RENDER_PUBLICATION, RenderPublication
 from textual._styles_cache import FramePaint, PaintStyles, StylesCache
 from textual._types import AnimationLevel
 from textual.actions import SkipAction
@@ -4130,6 +4131,14 @@ class Widget(ScrollsView):
 
     hit_test_transparent: ClassVar[bool] = False
     """Decorative paint may opt out of the original pointer hit-test owner."""
+
+    def capture_render(self, origin: Offset, region: Region, strips: list[Strip]) -> RenderPublication:
+        """Capture source information now; the output owner accepts it with these cells.
+
+        Origin and region are screen coordinates. A widget overriding this
+        must retain the rendered source, not consult mutable layout on admit.
+        """
+        return NO_RENDER_PUBLICATION
 
     def render_lines(self, crop: Region) -> list[Strip]:
         """Render the widget into lines.
