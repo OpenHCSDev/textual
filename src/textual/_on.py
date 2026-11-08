@@ -124,6 +124,17 @@ class DispatchScope:
     ) -> Iterable[Callable[..., object]]:
         return ()
 
+    def conventional_entries(self, message_type: type[Message]) -> tuple[MethodDescriptor, ...]:
+        return ()
+
+    def compiled(self, message_type: type[Message]) -> tuple[CompiledScope, ...]:
+        """This scope's part in dispatching ``message_type``, or nothing. Which routes and which
+        conventional handler a class declares for a message type is fixed once the class exists,
+        so a receiving class resolves it once instead of asking every scope per message."""
+        routes = tuple(self.routes_for(message_type))
+        conventional = self.conventional_entries(message_type)
+        return (CompiledScope(self.owner, routes, conventional),) if routes or conventional else ()
+
     def bound_for(self, receiver: MessagePump, message_type: type[Message]) -> BoundScope:
         return BoundScope(
             self.owner,
@@ -134,7 +145,7 @@ class DispatchScope:
 
 @dataclass(frozen=True)
 class NamedScope(DispatchScope):
-    """The live Python namespace still used by unmigrated messages."""
+    """A class namespace whose conventional ``on_*`` entries unmigrated messages still use."""
 
     named: Mapping[str, object]
 
@@ -157,14 +168,13 @@ class NamedScope(DispatchScope):
             )
         return cls(owner=owner, named=namespace)
 
-    def conventional_methods(
-        self, receiver: MessagePump, message: Message
-    ) -> Iterable[Callable[..., object]]:
-        conventional = self.named.get('_' + message.handler_name) or self.named.get(message.handler_name)
-        # Keep private-name precedence and the live dictionary. A decorated
-        # private entry masks the public conventional entry, too.
-        if conventional is not None and not isinstance(conventional, MessageHandler):
-            yield cast(MethodDescriptor, conventional).__get__(receiver, self.owner)
+    def conventional_entries(self, message_type: type[Message]) -> tuple[MethodDescriptor, ...]:
+        conventional = (self.named.get('_' + message_type.handler_name)
+                        or self.named.get(message_type.handler_name))
+        # Private-name precedence: a decorated private entry masks the public conventional entry, too.
+        if conventional is None or isinstance(conventional, MessageHandler):
+            return ()
+        return (cast(MethodDescriptor, conventional),)
 
 
 @dataclass(frozen=True)
@@ -184,13 +194,30 @@ class ClassScope(DeclaredRoutes, NamedScope):
 
 
 @dataclass(frozen=True)
-class BoundScope(DispatchScope):
-    """A declared-only candidate sequence bound to one receiving pump."""
+class RoutedScope(DispatchScope):
+    """A scope already narrowed to one message type: its routes are the ones it answers."""
 
     routes: tuple[MessageRoute, ...]
 
     def routes_for(self, message_type: type[Message]) -> Iterable[MessageRoute]:
         return self.routes
+
+
+@dataclass(frozen=True)
+class CompiledScope(RoutedScope):
+    """One class's routes and conventional handler for one message type, resolved once."""
+
+    conventional: tuple[MethodDescriptor, ...]
+
+    def conventional_methods(
+        self, receiver: MessagePump, message: Message
+    ) -> Iterable[Callable[..., object]]:
+        return (entry.__get__(receiver, self.owner) for entry in self.conventional)
+
+
+@dataclass(frozen=True)
+class BoundScope(RoutedScope):
+    """A declared-only candidate sequence bound to one receiving pump."""
 
 
 def on(

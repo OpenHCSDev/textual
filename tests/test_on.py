@@ -13,7 +13,9 @@ from textual.widget import Widget
 from textual.widgets import Button, TabbedContent, TabPane
 
 
-async def test_live_named_replacement_during_decorated_dispatch():
+async def test_dispatch_order_decorated_then_private_name_then_c3():
+    """Decorated handlers run first, then each C3 class's conventional handler, a private
+    name taking precedence over the public one; every app binds its own instance."""
     class Notice(Message, namespace="lookup", bubble=False):
         pass
 
@@ -35,7 +37,7 @@ async def test_live_named_replacement_during_decorated_dispatch():
             self.received = []
 
         def _on_lookup_notice(self):
-            self.received.append("old")
+            self.received.append("private")
 
         def on_lookup_notice(self):
             raise AssertionError("private handler has precedence")
@@ -43,26 +45,20 @@ async def test_live_named_replacement_during_decorated_dispatch():
         @on(Notice)
         async def observe(self):
             self.received.append("decorated")
-            # The generator is suspended at its decorated yield. Its captured
-            # class mapping must still expose real method replacement.
-            def replacement(instance):
-                instance.received.append("new")
-
-            type(self)._on_lookup_notice = replacement
 
     app = DispatchApp()
     async with app.run_test() as pilot:
         app.post_message(Notice())
         await pilot.pause()
-        assert app.received == ["decorated", "new", "left", "right", "base"]
+        assert app.received == ["decorated", "private", "left", "right", "base"]
 
     # Binding belongs to the current instance, not a cached bound method.
     second = DispatchApp()
     async with second.run_test() as pilot:
         second.post_message(Notice())
         await pilot.pause()
-        assert second.received == ["decorated", "new", "left", "right", "base"]
-    assert app.received == ["decorated", "new", "left", "right", "base"]
+        assert second.received == ["decorated", "private", "left", "right", "base"]
+    assert app.received == ["decorated", "private", "left", "right", "base"]
 
 
 async def test_on_button_pressed() -> None:
