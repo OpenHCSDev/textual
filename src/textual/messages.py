@@ -192,3 +192,54 @@ class InBandWindowResize(Message):
         supported = setting_parameter not in (0, 4)
         enabled = setting_parameter in (1, 3)
         return InBandWindowResize(supported, enabled)
+
+
+# The scrollbar's messages live here, beside ScrollToRegion, and not with the ScrollBar
+# widget: scrollbar.py imports Widget, so a widget that handles these could only name them
+# under `if TYPE_CHECKING`, which left five handlers on Widget resolvable by string alone.
+# Moving the declaration to a module both sides already import deletes that cycle rather
+# than hiding it, and nothing about a scroll message needs a Widget.
+class ScrollMessage(Message, bubble=False):
+    """Base class for all scrollbar messages."""
+
+
+@rich.repr.auto
+class ScrollUp(ScrollMessage, verbose=True):
+    """Message sent when clicking above handle."""
+
+
+@rich.repr.auto
+class ScrollDown(ScrollMessage, verbose=True):
+    """Message sent when clicking below handle."""
+
+
+@rich.repr.auto
+class ScrollLeft(ScrollMessage, verbose=True):
+    """Message sent when clicking above handle."""
+
+
+@rich.repr.auto
+class ScrollRight(ScrollMessage, verbose=True):
+    """Message sent when clicking below handle."""
+
+
+class ScrollTo(ScrollMessage, verbose=True):
+    """Message sent when click and dragging handle."""
+
+    __slots__ = ["x", "y", "animate"]
+
+    def __init__(
+        self,
+        x: float | None = None,
+        y: float | None = None,
+        animate: bool = True,
+    ) -> None:
+        self.x = x
+        self.y = y
+        self.animate = animate
+        super().__init__()
+
+    def __rich_repr__(self) -> rich.repr.Result:
+        yield "x", self.x, None
+        yield "y", self.y, None
+        yield "animate", self.animate, True

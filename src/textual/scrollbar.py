@@ -21,56 +21,13 @@ from rich.style import Style, StyleType
 from textual import events
 from textual.geometry import Offset
 from textual.message import Message
+from textual.messages import ScrollDown, ScrollLeft, ScrollMessage, ScrollRight, ScrollTo, ScrollUp
 from textual.reactive import Reactive
 from textual.renderables.blank import Blank
 from textual.widget import Widget
 from textual._on import on
 
 
-class ScrollMessage(Message, bubble=False):
-    """Base class for all scrollbar messages."""
-
-
-@rich.repr.auto
-class ScrollUp(ScrollMessage, verbose=True):
-    """Message sent when clicking above handle."""
-
-
-@rich.repr.auto
-class ScrollDown(ScrollMessage, verbose=True):
-    """Message sent when clicking below handle."""
-
-
-@rich.repr.auto
-class ScrollLeft(ScrollMessage, verbose=True):
-    """Message sent when clicking above handle."""
-
-
-@rich.repr.auto
-class ScrollRight(ScrollMessage, verbose=True):
-    """Message sent when clicking below handle."""
-
-
-class ScrollTo(ScrollMessage, verbose=True):
-    """Message sent when click and dragging handle."""
-
-    __slots__ = ["x", "y", "animate"]
-
-    def __init__(
-        self,
-        x: float | None = None,
-        y: float | None = None,
-        animate: bool = True,
-    ) -> None:
-        self.x = x
-        self.y = y
-        self.animate = animate
-        super().__init__()
-
-    def __rich_repr__(self) -> rich.repr.Result:
-        yield "x", self.x, None
-        yield "y", self.y, None
-        yield "animate", self.animate, True
 
 
 class ScrollBarRender:
