@@ -22,6 +22,8 @@ from .css.scalar import (
 )
 from .geometry import Spacing
 from .layout import Layout
+from textual.events import Unmount
+from textual._on import on
 
 AUTO = Scalar(1.0, Unit.AUTO, Unit.AUTO)
 
@@ -117,6 +119,7 @@ class FocusWithin(Widget):
         self.listen(events.DescendantFocus, self.refresh_paint)
         self.listen(events.DescendantBlur, self.refresh_paint)
 
+    @on(Unmount)
     def _on_unmount(self) -> None:
         self.unlisten(events.DescendantFocus, self.refresh_paint)
         self.unlisten(events.DescendantBlur, self.refresh_paint)

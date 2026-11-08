@@ -15,6 +15,7 @@ from textual.containers import VerticalScroll
 from textual.widgets import Static
 from textual.events import Mount
 from textual._on import on
+from textual.events import Unmount
 
 if TYPE_CHECKING:
     from textual.screen import Screen
@@ -181,5 +182,6 @@ class KeyPanel(VerticalScroll, can_focus=False):
         self.set_class(self.app.ansi_color, "-ansi-scrollbar")
         self.screen.bindings_updated_signal.subscribe(self, _bindings_changed)
 
+    @on(Unmount)
     def on_unmount(self) -> None:
         self.screen.bindings_updated_signal.unsubscribe(self)

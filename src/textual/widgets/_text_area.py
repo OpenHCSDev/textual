@@ -204,6 +204,7 @@ class TextArea(FocusActivation, EditableInput, ScrollView):
         await previous.close()
         self.editing_mode = mode
 
+    @on(events.Unmount)
     async def on_unmount(self) -> None:
         """The public lifecycle hook awaits the editor's owned child retirement."""
         await self.editing_mode.unmount(self)
@@ -2004,10 +2005,12 @@ TextArea {
         """Finalize the selection that has been made using the mouse."""
         self._end_mouse_selection()
 
+    @on(events.Hide)
     def _on_hide(self, event: events.Hide) -> None:
         """Finalize the selection that has been made using the mouse when the widget is hidden."""
         self._end_mouse_selection()
 
+    @on(events.Paste)
     async def _on_paste(self, event: events.Paste) -> None:
         """When a paste occurs, insert the text from the paste event into the document."""
         if self.read_only:

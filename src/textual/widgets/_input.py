@@ -703,6 +703,7 @@ class Input(NativeTextKeys, FocusActivation, EditableInput, ScrollView):
             pause=not (self.cursor_blink and self.has_focus),
         )
 
+    @on(events.Blur)
     def _on_blur(self, event: Blur) -> None:
         self._pause_blink()
         validation_result = (
@@ -710,6 +711,7 @@ class Input(NativeTextKeys, FocusActivation, EditableInput, ScrollView):
         )
         self.post_message(self.Blurred(self, self.value, validation_result))
 
+    @on(events.Focus)
     def _on_focus(self, event: Focus) -> None:
         self._restart_blink()
         if self.select_on_focus and not event.from_app_focus:
@@ -734,6 +736,7 @@ class Input(NativeTextKeys, FocusActivation, EditableInput, ScrollView):
                 self.replace(event.character, *selection)
             event.prevent_default()
 
+    @on(events.Paste)
     def _on_paste(self, event: events.Paste) -> None:
         if event.text:
             line = event.text.splitlines()[0]

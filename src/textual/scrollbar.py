@@ -324,15 +324,18 @@ class ScrollBar(Widget):
             style=scrollbar_style,
         )
 
+    @on(events.Hide)
     def _on_hide(self, event: events.Hide) -> None:
         if self.grabbed:
             self.release_mouse()
             self.grabbed = None
 
+    @on(events.Enter)
     def _on_enter(self, event: events.Enter) -> None:
         if event.node is self:
             self.mouse_over = True
 
+    @on(events.Leave)
     def _on_leave(self, event: events.Leave) -> None:
         if event.node is self:
             self.mouse_over = False

@@ -166,6 +166,7 @@ class SelectOverlay(OptionList):
         """Dismiss the overlay."""
         self.post_message(self.Dismiss())
 
+    @on(events.Blur)
     def _on_blur(self, _event: events.Blur) -> None:
         """On blur we want to dismiss the overlay."""
         self.post_message(self.Dismiss(lost_focus=True))
