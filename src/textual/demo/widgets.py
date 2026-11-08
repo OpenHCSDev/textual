@@ -623,6 +623,7 @@ Switches {
         if event.widget is not None:
             self.query_one(f"#{event.widget.name}", Switch).toggle()
 
+    @on(Switch.Changed)
     def on_switch_changed(self, event: Switch.Changed) -> None:
         # Don't issue more Changed events
         if not event.value:
@@ -753,6 +754,7 @@ from textual._on import on
 
         yield TextArea(self.DEFAULT_TEXT, show_line_numbers=True, language=None)
 
+    @on(Select.Changed)
     def on_select_changed(self, event: Select.Changed) -> None:
         self.query_one(TextArea).language = (
             event.value.lower() if isinstance(event.value, str) else None

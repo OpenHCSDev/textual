@@ -4389,6 +4389,7 @@ class Widget(ScrollsView):
                 pass
         return super().post_message(message)
 
+    @on(messages.Prune)
     async def on_prune(self, event: messages.Prune) -> None:
         """Close message loop when asked to prune."""
         await self._close_messages(wait=False)
@@ -4447,6 +4448,7 @@ class Widget(ScrollsView):
         self._content_width_cache = (None, 0)
         self._content_height_cache = (None, 0)
 
+    @on(events.Idle)
     async def _on_idle(self, event: events.Idle) -> None:
         """Called when there are no more events on the queue.
 
@@ -4638,6 +4640,7 @@ class Widget(ScrollsView):
     async def handle_key(self, event: events.Key) -> bool:
         return await dispatch_key(self, event)
 
+    @on(events.Compose)
     async def _on_compose(self, event: events.Compose) -> None:
         _rich_traceback_omit = True
         event.prevent_default()
@@ -4778,6 +4781,7 @@ class Widget(ScrollsView):
         if self.has_focus:
             self.blur()
 
+    @on(messages.ScrollToRegion)
     def _on_scroll_to_region(self, message: messages.ScrollToRegion) -> None:
         self.scroll_to_region(message.region, animate=True)
 

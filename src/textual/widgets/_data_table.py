@@ -1845,6 +1845,7 @@ class DataTable(
         self._update_count += 1
         self.refresh(layout=True)
 
+    @on(events.Idle)
     async def _on_idle(self, _: events.Idle) -> None:
         """Runs when the message pump is empty.
 

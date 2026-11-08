@@ -4586,9 +4586,11 @@ class App(Generic[ReturnType], DOMNode):
         """Shared decoded-action hook for pointer and keyboard activation."""
         return await handler.run(self, default_namespace)
 
+    @on(messages.Update)
     async def _on_update(self, message: messages.Update) -> None:
         message.stop()
 
+    @on(messages.Layout)
     async def _on_layout(self, message: messages.Layout) -> None:
         message.stop()
 
@@ -4610,12 +4612,14 @@ class App(Generic[ReturnType], DOMNode):
         if self._resize_timer is None:
             self._resize_timer = self.set_timer(1 / 120, self._check_resize)
 
+    @on(events.AppFocus)
     async def _on_app_focus(self, event: events.AppFocus) -> None:
         """App has focus."""
         # Required by textual-web to manage focus in a web page.
         self.app_focus = True
         self.screen.refresh_bindings()
 
+    @on(events.AppBlur)
     async def _on_app_blur(self, event: events.AppBlur) -> None:
         """App has lost focus."""
         # Required by textual-web to manage focus in a web page.
@@ -4791,6 +4795,7 @@ class App(Generic[ReturnType], DOMNode):
         """Show a notification."""
         self.notify(message, title=title, severity=severity)
 
+    @on(messages.TerminalSupportsSynchronizedOutput)
     def _on_terminal_supports_synchronized_output(
         self, message: messages.TerminalSupportsSynchronizedOutput
     ) -> None:
@@ -4892,6 +4897,7 @@ class App(Generic[ReturnType], DOMNode):
         notification = Notification(message, title, severity, timeout, markup=markup)
         self.post_message(Notify(notification))
 
+    @on(Notify)
     def _on_notify(self, event: Notify) -> None:
         """Handle notification message."""
         self._notifications.add(event.notification)
