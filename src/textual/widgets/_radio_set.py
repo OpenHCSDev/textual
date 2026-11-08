@@ -246,7 +246,8 @@ class RadioSet(
                 # We're being clicked off, we don't want that.
                 event.radio_button.value = True
 
-    def _on_radio_set_changed(self, event: RadioSet.Changed) -> None:
+    @on(Changed)
+    def _select_changed_button(self, event: Changed) -> None:
         """Handle a change to which button in the set is pressed.
 
         This handler ensures that, when a button is pressed, it's also the
