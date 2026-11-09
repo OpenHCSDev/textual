@@ -2,6 +2,7 @@ from textual import events
 from textual.app import App, ComposeResult
 from textual.widgets import RichLog
 from textual import on
+from textual.binding import MethodBinding
 
 
 class InputApp(App):
@@ -14,6 +15,7 @@ class InputApp(App):
     def on_key(self, event: events.Key) -> None:
         self.query_one(RichLog).write(event)
 
+    @MethodBinding.declare("space")
     def key_space(self) -> None:
         self.bell()
 

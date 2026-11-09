@@ -14,6 +14,7 @@ from textual.screen import ModalScreen, Screen
 from textual.widgets import Footer, Header, Label
 from textual import events
 from textual import on
+from textual.binding import MethodBinding
 
 
 class ScreenBindingsMixin(Screen[None]):
@@ -179,6 +180,7 @@ async def test_multiple_mode_callbacks():
             super().__init__()
             self.value = value
 
+        @MethodBinding.declare("p")
         def key_p(self) -> None:
             self.app.push_screen(ResultScreen(self.value), written.append)
 
@@ -187,12 +189,15 @@ async def test_multiple_mode_callbacks():
             super().__init__()
             self.value = value
 
+        @MethodBinding.declare("p")
         def key_p(self) -> None:
             self.dismiss(self.value)
 
+        @MethodBinding.declare("f")
         def key_f(self) -> None:
             self.app.switch_mode("first")
 
+        @MethodBinding.declare("o")
         def key_o(self) -> None:
             self.app.switch_mode("other")
 
@@ -206,9 +211,11 @@ async def test_multiple_mode_callbacks():
         def on_mount(self) -> None:
             self.switch_mode("first")
 
+        @MethodBinding.declare("f")
         def key_f(self) -> None:
             self.switch_mode("first")
 
+        @MethodBinding.declare("o")
         def key_o(self) -> None:
             self.switch_mode("other")
 

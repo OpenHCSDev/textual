@@ -53,7 +53,6 @@ from textual._animator import DEFAULT_EASING, Animatable, BoundAnimator, EasingF
 from textual._arrange import DockArrangeResult, arrange
 from textual._context import NoActiveAppError
 from textual.cursor_shape import CellCursor, CursorShape
-from textual._dispatch_key import dispatch_key
 from textual._easing import DEFAULT_SCROLL_EASING
 from textual._extrema import Extrema
 from textual._measurement import (
@@ -4647,12 +4646,6 @@ class Widget(ScrollsView):
         """Allow an asynchronous editor to settle previous input before key lookup."""
         return True
 
-    @on(events.Key)
-    async def _on_key(self, event: events.Key) -> None:
-        await self.handle_key(event)
-
-    async def handle_key(self, event: events.Key) -> bool:
-        return await dispatch_key(self, event)
 
     @on(events.Compose)
     async def _on_compose(self, event: events.Compose) -> None:

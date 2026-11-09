@@ -51,7 +51,7 @@ from textual._time import after_input
 from textual._types import CallbackType
 from textual.actions import SkipAction
 from textual.await_complete import AwaitComplete
-from textual.binding import ActiveBinding, Binding, BindingsMap
+from textual.binding import ActiveBinding, Binding, BindingsMap, MethodBinding
 from textual.css.match import match
 from textual.css.parse import parse_selectors
 from textual.css.query import NoMatches, QueryType
@@ -849,6 +849,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         """
         return self._compositor.find_widget(widget)
 
+    @MethodBinding.declare("escape")
     def clear_selection(self) -> None:
         """Clear any selected text."""
         self.selections = {}
@@ -2408,9 +2409,6 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
             self.post_message(event)
         self.update_pointer_shape()
         return completion
-
-    def _key_escape(self) -> None:
-        self.clear_selection()
 
     def _watch__mouse_down_offset(self, offset: Offset | None) -> None:
         if offset is None:

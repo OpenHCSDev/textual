@@ -5,6 +5,7 @@ from textual.timer import Timer
 from textual.widgets import Footer, ProgressBar
 from textual import events
 from textual import on
+from textual.binding import MethodBinding
 
 
 class StyledProgressBar(App[None]):
@@ -36,10 +37,12 @@ class StyledProgressBar(App[None]):
         self.progress_timer.resume()
         self.query_one(ProgressBar).refresh()
 
+    @MethodBinding.declare("f")
     def key_f(self) -> None:
         # Freeze time for the indeterminate progress bar.
         self.clock.set_time(5.0)
 
+    @MethodBinding.declare("t")
     def key_t(self) -> None:
         # Freeze time to show always the same ETA.
         self.clock.set_time(0)
@@ -47,6 +50,7 @@ class StyledProgressBar(App[None]):
         self.clock.set_time(3.9)
         self.query_one(ProgressBar).update(progress=39)
 
+    @MethodBinding.declare("u")
     def key_u(self) -> None:
         self.query_one(ProgressBar).update(total=100, progress=100)
 

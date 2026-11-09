@@ -1,6 +1,7 @@
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll, Container
 from textual.widgets import Button
+from textual.binding import MethodBinding
 
 
 class ScrollVisibleMargin(App):
@@ -18,6 +19,7 @@ class ScrollVisibleMargin(App):
                 for index in range(1, 51):
                     yield Button(f"Hello, world! ({index})", id=f"b{index}")
 
+    @MethodBinding.declare("x")
     def key_x(self):
         button_twenty = self.query_one("#b26")
         button_twenty.scroll_visible()

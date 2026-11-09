@@ -3,6 +3,7 @@ from rich.text import Text
 
 from textual.app import App
 from textual.widgets import DataTable
+from textual.binding import MethodBinding
 
 
 class AutoHeightRowsApp(App[None]):
@@ -17,6 +18,7 @@ class AutoHeightRowsApp(App[None]):
         table.add_row(4, "1\n2\n3\n4\n5\n6\n7", height=None)
         yield table
 
+    @MethodBinding.declare("s")
     def key_s(self):
         self.query_one(DataTable).sort(self.column)
 

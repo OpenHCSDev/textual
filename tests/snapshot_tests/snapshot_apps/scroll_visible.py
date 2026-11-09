@@ -1,6 +1,7 @@
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll
 from textual.widgets import Label, Static
+from textual.binding import MethodBinding
 
 
 # Checks  https://github.com/Textualize/textual/issues/2181
@@ -15,6 +16,7 @@ class MyApp(App):
         with VerticalScroll():
             yield MyCustomWidget()
 
+    @MethodBinding.declare("t")
     def key_t(self) -> None:
         self.query_one("#target").scroll_visible()
 

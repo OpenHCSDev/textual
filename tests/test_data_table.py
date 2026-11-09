@@ -22,6 +22,7 @@ from textual.widgets.data_table import (
 )
 from textual import events
 from textual import on
+from textual.binding import MethodBinding
 
 ROWS = [["0/0", "0/1"], ["1/0", "1/1"], ["2/0", "2/1"]]
 
@@ -1196,6 +1197,7 @@ async def test_scrolling_cursor_into_view():
     class ScrollingApp(DataTableApp):
         CSS = "DataTable { height: 100%; }"
 
+        @MethodBinding.declare("c")
         def key_c(self):
             self.query_one(DataTable).cursor_coordinate = Coordinate(200, 0)
 
@@ -1454,6 +1456,7 @@ async def test_move_cursor_respects_animate_parameter():
             for _ in range(100):
                 dt.add_row("one", "two")
 
+        @MethodBinding.declare("s")
         def key_s(self):
             table = self.query_one(_DataTable)
             table.move_cursor(row=99, animate=True)
