@@ -3391,22 +3391,27 @@ class App(Generic[ReturnType], DOMNode):
 
         if self.mouse_over is None or not screen.is_active:
             return
+        self.call_after_refresh(self._recheck_mouse_over)
 
-        async def check_mouse() -> None:
-            """Check if the mouse over widget has changed."""
-            try:
-                hover_widgets = screen.get_hover_widgets_at(*self.mouse_position)
-            except NoWidget:
-                pass
-            else:
-                mouse_over, hover_over = hover_widgets.widgets
-                if (
-                    mouse_over is not self.mouse_over
-                    or hover_over is not self.hover_over
-                ):
-                    self._set_mouse_over(mouse_over, hover_over)
+    async def _recheck_mouse_over(self) -> None:
+        """Set the pointer state from what is under the mouse position now.
 
-        self.call_after_refresh(check_mouse)
+        The pointer does not move when the scene under it changes, so this is the one
+        place that answers "what is the mouse over?" after a mount or a retirement.
+        """
+        screen = self.screen
+        if not screen.is_active:
+            return
+        try:
+            hover_widgets = screen.get_hover_widgets_at(*self.mouse_position)
+        except NoWidget:
+            return
+        mouse_over, hover_over = hover_widgets.widgets
+        if mouse_over is not self.mouse_over or hover_over is not self.hover_over:
+            self._set_mouse_over(mouse_over, hover_over)
+        # A link highlight lives in hover_style, which only a mouse move sets, so a scene
+        # that changed under a still pointer kept the widgets and lost the highlighted link.
+        mouse_over.hover_style = screen.get_style_at(*self.mouse_position)
 
     def _retire_pointer_widgets(self, widgets: set[Widget]) -> None:
         """Release only pointer resources belonging to the retired scene cohort."""
@@ -3417,6 +3422,9 @@ class App(Generic[ReturnType], DOMNode):
                 None if self.mouse_over in widgets else self.mouse_over,
                 None if self.hover_over in widgets else self.hover_over,
             )
+            # The pointer has not moved, so the cohort's replacement is under it: ask what
+            # is there now instead of leaving the pointer over nothing until the mouse moves.
+            self.call_after_refresh(self._recheck_mouse_over)
 
     def capture_mouse(self, widget: Widget | None) -> None:
         """Send all mouse events to the given widget or disable mouse capture.
