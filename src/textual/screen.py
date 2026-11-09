@@ -52,6 +52,7 @@ from textual._types import CallbackType
 from textual.actions import SkipAction
 from textual.await_complete import AwaitComplete
 from textual.binding import ActiveBinding, Binding, BindingsMap
+from textual.command_source import CommandSource
 from textual.css.match import match
 from textual.css.parse import parse_selectors
 from textual.css.query import NoMatches, QueryType
@@ -75,7 +76,6 @@ from textual.widgets._hints import HintHost
 from textual.widgets._toast import ToastRack
 
 if TYPE_CHECKING:
-    from textual.command import Provider
 
     # Unused & ignored imports are needed for the docs to link to these objects:
     from textual.message_pump import MessagePump
@@ -251,10 +251,10 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
     title: Reactive[str | None] = Reactive(None, compute=False)
     """Screen title to override [the app title][textual.app.App.title]."""
 
-    COMMANDS: ClassVar[set[type[Provider] | Callable[[], type[Provider]]]] = set()
+    COMMANDS: ClassVar[set[type[CommandSource] | Callable[[], type[CommandSource]]]] = set()
     """Command providers used by the [command palette](/guide/command_palette), associated with the screen.
 
-    Should be a set of [`command.Provider`][textual.command.Provider] classes.
+    Should be a set of [`command.Provider`][textual.command.Provider] classes (any `CommandSource`).
     """
     ALLOW_IN_MAXIMIZED_VIEW: ClassVar[str | None] = None
     """A selector for the widgets (direct children of Screen) that are allowed in the maximized view (in addition to maximized widget). Or
