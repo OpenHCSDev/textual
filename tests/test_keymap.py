@@ -7,6 +7,8 @@ from textual.binding import Binding, BindingsMap, Keymap
 from textual.dom import DOMNode
 from textual.widget import Widget
 from textual.widgets import Label
+from textual import events
+from textual import on
 
 
 class Counter(App[None]):
@@ -27,6 +29,7 @@ class Counter(App[None]):
     def compose(self) -> ComposeResult:
         yield Label("foo")
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.set_keymap(self.keymap)
 
@@ -129,6 +132,7 @@ async def test_keymap_inherited_bindings_same_id():
             yield Parent()
             yield Child()
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.set_keymap({"increment": "i"})
 
@@ -188,6 +192,7 @@ async def test_keymap_child_with_different_id_overridden():
             yield Parent()
             yield Child()
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.set_keymap({"parent.increment": "i"})
 

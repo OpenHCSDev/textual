@@ -1,6 +1,7 @@
 from textual.app import App, ComposeResult
 from textual.screen import ModalScreen
 from textual.widgets import Button, Footer, Header, Label, Input
+from textual import on
 
 
 class Dialog(ModalScreen):
@@ -9,10 +10,12 @@ class Dialog(ModalScreen):
         yield Input()
         yield Button("OK", id="ok")
 
+    @on(Button.Pressed)
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "ok":
             self.app.pop_screen()
 
+    @on(Input.Submitted)
     def on_input_submitted(self, event: Input.Submitted) -> None:
         self.app.pop_screen()  # Never gets here
 

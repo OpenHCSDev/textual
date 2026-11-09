@@ -1,6 +1,8 @@
 from textual.app import App, ComposeResult
 from textual.reactive import reactive
 from textual.widgets import Label, ListItem, ListView
+from textual import events
+from textual import on
 
 
 class ListViewIndexApp(App):
@@ -26,6 +28,7 @@ class ListViewIndexApp(App):
         new_index = len(self._menu) - 1
         self._menu.index = new_index
 
+    @on(events.Ready)
     async def on_ready(self):
         self.data = list(range(0, 30, 2))
 

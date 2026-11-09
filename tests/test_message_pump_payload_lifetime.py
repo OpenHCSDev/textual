@@ -7,6 +7,7 @@ import pytest
 from textual.app import App, ComposeResult
 from textual.message import Message
 from textual.widget import Widget
+from textual import on
 
 
 class Payload:
@@ -24,6 +25,7 @@ class Receiver(Widget):
         super().__init__()
         self.received = asyncio.Event()
 
+    @on(PayloadMessage)
     def on_payload_message(self, message: PayloadMessage) -> None:
         message.stop()
         self.received.set()

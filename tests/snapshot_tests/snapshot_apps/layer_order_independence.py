@@ -2,6 +2,8 @@ from textual.app import App, ComposeResult
 from textual.screen import Screen
 from textual.widgets import Header, Footer, Label
 from textual.containers import VerticalScroll, Container
+from textual import events
+from textual import on
 
 
 class Overlay(Container):
@@ -61,6 +63,7 @@ class Layers(App[None]):
 
     BINDINGS = [("t", "toggle", "Toggle Screen")]
 
+    @on(events.Mount)
     def on_mount(self):
         self.push_screen("good")
 

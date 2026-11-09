@@ -6,6 +6,8 @@ from textual.app import App, ComposeResult
 from textual.containers import Horizontal
 from textual.widgets import OptionList
 from textual.widgets.option_list import Option
+from textual import events
+from textual import on
 
 
 class OptionListApp(App[None]):
@@ -24,6 +26,7 @@ class OptionListApp(App[None]):
             yield OptionList(id="later-at-once")
             yield OptionList(id="after-mount")
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         options: list[None | str | Text | Option] = [
             "One",

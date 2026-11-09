@@ -5,6 +5,8 @@ import sys
 import pytest
 
 from textual.app import App
+from textual import events
+from textual import on
 
 pytestmark = pytest.mark.skipif(
     sys.platform != "win32", reason="We only need to test this on Windows."
@@ -25,6 +27,7 @@ def test_win_sleep_timer_is_cancellable():
     SLEEP_FOR = 10
 
     class WindowsIntervalBugApp(App[None]):
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.set_interval(SLEEP_FOR, lambda: None)
 

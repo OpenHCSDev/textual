@@ -2,6 +2,8 @@ from pathlib import Path
 
 from textual.app import App, ComposeResult
 from textual.widgets import DataTable
+from textual import events
+from textual import on
 
 CSS_PATH = (Path(__file__) / "../datatable_hot_reloading.tcss").resolve()
 
@@ -43,6 +45,7 @@ class DataTableHotReloadingApp(App[None]):
     def compose(self) -> ComposeResult:
         yield DataTable(zebra_stripes=True, cursor_type="row")
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         dt = self.query_one(DataTable)
         dt.add_column("A", width=10)

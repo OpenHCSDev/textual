@@ -332,6 +332,7 @@ async def test_markdown_quoting():
             self.md = Markdown(markdown="[tété](tété)", open_links=False)
             yield self.md
 
+        @on(Markdown.LinkClicked)
         def on_markdown_link_clicked(self, message: Markdown.LinkClicked):
             links.append(message.href)
 

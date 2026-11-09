@@ -1,1 +1,9 @@
-/* This file is purposefully empty. */
+
+Container {
+    align: center middle;
+}
+
+Label {
+    border: round $primary;
+    padding: 3;
+}

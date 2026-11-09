@@ -4,6 +4,8 @@ from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
 from textual.widgets import Digits, ProgressBar
+from textual import events
+from textual import on
 
 
 class Numbers(Vertical):
@@ -41,6 +43,7 @@ class RecomposeApp(App):
         yield Numbers(list(range(self.start, self.end)))
         yield Progress().data_bind(RecomposeApp.progress)
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.start = 10
         self.end = 17

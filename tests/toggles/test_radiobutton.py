@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from textual.app import App, ComposeResult
 from textual.widgets import RadioButton
+from textual import on
 
 
 class RadioButtonApp(App[None]):
@@ -14,6 +15,7 @@ class RadioButtonApp(App[None]):
         yield RadioButton(id="rb2")
         yield RadioButton(value=True, id="rb3")
 
+    @on(RadioButton.Changed)
     def on_radio_button_changed(self, event: RadioButton.Changed) -> None:
         self.events_received.append(
             (

@@ -4,6 +4,8 @@ import pytest
 
 from textual.app import App, SuspendNotSupported
 from textual.drivers.headless_driver import HeadlessDriver
+from textual import events
+from textual import on
 
 
 async def test_suspend_not_supported() -> None:
@@ -47,6 +49,7 @@ async def test_suspend_supported(capfd: pytest.CaptureFixture[str]) -> None:
             nonlocal calls
             calls.add("resume signal")
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.app_suspend_signal.subscribe(self, self.on_suspend, immediate=True)
             self.app_resume_signal.subscribe(self, self.on_resume, immediate=True)

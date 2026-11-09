@@ -6,6 +6,7 @@ from textual.app import App, ComposeResult, SystemCommand
 from textual.containers import Grid
 from textual.screen import ModalScreen, Screen
 from textual.widgets import Button, Label
+from textual import on
 
 
 class QuitScreen(ModalScreen[bool]):
@@ -19,6 +20,7 @@ class QuitScreen(ModalScreen[bool]):
             id="dialog",
         )
 
+    @on(Button.Pressed)
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "quit":
             self.dismiss(True)

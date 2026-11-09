@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from textual.app import App, ComposeResult
 from textual.widgets import Tree
+from textual import events
+from textual import on
 
 
 class TreeApp(App[None]):
@@ -10,6 +12,7 @@ class TreeApp(App[None]):
     def compose(self) -> ComposeResult:
         yield Tree("Test")
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         tree = self.query_one(Tree)
         for n in range(10):

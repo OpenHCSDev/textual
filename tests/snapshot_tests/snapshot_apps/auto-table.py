@@ -2,6 +2,8 @@ from textual.app import App
 from textual.containers import Container, Horizontal, ScrollableContainer, Vertical
 from textual.screen import Screen
 from textual.widgets import DataTable, Header, Label
+from textual import events
+from textual import on
 
 
 class LabeledBox(Container):
@@ -177,6 +179,7 @@ class MyScreen(Screen):
 
 
 class MyApp(App):
+    @on(events.Mount)
     async def on_mount(self):
         self.install_screen(MyScreen(), "myscreen")
         await self.push_screen("myscreen")

@@ -4,6 +4,8 @@ from textual.app import App, ComposeResult
 from textual.containers import Container
 from textual.screen import Screen
 from textual.widgets import Label
+from textual import events
+from textual import on
 
 
 SCREEN_CSS_PATH = (Path(__file__) / "../hot_reloading_app_with_screen_css.tcss").resolve()
@@ -33,6 +35,7 @@ class MyScreen(Screen[None]):
 
 
 class HotReloadingApp(App[None]):
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.push_screen(MyScreen())
 

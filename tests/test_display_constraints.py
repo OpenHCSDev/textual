@@ -4,6 +4,8 @@ from unittest.mock import patch
 from textual.app import App
 from textual.containers import HorizontalGroup, VerticalGroup, VerticalScroll
 from textual.widgets import Static
+from textual import events
+from textual import on
 
 
 async def test_display_constraints_compose_and_preserve_current_authored_styles():
@@ -102,6 +104,7 @@ async def test_nested_removal_reflows_before_all_teardown_finishes():
     release = asyncio.Event()
 
     class ReleasingRow(Static):
+        @on(events.Unmount)
         async def on_unmount(self):
             await release.wait()
 

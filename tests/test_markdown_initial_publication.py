@@ -10,6 +10,8 @@ from textual.app import App
 from textual.await_complete import AwaitComplete
 from textual.worker import WorkerCancelled, WorkerFailed
 from textual.widgets import Markdown
+from textual import events
+from textual import on
 
 
 class PreparedDocument(Markdown):
@@ -36,6 +38,7 @@ class PreparedDocument(Markdown):
         await self.release.wait()
         return await super()._parse_tokens(parser, markdown, use_thread=use_thread)
 
+    @on(events.Callback)
     async def on_callback(self, event):
         if (isinstance(event.callback, partial)
                 and event.callback.func is self.initial_publication):

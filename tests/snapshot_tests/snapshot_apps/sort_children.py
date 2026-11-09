@@ -3,6 +3,8 @@ from operator import attrgetter
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Label
+from textual import events
+from textual import on
 
 
 class Number(Label):
@@ -64,6 +66,7 @@ class SortApp(App):
             yield NumberList(id="ascending")
             yield NumberList(id="descending")
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.query_one("#ascending").sort_children(
             key=attrgetter("number"),

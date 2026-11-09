@@ -6,6 +6,8 @@ from textual._context import active_message_pump
 from textual.app import App, ComposeResult
 from textual.message import Message
 from textual.widgets import Static
+from textual import events
+from textual import on
 
 
 async def test_busy_sender_hands_execution_to_peer_after_completed_delivery():
@@ -113,6 +115,7 @@ async def test_callbacks_run_while_another_widget_relayouts_every_frame():
     ran = []
 
     class Spinner(Static):
+        @on(events.Mount)
         def on_mount(self):
             self.screen.screen_layout_refresh_signal.subscribe(self, self.spin, immediate=True)
 

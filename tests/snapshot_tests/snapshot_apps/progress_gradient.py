@@ -1,6 +1,8 @@
 from textual.app import App, ComposeResult
 from textual.color import Gradient
 from textual.widgets import ProgressBar
+from textual import events
+from textual import on
 
 
 class ProgressApp(App[None]):
@@ -21,6 +23,7 @@ class ProgressApp(App[None]):
         )
         yield ProgressBar(total=100, gradient=gradient)
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.query_one(ProgressBar).update(progress=50)
 

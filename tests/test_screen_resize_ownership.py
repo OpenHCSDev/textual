@@ -4,6 +4,7 @@ from textual.events import Resize
 from textual.geometry import Size
 from textual.screen import Screen
 from textual.widgets import Input
+from textual import on
 
 
 class ResizeScreen(Screen):
@@ -19,6 +20,7 @@ class ResizeScreen(Screen):
         self.layout_requests.append(size)
         return super()._screen_resized(size)
 
+    @on(Resize)
     def on_resize(self, event: Resize):
         self.resize_notifications.append(event)
 

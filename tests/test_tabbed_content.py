@@ -6,6 +6,8 @@ from textual.app import App, ComposeResult
 from textual.reactive import var
 from textual.widgets import Label, Tab, TabbedContent, TabPane, Tabs
 from textual.widgets._tabbed_content import ContentTab
+from textual import events
+from textual import on
 
 
 async def test_tabbed_content_switch_via_ui():
@@ -124,6 +126,7 @@ async def test_unsetting_tabbed_content_active():
                 with TabPane("baz", id="baz"):
                     yield Label("Baz", id="baz-label")
 
+        @on(TabbedContent.Cleared)
         def on_tabbed_content_cleared(self, event: TabbedContent.Cleared) -> None:
             messages.append(event)
 
@@ -174,6 +177,7 @@ async def test_tabbed_content_messages():
                 with TabPane("baz", id="baz"):
                     yield Label("Baz", id="baz-label")
 
+        @on(TabbedContent.TabActivated)
         def on_tabbed_content_tab_activated(
             self, event: TabbedContent.TabActivated
         ) -> None:
@@ -472,6 +476,7 @@ async def test_disabling_does_not_deactivate_tab():
             with TabbedContent():
                 yield Label("tab-1")
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.query_one(TabbedContent).get_tab("tab-1").disabled = True
 
@@ -487,6 +492,7 @@ async def test_disabled_tab_cannot_be_clicked():
                 yield Label("tab-1")
                 yield Label("tab-2")
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.query_one(TabbedContent).get_tab("tab-2").disabled = True
 
@@ -503,6 +509,7 @@ async def test_disabling_via_tabbed_content():
                 yield Label("tab-1")
                 yield Label("tab-2")
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.query_one(TabbedContent).disable_tab("tab-2")
 
@@ -519,6 +526,7 @@ async def test_disabling_via_tab_pane():
                 yield Label("tab-1")
                 yield Label("tab-2")
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.query_one("TabPane#tab-2").disabled = True
 
@@ -553,6 +561,7 @@ async def test_navigation_around_disabled_tabs():
                 yield Label("tab-3")
                 yield Label("tab-4")
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.query_one(TabbedContent).get_tab("tab-1").disabled = True
             self.query_one(TabbedContent).get_tab("tab-3").disabled = True
@@ -583,6 +592,7 @@ async def test_reenabling_tab():
                 yield Label("tab-1")
                 yield Label("tab-2")
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.query_one(TabbedContent).get_tab("tab-2").disabled = True
 
@@ -605,6 +615,7 @@ async def test_reenabling_via_tabbed_content():
                 yield Label("tab-1")
                 yield Label("tab-2")
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.query_one(TabbedContent).disable_tab("tab-2")
 
@@ -627,6 +638,7 @@ async def test_reenabling_via_tab_pane():
                 yield Label("tab-1")
                 yield Label("tab-2")
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.query_one("TabPane#tab-2").disabled = True
 

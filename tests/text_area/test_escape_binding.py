@@ -1,6 +1,8 @@
 from textual.app import App, ComposeResult
 from textual.screen import ModalScreen
 from textual.widgets import Button, TextArea
+from textual import events
+from textual import on
 
 
 class TextAreaDialog(ModalScreen):
@@ -14,6 +16,7 @@ class TextAreaDialog(ModalScreen):
 
 
 class TextAreaDialogApp(App):
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.push_screen(TextAreaDialog())
 

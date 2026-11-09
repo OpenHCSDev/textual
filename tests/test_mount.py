@@ -10,6 +10,7 @@ import pytest
 
 from textual.app import App
 from textual.widget import AwaitMount, Widget
+from textual import events, on
 
 
 async def test_concurrent_composition_keeps_nested_declarations_private():
@@ -75,6 +76,7 @@ class W(Widget):
     def render(self):
         return self.renderable
 
+    @on(events.Mount)
     async def on_mount(self):
         await asyncio.sleep(0.1)
         self.renderable = "1234"

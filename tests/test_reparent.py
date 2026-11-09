@@ -10,15 +10,19 @@ from textual.screen import Screen
 from textual.selection import SELECT_ALL
 from textual.widget import WidgetError
 from textual.widgets import Static
+from textual import events
+from textual import on
 
 
 class Retained(VerticalGroup):
     mounts = 0
     unmounts = 0
 
+    @on(events.Mount)
     def on_mount(self):
         self.mounts += 1
 
+    @on(events.Unmount)
     def on_unmount(self):
         self.unmounts += 1
 

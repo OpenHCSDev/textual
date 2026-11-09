@@ -4,6 +4,8 @@ from typing import Any
 from textual import work
 from textual._log import LogGroup, LogVerbosity
 from textual.app import App
+from textual import events
+from textual import on
 
 
 async def test_log_from_worker() -> None:
@@ -28,6 +30,7 @@ async def test_log_from_worker() -> None:
             """Fake connected devtools."""
             return True
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.do_work()
 

@@ -8,6 +8,7 @@ from textual import work
 from textual._work_decorator import WorkerDeclarationError
 from textual.app import App
 from textual.worker import Worker, WorkerState, WorkType
+from textual import on
 
 
 async def test_worker_descriptions_do_not_format_call_payloads():
@@ -110,6 +111,7 @@ class WorkApp(App):
     def launch(self, worker) -> None:
         self.worker = worker()
 
+    @on(Worker.StateChanged)
     def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
         self.states.append(event.state)
 

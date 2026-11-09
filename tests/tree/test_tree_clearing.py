@@ -5,6 +5,8 @@ import pytest
 from textual.app import App, ComposeResult
 from textual.widgets import Tree
 from textual.widgets.tree import RemoveRootError
+from textual import events
+from textual import on
 
 
 class VerseBody:
@@ -33,6 +35,7 @@ class TreeClearApp(App[None]):
     def compose(self) -> ComposeResult:
         yield VerseTree("White Sun", data=VerseStar())
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         tree = self.query_one(VerseTree)
         node = tree.root.add("Londinium", VersePlanet())

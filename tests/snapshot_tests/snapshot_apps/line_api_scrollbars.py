@@ -4,6 +4,8 @@ from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll
 from textual.widget import Widget
 from textual.widgets import RichLog
+from textual import events
+from textual import on
 
 
 class MyWidget(Widget):
@@ -44,6 +46,7 @@ class ScrollViewApp(App):
         yield RichLog()
         yield VerticalScroll(MyWidget())
 
+    @on(events.Ready)
     def on_ready(self) -> None:
         self.query_one(RichLog).write("\n".join(f"{n} 0123456789" for n in range(20)))
         self.query_one(VerticalScroll).scroll_end(animate=False)

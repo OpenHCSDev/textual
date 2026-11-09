@@ -1,6 +1,8 @@
 from textual.app import App, ComposeResult
 from textual.widgets import Label
 from textual.containers import Container
+from textual import events
+from textual import on
 
 
 class HatchApp(App):
@@ -48,6 +50,7 @@ class HatchApp(App):
                         with Container(id="five"):
                             yield Label("Hatched")
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.query_one("#four").border_title = "Hello World"
 

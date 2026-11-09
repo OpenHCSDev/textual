@@ -11,12 +11,15 @@ from textual.screen import Screen
 from textual.selection import SELECT_ALL
 from textual.widgets import Static
 import pytest
+from textual import events
+from textual import on
 
 
 async def test_pending_removal_retires_each_original_scene_and_cover():
     release = asyncio.Event()
 
     class SlowUnmount(VerticalGroup):
+        @on(events.Unmount)
         async def on_unmount(self):
             await release.wait()
 
@@ -54,6 +57,7 @@ async def test_pending_removal_revokes_pointer_intent_but_keeps_surviving_select
     entered, release = asyncio.Event(), asyncio.Event()
 
     class SlowText(Static):
+        @on(events.Unmount)
         async def on_unmount(self):
             entered.set()
             await release.wait()

@@ -1,5 +1,7 @@
 from textual.app import App, ComposeResult
 from textual.widgets import Button, TabbedContent
+from textual import events
+from textual import on
 
 
 class FiddleWithTabsApp(App[None]):
@@ -17,6 +19,7 @@ class FiddleWithTabsApp(App[None]):
             yield Button()
             yield Button()
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.query_one(TabbedContent).disable_tab("tab-1")
         self.query_one(TabbedContent).disable_tab("tab-2")

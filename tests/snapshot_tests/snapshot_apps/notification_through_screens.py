@@ -1,6 +1,8 @@
 from textual.app import App, ComposeResult
 from textual.screen import Screen
 from textual.widgets import Label
+from textual import events
+from textual import on
 
 class StackableScreen(Screen):
 
@@ -13,6 +15,7 @@ class StackableScreen(Screen):
     def compose(self) -> ComposeResult:
         yield Label(f"Screen {self.TARGET_DEPTH - self._number}")
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         if self._number > 0:
             self.app.push_screen(StackableScreen(self._number - 1))
@@ -22,6 +25,7 @@ class NotifyDownScreensApp(App[None]):
     def compose(self) -> ComposeResult:
         yield Label("Base screen")
 
+    @on(events.Mount)
     def on_mount(self):
         for n in range(10):
             self.notify(str(n))

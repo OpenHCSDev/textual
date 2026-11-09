@@ -1,1 +1,23 @@
-/* This file is purposefully empty. */
+DataTable > .datatable--cursor {
+    background: purple;
+}
+
+DataTable > .datatable--fixed {
+    background: red;
+}
+
+DataTable > .datatable--fixed-cursor {
+    background: blue;
+}
+
+DataTable > .datatable--header {
+    background: yellow;
+}
+
+DataTable > .datatable--odd-row {
+    background: pink;
+}
+
+DataTable > .datatable--even-row {
+    background: brown;
+}

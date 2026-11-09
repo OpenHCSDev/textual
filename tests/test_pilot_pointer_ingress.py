@@ -6,6 +6,7 @@ from textual.containers import Horizontal
 from textual.geometry import Offset
 from textual.widgets import Static
 from tests.test_pointer_capture_order import send_pointer
+from textual import on
 
 
 class PointerCell(Static):
@@ -24,6 +25,7 @@ class PointerApp(App):
             yield PointerCell("original", id="target")
             yield PointerCell("outside", id="outside")
 
+    @on(events.Click)
     def on_click(self, event):
         self.delivered.append(
             (event.widget.id, event.chain, event.shift, event.meta, event.ctrl)
@@ -63,6 +65,7 @@ async def test_real_run_async_pilot_and_driver_share_click_chain_and_modifiers()
 
 async def test_pilot_click_reports_the_pressed_widget_when_the_press_moves_it():
     class Moving(PointerCell):
+        @on(events.MouseDown)
         def on_mouse_down(self, event):
             self.styles.offset = (12, 0)
 
@@ -81,6 +84,7 @@ async def test_pilot_click_reports_the_pressed_widget_when_the_press_moves_it():
 
 async def test_mouse_down_result_uses_final_packet_after_hover_changes_layout():
     class Moving(PointerCell):
+        @on(events.MouseMove)
         def on_mouse_move(self, event):
             self.styles.offset = (12, 0)
 
@@ -98,9 +102,11 @@ async def test_mouse_down_result_uses_final_packet_after_hover_changes_layout():
 
 async def test_mouse_up_result_uses_capture_rather_than_widget_under_pointer():
     class Capturing(PointerCell):
+        @on(events.MouseDown)
         def on_mouse_down(self, event):
             self.capture_mouse()
 
+        @on(events.MouseUp)
         def on_mouse_up(self, event):
             self.release_mouse()
             self.app.released = event.widget
@@ -123,6 +129,7 @@ async def test_mouse_up_result_uses_capture_rather_than_widget_under_pointer():
 
 async def test_click_receipt_survives_recipient_removal_after_delivery():
     class Removing(PointerCell):
+        @on(events.Click)
         async def on_click(self, event):
             self.app.clicked = event.widget
             await self.remove()

@@ -1,5 +1,6 @@
 from textual.app import App, ComposeResult
 from textual.widgets import Label, ListItem, ListView
+from textual import on
 
 
 class ListViewDisabledItemsApp(App[None]):
@@ -17,6 +18,7 @@ class ListViewDisabledItemsApp(App[None]):
             ListItem(Label("8"), disabled=True),
         )
 
+    @on(ListView.Highlighted)
     def _on_list_view_highlighted(self, message: ListView.Highlighted) -> None:
         if message.item is None:
             self.highlighted.append(None)

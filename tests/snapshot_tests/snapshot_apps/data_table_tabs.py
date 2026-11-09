@@ -1,6 +1,8 @@
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.widgets import TabbedContent, DataTable
+from textual import events
+from textual import on
 
 
 class Dashboard(App):
@@ -23,6 +25,7 @@ class Dashboard(App):
         with TabbedContent("Workflows"):
             yield DataTable(id="table")
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         table = self.query_one(DataTable)
         table.add_columns("Id", "Description", "Status", "Result Id")

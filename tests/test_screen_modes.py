@@ -12,6 +12,8 @@ from textual.app import (
 )
 from textual.screen import ModalScreen, Screen
 from textual.widgets import Footer, Header, Label
+from textual import events
+from textual import on
 
 
 class ScreenBindingsMixin(Screen[None]):
@@ -72,6 +74,7 @@ def ModesApp():
             "screen_two": lambda: BaseScreen("two"),
         }
 
+        @on(events.Mount)
         def on_mount(self):
             self.switch_mode("one")
 
@@ -199,6 +202,7 @@ async def test_multiple_mode_callbacks():
             "other": lambda: LogScreen("other"),
         }
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.switch_mode("first")
 

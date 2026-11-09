@@ -2,6 +2,8 @@ from textual.app import App
 from textual.color import Color
 from textual.screen import Screen
 from textual.widgets import Label
+from textual import events
+from textual import on
 
 RED = Color(255, 0, 0)
 GREEN = Color(0, 255, 0)
@@ -46,6 +48,7 @@ class BaseApp(App):
     }
     """
 
+    @on(events.Mount)
     def on_mount(self):
         self.push_screen(BaseScreen())
 
@@ -53,6 +56,7 @@ class BaseApp(App):
 class SwitchBaseApp(BaseApp):
     """Base app for testing screen CSS when switching a screen."""
 
+    @on(events.Mount)
     def on_mount(self):
         self.push_screen(BaseScreen())
 

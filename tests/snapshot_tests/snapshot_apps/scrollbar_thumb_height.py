@@ -5,6 +5,8 @@ from textual.widgets import Header, Footer
 from textual.scroll_view import ScrollView
 from textual.strip import Strip
 from textual.geometry import Size
+from textual import events
+from textual import on
 
 
 class TestScrollView(ScrollView, can_focus=True):
@@ -36,6 +38,7 @@ class ScrollViewTester(App[None]):
         yield TestScrollView(height=1000, border_title="1")
         yield Footer()
 
+    @on(events.Ready)
     def on_ready(self) -> None:
         self.query_one(TestScrollView).scroll_end(animate=False)
 

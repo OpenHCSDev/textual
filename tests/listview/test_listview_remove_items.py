@@ -4,6 +4,7 @@ import pytest
 
 from textual.app import App, ComposeResult
 from textual.widgets import Label, ListItem, ListView
+from textual import on
 
 
 class EmptyListViewApp(App[None]):
@@ -40,6 +41,7 @@ class ListViewApp(App[None]):
             initial_index=self.initial_index,
         )
 
+    @on(ListView.Highlighted)
     def _on_list_view_highlighted(self, message: ListView.Highlighted) -> None:
         if message.item is None:
             self.highlighted.append(None)

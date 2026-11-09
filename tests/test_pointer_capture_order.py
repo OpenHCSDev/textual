@@ -7,6 +7,7 @@ from textual.app import App, ComposeResult
 from textual.containers import Horizontal, VerticalGroup
 from textual.geometry import Offset
 from textual.widgets import Input, Static, TextArea
+from textual import on
 
 
 def send_pointer(app, kind, point, button=1):
@@ -21,6 +22,7 @@ async def test_driver_burst_waits_for_press_capture_and_routes_release_before_wh
     class Handle(Static):
         ALLOW_SELECT = False
 
+        @on(events.MouseDown)
         async def on_mouse_down(self, event):
             event.stop()
             entered.set()
@@ -28,16 +30,19 @@ async def test_driver_burst_waits_for_press_capture_and_routes_release_before_wh
             self.capture_mouse()
             delivered.append(("down", event.screen_offset))
 
+        @on(events.MouseMove)
         def on_mouse_move(self, event):
             event.stop()
             delivered.append(("move", event.screen_offset))
 
+        @on(events.MouseUp)
         def on_mouse_up(self, event):
             event.stop()
             delivered.append(("up", event.screen_offset))
             self.release_mouse()
 
     class Body(Static):
+        @on(events.MouseScrollUp)
         def on_mouse_scroll_up(self, event):
             event.stop()
             delivered.append(("wheel", event.screen_offset))
@@ -79,15 +84,18 @@ async def test_driver_burst_waits_for_bubbled_parent_capture():
     class CaptureParent(VerticalGroup):
         ALLOW_SELECT = False
 
+        @on(events.MouseDown)
         def on_mouse_down(self, event):
             event.stop()
             self.capture_mouse()
             delivered.append("down")
 
+        @on(events.MouseMove)
         def on_mouse_move(self, event):
             event.stop()
             delivered.append("move")
 
+        @on(events.MouseUp)
         def on_mouse_up(self, event):
             event.stop()
             self.release_mouse()
@@ -162,6 +170,7 @@ async def test_pointer_receiver_self_removal_releases_original_delivery():
     class Retiring(Static):
         ALLOW_SELECT = False
 
+        @on(events.MouseDown)
         async def on_mouse_down(self, event):
             event.stop()
             await self.remove()
@@ -192,6 +201,7 @@ async def test_captured_absolute_motion_replacement_preserves_gesture_boundaries
         def can_replace_mouse_move(self, event, pending):
             return latest_position and event.button == 1
 
+        @on(events.MouseDown)
         async def on_mouse_down(self, event):
             event.stop()
             entered.set()
@@ -199,15 +209,18 @@ async def test_captured_absolute_motion_replacement_preserves_gesture_boundaries
             self.capture_mouse()
             delivered.append(('down', event.screen_x))
 
+        @on(events.MouseMove)
         def on_mouse_move(self, event):
             event.stop()
             delivered.append(('move', event.screen_x, event.shift))
 
+        @on(events.MouseUp)
         def on_mouse_up(self, event):
             event.stop()
             delivered.append(('up', event.screen_x))
             self.release_mouse()
 
+        @on(events.MouseScrollUp)
         def on_mouse_scroll_up(self, event):
             event.stop()
             delivered.append(('wheel', event.screen_x))
@@ -254,12 +267,14 @@ async def test_captured_motion_keeps_each_owned_delivery_completion():
         def can_replace_mouse_move(self, event, pending):
             return True
 
+        @on(events.MouseDown)
         async def on_mouse_down(self, event):
             event.stop()
             entered.set()
             await release.wait()
             self.capture_mouse()
 
+        @on(events.MouseMove)
         def on_mouse_move(self, event):
             event.stop()
             delivered.append(event.screen_x)

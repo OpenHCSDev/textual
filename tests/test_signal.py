@@ -7,6 +7,8 @@ import pytest
 from textual.app import App, ComposeResult
 from textual.signal import Signal, SignalError
 from textual.widgets import Label
+from textual import events
+from textual import on
 
 
 async def test_signal():
@@ -14,6 +16,7 @@ async def test_signal():
     called = 0
 
     class TestLabel(Label):
+        @on(events.Mount)
         def on_mount(self) -> None:
             def signal_result(_):
                 nonlocal called
@@ -95,6 +98,7 @@ async def test_signal_parameters():
             self.str_signal.publish("foo")
             self.int_signal.publish(3)
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             def on_str(my_str):
                 nonlocal str_result
@@ -123,6 +127,7 @@ async def test_removed_subscriber_releases_quiet_publishers(immediate, closure):
     second = Signal[str](app, "rare-layout-change")
 
     class Subscriber(Label):
+        @on(events.Mount)
         def on_mount(self):
             callback = (lambda value: self.update(value)) if closure else self.update
             first.subscribe(self, callback, immediate=immediate)

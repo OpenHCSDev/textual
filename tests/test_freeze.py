@@ -3,6 +3,8 @@ import pytest
 from textual.app import App
 from textual.screen import Screen
 from textual.widgets import Footer, Header, Input
+from textual import events
+from textual import on
 
 
 class MyScreen(Screen):
@@ -13,6 +15,7 @@ class MyScreen(Screen):
 
 
 class MyApp(App):
+    @on(events.Mount)
     def on_mount(self):
         self.install_screen(MyScreen(), "myscreen")
         self.push_screen("myscreen")

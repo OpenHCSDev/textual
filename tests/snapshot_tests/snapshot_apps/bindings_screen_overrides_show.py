@@ -2,6 +2,8 @@ from textual.app import App, ComposeResult
 from textual.screen import Screen
 from textual.binding import Binding
 from textual.widgets import Footer
+from textual import events
+from textual import on
 
 
 class ShowBindingScreen(Screen):
@@ -20,6 +22,7 @@ class HideBindingApp(App):
         Binding("p", "app.pop_screen", "Binding hidden", show=False),
     ]
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.push_screen(ShowBindingScreen())
 

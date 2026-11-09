@@ -4,6 +4,8 @@ import time
 from textual.app import App, ComposeResult
 from textual.widget import Widget
 from textual.worker import Worker, WorkerState
+from textual import events
+from textual import on
 
 
 async def test_direct_callable_description_does_not_call_its_repr():
@@ -51,6 +53,7 @@ async def test_run_worker_async() -> None:
             work_result = "foo"
             return "foo"
 
+        @on(events.Mount)
         def on_mount(self):
             nonlocal new_worker
             new_worker = self.run_worker(self.work, start=False)
@@ -93,6 +96,7 @@ async def test_run_worker_thread_non_async() -> None:
             work_result = "foo"
             return "foo"
 
+        @on(events.Mount)
         def on_mount(self):
             self.run_worker(self.work, thread=True)
 
@@ -130,6 +134,7 @@ async def test_run_worker_thread_async() -> None:
             work_result = "foo"
             return "foo"
 
+        @on(events.Mount)
         def on_mount(self):
             self.run_worker(self.work, thread=True)
 

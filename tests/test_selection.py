@@ -11,6 +11,8 @@ from textual.events import MouseMove, MouseScrollDown, MouseUp
 from textual.geometry import Offset, Region
 from textual.selection import Selection, SelectState
 from textual.widgets import Static
+from textual import events
+from textual import on
 
 
 @pytest.mark.parametrize(
@@ -428,6 +430,7 @@ async def test_queued_drag_keeps_events_and_copy_but_coalesces_selection_work():
     class Tracked(Static):
         moves = 0
 
+        @on(MouseMove)
         def on_mouse_move(self, event: MouseMove):
             self.moves += 1
 
@@ -450,6 +453,7 @@ async def test_queued_drag_keeps_events_and_copy_but_coalesces_selection_work():
                 self.during_drag = self.screen.get_selected_text()
             return result
 
+        @on(events.TextSelected)
         def on_text_selected(self):
             self.after_release = self.screen.get_selected_text()
 

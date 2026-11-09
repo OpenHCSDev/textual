@@ -82,6 +82,7 @@ async def test_pilot_exception_catching_widget_compose():
             yield Label("Beep")
 
     class FailingApp(App[None]):
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.push_screen(SomeScreen())
 
@@ -107,6 +108,7 @@ async def test_pilot_exception_catching_action():
 
 async def test_pilot_exception_catching_worker():
     class SimpleAppThatCrashes(App[None]):
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.crash()
 
@@ -332,6 +334,7 @@ async def test_pilot_target_widget_under_another_widget(method):
             yield Button()
             yield Label()
 
+        @on(events.Mount)
         def on_mount(self):
             self.query_one(Label).styles.offset = (0, -3)
 

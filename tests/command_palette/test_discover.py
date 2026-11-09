@@ -1,6 +1,8 @@
 from textual.app import App
 from textual.command import CommandPalette, DiscoveryHit, Hit, Hits, Provider
 from textual.widgets import OptionList
+from textual import events
+from textual import on
 
 
 class SimpleSource(Provider):
@@ -21,6 +23,7 @@ class SimpleSource(Provider):
 class CommandPaletteApp(App[None]):
     COMMANDS = {SimpleSource}
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.action_command_palette()
 

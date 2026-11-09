@@ -5,6 +5,8 @@ from asyncio import sleep
 from textual import work
 from textual.app import App
 from textual.command import Hit, Hits, Provider
+from textual import events
+from textual import on
 
 
 class SimpleSource(Provider):
@@ -32,6 +34,7 @@ async def test_no_command_palette_worker_droppings() -> None:
 class CommandPaletteWithWorkerApp(App[None]):
     COMMANDS = {SimpleSource}
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.innocent_worker()
 

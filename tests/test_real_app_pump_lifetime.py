@@ -8,6 +8,7 @@ from textual.message_pump import MessagePump
 from textual.widgets import Static
 
 from tests.test_pointer_capture_order import send_pointer
+from textual import on
 
 
 async def test_run_async_driver_burst_owns_bubbling_pointer_until_terminal():
@@ -17,18 +18,22 @@ async def test_run_async_driver_burst_owns_bubbling_pointer_until_terminal():
     class Handle(Static):
         ALLOW_SELECT = False
 
+        @on(events.MouseDown)
         def on_mouse_down(self, event):
             self.capture_mouse()
             delivered.append("down")
 
+        @on(events.MouseMove)
         def on_mouse_move(self, event):
             delivered.append("move")
 
+        @on(events.MouseUp)
         def on_mouse_up(self, event):
             self.release_mouse()
             delivered.append("up")
 
     class Body(Static):
+        @on(events.MouseScrollUp)
         def on_mouse_scroll_up(self, event):
             delivered.append("wheel")
             wheel.set()
@@ -42,19 +47,24 @@ async def test_run_async_driver_burst_owns_bubbling_pointer_until_terminal():
                 yield Handle("handle")
                 yield Body("body")
 
+        @on(events.Mount)
         def on_mount(self):
             self.startup_task = self.task
             assert self.task is asyncio.current_task()
 
+        @on(events.MouseDown)
         def on_mouse_down(self, event):
             root_deliveries.append("down")
 
+        @on(events.MouseMove)
         def on_mouse_move(self, event):
             root_deliveries.append("move")
 
+        @on(events.MouseUp)
         def on_mouse_up(self, event):
             root_deliveries.append("up")
 
+        @on(events.MouseScrollUp)
         def on_mouse_scroll_up(self, event):
             root_deliveries.append("wheel")
 
@@ -94,6 +104,7 @@ async def test_run_async_startup_failure_releases_shared_task():
     class FailedStartup(App):
         observed_task = None
 
+        @on(events.Mount)
         def on_mount(self):
             self.observed_task = self.task
             assert self.task is asyncio.current_task()

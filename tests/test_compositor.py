@@ -5,6 +5,8 @@ from unittest.mock import patch
 import gc
 from types import FunctionType
 import pytest
+from textual import events
+from textual import on
 
 
 async def test_point_hits_follow_layer_clip_visibility_and_scene_changes():
@@ -136,6 +138,7 @@ async def test_compositor_scroll_placements():
             with Container():
                 yield Static("Hello", id="hello")
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.screen.scroll_to(20, 0, animate=False)
 

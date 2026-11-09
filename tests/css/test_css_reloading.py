@@ -4,6 +4,8 @@ from pathlib import Path
 from textual.app import App, ComposeResult
 from textual.screen import Screen
 from textual.widgets import Label
+from textual import events
+from textual import on
 
 CSS_PATH = (Path(__file__) / "../css_reloading.tcss").resolve()
 
@@ -25,6 +27,7 @@ class TopScreen(Screen[None]):
 class MyApp(App[None]):
     CSS_PATH = CSS_PATH
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.push_screen(BaseScreen())
         self.push_screen(TopScreen())

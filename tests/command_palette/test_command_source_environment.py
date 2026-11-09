@@ -5,6 +5,8 @@ from textual.command import Hit, Hits, Provider
 from textual.screen import Screen
 from textual.widget import Widget
 from textual.widgets import Input
+from textual import events
+from textual import on
 
 
 class SimpleSource(Provider):
@@ -24,6 +26,7 @@ class CommandPaletteApp(App[None]):
     def compose(self) -> ComposeResult:
         yield Input()
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.action_command_palette()
 

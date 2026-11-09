@@ -3,8 +3,11 @@ from textual import work
 from textual.geometry import Size
 from textual.pilot import Pilot
 from shutdown_mode_installed_pilot import ShutdownApp
+from textual import events
+from textual import on
 
 class CrashShutdownApp(ShutdownApp):
+ @on(events.Mount)
  def on_mount(self):self.exercise()
  @work
  async def exercise(self):

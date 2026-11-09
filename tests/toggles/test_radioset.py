@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from textual.app import App, ComposeResult
 from textual.widgets import RadioButton, RadioSet
+from textual import events
+from textual import on
 
 
 class RadioSetApp(App[None]):
@@ -16,6 +18,7 @@ class RadioSetApp(App[None]):
             yield RadioButton(value=True)
         yield RadioSet("One", "True", "Three", id="from_strings")
 
+    @on(RadioSet.Changed)
     def on_radio_set_changed(self, event: RadioSet.Changed) -> None:
         assert event.radio_set is event.control
         self.events_received.append(
@@ -101,6 +104,7 @@ async def test_radioset_inner_navigation_post_build():
         def compose(self) -> ComposeResult:
             yield RadioSet()
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             # This isn't encouraged; but neither is it currently prohibited;
             # so let's test.
@@ -151,6 +155,7 @@ class RadioSetDisabledButtonsApp(App[None]):
             yield RadioButton("7")
             yield RadioButton("8", disabled=True)
 
+    @on(RadioSet.Changed)
     def on_radio_set_changed(self, radio_set: RadioSet.Changed) -> None:
         self.selected.append(str(radio_set.pressed.label))
 

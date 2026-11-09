@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from textual.app import App, ComposeResult
 from textual.widgets import Checkbox
+from textual import on
 
 
 class CheckboxApp(App[None]):
@@ -14,6 +15,7 @@ class CheckboxApp(App[None]):
         yield Checkbox(id="cb2")
         yield Checkbox(value=True, id="cb3")
 
+    @on(Checkbox.Changed)
     def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
         self.events_received.append(
             (event.checkbox.id, event.checkbox.value, event.checkbox == event.control)

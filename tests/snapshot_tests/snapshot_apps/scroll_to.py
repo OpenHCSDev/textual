@@ -1,5 +1,7 @@
 from textual.app import App, ComposeResult
 from textual.widgets import Checkbox, Footer
+from textual import events
+from textual import on
 
 
 class ScrollOffByOne(App):
@@ -12,6 +14,7 @@ class ScrollOffByOne(App):
             yield Checkbox(str(number), id=f"number-{number}")
         yield Footer()
 
+    @on(events.Ready)
     def on_ready(self) -> None:
         self.query_one("#number-50").scroll_visible()
 
