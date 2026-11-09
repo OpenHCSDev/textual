@@ -511,7 +511,7 @@ class App(Generic[ReturnType], DOMNode):
     SUSPENDED_SCREEN_CLASS: ClassVar[str] = ""
     """Class to apply to suspended screens, or empty string for no class."""
 
-    HORIZONTAL_BREAKPOINTS: ClassVar[list[tuple[int, str]]] | None = []
+    HORIZONTAL_BREAKPOINTS: ClassVar[list[tuple[int, str]] | None] = []
     """List of horizontal breakpoints for responsive classes.
 
     Setting this classvar on `App` or `Screen` will automatically apply TCSS classes to your Screen according to the terminal width.
@@ -542,7 +542,7 @@ class App(Generic[ReturnType], DOMNode):
     ```
     
     """
-    VERTICAL_BREAKPOINTS: ClassVar[list[tuple[int, str]]] | None = []
+    VERTICAL_BREAKPOINTS: ClassVar[list[tuple[int, str]] | None] = []
     """List of vertical breakpoints for responsive classes.
     
     Contents are the same as [`HORIZONTAL_BREAKPOINTS`][textual.app.App.HORIZONTAL_BREAKPOINTS], but the integer is compared to the height, rather than the width.

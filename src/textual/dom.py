@@ -53,6 +53,7 @@ from textual.text_format import TextFormat
 from textual.geometry import Size
 from textual.css.tokenize import IDENTIFIER
 from textual.message_pump import MessagePump
+from textual.keys import KeyDeclaration
 from textual.reactive import Reactive, ReactiveError, _Mutated, _StoredReactiveAccess, _watch
 from textual.style import NULL_STYLE
 from textual.timer import Timer
@@ -69,7 +70,6 @@ if TYPE_CHECKING:
     from textual.css.types import CSSLocation
     from textual.screen import Screen
     from textual.widget import Widget
-    from textual.keys import KeyDeclaration
     from textual.events import Key
     from textual.widgets import TextArea
     from textual.worker import Worker, WorkType, ResultType
@@ -268,7 +268,7 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump):
     # Names of potential computed reactives
     _computes: ClassVar[frozenset[str]]
 
-    _PSEUDO_CLASSES: ClassVar[dict[str, Callable[[App[Any]], bool]]] = {}
+    _PSEUDO_CLASSES: ClassVar[dict[str, Callable[[DOMNode], bool]]] = {}
     """Pseudo class checks."""
 
     @property

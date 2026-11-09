@@ -236,9 +236,9 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
     you can set the [sub_title][textual.screen.Screen.sub_title] attribute.
     """
 
-    HORIZONTAL_BREAKPOINTS: ClassVar[list[tuple[int, str]]] | None = None
+    HORIZONTAL_BREAKPOINTS: ClassVar[list[tuple[int, str]] | None] = None
     """Horizontal breakpoints, will override [App.HORIZONTAL_BREAKPOINTS][textual.app.App.HORIZONTAL_BREAKPOINTS] if not `None`."""
-    VERTICAL_BREAKPOINTS: ClassVar[list[tuple[int, str]]] | None = None
+    VERTICAL_BREAKPOINTS: ClassVar[list[tuple[int, str]] | None] = None
     """Vertical breakpoints, will override [App.VERTICAL_BREAKPOINTS][textual.app.App.VERTICAL_BREAKPOINTS] if not `None`."""
 
     focused: Reactive[Widget | None] = Reactive(None, repaint=False)
