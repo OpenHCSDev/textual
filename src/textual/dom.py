@@ -53,7 +53,7 @@ from textual.text_format import TextFormat
 from textual.geometry import Size
 from textual.css.tokenize import IDENTIFIER
 from textual.message_pump import MessagePump
-from textual.reactive import Reactive, ReactiveError, _Mutated, _watch
+from textual.reactive import Reactive, ReactiveError, _Mutated, _StoredReactiveAccess, _watch
 from textual.style import NULL_STYLE
 from textual.timer import Timer
 from textual.walk import walk_breadth_first, walk_breadth_search_id, walk_depth_first
@@ -67,7 +67,6 @@ if TYPE_CHECKING:
     from textual.app import App
     from textual.css.query import AncestorType, DOMQuery, QueryType
     from textual.css.types import CSSLocation
-    from textual.reactive import _StoredReactiveAccess
     from textual.screen import Screen
     from textual.widget import Widget
     from textual.keys import KeyDeclaration
