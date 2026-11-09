@@ -1512,7 +1512,6 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         self._callbacks.clear()
         self._layout_widgets.clear()
         self._dirty_widgets.clear()
-        self._dirty_regions.clear()
         self._arrangement_cache.clear()
         self._nodes._clear()
 

@@ -528,8 +528,6 @@ class Widget(ScrollsView):
         """A dict that is refreshed when the widget is resized / refreshed."""
 
         self._render_cache = _RenderCache(_null_size, [])
-        # Regions which need to be updated (in Widget)
-        self._dirty_regions: set[Region] = set()
         # Regions which need to be transferred from cache to screen
         self._repaint_regions: set[Region] = set()
 
@@ -2540,19 +2538,17 @@ class Widget(ScrollsView):
         Args:
             *regions: Regions which require a repaint.
         """
+        self._render_cache = _RenderCache(NULL_SIZE, [])
+        self._invalidate_lines(*regions)
+
+    def _invalidate_lines(self, *regions: Region) -> None:
+        """Paint the requested lines again, retaining their prepared content."""
         if regions:
             content_offset = self.content_offset
             widget_regions = [region.translate(content_offset) for region in regions]
-            self._dirty_regions.update(widget_regions)
             self._repaint_regions.update(widget_regions)
             self._styles_cache.set_dirty(*widget_regions)
-        else:
-            self._dirty_regions.clear()
-            self._invalidate_lines()
-            self._dirty_regions.add(self.outer_size.region)
-
-    def _invalidate_lines(self) -> None:
-        """Every line is painted again on the next frame, from whatever content is rendered."""
+            return
         self._repaint_regions.clear()
         self._styles_cache.clear()
         # Invalidation must not measure a lazily invalidated compositor.
@@ -4107,7 +4103,6 @@ class Widget(ScrollsView):
         visual = self._render()
         strips = Visual.to_strips(self, visual, width, height, paint, paint.visual_style)
         self._render_cache = _RenderCache(size, strips)
-        self._dirty_regions.clear()
 
     def render_line(self, y: int, paint: PaintState) -> Strip:
         """Render a line of content.
@@ -4121,7 +4116,7 @@ class Widget(ScrollsView):
         if self.BLANK:
             return Strip.blank(self.size.width, paint.rich_style)
 
-        if self._dirty_regions or self._render_cache.size != self.size:
+        if self._render_cache.size != self.size:
             self._render_content(paint)
         try:
             line = self._render_cache.lines[y]
@@ -4263,7 +4258,7 @@ class Widget(ScrollsView):
         """
         if not self._is_mounted:
             return self.refresh()
-        self._set_dirty(region)
+        self._invalidate_lines(region)
         self._repaint_required = True
         self.check_idle()
         return self
@@ -4436,9 +4431,6 @@ class Widget(ScrollsView):
     def _release_paint(self) -> None:
         """Release reconstructible paint without discarding measured geometry."""
         self._render_cache = _RenderCache(NULL_SIZE, [])
-        # The next exposed line must regenerate content, even when its native
-        # size did not change while this presentation was retired.
-        self._dirty_regions.add(self._size.region)
         self._layout_cache.clear()
         self._styles_cache.clear()
         self._rich_style_cache.clear()
