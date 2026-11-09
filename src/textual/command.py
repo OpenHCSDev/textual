@@ -7,7 +7,7 @@ See the guide on the [Command Palette](../guide/command_palette.md) for full det
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from asyncio import (
     CancelledError,
     Queue,
@@ -40,6 +40,7 @@ from typing_extensions import Final, TypeAlias
 
 from textual import on, work
 from textual.binding import MethodBinding
+from textual.command_source import CommandSource
 from textual.containers import Horizontal, Vertical
 from textual.content import Content
 from textual.events import Click, Mount
@@ -182,7 +183,7 @@ ProviderSource: TypeAlias = "Iterable[type[Provider] | Callable[[], type[Provide
 """The type used to declare the providers for a CommandPalette."""
 
 
-class Provider(ABC):
+class Provider(CommandSource):
     """Base class for command palette command providers.
 
     To create new command provider, inherit from this class and implement
