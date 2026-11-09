@@ -13,6 +13,7 @@ from textual.geometry import Offset
 from textual.screen import Screen
 from textual.widgets import Button, Input, Label
 from textual.worker import NoActiveWorker
+from textual import events, on
 
 skip_py310 = pytest.mark.skipif(
     sys.version_info.minor == 10 and sys.version_info.major == 3,
@@ -266,6 +267,7 @@ async def test_auto_focus_skips_non_focusable_widgets():
             yield Button()
 
     class MyApp(App[None]):
+        @on(events.Mount)
         def on_mount(self):
             self.push_screen(MyScreen())
 
@@ -282,6 +284,7 @@ async def test_dismiss_action():
     class MyApp(App[None]):
         bingo = False
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.push_screen(ConfirmScreen(), callback=self.callback)
 
@@ -301,6 +304,7 @@ async def test_dismiss_action_no_argument():
     class MyApp(App[None]):
         bingo = False
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.push_screen(ConfirmScreen(), callback=self.callback)
 
@@ -322,6 +326,7 @@ async def test_switch_screen_no_op():
     class MyApp(App[None]):
         SCREENS = {"screen": MyScreen}
 
+        @on(events.Mount)
         def on_mount(self):
             self.push_screen("screen")
 
@@ -352,6 +357,7 @@ async def test_switch_screen_updates_results_callback_stack():
         def callback(self, _):
             return 42
 
+        @on(events.Mount)
         def on_mount(self):
             self.push_screen("a", self.callback)
 
@@ -369,12 +375,14 @@ async def test_screen_receives_mouse_move_events():
     class MouseMoveRecordingScreen(Screen):
         mouse_events = []
 
+        @on(MouseMove)
         def on_mouse_move(self, event: MouseMove) -> None:
             MouseMoveRecordingScreen.mouse_events.append(event)
 
     class SimpleApp(App[None]):
         SCREENS = {"a": MouseMoveRecordingScreen}
 
+        @on(events.Mount)
         def on_mount(self):
             self.push_screen("a")
 
@@ -401,12 +409,14 @@ async def test_mouse_move_event_bubbles_to_screen_from_widget():
         def compose(self) -> ComposeResult:
             yield Label("Any label")
 
+        @on(MouseMove)
         def on_mouse_move(self, event: MouseMove) -> None:
             MouseMoveRecordingScreen.mouse_events.append(event)
 
     class SimpleApp(App[None]):
         SCREENS = {"a": MouseMoveRecordingScreen}
 
+        @on(events.Mount)
         def on_mount(self):
             self.push_screen("a")
 
@@ -607,6 +617,7 @@ async def test_get_screen_with_expected_type():
     class MyApp(App[None]):
         SCREENS = {"my_screen": MyScreen}
 
+        @on(events.Mount)
         def on_mount(self):
             self.push_screen("my_screen")
 

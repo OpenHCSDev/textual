@@ -3,6 +3,8 @@ from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, VerticalScroll
 from textual.widgets import Label, RadioButton, RadioSet
+from textual import events
+from textual import on
 
 
 class RadioSetChangedApp(App[None]):
@@ -30,9 +32,11 @@ class RadioSetChangedApp(App[None]):
             with Horizontal():
                 yield Label(id="index")
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.query_one(RadioSet).focus()
 
+    @on(RadioSet.Changed)
     def on_radio_set_changed(self, event: RadioSet.Changed) -> None:
         self.query_one("#pressed", Label).update(
             f"Pressed button label: {event.pressed.label}"

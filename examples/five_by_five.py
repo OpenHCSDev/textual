@@ -13,6 +13,8 @@ from textual.reactive import reactive
 from textual.screen import Screen
 from textual.widget import Widget
 from textual.widgets import Button, Footer, Label, Markdown
+from textual import events
+from textual import on
 
 if TYPE_CHECKING:
     from typing_extensions import Final
@@ -256,6 +258,7 @@ class Game(Screen):
             self.query_one(WinnerMessage).show(self.query_one(GameHeader).moves)
             self.game_playable(False)
 
+    @on(Button.Pressed)
     def on_button_pressed(self, event: GameCell.Pressed) -> None:
         """React to a press of a button on the game grid.
 
@@ -294,6 +297,7 @@ class Game(Screen):
         if isinstance(self.focused, GameCell):
             self.focused.press()
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         """Get the game started when we first mount."""
         self.action_new_game()
@@ -314,6 +318,7 @@ class FiveByFive(App[None]):
     TITLE = "5x5 -- A little annoying puzzle"
     """The title of the application."""
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         """Set up the application on startup."""
         self.push_screen(Game())

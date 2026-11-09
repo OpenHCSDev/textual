@@ -9,6 +9,7 @@ from textual.scroll_view import ScrollView
 
 from rich.segment import Segment
 from rich.style import Style
+from textual import on
 
 
 class CheckerBoard(ScrollView):
@@ -38,6 +39,7 @@ class CheckerBoard(ScrollView):
         # Each square is 4 rows and 8 columns
         self.virtual_size = Size(board_size * 8, board_size * 4)
 
+    @on(events.MouseMove)
     def on_mouse_move(self, event: events.MouseMove) -> None:
         """Called when the user moves the mouse over the widget."""
         mouse_position = event.offset + self.scroll_offset

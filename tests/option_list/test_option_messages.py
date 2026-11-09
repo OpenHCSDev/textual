@@ -6,6 +6,7 @@ from textual.app import App, ComposeResult
 from textual.geometry import Offset
 from textual.widgets import OptionList
 from textual.widgets.option_list import Option
+from textual import on
 
 
 class OptionListApp(App[None]):
@@ -25,11 +26,13 @@ class OptionListApp(App[None]):
             (event.__class__.__name__, event.option_id, event.option_index)
         )
 
+    @on(OptionList.OptionHighlighted)
     def on_option_list_option_highlighted(
         self, event: OptionList.OptionHighlighted
     ) -> None:
         self._record(event)
 
+    @on(OptionList.OptionSelected)
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
         self._record(event)
 

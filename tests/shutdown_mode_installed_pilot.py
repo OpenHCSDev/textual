@@ -3,14 +3,18 @@ import asyncio
 from textual.app import App
 from textual.screen import Screen
 from textual.widgets import Static
+from textual import events
+from textual import on
 
 class RemovalContent(Static):
+ @on(events.Unmount)
  def on_unmount(self):
   self.app.remove_mode('secondary')
   self.app.destroyed.add('content')
 
 class SecondaryScreen(Screen):
  def compose(self):yield Static('SECONDARY')
+ @on(events.Unmount)
  def on_unmount(self):self.app.destroyed.add('secondary')
 
 class FirstScreen(Screen):

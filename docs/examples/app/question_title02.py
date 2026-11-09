@@ -1,6 +1,7 @@
 from textual.app import App, ComposeResult
 from textual.events import Key
 from textual.widgets import Button, Header, Label
+from textual import on
 
 
 class MyApp(App[str]):
@@ -14,9 +15,11 @@ class MyApp(App[str]):
         yield Button("Yes", id="yes", variant="primary")
         yield Button("No", id="no", variant="error")
 
+    @on(Button.Pressed)
     def on_button_pressed(self, event: Button.Pressed) -> None:
         self.exit(event.button.id)
 
+    @on(Key)
     def on_key(self, event: Key):
         self.title = event.key
         self.sub_title = f"You just pressed {event.key}!"

@@ -1,5 +1,7 @@
 from textual.app import App, ComposeResult
 from textual.widgets import TabbedContent, TabPane
+from textual import events
+from textual import on
 
 class TabRenameApp(App[None]):
 
@@ -9,6 +11,7 @@ class TabRenameApp(App[None]):
             for n in range(5):
                 yield TabPane(str(n) * (n+1))
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.query_one(TabbedContent).get_tab("test").label = "This is a much longer label for the tab"
 

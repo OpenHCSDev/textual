@@ -2,6 +2,8 @@ from itertools import cycle
 
 from textual.app import App, ComposeResult
 from textual.widgets import Static
+from textual import events
+from textual import on
 
 hellos = cycle(
     [
@@ -25,6 +27,7 @@ class Hello(Static):
 
     BORDER_TITLE = "Hello Widget"  # (1)!
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.action_next_word()
         self.border_subtitle = "Click for next hello"  # (2)!

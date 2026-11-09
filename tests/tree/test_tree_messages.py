@@ -5,6 +5,8 @@ from typing import Any
 from textual.app import App, ComposeResult
 from textual.containers import Vertical
 from textual.widgets import Button, Tree
+from textual import events
+from textual import on
 
 
 class MyTree(Tree[None]):
@@ -22,6 +24,7 @@ class TreeApp(App[None]):
         """Compose the child widgets."""
         yield MyTree("Root", id="test-tree")
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.query_one(MyTree).root.add("Child")
         self.query_one(MyTree).focus()
@@ -39,15 +42,19 @@ class TreeApp(App[None]):
             (event.__class__.__name__, event.node.tree.id or "Unknown")
         )
 
+    @on(Tree.NodeSelected)
     def on_tree_node_selected(self, event: Tree.NodeSelected[None]) -> None:
         self.record(event)
 
+    @on(Tree.NodeExpanded)
     def on_tree_node_expanded(self, event: Tree.NodeExpanded[None]) -> None:
         self.record(event)
 
+    @on(Tree.NodeCollapsed)
     def on_tree_node_collapsed(self, event: Tree.NodeCollapsed[None]) -> None:
         self.record(event)
 
+    @on(Tree.NodeHighlighted)
     def on_tree_node_highlighted(self, event: Tree.NodeHighlighted[None]) -> None:
         self.record(event)
 
@@ -189,10 +196,12 @@ class TreeWrapper(Vertical):
         yield Button(id="collapser")
         yield MyTree("Root", id="test-tree")
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.query_one(MyTree).auto_expand = self._auto_expand
         self.query_one(MyTree).root.add("Child")
 
+    @on(Button.Pressed)
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "expander":
             self.query_one(Tree).root.expand()
@@ -224,12 +233,15 @@ class TreeViaCodeApp(App[None]):
             (event.__class__.__name__, event.node.tree.id or "Unknown")
         )
 
+    @on(Tree.NodeExpanded)
     def on_tree_node_expanded(self, event: Tree.NodeExpanded[None]) -> None:
         self.record(event)
 
+    @on(Tree.NodeCollapsed)
     def on_tree_node_collapsed(self, event: Tree.NodeCollapsed[None]) -> None:
         self.record(event)
 
+    @on(Tree.NodeHighlighted)
     def on_tree_node_highlighted(self, event: Tree.NodeHighlighted[None]) -> None:
         self.record(event)
 

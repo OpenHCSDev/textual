@@ -1,5 +1,7 @@
 from textual.app import App, ComposeResult
 from textual.widgets import Tree
+from textual import events
+from textual import on
 
 class TreeClearingSnapshotApp(App[None]):
 
@@ -21,6 +23,7 @@ class TreeClearingSnapshotApp(App[None]):
         yield self._populate(Tree("Left", id="left"))
         yield self._populate(Tree("Right", id="right"))
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.query_one("#left", Tree).root.expand()
         self.query_one("#left", Tree).clear()

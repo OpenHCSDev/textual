@@ -4,6 +4,8 @@ from textual.app import App, ComposeResult
 from textual.containers import Grid
 from textual.screen import ModalScreen
 from textual.widgets import Button, Footer, Header, Label
+from textual import events
+from textual import on
 
 TEXT = """I must not fear.
 Fear is the mind-killer.
@@ -25,6 +27,7 @@ class QuitScreen(ModalScreen[bool]):  # (1)!
             id="dialog",
         )
 
+    @on(Button.Pressed)
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "quit":
             self.dismiss(True)
@@ -122,6 +125,7 @@ async def test_menu_opening_over_a_screen_keeps_that_screen_drawn():
                 for index in range(4):
                     yield Static(f"item {index}", classes="item")
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             menu = self.query_one("#menu")
             menu.styles.width = 20

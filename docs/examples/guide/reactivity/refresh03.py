@@ -2,6 +2,7 @@ from textual.app import App, ComposeResult
 from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Input, Label
+from textual import on
 
 
 class Name(Widget):
@@ -20,6 +21,7 @@ class WatchApp(App):
         yield Input(placeholder="Enter your name")
         yield Name()
 
+    @on(Input.Changed)
     def on_input_changed(self, event: Input.Changed) -> None:
         self.query_one(Name).who = event.value
 

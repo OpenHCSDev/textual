@@ -1,6 +1,8 @@
 from textual.app import App
 from textual.screen import Screen
 from textual.widgets import Header, Static
+from textual import events
+from textual import on
 
 
 async def test_screen_title_none_is_ignored():
@@ -11,6 +13,7 @@ async def test_screen_title_none_is_ignored():
     class MyApp(App):
         TITLE = "app title"
 
+        @on(events.Mount)
         def on_mount(self):
             self.push_screen(MyScreen())
 
@@ -29,6 +32,7 @@ async def test_screen_title_overrides_app_title():
     class MyApp(App):
         TITLE = "app title"
 
+        @on(events.Mount)
         def on_mount(self):
             self.push_screen(MyScreen())
 
@@ -47,6 +51,7 @@ async def test_screen_title_reactive_updates_title():
     class MyApp(App):
         TITLE = "app title"
 
+        @on(events.Mount)
         def on_mount(self):
             self.push_screen(MyScreen())
 
@@ -67,6 +72,7 @@ async def test_app_title_reactive_does_not_update_title_when_screen_title_is_set
     class MyApp(App):
         TITLE = "app title"
 
+        @on(events.Mount)
         def on_mount(self):
             self.push_screen(MyScreen())
 
@@ -85,6 +91,7 @@ async def test_screen_sub_title_none_is_ignored():
     class MyApp(App):
         SUB_TITLE = "app sub-title"
 
+        @on(events.Mount)
         def on_mount(self):
             self.push_screen(MyScreen())
 
@@ -106,6 +113,7 @@ async def test_screen_sub_title_overrides_app_sub_title():
     class MyApp(App):
         SUB_TITLE = "app sub-title"
 
+        @on(events.Mount)
         def on_mount(self):
             self.push_screen(MyScreen())
 
@@ -127,6 +135,7 @@ async def test_screen_sub_title_reactive_updates_sub_title():
     class MyApp(App):
         SUB_TITLE = "app sub-title"
 
+        @on(events.Mount)
         def on_mount(self):
             self.push_screen(MyScreen())
 

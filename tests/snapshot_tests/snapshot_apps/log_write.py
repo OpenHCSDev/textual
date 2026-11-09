@@ -1,12 +1,15 @@
 from textual.app import App, ComposeResult
 from textual.widgets import Log
 from textual.containers import Horizontal
+from textual import events
+from textual import on
 
 
 class LogApp(App):
     def compose(self) -> ComposeResult:
         yield Log()
 
+    @on(events.Ready)
     def on_ready(self) -> None:
         log = self.query_one(Log)
         log.write("Hello,")

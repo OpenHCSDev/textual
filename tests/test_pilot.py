@@ -52,6 +52,7 @@ async def test_pilot_press_ascii_chars():
     keys_pressed = []
 
     class TestApp(App[None]):
+        @on(events.Key)
         def on_key(self, event: events.Key) -> None:
             keys_pressed.append(event.character)
 
@@ -82,6 +83,7 @@ async def test_pilot_exception_catching_widget_compose():
             yield Label("Beep")
 
     class FailingApp(App[None]):
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.push_screen(SomeScreen())
 
@@ -107,6 +109,7 @@ async def test_pilot_exception_catching_action():
 
 async def test_pilot_exception_catching_worker():
     class SimpleAppThatCrashes(App[None]):
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.crash()
 
@@ -332,6 +335,7 @@ async def test_pilot_target_widget_under_another_widget(method):
             yield Button()
             yield Label()
 
+        @on(events.Mount)
         def on_mount(self):
             self.query_one(Label).styles.offset = (0, -3)
 
@@ -416,6 +420,7 @@ async def test_click_by_widget():
     pressed = False
 
     class TestApp(CenteredButtonApp):
+        @on(Button.Pressed)
         def on_button_pressed(self):
             nonlocal pressed
             pressed = True

@@ -1,5 +1,7 @@
 from textual.app import App, ComposeResult
 from textual.widgets import Switch
+from textual import events
+from textual import on
 
 
 async def test_switch_click_doesnt_bubble_up():
@@ -9,6 +11,7 @@ async def test_switch_click_doesnt_bubble_up():
         def compose(self) -> ComposeResult:
             yield Switch()
 
+        @on(events.Click)
         async def on_click(self) -> None:
             raise AssertionError(
                 "The app should never receive a click event when Switch is clicked."

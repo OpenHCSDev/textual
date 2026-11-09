@@ -4,6 +4,8 @@ from textual.app import App, ComposeResult, RenderableType
 from textual.containers import Container
 from textual.renderables.gradient import LinearGradient
 from textual.widgets import Static
+from textual import events
+from textual import on
 
 COLORS = [
     "#881177",
@@ -35,6 +37,7 @@ class Splash(Container):
     }
     """
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.auto_refresh = 1 / 30
 

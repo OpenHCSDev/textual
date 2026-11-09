@@ -6,6 +6,7 @@ from textual.message import Message
 from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Input, Label, Switch
+from textual import on
 
 
 class BitSwitch(Widget):
@@ -41,6 +42,7 @@ class BitSwitch(Widget):
         yield Label(str(self.bit))
         yield Switch()
 
+    @on(Switch.Changed)
     def on_switch_changed(self, event: Switch.Changed) -> None:  # (2)!
         """When the switch changes, notify the parent via a message."""
         event.stop()  # (3)!
@@ -88,6 +90,7 @@ class ByteEditor(Widget):
         with Container():
             yield ByteInput()
 
+    @on(BitSwitch.BitChanged)
     def on_bit_switch_bit_changed(self, event: BitSwitch.BitChanged) -> None:
         """When a switch changes, update the value."""
         value = 0

@@ -718,6 +718,7 @@ class Input(NativeTextKeys, FocusActivation, EditableInput, ScrollView):
             self.selection = Selection(0, len(self.value))
         self._suggestion = ""
 
+    @on(events.Key)
     async def _on_key(self, event: events.Key) -> None:
         self._restart_blink()
 

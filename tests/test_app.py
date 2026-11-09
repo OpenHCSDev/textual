@@ -12,6 +12,7 @@ from textual.driver import TerminalGaveNoPalette
 from textual.pilot import Pilot, _get_mouse_message_arguments
 from textual.screen import Screen
 from textual.widgets import Button, Input, Label, Static
+from textual import on
 
 
 def test_batch_update():
@@ -194,6 +195,7 @@ async def test_early_exit():
         def compose(self):
             yield Static("Hello")
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             # Exit after creating app
             self.exit()
@@ -210,6 +212,7 @@ def test_early_exit_inline():
         def compose(self):
             yield Static("Hello")
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             # Exit after creating app
             self.exit()
@@ -288,6 +291,7 @@ async def test_click_chain_initial_repeated_clicks(
         def compose(self) -> ComposeResult:
             yield Label("Click me!", id="one")
 
+        @on(events.Click)
         def on_click(self, event: events.Click) -> None:
             nonlocal click_count
             print(f"event: {event}")
@@ -313,6 +317,7 @@ async def test_click_chain_different_offset():
             yield Label("Two!", id="two")
             yield Label("Three!", id="three")
 
+        @on(events.Click)
         def on_click(self, event: events.Click) -> None:
             nonlocal click_count
             click_count += event.chain
@@ -342,6 +347,7 @@ async def test_click_chain_offset_changes_mid_chain():
             yield Label("Click me!", id="one")
             yield Label("Another button!", id="two")
 
+        @on(events.Click)
         def on_click(self, event: events.Click) -> None:
             nonlocal click_count
             click_count = event.chain
@@ -364,6 +370,7 @@ async def test_click_chain_time_outwith_threshold():
         def compose(self) -> ComposeResult:
             yield Label("Click me!", id="one")
 
+        @on(events.Click)
         def on_click(self, event: events.Click) -> None:
             nonlocal click_count
             click_count += event.chain
@@ -379,6 +386,7 @@ def test_app_loop() -> None:
     """Test that App.run accepts a loop argument."""
 
     class MyApp(App[int]):
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.exit(42)
 
@@ -391,6 +399,7 @@ async def test_app_run_async() -> None:
     """Check run_async runs without issues."""
 
     class MyApp(App[int]):
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.exit(42)
 
@@ -403,6 +412,7 @@ def test_app_loop_run_after_asyncio_run() -> None:
     """Test that App.run runs after asyncio.run has run."""
 
     class MyApp(App[int]):
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.exit(42)
 

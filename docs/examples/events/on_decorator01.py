@@ -1,5 +1,6 @@
 from textual.app import App, ComposeResult
 from textual.widgets import Button
+from textual import on
 
 
 class OnDecoratorApp(App):
@@ -11,6 +12,7 @@ class OnDecoratorApp(App):
         yield Button("Toggle dark", classes="toggle dark")
         yield Button("Quit", id="quit")
 
+    @on(Button.Pressed)
     def on_button_pressed(self, event: Button.Pressed) -> None:  # (1)!
         """Handle all button pressed events."""
         if event.button.id == "bell":

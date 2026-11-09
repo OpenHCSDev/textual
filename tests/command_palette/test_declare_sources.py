@@ -2,6 +2,8 @@ from textual.app import App
 from textual.command import CommandPalette, Hit, Hits, Provider
 from textual.screen import Screen
 from textual.system_commands import SystemCommandsProvider
+from textual import events
+from textual import on
 
 
 async def test_sources_with_no_known_screen() -> None:
@@ -18,6 +20,7 @@ class ExampleCommandSource(Provider):
 
 
 class AppWithActiveCommandPalette(App[None]):
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.action_command_palette()
 
@@ -49,11 +52,13 @@ class AppWithInitialScreen(App[None]):
         super().__init__()
         self._test_screen = screen
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.push_screen(self._test_screen)
 
 
 class ScreenWithNoSources(Screen[None]):
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.app.action_command_palette()
 
@@ -86,6 +91,7 @@ class AnotherCommandSource(ExampleCommandSource):
 class CombinedSourceApp(App[None]):
     COMMANDS = {AnotherCommandSource}
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.push_screen(ScreenWithSources())
 

@@ -1,7 +1,10 @@
 from textual.app import App
+from textual import events
+from textual import on
 
 
 class ToastApp(App[None]):
+    @on(events.Mount)
     def on_mount(self) -> None:
         # Show an information notification.
         self.notify("It's an older code, sir, but it checks out.")

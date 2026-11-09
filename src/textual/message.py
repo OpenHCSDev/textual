@@ -12,7 +12,6 @@ from typing_extensions import Self
 
 from textual import _time
 from textual._context import active_message_pump
-from textual.case import camel_to_snake
 
 if TYPE_CHECKING:
     from asyncio import Future, Task
@@ -45,9 +44,6 @@ class Message:
     bubble: ClassVar[bool] = True  # Message will bubble to parent
     verbose: ClassVar[bool] = False  # Message is verbose
     no_dispatch: ClassVar[bool] = False  # Message may not be handled by client code
-    namespace: ClassVar[str] = ""  # Namespace to disambiguate messages
-    handler_name: ClassVar[str]
-    """Name of the default message handler."""
     _dispatch_types: ClassVar[tuple[type[Message], ...]] = ()
 
     def __init__(self) -> None:
@@ -78,7 +74,6 @@ class Message:
         bubble: bool | None = True,
         verbose: bool = False,
         no_dispatch: bool | None = False,
-        namespace: str | None = None,
     ) -> None:
         super().__init_subclass__()
         cls._dispatch_types = tuple(base for base in cls.__mro__ if issubclass(base, Message))
@@ -87,18 +82,6 @@ class Message:
         cls.verbose = verbose
         if no_dispatch is not None:
             cls.no_dispatch = no_dispatch
-        if namespace is not None:
-            cls.namespace = namespace
-            name = f"{namespace}_{camel_to_snake(cls.__name__)}"
-        else:
-            # a class defined inside of a function will have a qualified name like func.<locals>.Class,
-            # so make sure we only use the actual class name(s)
-            qualname = cls.__qualname__.rsplit("<locals>.", 1)[-1]
-            # only keep the last two parts of the qualified name of deeply nested classes
-            # for backwards compatibility, e.g. A.B.C.D becomes C.D
-            namespace = qualname.rsplit(".", 2)[-2:]
-            name = "_".join(camel_to_snake(part) for part in namespace)
-        cls.handler_name = f"on_{name}"
 
     @property
     def control(self) -> DOMNode | None:

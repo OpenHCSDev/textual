@@ -1,6 +1,7 @@
 from textual.app import App, ComposeResult
 from textual.containers import Center, VerticalScroll
 from textual.widgets import Button, Header, Input, Label, ProgressBar
+from textual import on
 
 
 class FundingProgressApp(App[None]):
@@ -19,9 +20,11 @@ class FundingProgressApp(App[None]):
 
         yield VerticalScroll(id="history")
 
+    @on(Button.Pressed)
     def on_button_pressed(self) -> None:
         self.add_donation()
 
+    @on(Input.Submitted)
     def on_input_submitted(self) -> None:
         self.add_donation()
 

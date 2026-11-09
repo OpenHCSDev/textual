@@ -1,5 +1,7 @@
 from textual.app import App, ComposeResult
 from textual.widgets import DataTable, Label
+from textual import events
+from textual import on
 
 LORUM_IPSUM = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."
 
@@ -21,6 +23,7 @@ class ExampleApp(App):
         yield Label("no automatic scrollbar")
         yield DataTable(id="table2")
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         table = self.query_one("#table1", DataTable)
         table.add_column("Column 1")

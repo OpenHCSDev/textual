@@ -1928,6 +1928,7 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
                         self.set_focus(widget)
                         break
 
+    @on(events.ScreenSuspend)
     def _on_screen_suspend(self) -> None:
         """Screen has suspended."""
         self.dismiss_hints(restore=False)

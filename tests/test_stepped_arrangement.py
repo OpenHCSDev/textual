@@ -25,6 +25,7 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import Screen
 from textual.widget import Widget
 from textual.widgets import Label, Static
+from textual import on
 
 
 class Cached(VerticalScroll):
@@ -81,6 +82,7 @@ class Tree(App[None]):
     def get_default_screen(self) -> Screen:
         return Workspace()
 
+    @on(events.Key)
     def on_key(self, event: events.Key) -> None:
         if event.key == "x":
             self.handled_during_layout.append(self.screen._stepped_layout is not None)

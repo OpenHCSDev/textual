@@ -5,6 +5,7 @@ from typing import Any
 from textual import on
 from textual.app import App, ComposeResult
 from textual.widgets import Tree
+from textual import events
 
 
 class TreeApp(App[None]):
@@ -19,6 +20,7 @@ class TreeApp(App[None]):
         """Compose the child widgets."""
         yield Tree("Root", disabled=self.disabled, id="test-tree")
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.query_one(Tree).root.add("Child")
         self.query_one(Tree).focus()

@@ -4,6 +4,7 @@ from unittest import mock
 from textual import on
 from textual.app import App
 from textual.command import CommandPalette, Hit, Hits, Provider
+from textual import events
 
 CommandPaletteEvent = Union[
     CommandPalette.Opened, CommandPalette.Closed, CommandPalette.OptionHighlighted
@@ -25,6 +26,7 @@ class AppWithActiveCommandPalette(App[None]):
         super().__init__()
         self.events: list[CommandPaletteEvent] = []
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.action_command_palette()
 

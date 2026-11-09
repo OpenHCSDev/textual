@@ -4647,6 +4647,7 @@ class Widget(ScrollsView):
         """Allow an asynchronous editor to settle previous input before key lookup."""
         return True
 
+    @on(events.Key)
     async def _on_key(self, event: events.Key) -> None:
         await self.handle_key(event)
 

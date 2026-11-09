@@ -6,6 +6,7 @@ from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll
 from textual.widgets import Input, Static
 from textual.worker import Worker
+from textual import on
 
 
 class WeatherApp(App):
@@ -18,6 +19,7 @@ class WeatherApp(App):
         with VerticalScroll(id="weather-container"):
             yield Static(id="weather")
 
+    @on(Input.Changed)
     async def on_input_changed(self, message: Input.Changed) -> None:
         """Called when the input changes"""
         self.update_weather(message.value)
@@ -37,6 +39,7 @@ class WeatherApp(App):
             # No city, so just blank out the weather
             weather_widget.update("")
 
+    @on(Worker.StateChanged)
     def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
         """Called when the worker state changes."""
         self.log(event)

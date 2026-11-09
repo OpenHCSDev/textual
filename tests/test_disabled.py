@@ -23,6 +23,8 @@ from textual.widgets import (
     Switch,
     Tree,
 )
+from textual import events
+from textual import on
 
 
 class DisableApp(App[None]):
@@ -116,6 +118,7 @@ class ChildrenNoFocusDisabledContainer(App[None]):
                 yield Select([("one", 1), ("two", 2), ("three", 3)])
                 yield Switch()
 
+    @on(events.Mount)
     def on_mount(self):
         dt = self.query_one(DataTable)
         dt.add_columns("one", "two", "three")

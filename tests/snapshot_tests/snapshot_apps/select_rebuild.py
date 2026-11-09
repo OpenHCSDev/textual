@@ -2,6 +2,7 @@
 
 from textual.app import App, ComposeResult
 from textual.widgets import Select, Button
+from textual import on
 
 
 class SelectRebuildApp(App[None]):
@@ -10,6 +11,7 @@ class SelectRebuildApp(App[None]):
         yield Select[int]((("1", 1), ("2", 2)))
         yield Button("Rebuild")
 
+    @on(Button.Pressed)
     def on_button_pressed(self):
         self.query_one(Select).set_options((
             ("This", 0), ("Should", 1), ("Be", 2),

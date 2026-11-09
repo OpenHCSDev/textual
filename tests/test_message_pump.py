@@ -11,6 +11,8 @@ from textual.message import Message
 from textual.message_pump import MessagePump
 from textual.widget import Widget
 from textual.widgets import Button, Input, Label
+from textual import events
+from textual import on
 
 
 def test_layout_replacement_preserves_distinct_source_requests():
@@ -35,6 +37,7 @@ class ListenerPump(MessagePump):
         super().__init__()
         self.seen: list[str] = []
 
+    @on(ChildListenerMessage)
     def on_child_listener_message(self, message: ChildListenerMessage) -> None:
         self.seen.append("handler")
 
@@ -140,6 +143,7 @@ class PreventTestApp(App):
     def compose(self) -> ComposeResult:
         yield Input()
 
+    @on(Input.Changed)
     def on_input_changed(self, event: Input.Changed) -> None:
         self.input_changed_events.append(event)
 
@@ -216,6 +220,7 @@ async def test_prevent_with_call_next() -> None:
         def change_input(self) -> None:
             self.query_one(Input).value += "a"
 
+        @on(Input.Changed)
         def on_input_changed(self) -> None:
             nonlocal hits
             hits += 1
@@ -242,6 +247,7 @@ async def test_prevent_default():
     app_button_pressed = False
 
     class MyButton(Button):
+        @on(Button.Pressed)
         def _on_button_pressed(self, event: Button.Pressed) -> None:
             event.prevent_default()
 
@@ -250,6 +256,7 @@ async def test_prevent_default():
             yield MyButton("Press me")
             yield Label("No pressure")
 
+        @on(Button.Pressed)
         def on_button_pressed(self, event: Button.Pressed) -> None:
             nonlocal app_button_pressed
             app_button_pressed = True
@@ -267,10 +274,12 @@ async def test_thread_safe_post_message():
 
     class TestApp(App):
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             msg = TextMessage()
             threading.Thread(target=self.post_message, args=(msg,)).start()
 
+        @on(TextMessage)
         def on_text_message(self, message):
             self.exit()
 

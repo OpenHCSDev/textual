@@ -4,6 +4,7 @@ from textual import events
 from textual.app import App, ComposeResult
 from textual.containers import Container
 from textual.screen import Screen
+from textual import on
 
 
 async def test_unmount() -> None:
@@ -11,6 +12,7 @@ async def test_unmount() -> None:
     unmount_ids: list[str] = []
 
     class UnmountWidget(Container):
+        @on(events.Unmount)
         def on_unmount(self, event: events.Unmount):
             unmount_ids.append(
                 f"{self.__class__.__name__}#{self.id}-{self.parent is not None}-{len(self._nodes)}"
@@ -28,10 +30,12 @@ async def test_unmount() -> None:
                 id="top",
             )
 
+        @on(events.Unmount)
         def on_unmount(self, event: events.Unmount):
             unmount_ids.append(f"{self.__class__.__name__}#{self.id}")
 
     class UnmountApp(App):
+        @on(events.Mount)
         async def on_mount(self) -> None:
             await self.push_screen(MyScreen(id="main"))
 

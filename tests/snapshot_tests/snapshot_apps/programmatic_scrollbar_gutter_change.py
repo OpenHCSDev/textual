@@ -1,6 +1,8 @@
 from textual.app import App
 from textual.containers import Grid
 from textual.widgets import Label
+from textual import events
+from textual import on
 
 
 class ProgrammaticScrollbarGutterChange(App[None]):
@@ -17,6 +19,7 @@ class ProgrammaticScrollbarGutterChange(App[None]):
             Label("four"),
         )
 
+    @on(events.Key)
     def on_key(self, event):
         if event.key == "s":
             self.query_one(Grid).styles.scrollbar_gutter = "stable"

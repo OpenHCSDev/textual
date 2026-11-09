@@ -6,6 +6,7 @@ from textual.containers import VerticalScroll
 from textual.geometry import Offset
 from textual.screen import Screen
 from textual.widgets import Checkbox, Static
+from textual import on
 
 
 def pointer(app, kind, point, button):
@@ -27,6 +28,7 @@ class HistoryApp(App):
             for index in range(50):
                 yield Static(f"original row {index:02}", id=f"row-{index}")
 
+    @on(events.TextSelected)
     def on_text_selected(self):
         self.selection_completions += 1
 
@@ -187,15 +189,18 @@ async def test_screen_suspend_retires_primary_scroll_but_retains_copyable_range(
 
 async def test_right_capture_and_menu_keep_completed_primary_selection():
     class MenuRow(Static):
+        @on(events.MouseDown)
         def on_mouse_down(self, event):
             if event.button == 3:
                 self.capture_mouse()
 
+        @on(events.MouseUp)
         def on_mouse_up(self, event):
             if event.button == 3:
                 self.release_mouse()
                 self.app.secondary_release = event.widget
 
+        @on(events.Click)
         def on_click(self, event):
             if event.button == 3:
                 self.app.push_screen(Screen(Static("Original right-click menu")))

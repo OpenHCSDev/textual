@@ -1,5 +1,7 @@
 from textual.app import App, ComposeResult
 from textual.widgets import Static
+from textual import events
+from textual import on
 
 TEXT = """I must not fear.
 Fear is the mind-killer.
@@ -15,6 +17,7 @@ class BorderTitleApp(App[None]):
         self.widget = Static(TEXT)
         yield self.widget
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.widget.styles.background = "darkblue"
         self.widget.styles.width = "50%"

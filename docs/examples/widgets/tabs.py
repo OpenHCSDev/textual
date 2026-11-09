@@ -1,5 +1,7 @@
 from textual.app import App, ComposeResult
 from textual.widgets import Footer, Label, Tabs
+from textual import events
+from textual import on
 
 NAMES = [
     "Paul Atreidies",
@@ -44,10 +46,12 @@ class TabsApp(App):
         yield Label()
         yield Footer()
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         """Focus the tabs when the app starts."""
         self.query_one(Tabs).focus()
 
+    @on(Tabs.TabActivated)
     def on_tabs_tab_activated(self, event: Tabs.TabActivated) -> None:
         """Handle TabActivated message sent by Tabs."""
         label = self.query_one(Label)

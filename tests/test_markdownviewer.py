@@ -8,6 +8,7 @@ from textual.app import App, ComposeResult
 from textual.content import Content
 from textual.geometry import Offset
 from textual.widgets import Markdown, MarkdownViewer, Tree
+from textual import on
 
 TEST_MARKDOWN = """\
 * [First]({{file}}#first)
@@ -32,6 +33,7 @@ class MarkdownFileViewerApp(App[None]):
     def compose(self) -> ComposeResult:
         yield MarkdownViewer(open_links=False)
 
+    @on(MD.Mount)
     async def on_mount(self) -> None:
         self.query_one(MarkdownViewer).show_table_of_contents = False
         await self.query_one(MarkdownViewer).go(self.markdown_file)
@@ -55,6 +57,7 @@ class MarkdownStringViewerApp(App[None]):
     def compose(self) -> ComposeResult:
         yield MarkdownViewer(self.markdown_string, open_links=False)
 
+    @on(MD.Mount)
     async def on_mount(self) -> None:
         self.query_one(MarkdownViewer).show_table_of_contents = False
 

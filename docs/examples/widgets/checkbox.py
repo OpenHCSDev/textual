@@ -1,6 +1,8 @@
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll
 from textual.widgets import Checkbox
+from textual import events
+from textual import on
 
 
 class CheckboxApp(App[None]):
@@ -17,6 +19,7 @@ class CheckboxApp(App[None]):
             yield Checkbox("Kaitain", id="initial_focus")
             yield Checkbox("Novebruns", True)
 
+    @on(events.Mount)
     def on_mount(self):
         self.query_one("#initial_focus", Checkbox).focus()
 

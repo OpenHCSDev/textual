@@ -1,6 +1,7 @@
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, VerticalScroll
 from textual.widgets import Button, Static
+from textual import on
 
 
 class ButtonsApp(App[str]):
@@ -42,6 +43,7 @@ class ButtonsApp(App[str]):
             ),
         )
 
+    @on(Button.Pressed)
     def on_button_pressed(self, event: Button.Pressed) -> None:
         self.exit(str(event.button))
 

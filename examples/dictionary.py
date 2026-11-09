@@ -10,6 +10,7 @@ from textual import getters, work
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll
 from textual.widgets import Input, Markdown
+from textual import on
 
 
 class DictionaryApp(App):
@@ -25,6 +26,7 @@ class DictionaryApp(App):
         with VerticalScroll(id="results-container"):
             yield Markdown(id="results")
 
+    @on(Input.Changed)
     async def on_input_changed(self, message: Input.Changed) -> None:
         """A coroutine to handle a text changed message."""
         if message.value:

@@ -10,9 +10,12 @@ from agent_comms.comms import Comms
 from toad.app import ToadApp
 from toad.cli import run_terminal
 from toad.widgets.agent_response import AgentResponse
+from textual import events
+from textual import on
 
 class FrameToad(ToadApp):
  CSS_PATH=Path(inspect.getfile(ToadApp)).with_name('toad.tcss')
+ @on(events.Mount)
  async def on_mount(self,event):
   event.prevent_default()
   await super().on_mount()

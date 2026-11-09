@@ -1,5 +1,7 @@
 from textual.app import App
 from textual.command import Hit, Hits, Provider
+from textual import events
+from textual import on
 
 
 class TestSource(Provider):
@@ -21,6 +23,7 @@ class TestSource(Provider):
 class CommandPaletteApp(App[None]):
     COMMANDS = {TestSource}
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.action_command_palette()
 

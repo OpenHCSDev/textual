@@ -2,6 +2,8 @@ from itertools import cycle
 
 from textual.app import App, ComposeResult
 from textual.widgets import DataTable
+from textual import events
+from textual import on
 
 ROWS = [
     ("lane", "swimmer", "country", "time"),
@@ -23,6 +25,7 @@ class TableApp(App):
     def compose(self) -> ComposeResult:
         yield DataTable()
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         table = self.query_one(DataTable)
         table.cursor_type = next(cursors)

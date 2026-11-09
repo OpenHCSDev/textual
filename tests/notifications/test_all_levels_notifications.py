@@ -1,14 +1,18 @@
 from textual.app import App, ComposeResult
 from textual.screen import Screen
 from textual.widget import Widget
+from textual import events
+from textual import on
 
 
 class NotifyWidget(Widget):
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.notify("test", timeout=60)
 
 
 class NotifyScreen(Screen):
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.notify("test", timeout=60)
 
@@ -17,6 +21,7 @@ class NotifyScreen(Screen):
 
 
 class NotifyApp(App[None]):
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.notify("test", timeout=60)
         self.push_screen(NotifyScreen())

@@ -4,6 +4,8 @@ from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.widgets import Tree
 from textual.widgets.tree import TreeNode
+from textual import events
+from textual import on
 
 class HistoryTree(Tree):
 
@@ -12,6 +14,7 @@ class HistoryTree(Tree):
         self.counter = 0
         self.render_hits: set[tuple[int, int]] = set()
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.root.add("Child").add_leaf("Grandchild")
 
@@ -25,6 +28,7 @@ class RefreshApp(App[None]):
     def compose(self) -> ComposeResult:
         yield HistoryTree()
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.query_one(HistoryTree).root.expand_all()
 

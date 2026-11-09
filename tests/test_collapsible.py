@@ -182,6 +182,7 @@ async def test_expand_message():
         def compose(self) -> ComposeResult:
             yield Collapsible(collapsed=True)
 
+        @on(Collapsible.Expanded)
         def on_collapsible_expanded(self) -> None:
             hits.append("expanded")
 
@@ -204,6 +205,7 @@ async def test_expand_via_watcher_message():
         def compose(self) -> ComposeResult:
             yield Collapsible(collapsed=True)
 
+        @on(Collapsible.Expanded)
         def on_collapsible_expanded(self) -> None:
             hits.append("expanded")
 
@@ -226,6 +228,7 @@ async def test_collapse_message():
         def compose(self) -> ComposeResult:
             yield Collapsible(collapsed=False)
 
+        @on(Collapsible.Collapsed)
         def on_collapsible_collapsed(self) -> None:
             hits.append("collapsed")
 
@@ -248,6 +251,7 @@ async def test_collapse_via_watcher_message():
         def compose(self) -> ComposeResult:
             yield Collapsible(collapsed=False)
 
+        @on(Collapsible.Collapsed)
         def on_collapsible_collapsed(self) -> None:
             hits.append("collapsed")
 

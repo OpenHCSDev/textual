@@ -1,6 +1,7 @@
 from textual import events
 from textual.app import App, ComposeResult
 from textual.widgets import RichLog, Static
+from textual import on
 
 
 class Ball(Static):
@@ -14,6 +15,7 @@ class MouseApp(App):
         yield RichLog()
         yield Ball("Textual")
 
+    @on(events.MouseMove)
     def on_mouse_move(self, event: events.MouseMove) -> None:
         self.screen.query_one(RichLog).write(event)
         self.query_one(Ball).offset = event.screen_offset - (8, 2)

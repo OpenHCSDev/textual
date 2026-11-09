@@ -2,6 +2,8 @@ from itertools import cycle
 
 from textual.app import App, ComposeResult
 from textual.widgets import Static
+from textual import events
+from textual import on
 
 hellos = cycle(
     [
@@ -23,6 +25,7 @@ hellos = cycle(
 class Hello(Static):
     """Display a greeting."""
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.action_next_word()
 

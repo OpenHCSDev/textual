@@ -1,6 +1,7 @@
 from textual import events
 from textual.app import App, ComposeResult
 from textual.widgets import RichLog
+from textual import on
 
 
 class InputApp(App):
@@ -9,6 +10,7 @@ class InputApp(App):
     def compose(self) -> ComposeResult:
         yield RichLog()
 
+    @on(events.Key)
     def on_key(self, event: events.Key) -> None:
         self.query_one(RichLog).write(event)
 

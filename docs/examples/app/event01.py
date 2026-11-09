@@ -1,5 +1,6 @@
 from textual.app import App
 from textual import events
+from textual import on
 
 
 class EventApp(App):
@@ -17,9 +18,11 @@ class EventApp(App):
         "aqua",
     ]
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.screen.styles.background = "darkblue"
 
+    @on(events.Key)
     def on_key(self, event: events.Key) -> None:
         if event.key.isdecimal():
             self.screen.styles.background = self.COLORS[int(event.key)]

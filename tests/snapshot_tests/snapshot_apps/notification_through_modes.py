@@ -1,6 +1,8 @@
 from textual.app import App, ComposeResult
 from textual.screen import Screen
 from textual.widgets import Label
+from textual import events
+from textual import on
 
 class Mode(Screen):
 
@@ -17,6 +19,7 @@ class NotifyThroughModesApp(App[None]):
     def compose(self) -> ComposeResult:
         yield Label("Base screen")
 
+    @on(events.Mount)
     def on_mount(self):
         for n in range(10):
             self.notify(str(n))

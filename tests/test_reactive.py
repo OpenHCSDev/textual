@@ -12,6 +12,8 @@ from textual.message_pump import MessagePump
 from textual.reactive import Initialize, Reactive, TooManyComputesError, reactive, var
 from textual.widget import Widget
 from textual.widgets import DirectoryTree
+from textual import events
+from textual import on
 
 OLD_VALUE = 5_000
 NEW_VALUE = 1_000_000
@@ -663,6 +665,7 @@ async def test_async_reactive_watch_callbacks_go_on_the_watcher():
             super().__init__()
             self.holder = Holder()
 
+        @on(events.Mount)
         def on_mount(self):
             self.watch(self.holder, "attr", self.callback)
 
@@ -702,6 +705,7 @@ async def test_sync_reactive_watch_callbacks_go_on_the_watcher():
             super().__init__()
             self.holder = Holder()
 
+        @on(events.Mount)
         def on_mount(self):
             self.watch(self.holder, "attr", self.callback)
 
@@ -755,6 +759,7 @@ async def test_no_duplicate_external_watchers() -> None:
             super().__init__()
             self.holder = Holder()
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.watch(self.holder, "attr", self.callback)
             self.watch(self.holder, "attr", self.callback)
@@ -794,6 +799,7 @@ async def test_external_watch_init_does_not_propagate() -> None:
         def compose(self) -> ComposeResult:
             yield SomeWidget()
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             def watch_test_2_extra() -> None:
                 logs.append("test_2_extra")
@@ -870,6 +876,7 @@ async def test_message_sender_from_reactive() -> None:
         def compose(self) -> ComposeResult:
             yield TestWidget()
 
+        @on(TestWidget.TestMessage)
         def on_test_widget_test_message(self, event: TestWidget.TestMessage) -> None:
             nonlocal message_senders
             message_senders.append(event._sender)

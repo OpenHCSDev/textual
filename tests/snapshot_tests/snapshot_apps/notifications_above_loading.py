@@ -1,6 +1,8 @@
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll
 from textual.widgets import Label
+from textual import events
+from textual import on
 
 
 class LoadingOverlayApp(App[None]):
@@ -20,6 +22,7 @@ class LoadingOverlayApp(App[None]):
         with VerticalScroll():
             yield Label("another big label\n" * 30)  # Ensure there's a scrollbar.
 
+    @on(events.Mount)
     def on_mount(self):
         self.notify("This is a big notification.\n" * 10, timeout=10)
         self.query_one(VerticalScroll).loading = True

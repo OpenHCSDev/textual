@@ -12,12 +12,15 @@ from textual.events import Key
 from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import Input
+from textual import events
+from textual import on
 
 
 async def test_pending_unmount_does_not_block_unrelated_native_input():
     entered, release, received = asyncio.Event(), asyncio.Event(), asyncio.Event()
 
     class SlowUnmount(Widget):
+        @on(events.Unmount)
         async def on_unmount(self):
             entered.set()
             await release.wait()
@@ -124,6 +127,7 @@ async def test_widget_can_await_its_own_removal_without_waiting_on_itself():
         pass
 
     class SelfRemoving(Widget):
+        @on(Retire)
         async def on_retire(self):
             await self.remove()
             returned.set()

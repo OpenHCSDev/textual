@@ -1,12 +1,14 @@
 from textual import events
 from textual.app import App
 from textual.widgets import Input
+from textual import on
 
 
 async def test_paste_app():
     paste_events = []
 
     class PasteApp(App):
+        @on(events.Paste)
         def on_paste(self, event):
             paste_events.append(event)
 
@@ -25,6 +27,7 @@ async def test_empty_paste():
     paste_events = []
 
     class MyInput(Input):
+        @on(events.Paste)
         def on_paste(self, event):
             super()._on_paste(event)
             paste_events.append(event)

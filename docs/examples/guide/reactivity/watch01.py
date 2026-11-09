@@ -3,6 +3,7 @@ from textual.color import Color, ColorParseError
 from textual.containers import Grid
 from textual.reactive import reactive
 from textual.widgets import Input, Static
+from textual import on
 
 
 class WatchApp(App):
@@ -18,6 +19,7 @@ class WatchApp(App):
         self.query_one("#old").styles.background = old_color
         self.query_one("#new").styles.background = new_color
 
+    @on(Input.Submitted)
     def on_input_submitted(self, event: Input.Submitted) -> None:
         try:
             input_color = Color.parse(event.value)

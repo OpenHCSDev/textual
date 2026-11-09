@@ -2,6 +2,8 @@ from datetime import datetime
 
 from textual.app import App, ComposeResult
 from textual.widgets import Digits
+from textual import events
+from textual import on
 
 
 class ClockApp(App):
@@ -17,6 +19,7 @@ class ClockApp(App):
     def compose(self) -> ComposeResult:
         yield Digits("", id="clock")
 
+    @on(events.Ready)
     def on_ready(self) -> None:
         self.update_clock()
         self.set_interval(1, self.update_clock)

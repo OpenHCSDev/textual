@@ -2,6 +2,8 @@ from textual.app import App, ComposeResult
 from textual.color import Color
 from textual.message import Message
 from textual.widgets import Static
+from textual import events
+from textual import on
 
 
 class ColorButton(Static):
@@ -18,12 +20,14 @@ class ColorButton(Static):
         self.color = color
         super().__init__()
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.styles.margin = (1, 2)
         self.styles.content_align = ("center", "middle")
         self.styles.background = Color.parse("#ffffff33")
         self.styles.border = ("tall", self.color)
 
+    @on(events.Click)
     def on_click(self) -> None:
         # The post_message method sends an event to be handled in the DOM
         self.post_message(self.Selected(self.color))
@@ -39,6 +43,7 @@ class ColorApp(App):
         yield ColorButton(Color.parse("#E9967A"))
         yield ColorButton(Color.parse("#121212"))
 
+    @on(ColorButton.Selected)
     def on_color_button_selected(self, message: ColorButton.Selected) -> None:
         self.screen.styles.animate("background", message.color, duration=0.5)
 

@@ -187,6 +187,7 @@ def test_input_setting_value(snap_compare):
             yield Input(placeholder="Placeholder, no value")
             yield Input(id="input3")
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             input3 = self.query_one("#input3", Input)
             input3.value = "set in on_mount"
@@ -356,6 +357,7 @@ def test_datatable_auto_height_future_updates(snap_compare):
         def compose(self) -> ComposeResult:
             yield DataTable()
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             table = self.query_one(DataTable)
             table.add_columns(*ROWS[0])
@@ -2059,6 +2061,7 @@ def test_escape_to_minimize_screen_override(snap_compare):
         def compose(self) -> ComposeResult:
             yield Label("You are looking at the default screen")
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.push_screen(TestScreen())
 
@@ -2136,6 +2139,7 @@ def test_ansi_command_palette(snap_compare):
         def compose(self) -> ComposeResult:
             yield Label("[ansi_red]Red[/] [ansi_magenta]Magenta[/] " * 200)
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.action_command_palette()
 
@@ -2173,6 +2177,7 @@ def test_disabled(snap_compare):
             yield OptionList("you", "can't", "select", "me", disabled=True)
             yield SelectionList(("Simple SelectionList", "", False), disabled=True)
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.query_one(Log).write("I am disabled")
             self.query_one(RichLog).write("I am disabled")
@@ -2214,6 +2219,7 @@ def test_keymap_bindings_display_footer_and_help_panel(snap_compare):
             yield Label("Counter")
             yield Footer()
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.action_show_help_panel()
             self.set_keymap(
@@ -2249,6 +2255,7 @@ def test_keymap_bindings_key_display(snap_compare):
             yield Label("Check the footer and help panel")
             yield Footer()
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.action_show_help_panel()
             self.set_keymap({"app.increment": "k,plus,j,l"})
@@ -2279,6 +2286,7 @@ def test_missing_new_widgets(snap_compare):
             yield Footer()  # clicking "Console" in the footer prevents the bug
             yield RichLog(classes="hidden")
 
+        @on(events.Ready)
         def on_ready(self) -> None:
             self.query_one(RichLog).write("\n".join(f"line #{i}" for i in range(5)))
 
@@ -2309,6 +2317,7 @@ def test_pop_until_active(snap_compare):
     class PopApp(App):
         SCREENS = {"base": BaseScreen}
 
+        @on(events.Mount)
         async def on_mount(self) -> None:
             # Push base
             await self.push_screen("base")
@@ -2351,6 +2360,7 @@ def test_updates_with_auto_refresh(snap_compare):
             yield ProgressBar(classes="hidden")
             yield RichLog(classes="hidden")
 
+        @on(events.Ready)
         def on_ready(self) -> None:
             self.query_one(RichLog).write("\n".join(f"line #{i}" for i in range(5)))
 
@@ -2409,6 +2419,7 @@ def test_push_screen_on_mount(snap_compare):
             s = "Hello World Foo Bar Baz"
             yield Middle(Center(Static(s)))
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.push_screen(QuitScreen())
 
@@ -2579,6 +2590,7 @@ def test_pseudo_classes(snap_compare):
             for item_number in range(5):
                 yield Label(f"Item {item_number + 1}")
 
+        @on(events.Mount)
         async def on_mount(self) -> None:
             # Mounting a new widget should updated previous widgets, as the last of type has changed
             await self.mount(Label("HELLO"))
@@ -2612,6 +2624,7 @@ def test_child_pseudo_classes(snap_compare):
             yield Button("Button 1")
             yield Button("Button 2")
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             # Mounting a new widget should update previous widgets, as the last child has changed
             self.mount(Button("HELLO"))
@@ -2658,6 +2671,7 @@ def test_themes(snap_compare, theme_name):
         def compose(self) -> ComposeResult:
             yield Label(f"{theme_name.title()} Theme")
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.theme = theme_name
 
@@ -2700,6 +2714,7 @@ def test_custom_theme_with_variables(snap_compare):
                 "custom-background": "#0000ff 50%",
             }
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             custom_theme = Theme(
                 name="my-custom",
@@ -2725,6 +2740,7 @@ def test_app_search_commands_opens_and_displays_search_list(snap_compare):
         def compose(self) -> ComposeResult:
             yield Label("Search Commands")
 
+        @on(events.Mount)
         async def on_mount(self) -> None:
             def callback():
                 """Dummy no-op callback."""
@@ -2785,6 +2801,7 @@ def test_theme_variables_available_in_code(snap_compare):
         def compose(self) -> ComposeResult:
             yield Label("Hello")
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             variables = self.theme_variables
             label = self.query_one(Label)
@@ -2963,6 +2980,7 @@ def test_markup_command_list(snap_compare):
     """
 
     class MyApp(App):
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.search_commands(
                 [
@@ -3012,9 +3030,11 @@ def test_app_resize_order(snap_compare):
 
         """
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.push_screen(NarrowScreen())
 
+        @on(events.Resize)
         def on_resize(self) -> None:
             self.add_class("narrow")
 
@@ -3262,6 +3282,7 @@ def test_select_refocus(snap_compare):
                 yield self.lab
                 yield self.sel
 
+        @on(Select.Changed)
         def on_select_changed(self, event: Select.Changed):
             self.app.query_one(MyListView).focus()
 
@@ -3271,6 +3292,7 @@ def test_select_refocus(snap_compare):
             yield MyListItem(opts)
             yield MyListItem(opts)
 
+        @on(ListView.Selected)
         def on_list_view_selected(self, event: ListView.Selected):
             event.item.sel.focus()
             event.item.sel.expanded = True
@@ -3369,6 +3391,7 @@ def test_collapsible_datatable(snap_compare):
             yield Collapsible(DataTable(id="t1"), id="c1", collapsed=False)
             yield Collapsible(Label("hello"), id="c2")
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             t1 = self.query_one("#t1", DataTable)
             t1.add_column("A")
@@ -3738,6 +3761,7 @@ def test_auto_rich_log_width(snap_compare):
                 with TabPane("Title Slide", id="title-slide-tab"):
                     yield Container(RichLog(id="title-rich-log"), id="title-container")
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             """Add some text to the RichLogs."""
             title_rich_log = self.query_one("#title-rich-log", RichLog)
@@ -3810,6 +3834,7 @@ def test_auto_in_auto(snap_compare):
                 id="main_tab",
             )
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             rows = [
                 (
@@ -3877,6 +3902,7 @@ def test_panel_border_title_colors(snap_compare):
                 classes="with-border-title-background with-border-title-color",
             )
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             for label in self.query(Label):
                 label.border_title = "Border title"
@@ -3915,6 +3941,7 @@ def test_click_selection_disabled_when_allow_select_is_false(
     class AllowSelectApp(App):
         ALLOW_SELECT = app_allow_select
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.push_screen(AllowSelectScreen())
 
@@ -3990,6 +4017,7 @@ def test_notifications_markup(snap_compare):
     The second will have markup disabled, and square brackets will be verbatim."""
 
     class ToastApp(App[None]):
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.notify(
                 "[$accent italic]Hello, World!", title="With Markup", timeout=100
@@ -4300,6 +4328,7 @@ def test_textarea_line_highlight(snap_compare):
         def compose(self) -> ComposeResult:
             yield TextArea("Hello\nWorld!", highlight_cursor_line=False)
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.query_one(TextArea).move_cursor((0, 2))
 
@@ -4365,6 +4394,7 @@ def test_snapshot_scroll(snap_compare):
                 for i in range(10):
                     yield Vertical(Input(valid_empty=False, id=f"test-{i}", value="x"))
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.query_one("#my-container").scroll_to(0, 3)
 
@@ -4413,6 +4443,7 @@ def test_markdown_append(snap_compare):
         def compose(self) -> ComposeResult:
             yield Markdown()
 
+        @on(events.Mount)
         async def on_mount(self) -> None:
             markdown = self.query_one(Markdown)
             for line in MD:
@@ -4437,6 +4468,7 @@ def test_append_with_initial_document(snap_compare):
         def compose(self):
             yield Markdown(TEXT)
 
+        @on(events.Mount)
         async def on_mount(self) -> None:
             await self.query_one(Markdown).append(" *World*")
 
@@ -4466,6 +4498,7 @@ def test_text_area_css_theme_updates_background(snap_compare):
             yield text_area_control
             yield text_area_variable
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             text_area = self.query_one("#text-area-variable", TextArea)
             text_area.theme = "css"
@@ -4582,6 +4615,7 @@ def test_static_content_property(snap_compare):
         def compose(self) -> ComposeResult:
             yield Static("Hello, World")
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.query_one(Static).content = "FOO BAR"
 
@@ -4599,6 +4633,7 @@ def test_textarea_suggestion(snap_compare):
         def compose(self) -> ComposeResult:
             yield TextArea()
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.query_one(TextArea).insert("Hello, ")
             self.query_one(TextArea).suggestion = "World!"
@@ -4675,9 +4710,11 @@ def test_rich_log_early_write(snap_compare) -> None:
             with Horizontal():
                 yield RichLog()
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.theme = "nord"
 
+        @on(events.Ready)
         def on_ready(self) -> None:
             log_widget = self.query_one(RichLog)
             log_widget.write("Hello, World!")
@@ -4778,6 +4815,7 @@ def test_mount_compose(snap_compare) -> None:
 
     class ComposeApp(App):
 
+        @on(events.Mount)
         async def on_mount(self) -> None:
             # Perform compose outside of usual compose method.
             def compose_things() -> ComposeResult:
@@ -4853,6 +4891,7 @@ Input {
             self.query_one("#old").styles.background = old_color
             self.query_one("#new").styles.background = new_color
 
+        @on(Input.Submitted)
         def on_input_submitted(self, event: Input.Submitted) -> None:
             try:
                 input_color = Color.parse(event.value)
@@ -4903,6 +4942,7 @@ How's that?
         def compose(self) -> ComposeResult:
             yield Markdown()
 
+        @on(events.Mount)
         async def on_mount(self) -> None:
             markdown = self.query_one(Markdown)
             stream = Markdown.get_stream(markdown)
@@ -4927,6 +4967,7 @@ def test_text_opacity_native_ansi(snap_compare) -> None:
 
     class TApp(App):
 
+        @on(events.Load)
         def on_load(self) -> None:
             self.theme = "ansi-dark"
 

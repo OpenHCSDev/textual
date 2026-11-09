@@ -1,6 +1,8 @@
 from textual.app import App, ComposeResult
 from textual.events import AppBlur
 from textual.widgets import Input
+from textual import events
+from textual import on
 
 class AppBlurApp(App[None]):
 
@@ -25,6 +27,7 @@ class AppBlurApp(App[None]):
         yield Input("This should be the blur style")
         yield Input("This should also be the blur style")
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.post_message(AppBlur())
 

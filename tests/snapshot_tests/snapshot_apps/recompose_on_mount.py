@@ -4,6 +4,8 @@ from textual.app import App, ComposeResult
 from textual.screen import Screen
 from textual.widgets import Header, Footer, Static, RadioSet
 from textual.reactive import reactive
+from textual import events
+from textual import on
 
 
 class Profile(Static):
@@ -12,6 +14,7 @@ class Profile(Static):
     def compose(self) -> ComposeResult:
         yield RadioSet(*self.choices)
 
+    @on(events.Mount)
     async def on_mount(self) -> None:
         self.choices.append("Foo")
         self.choices.append("Bar")
@@ -35,6 +38,7 @@ class ForecastApp(App):
         yield Header()
         yield Footer()
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.install_screen(Landing(), name="landing")
         self.push_screen("landing")

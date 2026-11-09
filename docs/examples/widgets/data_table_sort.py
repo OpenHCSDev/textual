@@ -2,6 +2,8 @@ from rich.text import Text
 
 from textual.app import App, ComposeResult
 from textual.widgets import DataTable, Footer
+from textual import events
+from textual import on
 
 ROWS = [
     ("lane", "swimmer", "country", "time 1", "time 2"),
@@ -31,6 +33,7 @@ class TableApp(App):
         yield DataTable()
         yield Footer()
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         table = self.query_one(DataTable)
         for col in ROWS[0]:

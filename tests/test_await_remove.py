@@ -1,13 +1,17 @@
 from textual.app import App
 from textual.widgets import Label
+from textual import events
+from textual import on
 
 
 class SelfRemovingLabel(Label):
+    @on(events.Mount)
     async def on_mount(self) -> None:
         await self.remove()
 
 
 class RemoveOnTimerApp(App[None]):
+    @on(events.Mount)
     def on_mount(self):
         for _ in range(5):
             self.mount(SelfRemovingLabel("I will remove myself!"))

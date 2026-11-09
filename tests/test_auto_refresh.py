@@ -3,6 +3,8 @@ from time import time
 
 from textual.app import App
 from textual.pilot import Pilot
+from textual import events
+from textual import on
 
 
 class RefreshApp(App[float]):
@@ -10,6 +12,7 @@ class RefreshApp(App[float]):
         self.count = 0
         super().__init__()
 
+    @on(events.Mount)
     def on_mount(self):
         self.start = time()
         self.auto_refresh = 0.1

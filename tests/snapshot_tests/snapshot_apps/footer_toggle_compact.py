@@ -1,5 +1,7 @@
 from textual.app import App, ComposeResult
 from textual.widgets import Footer, Label
+from textual import events
+from textual import on
 
 
 class ToggleCompactFooterApp(App):
@@ -17,6 +19,7 @@ class ToggleCompactFooterApp(App):
         yield Label("Compact Footer")
         yield Footer()
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         footer = self.query_one(Footer)
         footer.compact = True

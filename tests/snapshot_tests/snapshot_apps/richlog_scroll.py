@@ -1,6 +1,8 @@
 from textual.app import App, ComposeResult
 from textual.widgets import RichLog
 from textual.containers import Horizontal
+from textual import events
+from textual import on
 
 
 class RichLogScrollApp(App):
@@ -20,6 +22,7 @@ class RichLogScrollApp(App):
             # Scroll on write, but disabled on write()
             yield RichLog(id="richlog3", auto_scroll=True)
 
+    @on(events.Ready)
     def on_ready(self) -> None:
         lines = [f"Line {n}" for n in range(20)]
         for line in lines:

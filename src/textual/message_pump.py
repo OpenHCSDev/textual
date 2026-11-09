@@ -38,7 +38,7 @@ from textual._compat import cached_property
 from textual._context import NoActiveAppError, active_app, active_message_pump
 from textual._context import message_hook as message_hook_context_var
 from textual._context import prevent_message_types_stack
-from textual._on import DispatchScope, MessageHandler, NamedScope, on
+from textual._on import DispatchScope, MessageHandler, on
 from textual._time import time
 from textual._types import CallbackType
 from textual.constants import SLOW_THRESHOLD
@@ -160,7 +160,7 @@ class _MessagePumpMeta(AbstractHooksMeta):
     def _compile_dispatch(cls) -> None:
         """Derive receiver-first C3 scopes from their original declarations."""
         cls._dispatch_declarations = tuple(
-            NamedScope.from_class(owner) for owner in cls.__mro__
+            DispatchScope.from_class(owner) for owner in cls.__mro__
         )
 
 
@@ -969,7 +969,7 @@ class MessagePump(ParentLinks, metaclass=_MessagePumpMeta):
                 if perf_counter() - start > SLOW_THRESHOLD / 1000:
                     log.warning(
                         f"method=<{self.__class__.__name__}."
-                        f"{message.handler_name}>",
+                        f"{type(message).__qualname__} handler>",
                         f"Took over {SLOW_THRESHOLD}ms to process.",
                         "\nTo avoid screen freezes, consider using a worker.",
                     )
@@ -1006,8 +1006,6 @@ class MessagePump(ParentLinks, metaclass=_MessagePumpMeta):
                 if route.declaration.matches(message):
                     yield scope.owner, route.method_for(self, scope.owner)
                     methods_dispatched.add(route.handler)
-            for method in scope.conventional_methods(self, message):
-                yield scope.owner, method
 
     async def on_event(self, event: events.Event) -> None:
         """Called to process an event.
@@ -1138,6 +1136,7 @@ class MessagePump(ParentLinks, metaclass=_MessagePumpMeta):
             self._message_queue.put_nowait(message)
         return True
 
+    @on(events.Callback)
     async def on_callback(self, event: events.Callback) -> None:
         if self.app._closing:
             return
@@ -1150,6 +1149,7 @@ class MessagePump(ParentLinks, metaclass=_MessagePumpMeta):
             return
         await invoke(event.callback)
 
+    @on(events.Timer)
     async def on_timer(self, event: events.Timer) -> None:
         if not self.app._running:
             return

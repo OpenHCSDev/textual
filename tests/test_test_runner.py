@@ -1,5 +1,6 @@
 from textual import events
 from textual.app import App
+from textual import on
 
 
 async def test_run_test() -> None:
@@ -7,6 +8,7 @@ async def test_run_test() -> None:
     keys_pressed: list[str] = []
 
     class TestApp(App[str]):
+        @on(events.Key)
         def on_key(self, event: events.Key) -> None:
             keys_pressed.append(event.key)
 

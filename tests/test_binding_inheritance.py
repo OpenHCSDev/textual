@@ -19,6 +19,8 @@ from textual.document._editing import EditingMode
 from textual.screen import Screen
 from textual.widget import Widget
 from textual.widgets import Static
+from textual import events
+from textual import on
 
 ##############################################################################
 # These are the movement keys within Textual; they kind of have a special
@@ -119,6 +121,7 @@ class AppWithScreenThatHasABinding(App[None]):
 
     SCREENS = {"main": ScreenWithBindings}
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.push_screen("main")
 
@@ -148,6 +151,7 @@ class AppWithScreenThatHasALowBinding(App[None]):
 
     SCREENS = {"main": ScreenWithLowBindings}
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.push_screen("main")
 
@@ -267,6 +271,7 @@ class AppWithWidgetWithBindings(AppKeyRecorder):
     def compose(self) -> ComposeResult:
         yield FocusableWidgetWithBindings()
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.query_one(FocusableWidgetWithBindings).focus()
 
@@ -305,6 +310,7 @@ class ScreenWithMovementBindings(Screen):
     def compose(self) -> ComposeResult:
         yield FocusableWidgetWithNoBindings()
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.query_one(FocusableWidgetWithNoBindings).focus()
 
@@ -314,6 +320,7 @@ class AppWithScreenWithBindingsWidgetNoBindings(AppKeyRecorder):
 
     SCREENS = {"main": ScreenWithMovementBindings}
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.push_screen("main")
 
@@ -348,6 +355,7 @@ class ScreenWithMovementBindingsAndContainerAroundWidget(Screen):
     def compose(self) -> ComposeResult:
         yield Container(FocusableWidgetWithNoBindings())
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.query_one(FocusableWidgetWithNoBindings).focus()
 
@@ -357,6 +365,7 @@ class AppWithScreenWithBindingsWrappedWidgetNoBindings(AppKeyRecorder):
 
     SCREENS = {"main": ScreenWithMovementBindings}
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.push_screen("main")
 
@@ -398,6 +407,7 @@ class AppWithWidgetWithBindingsNoInherit(AppKeyRecorder):
     def compose(self) -> ComposeResult:
         yield WidgetWithBindingsNoInherit()
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.query_one(WidgetWithBindingsNoInherit).focus()
 
@@ -441,6 +451,7 @@ class ScreenWithMovementBindingsNoInheritChild(Screen):
     def compose(self) -> ComposeResult:
         yield FocusableWidgetWithNoBindingsNoInherit()
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.query_one(FocusableWidgetWithNoBindingsNoInherit).focus()
 
@@ -450,6 +461,7 @@ class AppWithScreenWithBindingsWidgetNoBindingsNoInherit(AppKeyRecorder):
 
     SCREENS = {"main": ScreenWithMovementBindingsNoInheritChild}
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.push_screen("main")
 
@@ -498,6 +510,7 @@ class ScreenWithMovementBindingsNoInheritEmptyChild(Screen):
     def compose(self) -> ComposeResult:
         yield FocusableWidgetWithEmptyBindingsNoInherit()
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.query_one(FocusableWidgetWithEmptyBindingsNoInherit).focus()
 
@@ -507,6 +520,7 @@ class AppWithScreenWithBindingsWidgetEmptyBindingsNoInherit(AppKeyRecorder):
 
     SCREENS = {"main": ScreenWithMovementBindingsNoInheritEmptyChild}
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.push_screen("main")
 
@@ -571,6 +585,7 @@ class PriorityOverlapScreen(Screen):
     def compose(self) -> ComposeResult:
         yield PriorityOverlapWidget()
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.query_one(PriorityOverlapWidget).focus()
 
@@ -590,6 +605,7 @@ class PriorityOverlapApp(AppKeyRecorder):
 
     SCREENS = {"main": PriorityOverlapScreen}
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.push_screen("main")
 
@@ -632,6 +648,7 @@ async def test_skip_action() -> None:
         def compose(self) -> ComposeResult:
             yield Handle(NoHandle())
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.query_one(NoHandle).focus()
 

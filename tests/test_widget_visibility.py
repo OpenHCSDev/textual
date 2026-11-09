@@ -1,5 +1,7 @@
 from textual.app import App, ComposeResult
 from textual.widgets import Label
+from textual import events
+from textual import on
 
 
 async def test_hide() -> None:
@@ -8,9 +10,11 @@ async def test_hide() -> None:
     visibility: list[bool] = []
 
     class ShowHideLabel(Label):
+        @on(events.Show)
         def on_show(self) -> None:
             visibility.append(True)
 
+        @on(events.Hide)
         def on_hide(self) -> None:
             visibility.append(False)
 

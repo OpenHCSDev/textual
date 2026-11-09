@@ -2,6 +2,7 @@ from textual.app import App, ComposeResult
 from textual.containers import Horizontal
 from textual.reactive import reactive
 from textual.widgets import Button, RichLog
+from textual import on
 
 
 class ValidateApp(App):
@@ -25,6 +26,7 @@ class ValidateApp(App):
         )
         yield RichLog(highlight=True)
 
+    @on(Button.Pressed)
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "plus":
             self.count += 1

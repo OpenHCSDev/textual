@@ -10,6 +10,7 @@ from rich.json import JSON
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll
 from textual.widgets import Input, Static
+from textual import on
 
 
 class DictionaryApp(App):
@@ -21,6 +22,7 @@ class DictionaryApp(App):
         yield Input(placeholder="Search for a word")
         yield VerticalScroll(Static(id="results"), id="results-container")
 
+    @on(Input.Changed)
     async def on_input_changed(self, message: Input.Changed) -> None:
         """A coroutine to handle a text changed message."""
         if message.value:

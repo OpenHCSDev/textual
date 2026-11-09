@@ -1,5 +1,7 @@
 from textual.app import App, ComposeResult
 from textual.widgets import Input
+from textual import events
+from textual import on
 
 
 class BlurApp(App):
@@ -8,6 +10,7 @@ class BlurApp(App):
     def compose(self) -> ComposeResult:
         yield Input()
 
+    @on(events.Ready)
     def on_ready(self) -> None:
         self.query_one(Input).focus()
 

@@ -1,6 +1,8 @@
 from textual.app import App, ComposeResult
 from textual.containers import Container, Vertical
 from textual.widgets import Button, Label, Static
+from textual import events
+from textual import on
 
 
 async def test_remove_single_widget():
@@ -84,6 +86,7 @@ async def test_widget_remove_order() -> None:
     removals: list[str] = []
 
     class Removable(Container):
+        @on(events.Unmount)
         def on_unmount(self, _):
             removals.append(self.id if self.id is not None else "unknown")
 
@@ -103,6 +106,7 @@ async def test_query_remove_order():
     removals: list[str] = []
 
     class Removable(Container):
+        @on(events.Unmount)
         def on_unmount(self, _):
             removals.append(self.id if self.id is not None else "unknown")
 

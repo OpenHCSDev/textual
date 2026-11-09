@@ -3,6 +3,8 @@ import io
 
 from textual.app import App, ComposeResult
 from textual.widgets import DataTable
+from textual import events
+from textual import on
 
 CSV = """lane,swimmer,country,time
 4,Joseph Schooling,Singapore,50.39
@@ -24,6 +26,7 @@ class TableApp(App):
         table.fixed_rows = 1
         yield table
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         table = self.query_one(DataTable)
         rows = csv.reader(io.StringIO(CSV))

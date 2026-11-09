@@ -1,11 +1,14 @@
 from textual.app import App
 from textual.command import CommandPalette
 from textual.widgets import OptionList
+from textual import events
+from textual import on
 
 
 class CommandPaletteApp(App[None]):
     COMMANDS = set()
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.action_command_palette()
 

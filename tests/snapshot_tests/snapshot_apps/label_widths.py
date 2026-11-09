@@ -1,6 +1,8 @@
 from textual.app import App
 from textual.widgets import Label, Static
 from rich.panel import Panel
+from textual import events
+from textual import on
 
 
 class LabelWrap(App):
@@ -38,6 +40,7 @@ class LabelWrap(App):
         yield Static(self.data, id="s_data")
         yield Label(Panel(self.data), id="p_data")
 
+    @on(events.Mount)
     def on_mount(self):
         self.theme = "textual-light"
 

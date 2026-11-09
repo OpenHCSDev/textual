@@ -1,6 +1,8 @@
 from textual.app import App, ComposeResult
 from textual.widgets import Log
 from textual.containers import Horizontal
+from textual import events
+from textual import on
 
 TEXT = (
     """I must not fear.
@@ -23,6 +25,7 @@ class LogApp(App):
             yield Log(id="log3")
             yield Log(id="log4", max_lines=6)
 
+    @on(events.Ready)
     def on_ready(self) -> None:
         self.query_one("#log1", Log).write_line(TEXT)
         self.query_one("#log2", Log).write_line(TEXT)

@@ -4,6 +4,8 @@ import pytest
 
 from textual.app import App, ComposeResult
 from textual.widgets import RichLog
+from textual import events
+from textual import on
 
 
 def test_call_from_thread_app_not_running():
@@ -39,6 +41,7 @@ def test_call_from_thread():
         def compose(self) -> ComposeResult:
             yield RichLog()
 
+        @on(events.Ready)
         def on_ready(self) -> None:
             """Launch a thread which will modify the app."""
             try:

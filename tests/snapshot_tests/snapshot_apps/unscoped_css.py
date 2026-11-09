@@ -1,6 +1,8 @@
 from textual.app import App, ComposeResult
 from textual.widget import Widget
 from textual.widgets import Label
+from textual import events
+from textual import on
 
 
 class MyWidget(Widget):
@@ -19,6 +21,7 @@ class MyWidget(Widget):
         yield Label("foo")
         yield Label("bar")
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.log(self.app.stylesheet.css)
 

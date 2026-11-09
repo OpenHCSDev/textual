@@ -1,6 +1,8 @@
 from textual.app import App, ComposeResult
 from textual.screen import Screen
 from textual.widgets import Placeholder
+from textual import events
+from textual import on
 
 
 class Header(Placeholder):  # (1)!
@@ -18,6 +20,7 @@ class TweetScreen(Screen):
 
 
 class LayoutApp(App):
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.push_screen(TweetScreen())
 

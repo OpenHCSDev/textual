@@ -4,6 +4,8 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Footer, Header, Input, Label, SelectionList
+from textual import events
+from textual import on
 
 
 class TodoList(App[None]):
@@ -84,6 +86,7 @@ Screen {
 
         yield Footer()
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.action_cycle_theme()
 

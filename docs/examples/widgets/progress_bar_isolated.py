@@ -2,6 +2,8 @@ from textual.app import App, ComposeResult
 from textual.containers import Center, Middle
 from textual.timer import Timer
 from textual.widgets import Footer, ProgressBar
+from textual import events
+from textual import on
 
 
 class IndeterminateProgressBar(App[None]):
@@ -16,6 +18,7 @@ class IndeterminateProgressBar(App[None]):
                 yield ProgressBar()
         yield Footer()
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         """Set up a timer to simulate progess happening."""
         self.progress_timer = self.set_interval(1 / 10, self.make_progress, pause=True)

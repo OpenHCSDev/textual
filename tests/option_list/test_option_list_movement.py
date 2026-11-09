@@ -7,6 +7,7 @@ import pytest
 from textual.app import App, ComposeResult
 from textual.widgets import OptionList
 from textual.widgets.option_list import Option
+from textual import on
 
 
 class OptionListApp(App[None]):
@@ -180,6 +181,7 @@ class OptionListDisabledOptionsApp(App[None]):
             Option("8", disabled=True),
         )
 
+    @on(OptionList.OptionHighlighted)
     def _on_option_list_option_highlighted(
         self, message: OptionList.OptionHighlighted
     ) -> None:

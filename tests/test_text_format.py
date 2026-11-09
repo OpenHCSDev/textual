@@ -11,6 +11,8 @@ from textual.geometry import Region, Size
 from textual.text_format import TextFormat
 from textual.view import BoxView, TextView, WidgetView
 from textual.widgets import Checkbox, RadioButton, Static
+from textual import events
+from textual import on
 
 
 class NativeText(WidgetView, Static):
@@ -47,6 +49,7 @@ class TextApp(App):
         yield FramedCheckbox("checkbox")
         yield FramedRadioButton("radio")
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         styled = self.query_one("#styled", Static)
         styled.styles.width = 8

@@ -1,6 +1,8 @@
 from textual import __version__
 from textual.app import App, ComposeResult
 from textual.widgets import Static
+from textual import events
+from textual import on
 
 
 # Regression test for https://github.com/Textualize/textual/issues/3858
@@ -24,6 +26,7 @@ class BrokenClassesApp(App[None]):
     def compose(self) -> ComposeResult:
         yield Static("This should have a red background")
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.screen.set_class(True, "go-red")
 

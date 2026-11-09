@@ -10,6 +10,7 @@ import pytest
 
 from textual.app import App
 from textual.widget import AwaitMount, Widget
+from textual import events, on
 
 
 async def test_concurrent_composition_keeps_nested_declarations_private():
@@ -75,6 +76,7 @@ class W(Widget):
     def render(self):
         return self.renderable
 
+    @on(events.Mount)
     async def on_mount(self):
         await asyncio.sleep(0.1)
         self.renderable = "1234"
@@ -215,6 +217,7 @@ async def test_unawaited_mount_does_not_hold_parent_wheel_delivery():
     entered, release, scrolled = asyncio.Event(), asyncio.Event(), asyncio.Event()
 
     class SlowChild(Static):
+        @on(events.Mount)
         async def on_mount(self):
             entered.set()
             await release.wait()

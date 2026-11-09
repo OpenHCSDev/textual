@@ -7,6 +7,8 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.reactive import var
 from textual.widgets import Footer, MarkdownViewer
+from textual import events
+from textual import on
 
 
 class MarkdownApp(App):
@@ -34,6 +36,7 @@ class MarkdownApp(App):
         yield Footer()
         yield MarkdownViewer()
 
+    @on(events.Mount)
     async def on_mount(self) -> None:
         """Go to the first path when the app starts."""
         try:
@@ -41,6 +44,7 @@ class MarkdownApp(App):
         except FileNotFoundError:
             self.exit(message=f"Unable to load {self.path!r}")
 
+    @on(MarkdownViewer.NavigatorUpdated)
     def on_markdown_viewer_navigator_updated(self) -> None:
         """Refresh bindings for forward / back when the document changes."""
         self.refresh_bindings()
