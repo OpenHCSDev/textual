@@ -2,6 +2,7 @@ from textual.app import App, ComposeResult
 from textual.containers import Grid
 from textual.screen import ModalScreen
 from textual.widgets import Button, Footer, Header, Label
+from textual import on
 
 TEXT = """I must not fear.
 Fear is the mind-killer.
@@ -23,6 +24,7 @@ class QuitScreen(ModalScreen):
             id="dialog",
         )
 
+    @on(Button.Pressed)
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "quit":
             self.app.exit()

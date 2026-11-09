@@ -58,6 +58,7 @@ async def test_run_worker_async() -> None:
             nonlocal new_worker
             new_worker = self.run_worker(self.work, start=False)
 
+        @on(Worker.StateChanged)
         def on_worker_state_changed(self, event) -> None:
             worker_events.append(event)
 
@@ -100,6 +101,7 @@ async def test_run_worker_thread_non_async() -> None:
         def on_mount(self):
             self.run_worker(self.work, thread=True)
 
+        @on(Worker.StateChanged)
         def on_worker_state_changed(self, event) -> None:
             worker_events.append(event)
 
@@ -138,6 +140,7 @@ async def test_run_worker_thread_async() -> None:
         def on_mount(self):
             self.run_worker(self.work, thread=True)
 
+        @on(Worker.StateChanged)
         def on_worker_state_changed(self, event) -> None:
             worker_events.append(event)
 

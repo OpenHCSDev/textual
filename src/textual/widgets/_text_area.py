@@ -1835,6 +1835,7 @@ TextArea {
         self.post_message(self.Changed(self))
         self.update_suggestion()
 
+    @on(events.Key)
     async def _on_key(self, event: events.Key) -> None:
         """Handle key presses which correspond to document inserts."""
 

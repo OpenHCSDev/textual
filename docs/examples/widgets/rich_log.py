@@ -7,6 +7,7 @@ from rich.table import Table
 from textual import events
 from textual.app import App, ComposeResult
 from textual.widgets import RichLog
+from textual import on
 
 CSV = """lane,swimmer,country,time
 4,Joseph Schooling,Singapore,50.39
@@ -40,6 +41,7 @@ class RichLogApp(App):
     def compose(self) -> ComposeResult:
         yield RichLog(highlight=True, markup=True)
 
+    @on(events.Ready)
     def on_ready(self) -> None:
         """Called  when the DOM is ready."""
         text_log = self.query_one(RichLog)
@@ -54,6 +56,7 @@ class RichLogApp(App):
         text_log.write(table)
         text_log.write("[bold magenta]Write text or any Rich renderable!")
 
+    @on(events.Key)
     def on_key(self, event: events.Key) -> None:
         """Write Key events to log."""
         text_log = self.query_one(RichLog)

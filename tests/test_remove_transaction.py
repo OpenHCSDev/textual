@@ -127,6 +127,7 @@ async def test_widget_can_await_its_own_removal_without_waiting_on_itself():
         pass
 
     class SelfRemoving(Widget):
+        @on(Retire)
         async def on_retire(self):
             await self.remove()
             returned.set()

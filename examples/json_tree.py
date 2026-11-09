@@ -6,6 +6,8 @@ from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, Tree
 from textual.widgets.tree import TreeNode
+from textual import events
+from textual import on
 
 
 class TreeApp(App):
@@ -64,6 +66,7 @@ class TreeApp(App):
 
         add_node("JSON", node, json_data)
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         """Load some JSON when the app starts."""
         file_path = Path(__file__).parent / "food.json"

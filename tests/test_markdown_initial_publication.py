@@ -51,6 +51,7 @@ class DocumentApp(App):
         super().__init__()
         self.toc = []
 
+    @on(Markdown.TableOfContentsUpdated)
     def on_markdown_table_of_contents_updated(self, message):
         self.toc.append(message.table_of_contents)
 

@@ -2,6 +2,8 @@ from datetime import datetime
 
 from textual.app import App
 from textual.widget import Widget
+from textual import events
+from textual import on
 
 
 class Clock(Widget):
@@ -13,6 +15,7 @@ class Clock(Widget):
     }
     """
 
+    @on(events.Mount)
     def on_mount(self):
         self.set_interval(1, self.refresh)
 

@@ -6,9 +6,12 @@ from textual.color import Color
 from textual.containers import Grid, VerticalScroll
 from textual.widget import Widget
 from textual.widgets import Footer, Label
+from textual import events
+from textual import on
 
 
 class ColourChanger(Widget):
+    @on(events.Click)
     def on_click(self) -> None:
         self.styles.background = Color(
             randint(1, 255),

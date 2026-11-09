@@ -2,9 +2,12 @@ from rich.table import Table
 
 from textual.app import App, ComposeResult
 from textual.widgets import Static
+from textual import events
+from textual import on
 
 
 class FizzBuzz(Static):
+    @on(events.Mount)
     def on_mount(self) -> None:
         table = Table("Number", "Fizz?", "Buzz?")
         for n in range(1, 16):

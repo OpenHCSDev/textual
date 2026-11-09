@@ -103,7 +103,7 @@ class Layout(Message, verbose=True):
         return self.widget.walk_ancestors()
 
     def can_replace(self, message: Message) -> bool:
-        return (isinstance(message, Layout) and self.handler_name == message.handler_name
+        return (type(message) is type(self)
                 and self.widget is message.widget)
 
 

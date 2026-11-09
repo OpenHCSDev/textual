@@ -225,6 +225,7 @@ class HintSession(HintOverlay, HorizontalScroll, can_focus=True):
     def check_consume_key(self, key, character=None):
         return key == "escape" or (character is not None and character.isprintable())
 
+    @on(events.Key)
     def on_key(self, event: events.Key):
         if self.disabled:
             return

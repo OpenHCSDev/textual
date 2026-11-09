@@ -1,9 +1,11 @@
 from textual import events
 from textual.app import App, ComposeResult
 from textual.widgets import RichLog
+from textual import on
 
 
 class KeyLogger(RichLog):
+    @on(events.Key)
     def on_key(self, event: events.Key) -> None:
         self.write(event)
 

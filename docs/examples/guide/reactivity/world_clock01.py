@@ -6,6 +6,8 @@ from textual.app import App, ComposeResult
 from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Digits, Label
+from textual import events
+from textual import on
 
 
 class WorldClock(Widget):
@@ -42,6 +44,7 @@ class WorldClockApp(App):
         for world_clock in self.query(WorldClock):  # (1)!
             world_clock.time = time
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.update_time()
         self.set_interval(1, self.update_time)

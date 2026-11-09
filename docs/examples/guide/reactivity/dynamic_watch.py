@@ -2,6 +2,8 @@ from textual.app import App, ComposeResult
 from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Button, Label, ProgressBar
+from textual import events
+from textual import on
 
 
 class Counter(Widget):
@@ -12,6 +14,7 @@ class Counter(Widget):
         yield Label()
         yield Button("+10")
 
+    @on(Button.Pressed)
     def on_button_pressed(self) -> None:
         self.counter += 10
 
@@ -24,6 +27,7 @@ class WatchApp(App[None]):
         yield Counter()
         yield ProgressBar(total=100, show_eta=False)
 
+    @on(events.Mount)
     def on_mount(self):
         def update_progress(counter_value: int):  # (2)!
             self.query_one(ProgressBar).update(progress=counter_value)

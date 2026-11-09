@@ -1,11 +1,13 @@
 from textual import events
 from textual.app import App, ComposeResult
 from textual.widgets import TextArea
+from textual import on
 
 
 class ExtendedTextArea(TextArea):
     """A subclass of TextArea with parenthesis-closing functionality."""
 
+    @on(events.Key)
     def _on_key(self, event: events.Key) -> None:
         if event.character == "(":
             self.insert("()")

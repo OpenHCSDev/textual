@@ -3,6 +3,8 @@ from datetime import datetime
 from textual.app import App, ComposeResult
 from textual.reactive import reactive
 from textual.widgets import Digits
+from textual import events
+from textual import on
 
 
 class Clock(App):
@@ -23,6 +25,7 @@ class Clock(App):
     def update_time(self) -> None:
         self.time = datetime.now()
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.set_interval(1, self.update_time)  # (2)!
 

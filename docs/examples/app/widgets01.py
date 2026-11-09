@@ -1,11 +1,14 @@
 from textual.app import App, ComposeResult
 from textual.widgets import Welcome
+from textual import on
+from textual.widgets import Button
 
 
 class WelcomeApp(App):
     def compose(self) -> ComposeResult:
         yield Welcome()
 
+    @on(Button.Pressed)
     def on_button_pressed(self) -> None:
         self.exit()
 

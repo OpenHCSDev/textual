@@ -128,7 +128,7 @@ class Worker(Generic[ResultType]):
     """A class to manage concurrent work (either a task or a thread)."""
 
     @rich.repr.auto
-    class StateChanged(Message, bubble=False, namespace="worker"):
+    class StateChanged(Message, bubble=False):
         """The worker state changed."""
 
         def __init__(self, worker: Worker, state: WorkerState) -> None:

@@ -3757,6 +3757,7 @@ class App(Generic[ReturnType], DOMNode):
                 constants.SCREENSHOT_DELAY, take_screenshot, name="screenshot timer"
             )
 
+    @on(events.Compose)
     async def _on_compose(self) -> None:
         _rich_traceback_omit = True
         self._compose_screen = self.screen
@@ -4004,6 +4005,7 @@ class App(Generic[ReturnType], DOMNode):
             console.print("[b]The app returned:")
             console.print(Pretty(self._return_value))
 
+    @on(messages.ExitApp)
     async def _on_exit_app(self) -> None:
         self._begin_batch()  # Prevent repaint / layout while shutting down
         self._message_queue.put_nowait(None)
@@ -4594,6 +4596,7 @@ class App(Generic[ReturnType], DOMNode):
     async def _on_layout(self, message: messages.Layout) -> None:
         message.stop()
 
+    @on(events.Key)
     async def _on_key(self, event: events.Key) -> None:
         if not (await self._check_bindings(event.key)):
             await dispatch_key(self, event)
@@ -5241,6 +5244,7 @@ class App(Generic[ReturnType], DOMNode):
         self.supports_smooth_scrolling = message.enabled
         self.log.debug(message)
 
+    @on(events.Idle)
     def _on_idle(self) -> None:
         if self._resize_event is not None and self._resize_timer is None:
             self._check_resize()

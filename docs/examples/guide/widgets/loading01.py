@@ -4,6 +4,8 @@ from random import randint
 from textual import work
 from textual.app import App, ComposeResult
 from textual.widgets import DataTable
+from textual import events
+from textual import on
 
 ROWS = [
     ("lane", "swimmer", "country", "time"),
@@ -36,6 +38,7 @@ class DataApp(App):
         yield DataTable()
         yield DataTable()
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         for data_table in self.query(DataTable):
             data_table.loading = True  # (1)!

@@ -1,5 +1,7 @@
 from textual.app import App
 from textual.widgets import RichLog
+from textual import events
+from textual import on
 
 
 class RichLogLines(App):
@@ -8,6 +10,7 @@ class RichLogLines(App):
     def compose(self):
         yield RichLog(max_lines=3)
 
+    @on(events.Key)
     async def on_key(self):
         self.count += 1
         log_widget = self.query_one(RichLog)

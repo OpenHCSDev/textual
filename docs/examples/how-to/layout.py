@@ -2,6 +2,8 @@ from textual.app import App, ComposeResult
 from textual.containers import HorizontalScroll, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Placeholder
+from textual import events
+from textual import on
 
 
 class Header(Placeholder):
@@ -60,6 +62,7 @@ class TweetScreen(Screen):
 class LayoutApp(App):
     CSS_PATH = "layout.tcss"
 
+    @on(events.Ready)
     def on_ready(self) -> None:
         self.push_screen(TweetScreen())
 

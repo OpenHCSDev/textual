@@ -1,3 +1,4 @@
+from textual import on
 from textual.app import App, ComposeResult
 from textual.message import Message
 from textual.widget import Widget
@@ -36,9 +37,11 @@ async def test_message_inheritance_namespace():
             yield Left()
             yield Right()
 
+        @on(Left.Fired)
         def on_left_fired(self):
             handlers_called.append("left")
 
+        @on(Right.Fired)
         def on_right_fired(self):
             handlers_called.append("right")
 

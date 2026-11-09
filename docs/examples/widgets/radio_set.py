@@ -3,6 +3,8 @@ from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal
 from textual.widgets import RadioButton, RadioSet
+from textual import events
+from textual import on
 
 
 class RadioChoicesApp(App[None]):
@@ -38,6 +40,7 @@ class RadioChoicesApp(App[None]):
                 "Ramírez",
             )
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.query_one("#focus_me").focus()
 

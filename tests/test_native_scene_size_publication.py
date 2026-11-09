@@ -6,9 +6,11 @@ from textual.containers import VerticalScroll
 from textual.geometry import Size
 from textual.scroll_view import ScrollView
 from textual.widgets import Static
+from textual import on
 
 
 class SizeReceipts:
+    @on(events.Resize)
     def on_resize(self, event: events.Resize) -> None:
         self.receipts.append((event.size, event.virtual_size, event.container_size))
 

@@ -1,6 +1,8 @@
 from textual.app import App, ComposeResult
 from textual.color import Color
 from textual.widgets import Static
+from textual import events
+from textual import on
 
 
 class ColorApp(App):
@@ -8,6 +10,7 @@ class ColorApp(App):
         self.widgets = [Static("") for n in range(10)]
         yield from self.widgets
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         for index, widget in enumerate(self.widgets, 1):
             alpha = index * 0.1

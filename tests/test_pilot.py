@@ -52,6 +52,7 @@ async def test_pilot_press_ascii_chars():
     keys_pressed = []
 
     class TestApp(App[None]):
+        @on(events.Key)
         def on_key(self, event: events.Key) -> None:
             keys_pressed.append(event.character)
 
@@ -419,6 +420,7 @@ async def test_click_by_widget():
     pressed = False
 
     class TestApp(CenteredButtonApp):
+        @on(Button.Pressed)
         def on_button_pressed(self):
             nonlocal pressed
             pressed = True

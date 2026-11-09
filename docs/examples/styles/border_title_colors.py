@@ -1,5 +1,7 @@
 from textual.app import App, ComposeResult
 from textual.widgets import Label
+from textual import events
+from textual import on
 
 
 class BorderTitleApp(App):
@@ -8,6 +10,7 @@ class BorderTitleApp(App):
     def compose(self) -> ComposeResult:
         yield Label("Hello, World!")
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         label = self.query_one(Label)
         label.border_title = "Textual Rocks"

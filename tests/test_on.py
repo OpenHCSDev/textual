@@ -11,58 +11,7 @@ from textual.events import Enter, Leave
 from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import Button, TabbedContent, TabPane
-
-
-async def test_live_named_replacement_during_decorated_dispatch():
-    class Notice(Message, namespace="lookup", bubble=False):
-        pass
-
-    class BaseApp(App):
-        def _on_lookup_notice(self):
-            self.received.append("base")
-
-    class Left(BaseApp):
-        def on_lookup_notice(self):
-            self.received.append("left")
-
-    class Right(BaseApp):
-        def on_lookup_notice(self):
-            self.received.append("right")
-
-    class DispatchApp(Left, Right):
-        def __init__(self):
-            super().__init__()
-            self.received = []
-
-        def _on_lookup_notice(self):
-            self.received.append("old")
-
-        def on_lookup_notice(self):
-            raise AssertionError("private handler has precedence")
-
-        @on(Notice)
-        async def observe(self):
-            self.received.append("decorated")
-            # The generator is suspended at its decorated yield. Its captured
-            # class mapping must still expose real method replacement.
-            def replacement(instance):
-                instance.received.append("new")
-
-            type(self)._on_lookup_notice = replacement
-
-    app = DispatchApp()
-    async with app.run_test() as pilot:
-        app.post_message(Notice())
-        await pilot.pause()
-        assert app.received == ["decorated", "new", "left", "right", "base"]
-
-    # Binding belongs to the current instance, not a cached bound method.
-    second = DispatchApp()
-    async with second.run_test() as pilot:
-        second.post_message(Notice())
-        await pilot.pause()
-        assert second.received == ["decorated", "new", "left", "right", "base"]
-    assert app.received == ["decorated", "new", "left", "right", "base"]
+from textual import events
 
 
 async def test_on_button_pressed() -> None:
@@ -88,6 +37,7 @@ async def test_on_button_pressed() -> None:
         def _(self):
             pressed.append("quit")
 
+        @on(Button.Pressed)
         def on_button_pressed(self):
             pressed.append("default")
 
@@ -184,6 +134,7 @@ async def test_on_arbitrary_attributes() -> None:
                 yield TabPane("Two", id="two")
                 yield TabPane("Three", id="three")
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.query_one(TabbedContent).add_class("tabs")
 
@@ -238,6 +189,7 @@ async def test_fire_on_inherited_message() -> None:
         def catch_child(self) -> None:
             posted.append("child")
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.query_one(MessageSender).post_parent()
             self.query_one(MessageSender).post_child()
@@ -262,6 +214,7 @@ async def test_fire_inherited_on_single_handler() -> None:
         def catch_either(self, event: MessageSender.Parent) -> None:
             posted.append(f"either {event.__class__.__name__}")
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.query_one(MessageSender).post_parent()
             self.query_one(MessageSender).post_child()
@@ -310,6 +263,7 @@ async def test_fire_inherited_on_single_handler_multi_selector() -> None:
         def catch_selector_combined_miss(self, event: MessageSender.Parent) -> None:
             posted.append(f"combined miss {event.__class__.__name__}")
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.query_one(MessageSender).post_parent()
             self.query_one(MessageSender).post_child()
@@ -323,43 +277,6 @@ async def test_fire_inherited_on_single_handler_multi_selector() -> None:
         "selector list one miss Child",
         "selector list two hits Child",
         "combined hits Child",
-    ]
-
-
-async def test_fire_inherited_and_on_methods() -> None:
-    posted: list[str] = []
-
-    class OnAndOnTestApp(App[None]):
-        def compose(self) -> ComposeResult:
-            yield MessageSender()
-
-        def on_message_sender_parent(self) -> None:
-            posted.append("on_message_sender_parent")
-
-        @on(MessageSender.Parent)
-        def catch_parent(self) -> None:
-            posted.append("catch_parent")
-
-        def on_message_sender_child(self) -> None:
-            posted.append("on_message_sender_child")
-
-        @on(MessageSender.Child)
-        def catch_child(self) -> None:
-            posted.append("catch_child")
-
-        def on_mount(self) -> None:
-            self.query_one(MessageSender).post_parent()
-            self.query_one(MessageSender).post_child()
-
-    async with OnAndOnTestApp().run_test():
-        pass
-
-    assert posted == [
-        "catch_parent",
-        "on_message_sender_parent",
-        "catch_child",
-        "catch_parent",
-        "on_message_sender_child",
     ]
 
 
@@ -397,6 +314,7 @@ async def test_fire_on_inherited_message_plus_mixins() -> None:
         def catch_child(self) -> None:
             posted.append("child")
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.query_one(MixinMessageSender).post_parent()
             self.query_one(MixinMessageSender).post_child()

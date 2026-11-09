@@ -1,5 +1,7 @@
 from textual.app import App, ComposeResult
 from textual.widgets import Button
+from textual import events
+from textual import on
 
 TEXT = """I must not fear.
 Fear is the mind-killer.
@@ -22,6 +24,7 @@ class TooltipApp(App):
     def compose(self) -> ComposeResult:
         yield Button("Click me", variant="success")
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.query_one(Button).tooltip = TEXT
 

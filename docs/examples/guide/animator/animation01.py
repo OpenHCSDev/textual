@@ -1,5 +1,7 @@
 from textual.app import App, ComposeResult
 from textual.widgets import Static
+from textual import events
+from textual import on
 
 
 class AnimationApp(App):
@@ -10,6 +12,7 @@ class AnimationApp(App):
         self.box.styles.padding = (1, 2)
         yield self.box
 
+    @on(events.Mount)
     def on_mount(self):
         self.box.styles.animate("opacity", value=0.0, duration=2.0)
 

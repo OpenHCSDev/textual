@@ -1,6 +1,8 @@
 from textual.app import App, ComposeResult
 from textual.screen import Screen
 from textual.widgets import Footer, Placeholder
+from textual import events
+from textual import on
 
 
 class DashboardScreen(Screen):
@@ -33,6 +35,7 @@ class ModesApp(App):
         "help": HelpScreen,
     }
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.switch_mode("dashboard")  # (3)!
 

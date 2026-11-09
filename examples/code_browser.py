@@ -18,6 +18,8 @@ from textual.containers import Container, VerticalScroll
 from textual.highlight import highlight
 from textual.reactive import reactive, var
 from textual.widgets import DirectoryTree, Footer, Header, Static
+from textual import events
+from textual import on
 
 
 class CodeBrowser(App):
@@ -46,6 +48,7 @@ class CodeBrowser(App):
                 yield Static(id="code", expand=True)
         yield Footer()
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.query_one(DirectoryTree).focus()
 
@@ -55,6 +58,7 @@ class CodeBrowser(App):
 
         self.theme_changed_signal.subscribe(self, theme_change)
 
+    @on(DirectoryTree.FileSelected)
     def on_directory_tree_file_selected(
         self, event: DirectoryTree.FileSelected
     ) -> None:

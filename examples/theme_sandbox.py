@@ -33,6 +33,7 @@ from textual.widgets._masked_input import MaskedInput
 from textual.widgets._toggle_button import ToggleButton
 from textual.widgets.option_list import Option
 from textual.widgets.text_area import Selection
+from textual import events
 
 HEADERS = ("lane", "swimmer", "country", "time")
 ROWS = [
@@ -70,6 +71,7 @@ Markdown syntax and extensions are supported.
 
 
 class ThemeList(OptionList):
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.add_options(
             [Option(name, id=name) for name in self.app.available_themes.keys()]
@@ -479,6 +481,7 @@ class ChangingThemeApp(App[None]):
 
         yield Footer()
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.theme = "textual-light"
         text_area = self.query_one(TextArea)

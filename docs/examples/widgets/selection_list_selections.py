@@ -1,6 +1,8 @@
 from textual.app import App, ComposeResult
 from textual.widgets import Footer, Header, SelectionList
 from textual.widgets.selection_list import Selection
+from textual import events
+from textual import on
 
 
 class SelectionListApp(App[None]):
@@ -21,6 +23,7 @@ class SelectionListApp(App[None]):
         )
         yield Footer()
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.query_one(SelectionList).border_title = "Shall we play some games?"
 

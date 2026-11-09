@@ -5,6 +5,7 @@ from textual import work
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll
 from textual.widgets import Input, Static
+from textual import on
 
 
 class WeatherApp(App):
@@ -17,6 +18,7 @@ class WeatherApp(App):
         with VerticalScroll(id="weather-container"):
             yield Static(id="weather")
 
+    @on(Input.Changed)
     async def on_input_changed(self, message: Input.Changed) -> None:
         """Called when the input changes"""
         self.update_weather(message.value)

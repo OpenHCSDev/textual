@@ -18,6 +18,7 @@ from textual import on, work
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll
 from textual.widgets import Footer, Header, Input, Markdown
+from textual import events
 
 try:
     import llm
@@ -71,6 +72,7 @@ class MotherApp(App):
         yield Input(placeholder="How can I help you?")
         yield Footer()
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         """You might want to change the model if you don't have access to it."""
         self.model = llm.get_model("gpt-4o")

@@ -876,6 +876,7 @@ async def test_message_sender_from_reactive() -> None:
         def compose(self) -> ComposeResult:
             yield TestWidget()
 
+        @on(TestWidget.TestMessage)
         def on_test_widget_test_message(self, event: TestWidget.TestMessage) -> None:
             nonlocal message_senders
             message_senders.append(event._sender)

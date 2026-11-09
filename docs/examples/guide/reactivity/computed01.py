@@ -3,6 +3,7 @@ from textual.color import Color
 from textual.containers import Horizontal
 from textual.reactive import reactive
 from textual.widgets import Input, Static
+from textual import on
 
 
 class ComputedApp(App):
@@ -28,6 +29,7 @@ class ComputedApp(App):
     def watch_color(self, color: Color) -> None:  # (2)
         self.query_one("#color").styles.background = color
 
+    @on(Input.Changed)
     def on_input_changed(self, event: Input.Changed) -> None:
         try:
             component = int(event.value)

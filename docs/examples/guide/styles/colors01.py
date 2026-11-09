@@ -1,6 +1,8 @@
 from textual.app import App, ComposeResult
 from textual.color import Color
 from textual.widgets import Static
+from textual import events
+from textual import on
 
 
 class ColorApp(App):
@@ -12,6 +14,7 @@ class ColorApp(App):
         self.widget3 = Static("Textual Three")
         yield self.widget3
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.widget1.styles.background = "#9932CC"
         self.widget2.styles.background = "hsl(150,42.9%,49.4%)"

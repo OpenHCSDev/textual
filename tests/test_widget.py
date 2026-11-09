@@ -27,6 +27,7 @@ from textual.widgets import (
     Switch,
     TextArea,
 )
+from textual import on
 
 
 async def test_widget_construct():
@@ -276,6 +277,7 @@ async def test_get_pseudo_class_state_focus():
 # Regression test for https://github.com/Textualize/textual/issues/1634
 async def test_remove():
     class RemoveMeLabel(Label):
+        @on(events.Mount)
         async def on_mount(self) -> None:
             await self.run_action("app.remove_all")
 
@@ -303,6 +305,7 @@ async def test_remove_unmounted():
     mounted = False
 
     class RemoveApp(App):
+        @on(events.Mount)
         def on_mount(self):
             nonlocal mounted
             label = Label()
@@ -330,6 +333,7 @@ async def test_compose_order() -> None:
     from textual.widgets import Select
 
     class MyScreen(Screen):
+        @on(events.Mount)
         def on_mount(self) -> None:
             self.query_one(Select).value = 1
 
@@ -340,6 +344,7 @@ async def test_compose_order() -> None:
             )
 
     class SelectBugApp(App[None]):
+        @on(events.Mount)
         async def on_mount(self):
             await self.push_screen(MyScreen(id="my-screen"))
             self.screen.query_one(Select)

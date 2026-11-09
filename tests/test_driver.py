@@ -100,6 +100,7 @@ async def test_driver_mouse_down_up_click_widget():
         def compose(self):
             yield Button()
 
+        @on(Button.Pressed)
         def on_button_pressed(self, event):
             self.messages.append(event)
 
@@ -121,6 +122,7 @@ async def test_driver_mouse_down_drag_inside_widget_up_click():
         def compose(self):
             yield Button()
 
+        @on(Button.Pressed)
         def on_button_pressed(self, event):
             self.messages.append(event)
 
@@ -161,6 +163,7 @@ async def test_driver_mouse_down_drag_outside_widget_up_click():
         def compose(self):
             yield Button()
 
+        @on(Button.Pressed)
         def on_button_pressed(self, event):
             self.messages.append(event)
 

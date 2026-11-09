@@ -4,6 +4,8 @@ from textual.app import App, ComposeResult
 from textual.containers import HorizontalGroup, VerticalScroll
 from textual.reactive import reactive
 from textual.widgets import Button, Digits, Footer, Header
+from textual import events
+from textual import on
 
 
 class TimeDisplay(Digits):
@@ -13,6 +15,7 @@ class TimeDisplay(Digits):
     time = reactive(0.0)
     total = reactive(0.0)
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         """Event handler called when widget is added to the app."""
         self.update_timer = self.set_interval(1 / 60, self.update_time, pause=True)
@@ -47,6 +50,7 @@ class TimeDisplay(Digits):
 class Stopwatch(HorizontalGroup):
     """A stopwatch widget."""
 
+    @on(Button.Pressed)
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Event handler called when a button is pressed."""
         button_id = event.button.id

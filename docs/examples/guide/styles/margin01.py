@@ -1,5 +1,7 @@
 from textual.app import App, ComposeResult
 from textual.widgets import Static
+from textual import events
+from textual import on
 
 
 TEXT = """I must not fear.
@@ -18,6 +20,7 @@ class MarginApp(App):
         self.widget2 = Static(TEXT)
         yield self.widget2
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.widget1.styles.background = "purple"
         self.widget2.styles.background = "darkgreen"

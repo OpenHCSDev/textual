@@ -217,6 +217,7 @@ async def test_unawaited_mount_does_not_hold_parent_wheel_delivery():
     entered, release, scrolled = asyncio.Event(), asyncio.Event(), asyncio.Event()
 
     class SlowChild(Static):
+        @on(events.Mount)
         async def on_mount(self):
             entered.set()
             await release.wait()

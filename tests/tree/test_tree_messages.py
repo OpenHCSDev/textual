@@ -42,15 +42,19 @@ class TreeApp(App[None]):
             (event.__class__.__name__, event.node.tree.id or "Unknown")
         )
 
+    @on(Tree.NodeSelected)
     def on_tree_node_selected(self, event: Tree.NodeSelected[None]) -> None:
         self.record(event)
 
+    @on(Tree.NodeExpanded)
     def on_tree_node_expanded(self, event: Tree.NodeExpanded[None]) -> None:
         self.record(event)
 
+    @on(Tree.NodeCollapsed)
     def on_tree_node_collapsed(self, event: Tree.NodeCollapsed[None]) -> None:
         self.record(event)
 
+    @on(Tree.NodeHighlighted)
     def on_tree_node_highlighted(self, event: Tree.NodeHighlighted[None]) -> None:
         self.record(event)
 
@@ -229,12 +233,15 @@ class TreeViaCodeApp(App[None]):
             (event.__class__.__name__, event.node.tree.id or "Unknown")
         )
 
+    @on(Tree.NodeExpanded)
     def on_tree_node_expanded(self, event: Tree.NodeExpanded[None]) -> None:
         self.record(event)
 
+    @on(Tree.NodeCollapsed)
     def on_tree_node_collapsed(self, event: Tree.NodeCollapsed[None]) -> None:
         self.record(event)
 
+    @on(Tree.NodeHighlighted)
     def on_tree_node_highlighted(self, event: Tree.NodeHighlighted[None]) -> None:
         self.record(event)
 

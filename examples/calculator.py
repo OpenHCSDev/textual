@@ -77,6 +77,7 @@ class CalculatorApp(App):
             yield Button(".", id="point")
             yield Button("=", id="equals", variant="warning")
 
+    @on(events.Key)
     def on_key(self, event: events.Key) -> None:
         """Called when the user presses a key."""
 

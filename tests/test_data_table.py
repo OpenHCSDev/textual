@@ -20,6 +20,8 @@ from textual.widgets.data_table import (
     RowDoesNotExist,
     RowKey,
 )
+from textual import events
+from textual import on
 
 ROWS = [["0/0", "0/1"], ["1/0", "1/1"], ["2/0", "2/1"]]
 
@@ -1445,6 +1447,7 @@ async def test_move_cursor_respects_animate_parameter():
         def compose(self):
             yield _DataTable()
 
+        @on(events.Mount)
         def on_mount(self):
             dt = self.query_one(_DataTable)
             dt.add_columns("one", "two")
@@ -1476,6 +1479,7 @@ async def test_clicking_border_link_doesnt_crash():
         def compose(self) -> ComposeResult:
             yield DataTable()
 
+        @on(events.Mount)
         def on_mount(self) -> None:
             table = self.query_one(DataTable)
             table.border_title = "[@click=app.test_link]Border Link[/]"

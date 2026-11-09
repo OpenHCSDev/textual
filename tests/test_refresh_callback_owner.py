@@ -22,6 +22,7 @@ async def test_busy_sender_hands_execution_to_peer_after_completed_delivery():
     peer_position = []
 
     class Sender(Static):
+        @on(Notice)
         def on_notice(self, message):
             message.stop()
             delivered.append(message.sequence)

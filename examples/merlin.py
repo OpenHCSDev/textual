@@ -11,6 +11,7 @@ from textual.reactive import var
 from textual.renderables.gradient import LinearGradient
 from textual.widget import Widget
 from textual.widgets import Digits, Label, Switch
+from textual import on
 
 # A nice rainbow of colors.
 COLORS = [
@@ -85,6 +86,7 @@ class Timer(Digits):
     start_time = var(0.0)
     running = var(True)
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         """Start the timer on mount."""
         self.start_time = monotonic()
@@ -140,6 +142,7 @@ class MerlinApp(App):
             for switch in (7, 8, 9, 4, 5, 6, 1, 2, 3):
                 yield LabelSwitch(switch)
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         """Randomize the switches on mount."""
         for switch_no in range(1, 10):
@@ -153,6 +156,7 @@ class MerlinApp(App):
         }
         return on_switches == {1, 2, 3, 4, 6, 7, 8, 9}
 
+    @on(Switch.Changed)
     def on_switch_changed(self, event: Switch.Changed) -> None:
         """Called when a switch is toggled."""
         # The switch that was pressed
@@ -167,6 +171,7 @@ class MerlinApp(App):
             self.query_one(Timer).running = False
             self.notify("You win!", title="congratulations", severity="information")
 
+    @on(events.Key)
     def on_key(self, event: events.Key) -> None:
         """Maps switches to keys, so we can use the keyboard as well."""
         if event.character and event.character.isdigit():

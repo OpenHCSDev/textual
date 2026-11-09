@@ -220,6 +220,7 @@ async def test_prevent_with_call_next() -> None:
         def change_input(self) -> None:
             self.query_one(Input).value += "a"
 
+        @on(Input.Changed)
         def on_input_changed(self) -> None:
             nonlocal hits
             hits += 1
@@ -278,6 +279,7 @@ async def test_thread_safe_post_message():
             msg = TextMessage()
             threading.Thread(target=self.post_message, args=(msg,)).start()
 
+        @on(TextMessage)
         def on_text_message(self, message):
             self.exit()
 

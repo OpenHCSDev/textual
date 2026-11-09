@@ -1,6 +1,7 @@
 from textual.app import App, ComposeResult
 from textual.reactive import reactive
 from textual.widgets import Input, Label
+from textual import on
 
 
 class MultiGreet(App):
@@ -11,6 +12,7 @@ class MultiGreet(App):
         for name in self.names:
             yield Label(f"Hello, {name}")
 
+    @on(Input.Submitted)
     def on_input_submitted(self, event: Input.Changed) -> None:
         self.names.append(event.value)
         self.mutate_reactive(MultiGreet.names)  # (2)!

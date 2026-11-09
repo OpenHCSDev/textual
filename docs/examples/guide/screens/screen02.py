@@ -1,6 +1,8 @@
 from textual.app import App, ComposeResult
 from textual.screen import Screen
 from textual.widgets import Static
+from textual import events
+from textual import on
 
 ERROR_TEXT = """
 An error has occurred. To continue:
@@ -27,6 +29,7 @@ class BSODApp(App):
     CSS_PATH = "screen02.tcss"
     BINDINGS = [("b", "push_screen('bsod')", "BSOD")]
 
+    @on(events.Mount)
     def on_mount(self) -> None:
         self.install_screen(BSOD(), name="bsod")
 

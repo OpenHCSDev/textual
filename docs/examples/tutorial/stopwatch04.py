@@ -1,6 +1,7 @@
 from textual.app import App, ComposeResult
 from textual.containers import HorizontalGroup, VerticalScroll
 from textual.widgets import Button, Digits, Footer, Header
+from textual import on
 
 
 class TimeDisplay(Digits):
@@ -10,6 +11,7 @@ class TimeDisplay(Digits):
 class Stopwatch(HorizontalGroup):
     """A stopwatch widget."""
 
+    @on(Button.Pressed)
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Event handler called when a button is pressed."""
         if event.button.id == "start":

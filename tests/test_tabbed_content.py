@@ -385,6 +385,7 @@ async def test_tabbed_content_removal():
                 yield TabPane("Test 2", id="initial-2")
                 yield TabPane("Test 3", id="initial-3")
 
+        @on(TabbedContent.Cleared)
         def on_tabbed_content_cleared(self) -> None:
             self.cleared += 1
 
@@ -420,6 +421,7 @@ async def test_tabbed_content_reversed_removal():
                 yield TabPane("Test 2", id="initial-2")
                 yield TabPane("Test 3", id="initial-3")
 
+        @on(TabbedContent.Cleared)
         def on_tabbed_content_cleared(self) -> None:
             self.cleared += 1
 
@@ -455,6 +457,7 @@ async def test_tabbed_content_clear():
                 yield TabPane("Test 2", id="initial-2")
                 yield TabPane("Test 3", id="initial-3")
 
+        @on(TabbedContent.Cleared)
         def on_tabbed_content_cleared(self) -> None:
             self.cleared += 1
 
@@ -712,10 +715,12 @@ async def test_hide_show_messages():
             with TabbedContent():
                 yield Label("tab-1")
 
+        @on(Tabs.TabHidden)
         def on_tabs_tab_hidden(self) -> None:
             nonlocal hide_msg
             hide_msg = True
 
+        @on(Tabs.TabShown)
         def on_tabs_tab_shown(self) -> None:
             nonlocal show_msg
             show_msg = True

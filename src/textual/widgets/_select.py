@@ -97,6 +97,7 @@ class SelectOverlay(OptionList):
             self._search_reset_timer.stop()
         super().watch_has_focus(value)
 
+    @on(events.Key)
     async def _on_key(self, event: events.Key) -> None:
         if not self._type_to_search:
             return

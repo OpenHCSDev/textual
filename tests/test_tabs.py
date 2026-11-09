@@ -4,6 +4,7 @@ import pytest
 
 from textual import on
 from textual.app import App, ComposeResult
+from textual.message import Message
 from textual.widgets import Tab, Tabs
 from textual.widgets._tabs import Underline
 
@@ -397,7 +398,7 @@ async def test_navigate_tabs_with_mouse():
 class TabsMessageCatchApp(App[None]):
     def __init__(self) -> None:
         super().__init__()
-        self.intended_handlers: list[str] = []
+        self.intended_handlers: list[type[Message]] = []
 
     def compose(self) -> ComposeResult:
         yield Tabs("John", "Aeryn", "Moya", "Pilot")
@@ -409,7 +410,7 @@ class TabsMessageCatchApp(App[None]):
     def log_message(
         self, event: Tabs.Cleared | Tabs.TabActivated | Underline.Clicked | Tab.Clicked
     ) -> None:
-        self.intended_handlers.append(event.handler_name)
+        self.intended_handlers.append(type(event))
 
     @on(Tabs.TabActivated)
     @on(Tabs.Cleared)
@@ -420,7 +421,7 @@ class TabsMessageCatchApp(App[None]):
 async def test_startup_messages():
     """On startup there should be a tab activated message."""
     async with TabsMessageCatchApp().run_test() as pilot:
-        assert pilot.app.intended_handlers == ["on_tabs_tab_activated"]
+        assert pilot.app.intended_handlers == [Tabs.TabActivated]
 
 
 async def test_change_tab_with_code_messages():
@@ -429,8 +430,8 @@ async def test_change_tab_with_code_messages():
         pilot.app.query_one(Tabs).active = "tab-2"
         await pilot.pause()
         assert pilot.app.intended_handlers == [
-            "on_tabs_tab_activated",
-            "on_tabs_tab_activated",
+            Tabs.TabActivated,
+            Tabs.TabActivated,
         ]
 
 
@@ -443,11 +444,11 @@ async def test_remove_tabs_messages():
 
         await pilot.pause()
         assert pilot.app.intended_handlers == [
-            "on_tabs_tab_activated",
-            "on_tabs_tab_activated",
-            "on_tabs_tab_activated",
-            "on_tabs_tab_activated",
-            "on_tabs_cleared",
+            Tabs.TabActivated,
+            Tabs.TabActivated,
+            Tabs.TabActivated,
+            Tabs.TabActivated,
+            Tabs.Cleared,
         ]
 
 
@@ -460,8 +461,8 @@ async def test_reverse_remove_tabs_messages():
 
         await pilot.pause()
         assert pilot.app.intended_handlers == [
-            "on_tabs_tab_activated",
-            "on_tabs_cleared",
+            Tabs.TabActivated,
+            Tabs.Cleared,
         ]
 
 
@@ -473,9 +474,9 @@ async def test_keyboard_navigation_messages():
         await pilot.press("left")
         await pilot.pause()
         assert pilot.app.intended_handlers == [
-            "on_tabs_tab_activated",
-            "on_tabs_tab_activated",
-            "on_tabs_tab_activated",
+            Tabs.TabActivated,
+            Tabs.TabActivated,
+            Tabs.TabActivated,
         ]
 
 
@@ -487,9 +488,9 @@ async def test_mouse_navigation_messages():
         await pilot.click("Underline", offset=(2, 0))
         await pilot.pause()
         assert pilot.app.intended_handlers == [
-            "on_tabs_tab_activated",
-            "on_tabs_tab_activated",
-            "on_tabs_tab_activated",
+            Tabs.TabActivated,
+            Tabs.TabActivated,
+            Tabs.TabActivated,
         ]
 
 
