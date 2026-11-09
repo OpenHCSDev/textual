@@ -93,6 +93,7 @@ from textual.await_complete import AwaitComplete
 from textual.await_remove import AwaitRemove
 from textual.binding import Binding, BindingsMap, BindingType, Keymap
 from textual.command import CommandListItem, CommandPalette, Provider, SimpleProvider
+from textual.system_commands import SystemCommandsProvider
 from textual.compose import compose_async
 from textual.content import Content
 from textual.cursor_shape import CellCursor, CursorShape
@@ -146,7 +147,6 @@ if TYPE_CHECKING:
     from textual.filter import LineFilter
     from textual.message import Message
     from textual.pilot import Pilot
-    from textual.system_commands import SystemCommandsProvider
     from textual.widget import MountError  # type: ignore  # noqa: F401
 
 WINDOWS = sys.platform == "win32"
@@ -185,17 +185,6 @@ class SystemCommand(NamedTuple):
     """A callback to invoke when the command is selected."""
     discover: bool = True
     """Should the command show when the search is empty?"""
-
-
-def get_system_commands_provider() -> type[SystemCommandsProvider]:
-    """Callable to lazy load the system commands.
-
-    Returns:
-        System commands class.
-    """
-    from textual.system_commands import SystemCommandsProvider
-
-    return SystemCommandsProvider
 
 
 class AppError(Exception):
@@ -457,7 +446,7 @@ class App(Generic[ReturnType], DOMNode):
     """Default number of seconds to show notifications before removing them."""
 
     COMMANDS: ClassVar[set[type[Provider] | Callable[[], type[Provider]]]] = {
-        get_system_commands_provider
+        SystemCommandsProvider
     }
     """Command providers used by the [command palette](/guide/command_palette).
 
