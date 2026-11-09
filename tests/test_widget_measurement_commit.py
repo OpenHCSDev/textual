@@ -133,7 +133,8 @@ async def test_dirty_mark_does_not_materialize_invalidated_compositor():
         with patch.object(compositor, "_arrange_root", side_effect=AssertionError("Invalidation performed layout")):
             widget.refresh(layout=True)
             widget._size_updated(Size(35, 5), Size(35, 5), Size(35, 5))
-        assert widget._size.region in widget._dirty_regions
+        assert widget._render_cache.size != widget._size
+        assert widget._repaint_regions
 
 
 async def test_non_scrolling_group_commits_extent_without_remeasuring_ancestors():
