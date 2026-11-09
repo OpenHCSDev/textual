@@ -79,7 +79,6 @@ from textual._compat import cached_property
 from textual._compositor import CompositorMap, CompositorUpdate, run_steps
 from textual._context import NoActiveAppError, active_app, active_message_pump
 from textual._context import message_hook as message_hook_context_var
-from textual._dispatch_key import dispatch_key
 from textual._event_broker import NoHandler, extract_handler_actions
 from textual._files import generate_datetime_filename
 from textual._path import (
@@ -4598,8 +4597,7 @@ class App(Generic[ReturnType], DOMNode):
 
     @on(events.Key)
     async def _on_key(self, event: events.Key) -> None:
-        if not (await self._check_bindings(event.key)):
-            await dispatch_key(self, event)
+        await self._check_bindings(event.key)
 
     @on(events.Resize)
     async def _on_resize(self, event: events.Resize) -> None:

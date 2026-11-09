@@ -13,6 +13,7 @@ from textual.pilot import Pilot, _get_mouse_message_arguments
 from textual.screen import Screen
 from textual.widgets import Button, Input, Label, Static
 from textual import on
+from textual.binding import MethodBinding
 
 
 def test_batch_update():
@@ -112,6 +113,7 @@ async def test_default_return_code_is_zero():
 
 async def test_return_code_is_one_after_crash():
     class MyApp(App):
+        @MethodBinding.declare("p")
         def key_p(self):
             1 / 0
 

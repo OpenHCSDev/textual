@@ -2408,8 +2408,13 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         self.update_pointer_shape()
         return completion
 
-    def _key_escape(self) -> None:
-        self.clear_selection()
+    @on(events.Key)
+    def _escape_releases_selection(self, event: events.Key) -> None:
+        """An escape that bubbles this far releases selected text. A key handler, not a
+        binding: a screen binding would claim escape before the focused control sees it
+        (the keymap menu's escape stopped closing it)."""
+        if event.key == "escape":
+            self.clear_selection()
 
     def _watch__mouse_down_offset(self, offset: Offset | None) -> None:
         if offset is None:

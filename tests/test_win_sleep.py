@@ -7,6 +7,7 @@ import pytest
 from textual.app import App
 from textual import events
 from textual import on
+from textual.binding import MethodBinding
 
 pytestmark = pytest.mark.skipif(
     sys.platform != "win32", reason="We only need to test this on Windows."
@@ -31,6 +32,7 @@ def test_win_sleep_timer_is_cancellable():
         def on_mount(self) -> None:
             self.set_interval(SLEEP_FOR, lambda: None)
 
+        @MethodBinding.declare("e")
         def key_e(self):
             self.exit()
 

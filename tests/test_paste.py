@@ -2,6 +2,7 @@ from textual import events
 from textual.app import App
 from textual.widgets import Input
 from textual import on
+from textual.binding import MethodBinding
 
 
 async def test_paste_app():
@@ -36,6 +37,7 @@ async def test_empty_paste():
         def compose(self):
             yield MyInput()
 
+        @MethodBinding.declare("p")
         def key_p(self):
             self.query_one(MyInput).post_message(events.Paste(""))
 

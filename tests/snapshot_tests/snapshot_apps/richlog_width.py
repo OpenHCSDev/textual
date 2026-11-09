@@ -1,8 +1,8 @@
 from textual.app import App, ComposeResult
-from textual.events import Resize
 from textual.widgets import RichLog
 
 from rich.text import Text
+from textual.binding import MethodBinding
 
 
 class RichLogWidth(App[None]):
@@ -15,7 +15,8 @@ class RichLogWidth(App[None]):
         )
         yield rich_log
 
-    def key_p(self, event: Resize) -> None:
+    @MethodBinding.declare("p")
+    def key_p(self) -> None:
         rich_log: RichLog = self.query_one(RichLog)
         rich_log.display = True
         rich_log.write(Text("hello1", style="on red", justify="right"), expand=True)

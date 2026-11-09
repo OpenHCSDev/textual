@@ -262,7 +262,8 @@ class ProgressBar(HorizontalContainer, can_focus=False):
                 def compose(self):
                     yield ProgressBar(total=100)
 
-                def key_space(self):
+                @MethodBinding.declare("space")
+                def advance_bar(self):
                     self.query_one(ProgressBar).advance(5)
             ```
 

@@ -68,15 +68,15 @@ Some keys or combinations of keys can produce the same event. For instance, the 
 
 ### Key methods
 
-Textual offers a convenient way of handling specific keys. If you create a method beginning with `key_` followed by the key name (the event's `name` attribute), then that method will be called in response to the key press.
+A method can declare the key that runs it with `@MethodBinding.declare`, giving the key name (the event's `name` attribute). The method runs when that key is pressed and nothing more focused claims it.
 
 Let's add a key method to the example code.
 
-```python title="key02.py" hl_lines="15-16"
+```python title="key02.py" hl_lines="18-20"
 --8<-- "docs/examples/guide/input/key02.py"
 ```
 
-Note the addition of a `key_space` method which is called in response to the space key, and plays the terminal bell noise.
+Note the `key_space` method declared for the space key, which plays the terminal bell noise.
 
 !!! note
 

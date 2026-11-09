@@ -1,6 +1,7 @@
 from textual.app import App, ComposeResult
 from textual.containers import HorizontalScroll, VerticalScroll
 from textual.widgets import Label
+from textual.binding import MethodBinding
 
 
 class MyApp(App[None]):
@@ -34,6 +35,7 @@ class MyApp(App[None]):
             yield Label(("SPAM\n" * 49)[:-1])
         yield Label(("SPAM\n" * 51)[:-1])
 
+    @MethodBinding.declare("s")
     def key_s(self) -> None:
         self.screen.scroll_to_center(self.query_one("#bullseye"), origin_visible=False)
 

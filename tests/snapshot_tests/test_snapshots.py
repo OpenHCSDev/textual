@@ -62,6 +62,7 @@ from textual.theme import Theme
 from textual.widgets.option_list import Option
 from textual.widgets.text_area import BUILTIN_LANGUAGES, Selection, TextAreaTheme
 from textual.widgets.selection_list import Selection as SLSelection
+from textual.binding import MethodBinding
 
 # These paths should be relative to THIS directory.
 WIDGET_EXAMPLES_DIR = Path("../../docs/examples/widgets")
@@ -363,6 +364,7 @@ def test_datatable_auto_height_future_updates(snap_compare):
             table.add_columns(*ROWS[0])
             self.populate_table()
 
+        @MethodBinding.declare("r")
         def key_r(self) -> None:
             self.populate_table()
 

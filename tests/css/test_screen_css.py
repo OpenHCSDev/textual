@@ -4,6 +4,7 @@ from textual.screen import Screen
 from textual.widgets import Label
 from textual import events
 from textual import on
+from textual.binding import MethodBinding
 
 RED = Color(255, 0, 0)
 GREEN = Color(0, 255, 0)
@@ -77,9 +78,11 @@ async def test_screen_pushing_and_popping_does_not_reparse_css():
     """Check that pushing and popping the same screen doesn't trigger CSS reparses."""
 
     class MyApp(BaseApp):
+        @MethodBinding.declare("p")
         def key_p(self):
             self.push_screen(ScreenWithCSS())
 
+        @MethodBinding.declare("o")
         def key_o(self):
             self.pop_screen()
 
@@ -111,9 +114,11 @@ async def test_screen_css_push_screen_instance():
     """Check that screen CSS is loaded and applied when pushing a screen instance."""
 
     class MyApp(BaseApp):
+        @MethodBinding.declare("p")
         def key_p(self):
             self.push_screen(ScreenWithCSS())
 
+        @MethodBinding.declare("o")
         def key_o(self):
             self.pop_screen()
 
@@ -132,9 +137,11 @@ async def test_screen_css_push_screen_instance_by_name():
     class MyApp(BaseApp):
         SCREENS = {"screenwithcss": ScreenWithCSS}
 
+        @MethodBinding.declare("p")
         def key_p(self):
             self.push_screen("screenwithcss")
 
+        @MethodBinding.declare("o")
         def key_o(self):
             self.pop_screen()
 
@@ -153,9 +160,11 @@ async def test_screen_css_push_screen_type_by_name():
     class MyApp(BaseApp):
         SCREENS = {"screenwithcss": ScreenWithCSS}
 
+        @MethodBinding.declare("p")
         def key_p(self):
             self.push_screen("screenwithcss")
 
+        @MethodBinding.declare("o")
         def key_o(self):
             self.pop_screen()
 
@@ -172,9 +181,11 @@ async def test_screen_css_switch_screen_instance():
     """Check that screen CSS is loaded and applied when switching to a screen instance."""
 
     class MyApp(SwitchBaseApp):
+        @MethodBinding.declare("p")
         def key_p(self):
             self.switch_screen(ScreenWithCSS())
 
+        @MethodBinding.declare("o")
         def key_o(self):
             self.pop_screen()
 
@@ -193,9 +204,11 @@ async def test_screen_css_switch_screen_instance_by_name():
     class MyApp(SwitchBaseApp):
         SCREENS = {"screenwithcss": ScreenWithCSS}
 
+        @MethodBinding.declare("p")
         def key_p(self):
             self.switch_screen("screenwithcss")
 
+        @MethodBinding.declare("o")
         def key_o(self):
             self.pop_screen()
 
@@ -214,9 +227,11 @@ async def test_screen_css_switch_screen_type_by_name():
     class MyApp(SwitchBaseApp):
         SCREENS = {"screenwithcss": ScreenWithCSS}
 
-        async def key_p(self):
+        @MethodBinding.declare("p")
+        def key_p(self):
             self.switch_screen("screenwithcss")
 
+        @MethodBinding.declare("o")
         def key_o(self):
             self.pop_screen()
 
@@ -238,9 +253,11 @@ async def test_screen_css_switch_mode_screen_instance():
             "mode": ScreenWithCSS,
         }
 
+        @MethodBinding.declare("p")
         def key_p(self):
             self.switch_mode("mode")
 
+        @MethodBinding.declare("o")
         def key_o(self):
             self.switch_mode("base")
 
@@ -267,9 +284,11 @@ async def test_screen_css_switch_mode_screen_instance_by_name():
             "mode": "screenwithcss",
         }
 
+        @MethodBinding.declare("p")
         def key_p(self):
             self.switch_mode("mode")
 
+        @MethodBinding.declare("o")
         def key_o(self):
             self.switch_mode("base")
 
@@ -296,9 +315,11 @@ async def test_screen_css_switch_mode_screen_type_by_name():
             "mode": "screenwithcss",
         }
 
+        @MethodBinding.declare("p")
         def key_p(self):
             self.switch_mode("mode")
 
+        @MethodBinding.declare("o")
         def key_o(self):
             self.switch_mode("base")
 
