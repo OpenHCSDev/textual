@@ -94,11 +94,19 @@ class ActivationScene:
     """Click effects and styled body-cell previews from one accepted scene."""
 
     targets: dict[object, PaintedActivation] = field(default_factory=dict)
+    occupied: list[Region] = field(default_factory=list)
 
     def capture(
         self, widget: Widget, region: Region, strips: list[Strip], button: int,
         geometry: Mapping[Widget, MapGeometry],
     ) -> None:
+        for y, strip in zip(region.line_range, strips):
+            x = region.x
+            for segment in strip:
+                width = segment.cell_length
+                if width and segment.text.strip():
+                    self.occupied.append(Region(x, y, width, 1))
+                x += width
         for target in Activation.from_paint(widget, region, strips, button):
             # Borders may be valid click anchors, but the target's acquired
             # content inset determines which original cells describe it.
@@ -123,6 +131,15 @@ class ReflowResult(NamedTuple):
 
 # Maps a widget on to its geometry (information that describes its position in the composition)
 CompositorMap: TypeAlias = "dict[Widget, MapGeometry]"
+
+
+class FrameOverlay(Widget):
+    """A frame child whose transient paint must clear this frame's body cells."""
+
+    @abstractmethod
+    def frame_regions(
+        self, compositor: Compositor, geometry: CompositorMap,
+    ) -> Iterable[tuple[Widget, Region]]: ...
 
 
 class GeometryDemand(ABC):
@@ -2328,6 +2345,29 @@ class Compositor:
         update.bind_publication(self, arranged, {self.size.region}, sources.sources)
         return update
 
+    def _frame_paint(self):
+        """Place transient paint against the body before publishing either one."""
+        original = geometry = self._layout_map
+        if self.root is not None:
+            for overlay in self.root.query_children(FrameOverlay):
+                for widget, region in overlay.frame_regions(self, geometry):
+                    entry = geometry.get(widget)
+                    if entry is None or entry.region == region:
+                        continue
+                    if geometry is original:
+                        geometry = original.copy()
+                    moved = entry._replace(region=region)
+                    geometry[widget] = moved
+                    displayed = self._published_map.get(widget)
+                    if displayed != moved:
+                        if displayed is not None:
+                            self._dirty_regions.add(displayed.visible_region)
+                        self._dirty_regions.add(moved.visible_region)
+        if geometry is original:
+            return geometry, self.visible_widgets, self.cuts
+        widgets = self._paint_regions(self._ordered_geometry(geometry), self.size.region)
+        return geometry, widgets, self._cuts_for_regions(self.size.region, widgets)
+
     def render_full_update(self, simplify: bool = False) -> LayoutUpdate:
         """Render a full update.
 
@@ -2338,12 +2378,13 @@ class Compositor:
             A LayoutUpdate renderable.
         """
         screen_region = self.size.region
-        arranged = self._layout_map
+        arranged, widgets, cuts = self._frame_paint()
         crop = screen_region
-        sources = RenderedSources(self.visible_widgets)
-        chops = self._render_chops(crop, self._regions_to_spans((screen_region,)),
-                                  widgets=self.visible_widgets, cuts=self.cuts,
-                                  bounds=screen_region, on_render=sources.capture)
+        sources = RenderedSources(widgets)
+        with self._using_geometry(self.root, arranged):
+            chops = self._render_chops(crop, self._regions_to_spans((screen_region,)),
+                                      widgets=widgets, cuts=cuts,
+                                      bounds=screen_region, on_render=sources.capture)
         render_strips: list[Iterable[Strip]]
         if simplify:
             # Simplify is done when exporting to SVG
@@ -2365,7 +2406,7 @@ class Compositor:
             A ChopsUpdate if there is anything to update, otherwise `None`.
         """
         screen_region = self.size.region
-        arranged = self._layout_map
+        arranged, widgets, cuts = self._frame_paint()
         ready_regions = {
             damage for region in self._dirty_regions if (damage := region.intersection(screen_region))
         }
@@ -2373,11 +2414,11 @@ class Compositor:
             return None
         crop = Region.from_union(ready_regions)
         spans = list(self._regions_to_spans(ready_regions))
-        cuts = self.cuts
-        sources = RenderedSources(self.visible_widgets)
-        chops = self._render_chops(crop, spans,
-                                  widgets=self.visible_widgets, cuts=cuts,
-                                  bounds=screen_region, on_render=sources.capture)
+        sources = RenderedSources(widgets)
+        with self._using_geometry(self.root, arranged):
+            chops = self._render_chops(crop, spans,
+                                      widgets=widgets, cuts=cuts,
+                                      bounds=screen_region, on_render=sources.capture)
         update = ChopsUpdate(chops, spans, cuts)
         update.bind_publication(self, arranged, ready_regions, sources.sources)
         return update
@@ -2395,10 +2436,11 @@ class Compositor:
         if size is None:
             size = self.size
         rows = Region(0, 0, self.size.width, min(size.height, self.size.height))
-        cuts = self.cuts
-        chops = self._render_chops(size.region, self._regions_to_spans((rows,)),
-                                  widgets=self.visible_widgets, cuts=cuts,
-                                  bounds=self.size.region, on_render=on_render)
+        arranged, widgets, cuts = self._frame_paint()
+        with self._using_geometry(self.root, arranged):
+            chops = self._render_chops(size.region, self._regions_to_spans((rows,)),
+                                      widgets=widgets, cuts=cuts,
+                                      bounds=self.size.region, on_render=on_render)
         render_strips = [Strip.join(
             chop.get(x) or Strip.blank(end - x)
             for x, end in zip(cuts[y], cuts[y][1:])
@@ -2407,19 +2449,26 @@ class Compositor:
 
     def activation_scene(self, button=1, exclude: Iterable[Widget] = ()) -> ActivationScene:
         """Borrow click effects and glyph occupancy from the same published rows."""
+        return self.activation_scene_from(self._published_map, button, exclude)
+
+    def activation_scene_from(
+        self, geometry: CompositorMap, button=1, exclude: Iterable[Widget] = (),
+    ) -> ActivationScene:
+        """Borrow one body map before transient overlays choose their paint cells."""
         scene = ActivationScene()
         excluded = set(exclude)
-        widgets = {widget: geometry for widget, geometry in self.published_widgets.items()
-                   if widget not in excluded}
+        widgets = self._paint_regions(
+            ((widget, entry) for widget, entry in self._ordered_geometry(geometry)
+             if widget not in excluded), self.size.region)
         bounds = self.size.region
         if self.root is None or not widgets:
             return scene
         cuts = self._cuts_for_regions(bounds, widgets)
-        with self._using_geometry(self.root, self._published_map):
+        with self._using_geometry(self.root, geometry):
             self._render_chops(
                 bounds, self._regions_to_spans((bounds,)), widgets=widgets,
                 cuts=cuts, bounds=bounds,
-                on_render=partial(scene.capture, button=button, geometry=self._published_map),
+                on_render=partial(scene.capture, button=button, geometry=geometry),
             )
         return scene
 
