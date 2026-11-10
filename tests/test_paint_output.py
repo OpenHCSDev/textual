@@ -16,6 +16,8 @@ import hashlib
 from rich.segment import Segment
 from rich.style import Style
 
+from textual._compositor import CompositorUpdate
+from textual._paint_state import PaintState
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, VerticalScroll
 from textual.strip import Strip
@@ -26,7 +28,9 @@ from textual.widgets import Static
 # Re-recorded when a scoped scroll reflow stopped putting the history in front
 # of its own scrollbar: the only change is that the scrollbar's cells (column
 # 99) show the bar again instead of the container's background.
-EXPECTED_DIGEST = "43fb71c47b758efd8d4e9300096d7a9638d5f78e2f29072d136e06f76d815826"
+# Main 3cc92d796 and P1444's head produce byte-identical updates after this
+# fixture adopts Widget.render_line's explicit PaintState argument.
+EXPECTED_DIGEST = "ce9c911c0f69f5451c03b623ff3b9e71cd293f63097044d93c4c457094160f77"
 EXPECTED_UPDATES = 22
 
 WORDS = ("history", "│", "─┼─", "漢字", "scroll", "ü", "paint", "🙂", "line", "cells", "┌─┐", "compositor")
@@ -66,7 +70,7 @@ class PageView(Widget):
     def get_content_height(self, container, viewport, width: int) -> int:
         return len(self.lines)
 
-    def render_line(self, y: int) -> Strip:
+    def render_line(self, y: int, paint: PaintState) -> Strip:
         width = self.size.width
         if y >= len(self.lines):
             return Strip.blank(width)
@@ -113,8 +117,6 @@ class PaintApp(App):
         yield Static("overlay\n[b]on top[/b] 漢", id="overlay")
 
     def _display(self, screen, renderable) -> None:
-        from textual._compositor import CompositorUpdate
-
         if isinstance(renderable, CompositorUpdate) and not self._batch_count:
             self.updates.append(renderable.render_segments(self.console))
         super()._display(screen, renderable)
@@ -170,7 +172,7 @@ async def test_plain_widget_paints_its_own_lines():
             super().__init__()
             self.lines = [Strip([Segment(f"{row:<20}", Style(color="red"))], 20) for row in range(5)]
 
-        def render_line(self, y: int) -> Strip:
+        def render_line(self, y: int, paint: PaintState) -> Strip:
             return self.lines[y]
 
     class LinesApp(App):
