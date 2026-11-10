@@ -5,10 +5,11 @@ from dataclasses import dataclass
 import pytest
 
 from textual import on
-from textual._on import OnDecoratorError
+from textual._on import ClassScope, OnDecoratorError
 from textual.app import App, ComposeResult
 from textual.events import Enter, Leave
 from textual.message import Message
+from textual.message_pump import MessagePump
 from textual.widget import Widget
 from textual.widgets import Button, TabbedContent, TabPane
 from textual import events
@@ -348,3 +349,64 @@ async def test_on_with_enter_and_leave_events():
         await pilot.hover(Button, offset=(0, 20))
         expected_messages.append("Leave")
         assert app.messages == expected_messages
+
+
+async def test_event_bindings_keep_selectors_and_suppression_live(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Reuse event routes while applying each delivery's current state."""
+    seen: list[str] = []
+    selections = 0
+    routes_for = ClassScope.routes_for
+
+    def selected(scope: ClassScope, message_type: type[Message]):
+        nonlocal selections
+        selections += 1
+        return routes_for(scope, message_type)
+
+    monkeypatch.setattr(ClassScope, "routes_for", selected)
+
+    class ParentEvent(events.Event, bubble=False):
+        def __init__(self, control: Widget, suppress: bool = False) -> None:
+            super().__init__()
+            self.target = control
+            self.suppress = suppress
+            self.set_sender(control)
+
+        @property
+        def control(self) -> Widget:
+            return self.target
+
+    class ChildEvent(ParentEvent, bubble=False):
+        pass
+
+    class BasePump(MessagePump):
+        @on(ParentEvent)
+        def base(self) -> None:
+            seen.append("base")
+
+    class Pump(BasePump):
+        @on(ParentEvent)
+        @on(ChildEvent)
+        def derived(self, event: ParentEvent) -> None:
+            seen.append("derived")
+            if event.suppress:
+                event.prevent_default()
+
+        @on(ParentEvent, ".selected")
+        def matching(self) -> None:
+            seen.append("selected")
+
+    control = Widget()
+    pump = Pump()
+    await pump._on_message(ChildEvent(control))
+    assert seen == ["derived", "base"]
+    bound_selections = selections
+    assert bound_selections > 0
+
+    control.add_class("selected")
+    await pump._on_message(ChildEvent(control))
+    assert seen == ["derived", "base", "derived", "selected", "base"]
+
+    await pump._on_message(ChildEvent(control, suppress=True))
+    assert seen[-2:] == ["derived", "selected"]
+    assert len(seen) == 7
+    assert selections == bound_selections
