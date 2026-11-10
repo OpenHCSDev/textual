@@ -24,7 +24,7 @@ from typing_extensions import Self
 from textual._types import CallbackType
 from textual.geometry import Offset, Size
 from textual.keys import _get_key_aliases
-from textual.message import Message
+from textual.message import DeclaredMessage, Message
 
 MouseEventT = TypeVar("MouseEventT", bound="MouseEvent")
 
@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
 
 @rich.repr.auto
-class Event(Message):
+class Event(DeclaredMessage):
     """The base class for all events."""
 
 
