@@ -3,7 +3,7 @@
 from textual.app import App, ComposeResult
 from textual.screen import Screen
 from textual.widgets import Static
-from textual.widgets._hints import HintLabel, HintSession
+from textual.widgets._hints import HintLabel, HintSession, LegendHintSession, SpatialHintSession
 
 
 class ReadableHintsApp(App):
@@ -53,18 +53,20 @@ class DenseHintsApp(App):
         self.picked = index
 
 
-async def test_dense_two_letter_hints_keep_body_and_all_targets():
-    """No two-cell body gap: the footer legend must retain every hint."""
+async def test_dense_two_letter_hints_keep_readable_entries_and_all_targets():
+    """When the body has no key-sized gap, every target remains in the wrapped list."""
     app = DenseHintsApp()
     async with app.run_test(size=(54, 2)) as pilot:
         await pilot.pause()
-        before = screen_rows(app)[0]
         await app.screen.action_show_hints()
         await pilot.pause()
-        labels = list(app.screen.query(HintLabel))
+        session = app.screen.query_one(LegendHintSession)
+        labels = list(session.labels)
         assert len(labels) == 27
         assert all(label.display and len(label.text) == 2 for label in labels)
-        assert screen_rows(app)[0] == before
+        assert all(label.preview.text == "x" for label in labels)
+        assert session.region.height == 2
+        assert labels[0].region.intersection(app.screen.region)
         await pilot.press(*labels[-1].text)
         await pilot.pause()
         assert app.picked == 26
@@ -123,14 +125,16 @@ async def test_new_body_glyphs_are_clear_in_every_published_hint_frame():
         assert all(row.startswith(expanded) for row in changed_rows), changed_rows
 
 
-async def test_filling_body_does_not_switch_hint_presentation_or_overpaint():
+async def test_filling_body_keeps_targets_and_clears_spatial_keys_before_publication():
     app = ChangingHintsApp()
     async with app.run_test(size=(70, 28)) as pilot:
         await pilot.pause()
         await app.screen.action_show_hints()
         await pilot.pause()
         session = app.screen.query_one(HintSession)
-        targets = tuple(label.target for label in session.labels)
+        targets = tuple(label.target.identity for label in session.labels)
+        keys = tuple(label.text for label in session.labels)
+        assert isinstance(session, SpatialHintSession)
         screen = app.screen
         assert isinstance(screen, PublishedHintScreen)
         screen.frames.clear()
@@ -143,23 +147,24 @@ async def test_filling_body_does_not_switch_hint_presentation_or_overpaint():
         frames = [frame for frame in screen.frames if frame[0].startswith("Filled")]
         assert frames
         assert all(frame[:27] == expected for frame in frames)
-        assert app.screen.query_one(HintSession) is session
-        assert tuple(label.target for label in session.labels) == targets
-        await pilot.press(*session.labels[-1].text)
+        replacement = app.screen.query_one(LegendHintSession)
+        assert tuple(label.target.identity for label in replacement.labels) == targets
+        assert tuple(label.text for label in replacement.labels) == keys
+        assert tuple(label.preview.text.strip() for label in replacement.labels) == expected
+        await pilot.press(*replacement.labels[-1].text)
         await pilot.pause()
         assert app.picked == 26
 
 
-async def test_footer_browsing_and_resize_cancellation_follow_native_owners():
+async def test_spatial_keys_and_resize_cancellation_follow_native_owners():
     app = ReadableHintsApp()
     async with app.run_test(size=(70, 35)) as pilot:
         await pilot.pause()
         await app.screen.action_show_hints()
         await pilot.pause()
-        session = app.screen.query_one(HintSession)
-        await pilot.press("right")
-        await pilot.pause()
-        assert session.scroll_x > 0
+        session = app.screen.query_one(SpatialHintSession)
+        assert all(label.region.bottom <= session.region.y for label in session.labels)
+        assert all(label.region in app.screen.size.region for label in session.labels)
         await pilot.resize_terminal(54, 30)
         await pilot.pause()
         assert not app.screen.query(HintSession)
@@ -171,8 +176,35 @@ async def test_footer_browsing_and_resize_cancellation_follow_native_owners():
         assert reopened.region.y == 29
         assert reopened.region.width == 54
         assert all(label.display for label in reopened.labels)
+        assert all(label.region.bottom <= reopened.region.y for label in reopened.labels)
         for index in range(27):
             assert screen_rows(app)[index].startswith(f"Target {index:02}")
         await pilot.press("escape")
         await pilot.pause()
         assert not app.screen.query(HintSession)
+
+
+class CrowdedHintsApp(DenseHintsApp):
+    def compose(self):
+        yield from super().compose()
+        yield Static("b" * 54)
+        yield Static("c" * 54)
+
+
+async def test_crowded_list_browses_vertically_and_keeps_complete_target_previews():
+    app = CrowdedHintsApp()
+    async with app.run_test(size=(54, 4)) as pilot:
+        await pilot.pause()
+        before = screen_rows(app)[0]
+        await app.screen.action_show_hints()
+        await pilot.pause()
+        session = app.screen.query_one(LegendHintSession)
+        assert session.region.height > 1
+        assert all(label.preview.text == "x" for label in session.labels)
+        await pilot.press("down")
+        await pilot.pause()
+        assert session.scroll_y > 0
+        await pilot.press("escape")
+        await pilot.pause()
+        assert not app.screen.query(HintSession)
+        assert screen_rows(app)[0] == before

@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from textual._compositor import ChopsUpdate, CompositorUpdate, LayoutUpdate
 from textual.app import App, ComposeResult
-from textual.containers import Grid
-from textual.screen import ModalScreen
-from textual.widgets import Button, Footer, Header, Label
+from textual.binding import Binding
+from textual.containers import Container, Grid
+from textual.geometry import Offset
+from textual.screen import ModalScreen, Screen
+from textual.widgets import Button, Footer, Header, Label, Static
+from textual.widgets._footer import FooterKey
 from textual import events
 from textual import on
 
@@ -35,10 +39,13 @@ class QuitScreen(ModalScreen[bool]):  # (1)!
             self.dismiss(False)
 
 
+QUIT_BINDING = Binding("q", "request_quit", "Quit")
+
+
 class ModalApp(App):
     """An app with a modal dialog."""
 
-    BINDINGS = [("q", "request_quit", "Quit")]
+    BINDINGS = [QUIT_BINDING]
 
     CSS = """
 QuitScreen {
@@ -94,7 +101,8 @@ async def test_modal_pop_screen():
         # Pause to ensure the footer is fully composed to avoid flakiness in CI
         await pilot.pause()
         await pilot.pause()  # Required in Windows
-        assert await pilot.click("FooterKey")
+        quit_key = next(key for key in app.query(FooterKey) if key.key == QUIT_BINDING.key)
+        assert await pilot.click(quit_key)
         assert await app.wait_for_refresh()
         assert isinstance(app.screen, QuitScreen)
         # Check activating the quit button exits the app
@@ -106,11 +114,6 @@ async def test_menu_opening_over_a_screen_keeps_that_screen_drawn():
     """A see-through menu that moves to the pointer as it opens leaves the
     screen behind it on the terminal: every update written while it opens
     draws the rows of the screen below, never blank rows in their place."""
-    from textual._compositor import ChopsUpdate, CompositorUpdate, LayoutUpdate
-    from textual.containers import Container
-    from textual.geometry import Offset
-    from textual.widgets import Static
-
     width, height = 60, 20
 
     class Menu(ModalScreen[str]):
@@ -173,9 +176,6 @@ async def test_widget_added_under_an_opaque_screen_is_displayed_only_once_uncove
     """A widget mounted on a screen that an opaque screen covers has not been
     drawn, so the covered screen does not report it as displayed; uncovering
     the screen draws it."""
-    from textual.screen import Screen
-    from textual.widgets import Static
-
     class CoveredApp(App):
         def compose(self) -> ComposeResult:
             yield Static("below")
@@ -202,9 +202,6 @@ async def test_screens_uncovered_together_are_all_drawn_at_the_new_size():
     """Closing an opaque screen that covered a see-through screen and the
     screen behind it draws both, laid out for a terminal resized meanwhile
     and showing what was added behind while they were covered."""
-    from textual.screen import Screen
-    from textual.widgets import Static
-
     class SeeThrough(Screen):
         CSS = "SeeThrough { background: transparent; }"
 

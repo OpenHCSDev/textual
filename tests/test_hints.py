@@ -1,6 +1,4 @@
 from dataclasses import dataclass
-from itertools import combinations
-
 import pytest
 
 from textual.app import App, ComposeResult
@@ -8,7 +6,7 @@ from textual.document._editing import EditingMode
 from textual.geometry import Region
 from textual.widgets import Static, Input, TextArea, Checkbox, RadioButton, Switch, Collapsible, Select
 from textual.widgets._collapsible import CollapsibleTitle
-from textual.widgets._hints import HintCaption, HintClick, HintLabel, HintSession
+from textual.widgets._hints import HintCaption, HintClick, HintLabel, HintSession, SpatialHintSession
 
 
 class DenseLinksApp(App):
@@ -29,8 +27,9 @@ async def test_hint_labels_are_separated():
         regions = [Region(label.region.x, label.region.y, len(label.text), 1)
                    for label in app.screen.query(HintLabel)]
         assert len(regions) == 27
-        for first, second in combinations(regions, 2):
-            assert first.y != second.y or first.right < second.x or second.right < first.x, (first, second)
+        ordered = sorted(regions, key=lambda region: (region.y, region.x))
+        for first, second in zip(ordered, ordered[1:]):
+            assert first.y != second.y or first.right < second.x, (first, second)
 
 
 class NativeControlsApp(App):
@@ -130,7 +129,7 @@ async def test_hint_caption_initial_unset_width_mount(click: HintClick) -> None:
         session = HintSession.for_scene(app.screen, scene, click)
         assert session.styles.width is None
 
-        await app.screen.mount(session)
+        await session.mount_on(app.screen)
         session.focus_on_host()
         await pilot.pause()
 
@@ -142,7 +141,10 @@ async def test_hint_caption_initial_unset_width_mount(click: HintClick) -> None:
         caption = session.query_one(HintCaption)
         assert caption.region.width <= app.screen.size.width // 2
         assert caption.render().plain == f"{editor.editing_mode.label} · {click.caption}"
-        assert all(label.region.x >= caption.region.right for label in session.labels)
+        assert isinstance(session, SpatialHintSession)
+        assert all(label.region in app.screen.size.region for label in session.labels)
+        assert all(label.region.bottom <= session.region.y for label in session.labels)
+        assert all(label.region.width == len(label.text) for label in session.labels)
         await pilot.press("escape")
         await pilot.pause()
         assert not app.screen.query_children(HintSession)
