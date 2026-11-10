@@ -2338,9 +2338,9 @@ class Compositor:
         """Pause, then compose inline cells atomically; clear below a shrinking size."""
         yield from self._pause_before_commit(deadline)
         self.update_widgets(dirty_widgets)
-        arranged = self._layout_map
-        sources = RenderedSources(self.visible_widgets)
-        strips = self.render_strips(size, on_render=sources.capture)
+        arranged, widgets, cuts = self._frame_paint()
+        sources = RenderedSources(widgets)
+        strips = self._strips_from_geometry(size, arranged, widgets, cuts, sources.capture)
         update = InlineUpdate(strips, clear=clear)
         update.bind_publication(self, arranged, {self.size.region}, sources.sources)
         return update
@@ -2435,8 +2435,12 @@ class Compositor:
         """
         if size is None:
             size = self.size
-        rows = Region(0, 0, self.size.width, min(size.height, self.size.height))
         arranged, widgets, cuts = self._frame_paint()
+        return self._strips_from_geometry(size, arranged, widgets, cuts, on_render)
+
+    def _strips_from_geometry(self, size, arranged, widgets, cuts, on_render):
+        """The strip reader and inline output share one captured frame's cells."""
+        rows = Region(0, 0, self.size.width, min(size.height, self.size.height))
         with self._using_geometry(self.root, arranged):
             chops = self._render_chops(size.region, self._regions_to_spans((rows,)),
                                       widgets=widgets, cuts=cuts,

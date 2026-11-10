@@ -54,7 +54,6 @@ class HintHost:
             return
         session = HintSession.for_scene(self, scene, click)
         await session.mount_on(self)
-        session.focus_on_host()
 
     MODE_BINDINGS: ClassVar[tuple[ModeBinding, ...]] = (
         ModeBinding("f", action_show_hints, HintClick.LEFT.description,
@@ -250,6 +249,7 @@ class HintSession(HintOverlay, FrameOverlay, can_focus=True):
     @on(events.Mount)
     def on_mount(self) -> None:
         self.screen.bindings_updated_signal.subscribe(self, self._bindings_changed)
+        self.focus_on_host()
 
     @on(events.Unmount)
     def on_unmount(self) -> None:
@@ -389,9 +389,8 @@ class SpatialHintSession(HintSession):
         replacement.prefix = self.prefix
         for old, new in zip(self.labels, replacement.labels):
             new.display = old.display
-        await self._retire(None)
         await replacement.mount_on(screen)
-        replacement.focus_on_host()
+        await self._retire(None)
 
     async def _retire(self, target):
         await self.screen.remove_children(self.labels)
@@ -402,7 +401,12 @@ class LegendHintSession(HintSession, VerticalScroll):
     """When keys cannot fit beside text, show a wrapped, vertically browsable list."""
 
     DEFAULT_CSS = """
-    LegendHintSession { height: auto; max-height: 50%; }
+    LegendHintSession {
+        height: auto;
+        min-height: 2;
+        max-height: 100%;
+        scrollbar-size-vertical: 0;
+    }
     LegendHintSession > HintCaption { dock: top; width: 100%; max-width: 100%; }
     """
     label_type = LegendHintLabel
