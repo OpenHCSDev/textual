@@ -427,15 +427,18 @@ class Footer(HorizontalContainer, ScrollableContainer, can_focus=False, can_focu
             existing = {key.action: key for key in self.query(FooterKey)
                         if not key.has_class("-command-palette")}
             desired = {item.binding.action for part in projection.groups for item in part.bindings}
+            # A key whose action is unbound now stays built and hidden: switching between
+            # screens with different bindings must not rebuild the same keys every time.
             for action in existing.keys() - desired:
-                await existing.pop(action).remove()
+                existing[action].display = False
             for part, group in zip(projection.groups, groups):
+                group.display = True
                 parent = group.update_projection(part)
                 await self._reconcile_keys(parent, part.bindings, existing, grouped=part.grouped)
                 if not self.is_attached or self._closing or self._pruning:
                     return
             for group in groups[len(projection.groups):]:
-                await group.remove()
+                group.display = False
             palette_keys = [key for key in self.query_children(FooterKey)
                             if key.has_class("-command-palette")]
             if projection.palette is not None:
@@ -493,6 +496,7 @@ class Footer(HorizontalContainer, ScrollableContainer, can_focus=False, can_focu
             else:
                 if key.parent is not parent:
                     key.reparent(parent)
+                key.display = True
                 self._update_key(key, item, grouped=grouped)
             ordered.append(key)
         if added:
