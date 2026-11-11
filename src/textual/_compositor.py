@@ -2605,7 +2605,13 @@ class Compositor:
 
     @staticmethod
     def _layer_key(layer_widgets: Mapping[Widget, tuple[Region, Region]]) -> object:
-        """Scene key for one layer's widgets."""
+        """Scene key for one layer's widgets.
+
+        Includes _repaint_required so animation frames that change content
+        at the same size invalidate the layer's cache.
+        """
+        if any(w._repaint_required for w in layer_widgets):
+            return None  # A widget needs repaint — cache must miss.
         return tuple(sorted(
             (id(w), r.x, r.y, r.width, r.height,
              w._render_cache.size.width, w._render_cache.size.height)
