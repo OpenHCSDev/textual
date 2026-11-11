@@ -883,36 +883,27 @@ class ChopsUpdate(CompositorUpdate):
 
         last_y = self.spans[-1][0]
         row_cache_info = getattr(self, "_row_cache_info", None)
-        per_row: dict[int, list[str]] = {} if row_cache_info else {}
-
-        # Prepend any cached rows that were hits.
-        if row_cache_info:
-            compositor, widgets, cached_rows = row_cache_info
-            for y in sorted(cached_rows):
-                append(cached_rows[y])
+        per_row: dict[int, str] = {}
 
         for y, x1, x2 in self.spans:
-            row_parts: list[str] = []
+            parts: list[str] = []
             for x, strip in self._get_line_chops(y, x1, x2):
-                part = cursor_move_to(x, y) + strip.render(console)
-                append(part)
-                if row_cache_info is not None:
-                    row_parts.append(part)
+                parts.append(cursor_move_to(x, y) + strip.render(console))
+            row_str = "".join(parts)
+            append(row_str)
+            if row_cache_info is not None:
+                per_row[y] = row_str
 
             if y != last_y:
                 append("\n")
 
-            if row_cache_info is not None and row_parts:
-                per_row[y] = row_parts
-
         terminal_sequences = "".join(sequences)
 
-        # Save each composed row into the compositor's row cache.
+        # Save per-row output and the scene key.
         if row_cache_info is not None:
-            compositor, widgets, _ = row_cache_info
-            for y, parts in per_row.items():
-                key = compositor._row_fingerprint(y, widgets)
-                compositor._row_terminal_cache[y] = (key, "".join(parts))
+            compositor, scene_key = row_cache_info
+            compositor._row_terminal_cache.update(per_row)
+            compositor._cached_scene_key = scene_key
             del self._row_cache_info
 
         return terminal_sequences
@@ -933,6 +924,69 @@ class CachedRowsUpdate(CompositorUpdate):
         for y in sorted(self._rows):
             sequences.append(self._rows[y])
         return "".join(sequences)
+
+
+class SceneState:
+    """Whether the visible scene matches its cached frame buffer.
+
+    RetainedScene replays cached rows.  ChangedScene composes fresh and saves.
+    No flag, no branch: dispatch through the family.
+    """
+
+    __slots__ = ("key",)
+
+    def __init__(self, key: object) -> None:
+        self.key = key
+
+    def produce(
+        self,
+        compositor: Compositor,
+        arranged: CompositorMap,
+        widgets: Mapping[Widget, tuple[Region, Region]],
+        cuts: list[list[int]],
+        screen_region: Region,
+        ready_regions: set[Region],
+    ) -> CompositorUpdate | None:
+        raise NotImplementedError
+
+
+class RetainedScene(SceneState):
+    """The scene hasn't changed — replay cached per-row terminal output."""
+
+    __slots__ = ()
+
+    def produce(self, compositor, arranged, widgets, cuts, screen_region, ready_regions):
+        row_cache = compositor._row_terminal_cache
+        dirty_rows: set[int] = set()
+        for region in ready_regions:
+            dirty_rows.update(range(region.y, region.y + region.height))
+        cached_rows = {y: row_cache[y] for y in dirty_rows if y in row_cache}
+        if len(cached_rows) == len(dirty_rows):
+            update = CachedRowsUpdate(cached_rows)
+            update.bind_publication(compositor, arranged, ready_regions)
+            return update
+        # Partial miss — fall through to full composition.
+        return ChangedScene(self.key).produce(
+            compositor, arranged, widgets, cuts, screen_region, ready_regions)
+
+
+class ChangedScene(SceneState):
+    """The scene changed — compose fresh and save the rows."""
+
+    __slots__ = ()
+
+    def produce(self, compositor, arranged, widgets, cuts, screen_region, ready_regions):
+        crop = Region.from_union(ready_regions)
+        spans = list(compositor._regions_to_spans(ready_regions))
+        sources = RenderedSources(widgets)
+        with compositor._using_geometry(compositor.root, arranged):
+            chops = compositor._render_chops(crop, spans,
+                                             widgets=widgets, cuts=cuts,
+                                             bounds=screen_region, on_render=sources.capture)
+        update = ChopsUpdate(chops, spans, cuts)
+        update.bind_publication(compositor, arranged, ready_regions, sources.sources)
+        update._row_cache_info = (compositor, self.key)
+        return update
 
 
 class ExposedSpans:
@@ -1054,7 +1108,18 @@ class Compositor:
         # escape sequences are saved keyed by a fingerprint of the widgets that
         # produced it (identity, position, render-cache size).  A warm tab switch
         # replays the cached strings for unchanged rows, skipping composition.
-        self._row_terminal_cache: dict[int, tuple[object, str]] = {}
+        self._row_terminal_cache: dict[int, str] = {}
+        self._cached_scene_key: object = None
+
+        # Frame buffer: per-row composed chops, saved after each partial update.
+        # Each entry is (contributing_widgets_set, chops_dict).
+        # A row is valid when all its contributors still have valid render caches
+        # (their _render_cache.size matches their widget size).
+        self._frame_buffer: dict[int, tuple[frozenset[int], dict[int, Strip]]] = {}
+        # Widget paint generation: bumped when render cache is cleared.
+        # Used for O(1) staleness checks instead of per-row fingerprints.
+        self._widget_paint_gen: dict[int, int] = {}
+        self._frame_gen: dict[int, dict[int, int]] = {}  # row -> {widget_id: gen}
 
     @property
     def max_subtree_geometry_entries(self) -> int:
@@ -1087,6 +1152,7 @@ class Compositor:
         self._dirty_regions.clear()
         self._subtree_geometry.clear()
         self._row_terminal_cache.clear()
+        self._cached_scene_key = None
 
     def _damage(self, region: Region) -> None:
         """Mark the part of `region` on the screen as needing paint.
@@ -2418,6 +2484,8 @@ class Compositor:
         Returns:
             A LayoutUpdate renderable.
         """
+        self._row_terminal_cache.clear()
+        self._cached_scene_key = None
         screen_region = self.size.region
         arranged, widgets, cuts = self._frame_paint()
         crop = screen_region
@@ -2455,11 +2523,22 @@ class Compositor:
         contributors.sort()
         return tuple(contributors)
 
-    def render_partial_update(self) -> ChopsUpdate | CachedRowsUpdate | None:
-        """Render a partial update, reusing cached row output where possible.
+    def _scene_key(self, widgets: Mapping[Widget, tuple[Region, Region]]) -> object:
+        """One key for the entire visible scene: widget IDs, positions and render cache sizes.
 
-        Returns:
-            An update, or None when nothing is dirty.
+        Computed once per frame from visible_widgets.  O(visible widgets), not O(rows × widgets).
+        """
+        return tuple(sorted(
+            (id(w), r.x, r.y, r.width, r.height, w._render_cache.size.width, w._render_cache.size.height)
+            for w, (r, _) in widgets.items()
+        ))
+
+    def render_partial_update(self) -> CompositorUpdate | None:
+        """Produce a partial update, delegating to the scene state.
+
+        The scene state decides whether to replay cached rows (unchanged scene)
+        or compose fresh (changed scene).  No branching on a flag: the state
+        owns the method.
         """
         screen_region = self.size.region
         arranged, widgets, cuts = self._frame_paint()
@@ -2469,47 +2548,15 @@ class Compositor:
         if not ready_regions:
             return None
 
-        # Separate dirty rows into cache hits and misses.
-        dirty_rows: set[int] = set()
-        for region in ready_regions:
-            dirty_rows.update(range(region.y, region.y + region.height))
+        scene_key = self._scene_key(widgets)
+        state = self._scene_state(scene_key)
+        return state.produce(self, arranged, widgets, cuts, screen_region, ready_regions)
 
-        cached_rows: dict[int, str] = {}
-        missed_rows: set[int] = set()
-        row_cache = self._row_terminal_cache
-        for y in dirty_rows:
-            key = self._row_fingerprint(y, widgets)
-            cached = row_cache.get(y)
-            if cached is not None and cached[0] == key:
-                cached_rows[y] = cached[1]
-            else:
-                missed_rows.add(y)
-
-        if not missed_rows:
-            # Every dirty row is a cache hit.  Replay their terminal output.
-            update = CachedRowsUpdate(cached_rows)
-            update.bind_publication(self, arranged, ready_regions)
-            return update
-
-        # Compose the missed rows through the normal path.
-        # Restrict the damage to missed rows only.
-        miss_regions = set()
-        for region in ready_regions:
-            for y in range(region.y, region.y + region.height):
-                if y in missed_rows:
-                    miss_regions.add(Region(region.x, y, region.width, 1))
-        crop = Region.from_union(miss_regions)
-        spans = list(self._regions_to_spans(miss_regions))
-        sources = RenderedSources(widgets)
-        with self._using_geometry(self.root, arranged):
-            chops = self._render_chops(crop, spans,
-                                      widgets=widgets, cuts=cuts,
-                                      bounds=screen_region, on_render=sources.capture)
-        update = ChopsUpdate(chops, spans, cuts)
-        update.bind_publication(self, arranged, ready_regions, sources.sources)
-        # Attach info for saving rows to the cache after render_segments.
-        update._row_cache_info = (self, widgets, cached_rows)
-        return update
+    def _scene_state(self, scene_key: object) -> SceneState:
+        """Select the scene state by matching the key.  No branch: the family dispatches."""
+        if scene_key == self._cached_scene_key:
+            return RetainedScene(scene_key)
+        return ChangedScene(scene_key)
 
     def render_strips(self, size: Size | None = None, *,
                       on_render: Callable[[Widget, Region, list[Strip]], None] | None = None) -> list[Strip]:
