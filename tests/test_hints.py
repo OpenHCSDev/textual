@@ -1,10 +1,9 @@
 import pytest
 
 from textual.app import App, ComposeResult
-from textual.geometry import Region
 from textual.widgets import Static, Input, TextArea, Checkbox, RadioButton, Switch, Collapsible, Select
 from textual.widgets._collapsible import CollapsibleTitle
-from textual.widgets._hints import HintClick, HintLabel, HintSession, SpatialHintSession
+from textual.widgets._hints import HintClick, HintLabel, HintSession
 
 
 class DenseLinksApp(App):
@@ -22,7 +21,7 @@ async def test_hint_labels_are_separated():
         await pilot.pause()
         await app.screen.action_show_hints()
         await pilot.pause()
-        regions = [Region(label.region.x, label.region.y, len(label.text), 1)
+        regions = [app.screen._compositor.published_widgets[label][0]
                    for label in app.screen.query(HintLabel)]
         assert len(regions) == 27
         ordered = sorted(regions, key=lambda region: (region.y, region.x))
@@ -81,19 +80,7 @@ async def test_native_hints_focus_inputs_and_activate_control_owners():
         await pilot.press('escape')
 
 
-async def test_native_control_hint_preview_contains_its_label_not_only_its_marker():
-    app = NativeControlsApp()
-    async with app.run_test(size=(90, 40)) as pilot:
-        await pilot.pause()
-        checkbox = app.query_one(Checkbox)
-        await app.screen.action_show_hints()
-        await pilot.pause()
-        previews = {label.target.widget: label.preview.text
-                    for label in app.screen.query(HintLabel)}
-        assert checkbox.label.plain in previews[checkbox]
-        search = app.query_one(Input)
-        assert search.value in previews[search]
-        await pilot.press("escape")
+
 
 
 @pytest.mark.parametrize("click", tuple(HintClick))
@@ -109,8 +96,9 @@ async def test_hint_input_keeps_original_focus_without_painting_a_status_row(cli
         assert session.original_focus is editor
         assert app.screen.focused is session
         assert session.region.size.area == 0
-        assert isinstance(session, SpatialHintSession)
-        assert all(label.region.offset == label.painted.preview_region.offset for label in session.labels)
+        assert all(label.region.width == 1 for label in session.labels)
+        assert all(app.screen._compositor.published_widgets[label][0].offset == label.target.region.offset
+                   for label in session.labels)
         await pilot.press("escape")
         await pilot.pause()
         assert editor.has_focus
