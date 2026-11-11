@@ -1301,6 +1301,17 @@ class Compositor:
         # Newly hidden widgets
         hidden_widgets = old_widgets - new_widgets if visible_only else self.widgets - widgets
 
+        # Retain geometry for compositing layers that were hidden this frame.
+        # Their entries stay in the map as phantom geometry so the subtree skip
+        # can reuse them when the layer is shown again, avoiding a full walk.
+        for widget in hidden_widgets:
+            if getattr(widget, "COMPOSITING_LAYER", False) and widget in old_map:
+                map[widget] = old_map[widget]
+                # Also retain descendant entries.
+                for descendant in widget.walk_children():
+                    if descendant in old_map:
+                        map[descendant] = old_map[descendant]
+
         # Replace map and widgets
         if visible_only:
             self._visible_map = map

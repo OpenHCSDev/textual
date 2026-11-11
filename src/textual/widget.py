@@ -403,6 +403,10 @@ class Widget(ScrollsView):
     BLANK: ClassVar[bool] = False
     """Is this widget blank (no border, no content)? Enable for very large scrolling containers."""
 
+    COMPOSITING_LAYER: ClassVar[bool] = False
+    """Declare this widget a compositing layer.  The compositor caches each layer's
+    terminal output independently so unchanged layers replay without walking widgets."""
+
     can_focus: bool = False
     """Widget may receive focus."""
     can_focus_children: bool = True
