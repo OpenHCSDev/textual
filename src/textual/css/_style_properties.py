@@ -784,6 +784,13 @@ class DisplayProperty(StringEnumProperty):
         # retained descendant measurement was taken under the value it returns to.
         return False
 
+    def refresh_node(self, obj: StylesBase) -> None:
+        # A display toggle changes which widgets participate in layout, but
+        # it does not change any widget's rendered content.  Request layout
+        # without clearing the render cache so the compositor can repaint
+        # from cached lines instead of re-rendering every widget.
+        obj.refresh(layout=True, repaint=False)
+
 
 class OverflowProperty(StringEnumProperty):
     """Descriptor for overflow styles that forces widgets to refresh scrollbars."""
