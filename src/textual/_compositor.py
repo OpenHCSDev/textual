@@ -878,12 +878,19 @@ class ChopsUpdate(CompositorUpdate):
         Returns:
             Raw data with escape sequences.
         """
+        layer_cache_info = getattr(self, "_layer_cache_info", None)
+
         sequences: list[str] = []
         append = sequences.append
+        per_row: dict[int, str] = {}
 
         last_y = self.spans[-1][0]
-        row_cache_info = getattr(self, "_row_cache_info", None)
-        per_row: dict[int, str] = {}
+
+        # Prepend cached rows from unchanged layers.
+        if layer_cache_info is not None:
+            _, _, cached_rows = layer_cache_info
+            for y in sorted(cached_rows):
+                append(cached_rows[y])
 
         for y, x1, x2 in self.spans:
             parts: list[str] = []
@@ -891,20 +898,25 @@ class ChopsUpdate(CompositorUpdate):
                 parts.append(cursor_move_to(x, y) + strip.render(console))
             row_str = "".join(parts)
             append(row_str)
-            if row_cache_info is not None:
-                per_row[y] = row_str
+            per_row[y] = row_str
 
             if y != last_y:
                 append("\n")
 
         terminal_sequences = "".join(sequences)
 
-        # Save per-row output and the scene key.
-        if row_cache_info is not None:
-            compositor, scene_key = row_cache_info
-            compositor._row_terminal_cache.update(per_row)
-            compositor._cached_scene_key = scene_key
-            del self._row_cache_info
+        # Save rows into per-layer buffers.
+        if layer_cache_info is not None:
+            compositor, layers, _ = layer_cache_info
+            # Update each layer's buffer with the freshly composed rows.
+            for layer_id, layer_widgets in layers.items():
+                key = Compositor._layer_key(layer_widgets)
+                buf = compositor._layer_buffers.get(layer_id)
+                if buf is None or buf.scene_key != key:
+                    buf = LayerBuffer(widget_id=layer_id, scene_key=key)
+                    compositor._layer_buffers[layer_id] = buf
+                buf.rows.update(per_row)
+            del self._layer_cache_info
 
         return terminal_sequences
 
@@ -924,6 +936,20 @@ class CachedRowsUpdate(CompositorUpdate):
         for y in sorted(self._rows):
             sequences.append(self._rows[y])
         return "".join(sequences)
+
+
+@dataclass
+class LayerBuffer:
+    """Retained terminal output for one compositing layer.
+
+    Saved after the layer's widgets are composed.  On the next frame, if the
+    layer's scene key matches (its widgets haven't changed), the buffer's rows
+    are blitted directly without walking any widget.
+    """
+
+    widget_id: int
+    scene_key: object
+    rows: dict[int, str] = field(default_factory=dict)
 
 
 class SceneState:
@@ -1111,15 +1137,11 @@ class Compositor:
         self._row_terminal_cache: dict[int, str] = {}
         self._cached_scene_key: object = None
 
-        # Frame buffer: per-row composed chops, saved after each partial update.
-        # Each entry is (contributing_widgets_set, chops_dict).
-        # A row is valid when all its contributors still have valid render caches
-        # (their _render_cache.size matches their widget size).
-        self._frame_buffer: dict[int, tuple[frozenset[int], dict[int, Strip]]] = {}
-        # Widget paint generation: bumped when render cache is cleared.
-        # Used for O(1) staleness checks instead of per-row fingerprints.
-        self._widget_paint_gen: dict[int, int] = {}
-        self._frame_gen: dict[int, dict[int, int]] = {}  # row -> {widget_id: gen}
+        # Per-layer strip buffers: each COMPOSITING_LAYER widget owns a buffer
+        # of composed terminal output rows.  Unchanged layers blit their buffer
+        # instead of walking their widgets.
+        self._layer_buffers: dict[int, LayerBuffer] = {}
+        self._layer_index: dict[int, int] = {}  # widget id -> layer widget id
 
     @property
     def max_subtree_geometry_entries(self) -> int:
@@ -1152,6 +1174,8 @@ class Compositor:
         self._dirty_regions.clear()
         self._subtree_geometry.clear()
         self._row_terminal_cache.clear()
+        self._layer_buffers.clear()
+        self._layer_index.clear()
         self._cached_scene_key = None
 
     def _damage(self, region: Region) -> None:
@@ -2497,6 +2521,7 @@ class Compositor:
         """
         self._row_terminal_cache.clear()
         self._cached_scene_key = None
+        self._layer_buffers.clear()
         screen_region = self.size.region
         arranged, widgets, cuts = self._frame_paint()
         crop = screen_region
@@ -2544,12 +2569,55 @@ class Compositor:
             for w, (r, _) in widgets.items()
         ))
 
-    def render_partial_update(self) -> CompositorUpdate | None:
-        """Produce a partial update, delegating to the scene state.
+    def _partition_by_layer(
+        self, widgets: Mapping[Widget, tuple[Region, Region]],
+    ) -> tuple[dict[int, dict[Widget, tuple[Region, Region]]], dict[Widget, tuple[Region, Region]]]:
+        """Split visible widgets into per-layer groups and an unlayered remainder.
 
-        The scene state decides whether to replay cached rows (unchanged scene)
-        or compose fresh (changed scene).  No branching on a flag: the state
-        owns the method.
+        Each COMPOSITING_LAYER widget and all its descendants form one group,
+        keyed by the layer widget's id.  Widgets not under any layer are unlayered.
+        """
+        layers: dict[int, dict[Widget, tuple[Region, Region]]] = {}
+        unlayered: dict[Widget, tuple[Region, Region]] = {}
+        index = self._layer_index
+
+        for widget, placement in widgets.items():
+            wid = id(widget)
+            # Check cached index first.
+            layer_id = index.get(wid)
+            if layer_id is not None:
+                layers.setdefault(layer_id, {})[widget] = placement
+                continue
+            # Walk ancestors to find the nearest layer.
+            found = None
+            for ancestor in widget.walk_ancestors(with_self=True):
+                if getattr(ancestor, "COMPOSITING_LAYER", False):
+                    found = id(ancestor)
+                    break
+                if not isinstance(ancestor, Widget):
+                    break
+            if found is not None:
+                index[wid] = found
+                layers.setdefault(found, {})[widget] = placement
+            else:
+                unlayered[widget] = placement
+        return layers, unlayered
+
+    @staticmethod
+    def _layer_key(layer_widgets: Mapping[Widget, tuple[Region, Region]]) -> object:
+        """Scene key for one layer's widgets."""
+        return tuple(sorted(
+            (id(w), r.x, r.y, r.width, r.height,
+             w._render_cache.size.width, w._render_cache.size.height)
+            for w, (r, _) in layer_widgets.items()
+        ))
+
+    def render_partial_update(self) -> CompositorUpdate | None:
+        """Produce a partial update with per-layer caching.
+
+        Each compositing layer checks its own scene key independently.
+        Unchanged layers blit their cached rows.  Changed layers and unlayered
+        widgets compose normally.  The results merge into one update.
         """
         screen_region = self.size.region
         arranged, widgets, cuts = self._frame_paint()
@@ -2559,9 +2627,51 @@ class Compositor:
         if not ready_regions:
             return None
 
-        scene_key = self._scene_key(widgets)
-        state = self._scene_state(scene_key)
-        return state.produce(self, arranged, widgets, cuts, screen_region, ready_regions)
+        # Partition widgets by compositing layer.
+        layers, unlayered = self._partition_by_layer(widgets)
+
+        # Collect cached rows from unchanged layers and the remaining widgets
+        # that need fresh composition.
+        cached_rows: dict[int, str] = {}
+        compose_widgets: dict[Widget, tuple[Region, Region]] = dict(unlayered)
+
+        dirty_rows: set[int] = set()
+        for region in ready_regions:
+            dirty_rows.update(range(region.y, region.y + region.height))
+
+        for layer_id, layer_widgets in layers.items():
+            key = self._layer_key(layer_widgets)
+            buf = self._layer_buffers.get(layer_id)
+            if buf is not None and buf.scene_key == key:
+                # Layer unchanged — blit cached rows for dirty rows in this layer.
+                for y in dirty_rows:
+                    if y in buf.rows:
+                        cached_rows[y] = buf.rows[y]
+            else:
+                # Layer changed — include its widgets in the composition set.
+                compose_widgets.update(layer_widgets)
+
+        if not compose_widgets and cached_rows:
+            # Every dirty row served from layer caches.
+            remaining = dirty_rows - cached_rows.keys()
+            if not remaining:
+                update = CachedRowsUpdate(cached_rows)
+                update.bind_publication(self, arranged, ready_regions)
+                return update
+
+        # Compose the widgets that need fresh rendering.
+        crop = Region.from_union(ready_regions)
+        spans = list(self._regions_to_spans(ready_regions))
+        sources = RenderedSources(compose_widgets)
+        with self._using_geometry(self.root, arranged):
+            chops = self._render_chops(crop, spans,
+                                      widgets=compose_widgets, cuts=cuts,
+                                      bounds=screen_region, on_render=sources.capture)
+        update = ChopsUpdate(chops, spans, cuts)
+        update.bind_publication(self, arranged, ready_regions, sources.sources)
+        # Save layer info for caching after render_segments.
+        update._layer_cache_info = (self, layers, cached_rows)
+        return update
 
     def _scene_state(self, scene_key: object) -> SceneState:
         """Select the scene state by matching the key.  No branch: the family dispatches."""
