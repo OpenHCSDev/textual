@@ -95,7 +95,7 @@ class HintLabel(HintOverlay):
         self.target = target
 
     def render(self) -> Content:
-        return Content(self.session.label_style.caption(self.text, self.session.prefix))
+        return self.session.label_style.caption(self.text, self.session.prefix)
 
 
 class HintSession(HintOverlay, FrameOverlay, can_focus=True):
