@@ -179,7 +179,8 @@ class HintSession(HintOverlay, FrameOverlay, can_focus=True):
                 if target is not None:
                     label.target = target
                     if label.display and (placement := geometry.get(label)) is not None:
-                        placements[label] = placement.region.at_offset(target.region.offset)
+                        placements[label] = placement.region.at_offset(target.region.offset).translate_inside(
+                            self.screen.size.region, x_axis=True, y_axis=False)
         return tuple(placements.items())
 
     def check_consume_key(self, key, character=None):

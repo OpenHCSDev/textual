@@ -71,3 +71,25 @@ async def test_both_styles_keep_the_whole_key_and_original_target(style, before,
         await pilot.press("escape")
         await pilot.pause()
         assert original.has_focus and not app.screen.query(HintLabel)
+
+
+async def test_full_key_fits_at_the_right_edge_and_still_covers_its_click_cell():
+    app = LabelApp(FullKeyHints)
+    async with app.run_test(size=(70, 36)) as pilot:
+        target = app.query_one("#target-13", Static)
+        target.styles.position = "absolute"
+        target.styles.offset = (69, 4)
+        target.styles.width = 1
+        target.styles.height = 1
+        await pilot.pause()
+        await app.screen.action_show_hints()
+        await pilot.pause()
+        session = app.screen.query_one(HintSession)
+        label = next(label for label in session.labels if label.target.widget is target)
+        region = app.screen._compositor.published_widgets[label][0]
+        assert region.width == len(label.text) == 2
+        assert region.right <= app.screen.size.width
+        assert region.x <= label.target.region.x < region.right
+        await pilot.press(*label.text)
+        await pilot.pause()
+        assert app.picked == 13
