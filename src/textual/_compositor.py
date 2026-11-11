@@ -882,20 +882,57 @@ class ChopsUpdate(CompositorUpdate):
         append = sequences.append
 
         last_y = self.spans[-1][0]
+        row_cache_info = getattr(self, "_row_cache_info", None)
+        per_row: dict[int, list[str]] = {} if row_cache_info else {}
+
+        # Prepend any cached rows that were hits.
+        if row_cache_info:
+            compositor, widgets, cached_rows = row_cache_info
+            for y in sorted(cached_rows):
+                append(cached_rows[y])
 
         for y, x1, x2 in self.spans:
+            row_parts: list[str] = []
             for x, strip in self._get_line_chops(y, x1, x2):
-                append(cursor_move_to(x, y))
-                append(strip.render(console))
+                part = cursor_move_to(x, y) + strip.render(console)
+                append(part)
+                if row_cache_info is not None:
+                    row_parts.append(part)
 
             if y != last_y:
                 append("\n")
 
+            if row_cache_info is not None and row_parts:
+                per_row[y] = row_parts
+
         terminal_sequences = "".join(sequences)
+
+        # Save each composed row into the compositor's row cache.
+        if row_cache_info is not None:
+            compositor, widgets, _ = row_cache_info
+            for y, parts in per_row.items():
+                key = compositor._row_fingerprint(y, widgets)
+                compositor._row_terminal_cache[y] = (key, "".join(parts))
+            del self._row_cache_info
+
         return terminal_sequences
 
     def __rich_repr__(self) -> rich.repr.Result:
         yield from ()
+
+
+class CachedRowsUpdate(CompositorUpdate):
+    """Write cached per-row terminal output without compositing."""
+
+    def __init__(self, rows: dict[int, str]) -> None:
+        super().__init__()
+        self._rows = rows
+
+    def render_segments(self, console: Console) -> str:
+        sequences: list[str] = []
+        for y in sorted(self._rows):
+            sequences.append(self._rows[y])
+        return "".join(sequences)
 
 
 class ExposedSpans:
@@ -1013,6 +1050,12 @@ class Compositor:
         self._discarded_between_steps: set[Widget] | None = None
         """Widgets removed while a stepped reflow is paused, left out of its scene."""
 
+        # Per-row terminal output cache.  After a frame is written, each row's
+        # escape sequences are saved keyed by a fingerprint of the widgets that
+        # produced it (identity, position, render-cache size).  A warm tab switch
+        # replays the cached strings for unchanged rows, skipping composition.
+        self._row_terminal_cache: dict[int, tuple[object, str]] = {}
+
     @property
     def max_subtree_geometry_entries(self) -> int:
         return self._max_subtree_geometry_entries
@@ -1043,6 +1086,7 @@ class Compositor:
         self.widgets.clear()
         self._dirty_regions.clear()
         self._subtree_geometry.clear()
+        self._row_terminal_cache.clear()
 
     def _damage(self, region: Region) -> None:
         """Mark the part of `region` on the screen as needing paint.
@@ -2353,11 +2397,26 @@ class Compositor:
         update.bind_publication(self, arranged, {screen_region}, sources.sources)
         return update
 
-    def render_partial_update(self) -> ChopsUpdate | None:
-        """Render a partial update.
+    def _row_fingerprint(
+        self, y: int, widgets: Mapping[Widget, tuple[Region, Region]],
+    ) -> object:
+        """Hashable key for the widgets covering screen row y."""
+        contributors: list[tuple[int, int, int, int, int, int, int]] = []
+        for widget, (region, clip) in widgets.items():
+            if clip.y <= y < clip.y + clip.height:
+                rc = widget._render_cache
+                contributors.append((
+                    id(widget), region.x, region.y, region.width, region.height,
+                    rc.size.width, rc.size.height,
+                ))
+        contributors.sort()
+        return tuple(contributors)
+
+    def render_partial_update(self) -> ChopsUpdate | CachedRowsUpdate | None:
+        """Render a partial update, reusing cached row output where possible.
 
         Returns:
-            A ChopsUpdate if there is anything to update, otherwise `None`.
+            An update, or None when nothing is dirty.
         """
         screen_region = self.size.region
         arranged, widgets, cuts = self._frame_paint()
@@ -2366,8 +2425,38 @@ class Compositor:
         }
         if not ready_regions:
             return None
-        crop = Region.from_union(ready_regions)
-        spans = list(self._regions_to_spans(ready_regions))
+
+        # Separate dirty rows into cache hits and misses.
+        dirty_rows: set[int] = set()
+        for region in ready_regions:
+            dirty_rows.update(range(region.y, region.y + region.height))
+
+        cached_rows: dict[int, str] = {}
+        missed_rows: set[int] = set()
+        row_cache = self._row_terminal_cache
+        for y in dirty_rows:
+            key = self._row_fingerprint(y, widgets)
+            cached = row_cache.get(y)
+            if cached is not None and cached[0] == key:
+                cached_rows[y] = cached[1]
+            else:
+                missed_rows.add(y)
+
+        if not missed_rows:
+            # Every dirty row is a cache hit.  Replay their terminal output.
+            update = CachedRowsUpdate(cached_rows)
+            update.bind_publication(self, arranged, ready_regions)
+            return update
+
+        # Compose the missed rows through the normal path.
+        # Restrict the damage to missed rows only.
+        miss_regions = set()
+        for region in ready_regions:
+            for y in range(region.y, region.y + region.height):
+                if y in missed_rows:
+                    miss_regions.add(Region(region.x, y, region.width, 1))
+        crop = Region.from_union(miss_regions)
+        spans = list(self._regions_to_spans(miss_regions))
         sources = RenderedSources(widgets)
         with self._using_geometry(self.root, arranged):
             chops = self._render_chops(crop, spans,
@@ -2375,6 +2464,8 @@ class Compositor:
                                       bounds=screen_region, on_render=sources.capture)
         update = ChopsUpdate(chops, spans, cuts)
         update.bind_publication(self, arranged, ready_regions, sources.sources)
+        # Attach info for saving rows to the cache after render_segments.
+        update._row_cache_info = (self, widgets, cached_rows)
         return update
 
     def render_strips(self, size: Size | None = None, *,
