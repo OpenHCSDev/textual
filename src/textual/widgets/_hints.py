@@ -12,6 +12,7 @@ from textual.binding import ModeBinding
 from textual.content import Content
 from textual.document._editing import VimMode
 from textual.geometry import Region
+from textual.hint_labels import HintLabelStyle, NextLetterHints
 from textual.widget import Widget
 
 
@@ -28,6 +29,10 @@ class HintClick(IntEnum):
 
 class HintHost:
     """The screen owns one mounted hint interaction, not a second target roster."""
+
+    @property
+    def hint_label_style(self) -> type[HintLabelStyle]:
+        return NextLetterHints
 
     async def action_show_hints(self) -> None:
         await self._show_hints(HintClick.LEFT)
@@ -71,7 +76,7 @@ class HintOverlay(Widget):
 
 
 class HintLabel(HintOverlay):
-    """One next key at the native click cell; the assigned sequence never changes."""
+    """The selected caption at the native click cell; its assigned key stays fixed."""
 
     DEFAULT_CSS = """
     HintLabel {
@@ -90,8 +95,7 @@ class HintLabel(HintOverlay):
         self.target = target
 
     def render(self) -> Content:
-        prefix_length = len(self.session.prefix)
-        return Content(self.text[prefix_length:prefix_length + 1])
+        return Content(self.session.label_style.caption(self.text, self.session.prefix))
 
 
 class HintSession(HintOverlay, FrameOverlay, can_focus=True):
@@ -113,7 +117,7 @@ class HintSession(HintOverlay, FrameOverlay, can_focus=True):
     def for_scene(cls, screen, scene: ActivationScene, click: HintClick):
         targets = sorted(scene.targets.values(), key=lambda target: (
             target.region.y, target.region.x))
-        return cls(screen, targets, click)
+        return cls(screen, targets, click, screen.hint_label_style)
 
     @classmethod
     def label_width(cls, count: int) -> int:
@@ -130,8 +134,10 @@ class HintSession(HintOverlay, FrameOverlay, can_focus=True):
             characters.append(cls.alphabet[digit])
         return "".join(reversed(characters))
 
-    def __init__(self, screen, targets, click: HintClick):
+    def __init__(self, screen, targets, click: HintClick,
+                 label_style: type[HintLabelStyle] = NextLetterHints):
         super().__init__()
+        self.label_style = label_style
         self.click = click
         self.original_focus: Widget | None = screen.focused
         self.prefix = ""
