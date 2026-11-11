@@ -1,12 +1,10 @@
-from dataclasses import dataclass
 import pytest
 
 from textual.app import App, ComposeResult
-from textual.document._editing import EditingMode
 from textual.geometry import Region
 from textual.widgets import Static, Input, TextArea, Checkbox, RadioButton, Switch, Collapsible, Select
 from textual.widgets._collapsible import CollapsibleTitle
-from textual.widgets._hints import HintCaption, HintClick, HintLabel, HintSession, SpatialHintSession
+from textual.widgets._hints import HintClick, HintLabel, HintSession, SpatialHintSession
 
 
 class DenseLinksApp(App):
@@ -44,6 +42,7 @@ class NativeControlsApp(App):
         with Collapsible(title='Group', collapsed=True):
             yield Static('Members')
         yield Select([('One', 1), ('Two', 2)], id='select')
+        yield Static("[@click=app.notify('target')]Hint target[/]")
 
 
 async def test_native_hints_focus_inputs_and_activate_control_owners():
@@ -97,95 +96,22 @@ async def test_native_control_hint_preview_contains_its_label_not_only_its_marke
         await pilot.press("escape")
 
 
-@dataclass(frozen=True)
-class HintCaptionMode(EditingMode):
-    """A label-only mode leaves native editing and binding behavior unchanged."""
-
-    text: str
-
-    @property
-    def label(self) -> str:
-        return self.text
-
-
-class HintCaptionApp(App[None]):
-    CSS = "TextArea { height: 4; } Static { margin-top: 1; }"
-
-    def compose(self) -> ComposeResult:
-        yield TextArea("draft stays")
-        yield Static("[@click=app.notify('target')]Hint target[/]")
-
-
 @pytest.mark.parametrize("click", tuple(HintClick))
-async def test_hint_caption_initial_unset_width_mount(click: HintClick) -> None:
-    app = HintCaptionApp()
-    async with app.run_test(size=(80, 24)) as pilot:
+async def test_hint_input_keeps_original_focus_without_painting_a_status_row(click):
+    app = NativeControlsApp()
+    async with app.run_test(size=(90, 40)) as pilot:
         editor = app.query_one(TextArea)
-        editor.editing_mode = HintCaptionMode("NORMAL")
         editor.focus()
         await pilot.pause()
-        scene = app.screen._compositor.activation_scene(click)
-        assert scene.targets, "The session must borrow actual published targets"
-        session = HintSession.for_scene(app.screen, scene, click)
-        assert session.styles.width is None
-
-        await session.mount_on(app.screen)
-        session.focus_on_host()
-        await pilot.pause()
-
-        assert app.screen.query_one(HintSession) is session
-        assert app.screen.focused is session
-        assert session.original_focus is editor
-        assert session.region.width == app.screen.size.width
-        assert session.region.y == app.screen.size.height - 1
-        caption = session.query_one(HintCaption)
-        assert caption.region.width <= app.screen.size.width // 2
-        assert caption.render().plain == f"{editor.editing_mode.label} · {click.caption}"
-        assert isinstance(session, SpatialHintSession)
-        assert all(label.region in app.screen.size.region for label in session.labels)
-        assert all(label.region.bottom <= session.region.y for label in session.labels)
-        assert all(label.region.width == len(label.text) for label in session.labels)
-        await pilot.press("escape")
-        await pilot.pause()
-        assert not app.screen.query_children(HintSession)
-        assert editor.has_focus
-
-
-@pytest.mark.parametrize("click", tuple(HintClick))
-async def test_hint_caption_same_width_mode_change(click: HintClick) -> None:
-    app = HintCaptionApp()
-    async with app.run_test(size=(80, 24)) as pilot:
-        editor = app.query_one(TextArea)
-        original_mode = HintCaptionMode("NORMAL")
-        replacement_mode = HintCaptionMode("INSERT")
-        editor.editing_mode = original_mode
-        editor.focus()
-        await pilot.pause()
-        assert app.screen._compositor.activation_scene(click).targets
         await app.screen._show_hints(click)
         await pilot.pause()
         session = app.screen.query_one(HintSession)
-        region = session.region
-        positions = tuple(label.region for label in session.labels)
-        caption = session.query_one(HintCaption)
-        crop = Region(0, 0, caption.size.width, 1)
-        assert original_mode.label in "".join(
-            strip.text for strip in caption.render_lines(crop)
-        )
-
-        editor.editing_mode = replacement_mode
-        await pilot.pause()
-
-        assert app.screen.query_one(HintSession) is session
-        assert app.screen.focused is session
         assert session.original_focus is editor
-        assert session.region == region
-        assert tuple(label.region for label in session.labels) == positions
-        painted = "".join(strip.text for strip in caption.render_lines(crop))
-        assert replacement_mode.label in painted
-        assert original_mode.label not in painted
-        assert caption.render().plain == f"{replacement_mode.label} · {click.caption}"
+        assert app.screen.focused is session
+        assert session.region.size.area == 0
+        assert isinstance(session, SpatialHintSession)
+        assert all(label.region.offset == label.painted.preview_region.offset for label in session.labels)
         await pilot.press("escape")
         await pilot.pause()
-        assert not app.screen.query_children(HintSession)
         assert editor.has_focus
+        assert not app.screen.query(HintSession)

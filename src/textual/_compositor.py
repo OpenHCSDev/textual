@@ -94,19 +94,11 @@ class ActivationScene:
     """Click effects and styled body-cell previews from one accepted scene."""
 
     targets: dict[object, PaintedActivation] = field(default_factory=dict)
-    occupied: list[Region] = field(default_factory=list)
 
     def capture(
         self, widget: Widget, region: Region, strips: list[Strip], button: int,
         geometry: Mapping[Widget, MapGeometry],
     ) -> None:
-        for y, strip in zip(region.line_range, strips):
-            x = region.x
-            for segment in strip:
-                width = segment.cell_length
-                if width and segment.text.strip():
-                    self.occupied.append(Region(x, y, width, 1))
-                x += width
         for target in Activation.from_paint(widget, region, strips, button):
             # Borders may be valid click anchors, but the target's acquired
             # content inset determines which original cells describe it.
@@ -117,7 +109,7 @@ class ActivationScene:
             existing = self.targets.get(target.identity)
             if existing is not None:
                 self.targets[target.identity] = existing.including(preview_region, fragment)
-            elif target.available():
+            elif target.widget.is_on_screen and not target.widget.is_disabled:
                 self.targets[target.identity] = PaintedActivation(
                     target, fragment, preview_region)
 

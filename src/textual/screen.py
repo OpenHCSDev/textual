@@ -1984,7 +1984,6 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
 
     @on(messages.ResizeScreen)
     def _on_resize_screen(self, message: messages.ResizeScreen) -> None:
-        self.dismiss_hints()
         self._screen_resized(self.app.size)
 
     @property
