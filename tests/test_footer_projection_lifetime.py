@@ -103,10 +103,14 @@ async def test_group_transitions_match_fresh_native_composition(mixed):
         def check_action(self, action, parameters):
             return self.state if action == "second" else True
 
+    def shown(footer):
+        # Keys for unbound actions stay built and hidden; only shown keys are the footer's view.
+        return [key for key in footer.query(FooterKey) if key.display and key.parent.display]
+
     def displayed(footer):
         return [
             (key.key, key.key_display, key.description, key._disabled, key.tooltip, key.classes)
-            for key in footer.query(FooterKey)
+            for key in shown(footer)
         ]
 
     app = GroupApp()
@@ -120,7 +124,7 @@ async def test_group_transitions_match_fresh_native_composition(mixed):
             app.screen.refresh_bindings()
             await pilot.pause()
             before = displayed(footer)
-            groups = len({key.parent for key in footer.query(FooterKey) if key.has_class("-grouped")})
+            groups = len({key.parent for key in shown(footer) if key.has_class("-grouped")})
             assert groups == (0 if state is False else 1)
             if state is None:
                 key = next(key for key in footer.query(FooterKey) if key.key == "f3")
