@@ -2,10 +2,30 @@ import asyncio
 from unittest.mock import patch
 
 from textual.app import App
-from textual.containers import HorizontalGroup, VerticalGroup, VerticalScroll
+from textual.containers import HorizontalGroup, Vertical, VerticalGroup, VerticalScroll
 from textual.widgets import Static
 from textual import events
 from textual import on
+
+
+async def test_first_show_lays_out_compositing_layer_children():
+    class Layer(Vertical):
+        COMPOSITING_LAYER = True
+        DEFAULT_CSS = "Layer {height: 5; display: none;}"
+
+    child = Static("first show")
+    layer = Layer(child)
+    app = App()
+    async with app.run_test(size=(40, 10)) as pilot:
+        await app.mount(layer)
+        await pilot.pause()
+        assert not child.region
+        layer.display = True
+        await pilot.pause()
+        assert layer.region.height == 5
+        assert child.region.width == 40
+        assert child.region.height == 1
+        assert child in app.screen._compositor.visible_widgets
 
 
 async def test_display_constraints_compose_and_preserve_current_authored_styles():
