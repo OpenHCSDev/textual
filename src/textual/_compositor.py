@@ -1179,17 +1179,6 @@ class Compositor:
         # Newly hidden widgets
         hidden_widgets = old_widgets - new_widgets if visible_only else self.widgets - widgets
 
-        # Retain geometry for compositing layers that were hidden this frame.
-        # Their entries stay in the map as phantom geometry so the subtree skip
-        # can reuse them when the layer is shown again, avoiding a full walk.
-        for widget in hidden_widgets:
-            if getattr(widget, "COMPOSITING_LAYER", False) and widget in old_map:
-                map[widget] = old_map[widget]
-                # Also retain descendant entries.
-                for descendant in widget.walk_children():
-                    if descendant in old_map:
-                        map[descendant] = old_map[descendant]
-
         # Replace map and widgets
         if visible_only:
             self._visible_map = map
@@ -1509,24 +1498,6 @@ class Compositor:
             map[node] = geometry
             clips[node] = clip
 
-        # Previous frame's geometry for subtree short-circuit.
-        previous_map = self._layout_map
-        # All widgets that have been invalidated since the previous frame:
-        # dirty widgets, widgets with pending repaints, cleared caches.
-        # A COMPOSITING_LAYER widget's _repaint_required (from a display toggle)
-        # does not propagate to its ancestors — the layer contains its own repaint.
-        layout_requesters: set[Widget] = set()
-        for w in previous_map:
-            if (w._repaint_required or not w._arrangement_cache
-                    or w.virtual_size != previous_map[w].virtual_size):
-                layout_requesters.add(w)
-                if not getattr(w, "COMPOSITING_LAYER", False):
-                    for ancestor in w.walk_ancestors():
-                        if not isinstance(ancestor, Widget):
-                            break
-                        layout_requesters.add(ancestor)
-        old_widgets_visible = self.widgets
-
         widgets: set[Widget] = set()
         invisible_widgets: set[Widget] = set()
         if root_geometry is None:
@@ -1576,33 +1547,6 @@ class Compositor:
                     This may be overridden by the CSS rule `visibility`.
             """
             if not widget._is_mounted:
-                return
-
-            # Short-circuit: if this widget's placement inputs haven't changed
-            # and no descendant requested layout, reuse the previous frame's
-            # geometry for the entire subtree without recursing.
-            prev_geo = previous_map.get(widget)
-            if (prev_geo is not None
-                    and prev_geo.region == region
-                    and prev_geo.clip == clip.region
-                    and prev_geo.virtual_size == widget.virtual_size
-                    and prev_geo.container_size == widget._container_size
-                    and widget not in layout_requesters
-                    and not widget._repaint_required
-                    and widget._arrangement_cache):
-                # Copy previous geometry for this widget and all its descendants.
-                map[widget] = prev_geo
-                clips[widget] = clip
-                if visible:
-                    widgets.add(widget)
-                else:
-                    invisible_widgets.add(widget)
-                # Copy descendants from previous map.
-                for descendant in widget.walk_children():
-                    if descendant in previous_map:
-                        map[descendant] = previous_map[descendant]
-                        if descendant in old_widgets_visible:
-                            widgets.add(descendant)
                 return
 
             styles = widget.styles
