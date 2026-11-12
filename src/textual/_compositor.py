@@ -2653,9 +2653,16 @@ class Compositor:
         for region in ready_regions:
             dirty_rows.update(range(region.y, region.y + region.height))
 
+        partition_changed = widgets_identity != getattr(self, "_prev_partition_id", None)
+        self._prev_partition_id = widgets_identity
         for layer_id, layer_widgets in layers.items():
-            key = self._layer_key(layer_widgets)
             buf = self._layer_buffers.get(layer_id)
+            # Only recompute the layer key when the partition changed or the
+            # previous key was None (a widget needed repaint last frame).
+            if buf is not None and buf.scene_key is not None and not partition_changed:
+                key = buf.scene_key
+            else:
+                key = self._layer_key(layer_widgets)
             if buf is not None and buf.scene_key == key:
                 # Layer unchanged — blit cached rows for dirty rows in this layer.
                 for y in dirty_rows:
