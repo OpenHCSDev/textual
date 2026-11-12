@@ -2636,8 +2636,13 @@ class Compositor:
         if not ready_regions:
             return None
 
-        # Partition widgets by compositing layer.
-        layers, unlayered = self._partition_by_layer(widgets)
+        # Partition widgets by compositing layer.  Cache the partition:
+        # recompute only when the visible widget dict changes identity.
+        widgets_identity = id(widgets)
+        if widgets_identity != getattr(self, "_cached_partition_id", None):
+            self._cached_partition = self._partition_by_layer(widgets)
+            self._cached_partition_id = widgets_identity
+        layers, unlayered = self._cached_partition
 
         # Collect cached rows from unchanged layers and the remaining widgets
         # that need fresh composition.
