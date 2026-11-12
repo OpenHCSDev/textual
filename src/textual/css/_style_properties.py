@@ -798,7 +798,16 @@ class DisplayProperty(StringEnumProperty):
             node._repaint_required = True
             node.check_idle()
         else:
-            obj.refresh(layout=True, repaint=False)
+            # Skip repaint only when the widget has a valid render cache at its
+            # current size — its last paint is still correct and the compositor
+            # can reuse it.  A widget that has never been painted, or whose size
+            # changed while hidden, needs a full repaint.
+            has_valid_cache = (
+                isinstance(node, Widget)
+                and node._render_cache.size == node._size
+                and node._size.width > 0
+            )
+            obj.refresh(layout=True, repaint=not has_valid_cache)
 
 
 class OverflowProperty(StringEnumProperty):
