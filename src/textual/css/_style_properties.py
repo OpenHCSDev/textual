@@ -785,29 +785,17 @@ class DisplayProperty(StringEnumProperty):
         return False
 
     def refresh_node(self, obj: StylesBase) -> None:
-        # A display toggle changes which widgets participate in layout, but
-        # it does not change any widget's rendered content.
+        # Display changes layout even when a layer has never been visible.
+        # Reuse its painted content only when that content fits its current size.
         from textual.widget import Widget
 
         node = obj.node
-        if isinstance(node, Widget) and node.COMPOSITING_LAYER:
-            # A compositing layer retains its geometry while hidden.  Showing
-            # it again only needs the compositor to repaint its region from
-            # the retained scene — no layout, no render cache clear.
-            node._invalidate_lines()
-            node._repaint_required = True
-            node.check_idle()
-        else:
-            # Skip repaint only when the widget has a valid render cache at its
-            # current size — its last paint is still correct and the compositor
-            # can reuse it.  A widget that has never been painted, or whose size
-            # changed while hidden, needs a full repaint.
-            has_valid_cache = (
-                isinstance(node, Widget)
-                and node._render_cache.size == node._size
-                and node._size.width > 0
-            )
-            obj.refresh(layout=True, repaint=not has_valid_cache)
+        has_valid_cache = (
+            isinstance(node, Widget)
+            and node._render_cache.size == node._size
+            and node._size.width > 0
+        )
+        obj.refresh(layout=True, repaint=not has_valid_cache)
 
 
 class OverflowProperty(StringEnumProperty):
