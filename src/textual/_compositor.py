@@ -1659,15 +1659,18 @@ class Compositor:
         previous_map = self._layout_map
         # All widgets that have been invalidated since the previous frame:
         # dirty widgets, widgets with pending repaints, cleared caches.
+        # A COMPOSITING_LAYER widget's _repaint_required (from a display toggle)
+        # does not propagate to its ancestors — the layer contains its own repaint.
         layout_requesters: set[Widget] = set()
         for w in previous_map:
             if (w._repaint_required or not w._arrangement_cache
                     or w.virtual_size != previous_map[w].virtual_size):
                 layout_requesters.add(w)
-                for ancestor in w.walk_ancestors():
-                    if not isinstance(ancestor, Widget):
-                        break
-                    layout_requesters.add(ancestor)
+                if not getattr(w, "COMPOSITING_LAYER", False):
+                    for ancestor in w.walk_ancestors():
+                        if not isinstance(ancestor, Widget):
+                            break
+                        layout_requesters.add(ancestor)
         old_widgets_visible = self.widgets
 
         widgets: set[Widget] = set()
