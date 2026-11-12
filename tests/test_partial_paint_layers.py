@@ -29,3 +29,25 @@ async def test_partial_repaints_keep_current_content_in_independent_layers(compo
                 output = update.render_segments(app.console)
                 assert text in output
                 update.admit()
+
+
+@pytest.mark.parametrize('layered', [False, True])
+async def test_hidden_subtree_leaves_paint_and_hit_geometry(layered):
+    class Pane(Vertical):
+        COMPOSITING_LAYER = layered
+        DEFAULT_CSS = 'Pane { height: 3; }'
+    row=Static('VISIBLE')
+    pane=Pane(row)
+    app=App()
+    async with app.run_test(size=(30,8)) as pilot:
+        await app.mount(pane,Static('FOLLOWING'))
+        await pilot.pause()
+        compositor=app.screen._compositor
+        assert row in compositor.visible_widgets
+        pane.display=False
+        await pilot.pause()
+        assert pane not in compositor.visible_widgets
+        assert row not in compositor.visible_widgets
+        pane.display=True
+        await pilot.pause()
+        assert row in compositor.visible_widgets
