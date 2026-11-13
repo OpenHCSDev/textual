@@ -1036,6 +1036,8 @@ class Stylesheet(NativeStyleResolver):
             component_names = {f".{name}" for name in node._get_component_classes()}
             if names & (node._selector_names | component_names):
                 affected.append(node)
+            if isinstance(node, Widget) and not node.display:
+                continue
             pending.extend((child, names) for child in node.children)
             if isinstance(node, Widget):
                 pending.extend((child, names) for child in node._get_virtual_dom())
