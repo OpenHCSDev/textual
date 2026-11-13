@@ -1,12 +1,49 @@
 from textual.app import App, ComposeResult
 from textual.containers import Container
-from textual.widgets import Static
+from textual.widgets import Select, Static
 from unittest.mock import patch
 import gc
 from types import FunctionType
 import pytest
 from textual import events
 from textual import on
+from textual.widgets._select import SelectOverlay
+
+
+async def test_select_overlay_paints_above_its_containing_screen_overlay():
+    class NestedOverlayApp(App):
+        CSS = """
+        Screen { layers: lower upper; }
+        #workspace { overlay: screen; layer: upper; width: 32; height: 12; }
+        Select { width: 30; height: 3; }
+        #body { height: 8; }
+        """
+
+        def compose(self):
+            yield Container(
+                Select([("First setting", "first"), ("Second setting", "second")],
+                       value="first"),
+                Static("Workspace body", id="body"),
+                id="workspace",
+            )
+
+    app = NestedOverlayApp()
+    async with app.run_test(size=(40, 16)) as pilot:
+        await pilot.click(Select)
+        await pilot.pause()
+        select = app.query_one(Select)
+        overlay = select.query_one(SelectOverlay)
+        body = app.query_one("#body")
+        # Read the committed scene before any geometry lookup can acquire it.
+        scene = app.screen._compositor._published_map
+        geometry = scene[overlay]
+        assert select.expanded
+        assert geometry.order > scene[body].order
+        x, y, _, _ = geometry.region
+        hit = app.screen._compositor.get_widget_at(x + 1, y + 1)[0]
+        assert hit is overlay or overlay in hit.ancestors
+        await pilot.press("down", "enter")
+        assert select.value == "second"
 
 
 async def test_point_hits_follow_layer_clip_visibility_and_scene_changes():

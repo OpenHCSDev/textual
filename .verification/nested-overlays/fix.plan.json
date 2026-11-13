@@ -1,0 +1,20 @@
+{
+  "recipes": [
+    {
+      "recipe_id": "derive-nested-screen-overlay-depth",
+      "operations": [
+        {
+          "operation": "patch_target",
+          "file_path": "/home/ts/wt/codex-live--P192--textual/src/textual/_compositor.py",
+          "target_qualname": "Compositor._place_children",
+          "replacements": [
+            {
+              "old_source": "((1, 0, 0),) + child_order[-1:] if overlay else child_order",
+              "new_source": "((order[0][0] + 1, 0, 0),) + child_order[-1:] if overlay else child_order"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,216 @@
+{
+  "rewrites": [
+    {
+      "rationale": "Patch exact source text inside 'Compositor._place_children'.",
+      "contributors": [
+        {
+          "recipe_id": "derive-nested-screen-overlay-depth",
+          "plan_item_declaration": "PatchTargetOperation",
+          "plan_item_index": 0,
+          "file_path": "/home/ts/wt/codex-live--P192--textual/src/textual/_compositor.py",
+          "line": 1837,
+          "end_line": 1837,
+          "source_hash": "1f31f47574cc638981c535fe7db1d27f"
+        }
+      ],
+      "qualname": "Compositor._place_children",
+      "line": 1820,
+      "end_line": 1838,
+      "target_id": "71b050ab75",
+      "file_path": "/home/ts/wt/codex-live--P192--textual/src/textual/_compositor.py",
+      "operation": "replace_target"
+    }
+  ],
+  "parse_validation": {
+    "backend": "ast_span",
+    "validated_file_paths": [
+      "/home/ts/wt/codex-live--P192--textual/src/textual/_compositor.py"
+    ],
+    "parse_valid": true
+  },
+  "base_revisions": [
+    {
+      "file_path": "/home/ts/wt/codex-live--P192--textual/src/textual/_compositor.py",
+      "source_hash": "c2acd93fee3e1b0c80d885310fbdd4d9"
+    }
+  ],
+  "deleted_file_paths": [],
+  "applied_rewrite_count": 1,
+  "changed_file_paths": [
+    "/home/ts/wt/codex-live--P192--textual/src/textual/_compositor.py"
+  ],
+  "applied": true,
+  "plan_sequence_simulation": {
+    "sequence": {
+      "stages": [
+        {
+          "recipes": [
+            {
+              "recipe_id": "derive-nested-screen-overlay-depth",
+              "operations": [
+                {
+                  "operation": "patch_target",
+                  "replacements": [
+                    {
+                      "old_source": "((1, 0, 0),) + child_order[-1:] if overlay else child_order",
+                      "new_source": "((order[0][0] + 1, 0, 0),) + child_order[-1:] if overlay else child_order"
+                    }
+                  ],
+                  "file_path": "/home/ts/wt/codex-live--P192--textual/src/textual/_compositor.py",
+                  "target_qualname": "Compositor._place_children",
+                  "rationale": "",
+                  "decorators": "exclude"
+                }
+              ],
+              "architecture_guards": [],
+              "reason": "",
+              "authority_claims": []
+            }
+          ],
+          "architecture_guards": []
+        }
+      ]
+    },
+    "stage_count": 1,
+    "stages": [
+      {
+        "simulation": {
+          "rewrites": [
+            {
+              "rationale": "Patch exact source text inside 'Compositor._place_children'.",
+              "contributors": [
+                {
+                  "recipe_id": "derive-nested-screen-overlay-depth",
+                  "plan_item_declaration": "PatchTargetOperation",
+                  "plan_item_index": 0,
+                  "file_path": "/home/ts/wt/codex-live--P192--textual/src/textual/_compositor.py",
+                  "line": 1837,
+                  "end_line": 1837,
+                  "source_hash": "1f31f47574cc638981c535fe7db1d27f"
+                }
+              ],
+              "qualname": "Compositor._place_children",
+              "line": 1820,
+              "end_line": 1838,
+              "target_id": "71b050ab75",
+              "file_path": "/home/ts/wt/codex-live--P192--textual/src/textual/_compositor.py",
+              "operation": "replace_target"
+            }
+          ],
+          "parse_validation": {
+            "backend": "ast_span",
+            "validated_file_paths": [
+              "/home/ts/wt/codex-live--P192--textual/src/textual/_compositor.py"
+            ],
+            "parse_valid": true
+          },
+          "base_revisions": [
+            {
+              "file_path": "/home/ts/wt/codex-live--P192--textual/src/textual/_compositor.py",
+              "source_hash": "c2acd93fee3e1b0c80d885310fbdd4d9"
+            }
+          ],
+          "deleted_file_paths": [],
+          "applied_rewrite_count": 1,
+          "changed_file_paths": [
+            "/home/ts/wt/codex-live--P192--textual/src/textual/_compositor.py"
+          ]
+        },
+        "architecture_guard_report": {
+          "rules": [],
+          "violations": [],
+          "is_clean": true,
+          "violation_count": 0
+        },
+        "preflight_report": {
+          "reports": [],
+          "is_clean": true,
+          "preflight_failed": false,
+          "report_count": 0
+        },
+        "document": {
+          "recipes": [
+            {
+              "recipe_id": "derive-nested-screen-overlay-depth",
+              "operations": [
+                {
+                  "operation": "patch_target",
+                  "replacements": [
+                    {
+                      "old_source": "((1, 0, 0),) + child_order[-1:] if overlay else child_order",
+                      "new_source": "((order[0][0] + 1, 0, 0),) + child_order[-1:] if overlay else child_order"
+                    }
+                  ],
+                  "file_path": "/home/ts/wt/codex-live--P192--textual/src/textual/_compositor.py",
+                  "target_qualname": "Compositor._place_children",
+                  "rationale": "",
+                  "decorators": "exclude"
+                }
+              ],
+              "architecture_guards": [],
+              "reason": "",
+              "authority_claims": []
+            }
+          ],
+          "architecture_guards": []
+        },
+        "is_clean": true
+      }
+    ],
+    "simulation": {
+      "rewrites": [
+        {
+          "rationale": "Patch exact source text inside 'Compositor._place_children'.",
+          "contributors": [
+            {
+              "recipe_id": "derive-nested-screen-overlay-depth",
+              "plan_item_declaration": "PatchTargetOperation",
+              "plan_item_index": 0,
+              "file_path": "/home/ts/wt/codex-live--P192--textual/src/textual/_compositor.py",
+              "line": 1837,
+              "end_line": 1837,
+              "source_hash": "1f31f47574cc638981c535fe7db1d27f"
+            }
+          ],
+          "qualname": "Compositor._place_children",
+          "line": 1820,
+          "end_line": 1838,
+          "target_id": "71b050ab75",
+          "file_path": "/home/ts/wt/codex-live--P192--textual/src/textual/_compositor.py",
+          "operation": "replace_target"
+        }
+      ],
+      "parse_validation": {
+        "backend": "ast_span",
+        "validated_file_paths": [
+          "/home/ts/wt/codex-live--P192--textual/src/textual/_compositor.py"
+        ],
+        "parse_valid": true
+      },
+      "base_revisions": [
+        {
+          "file_path": "/home/ts/wt/codex-live--P192--textual/src/textual/_compositor.py",
+          "source_hash": "c2acd93fee3e1b0c80d885310fbdd4d9"
+        }
+      ],
+      "deleted_file_paths": [],
+      "applied_rewrite_count": 1,
+      "changed_file_paths": [
+        "/home/ts/wt/codex-live--P192--textual/src/textual/_compositor.py"
+      ]
+    },
+    "architecture_guard_report": {
+      "rules": [],
+      "violations": [],
+      "is_clean": true,
+      "violation_count": 0
+    },
+    "preflight_report": {
+      "reports": [],
+      "is_clean": true,
+      "preflight_failed": false,
+      "report_count": 0
+    },
+    "is_clean": true
+  }
+}

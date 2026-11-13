@@ -1,0 +1,270 @@
+{
+  "rewrites": [
+    {
+      "rationale": "Ensure import source exists in '/home/ts/wt/codex-live--P192--textual/tests/test_compositor.py'. Insert source adjacent to 'test_point_hits_follow_layer_clip_visibility_and_scene_changes'.",
+      "contributors": [
+        {
+          "recipe_id": "nested-screen-overlay-control",
+          "plan_item_declaration": "EnsureImportOperation",
+          "plan_item_index": 0,
+          "file_path": "/home/ts/wt/codex-live--P192--textual/tests/test_compositor.py",
+          "line": 3,
+          "end_line": 3,
+          "source_hash": "a18169863b312cd8686962352c2af228"
+        },
+        {
+          "recipe_id": "nested-screen-overlay-control",
+          "plan_item_declaration": "EnsureImportOperation",
+          "plan_item_index": 0,
+          "file_path": "/home/ts/wt/codex-live--P192--textual/tests/test_compositor.py",
+          "line": 10,
+          "end_line": 9,
+          "source_hash": "64550d6ffe2c0a01a14aba1eade0200c"
+        },
+        {
+          "recipe_id": "nested-screen-overlay-control",
+          "plan_item_declaration": "InsertBeforeTargetOperation",
+          "plan_item_index": 1,
+          "file_path": "/home/ts/wt/codex-live--P192--textual/tests/test_compositor.py",
+          "line": 12,
+          "end_line": 11,
+          "source_hash": "64550d6ffe2c0a01a14aba1eade0200c"
+        }
+      ],
+      "qualname": "tests.test_compositor",
+      "line": 1,
+      "end_line": 369,
+      "target_id": "771ecf43eb",
+      "file_path": "/home/ts/wt/codex-live--P192--textual/tests/test_compositor.py",
+      "operation": "replace_target"
+    }
+  ],
+  "parse_validation": {
+    "backend": "ast_span",
+    "validated_file_paths": [
+      "/home/ts/wt/codex-live--P192--textual/tests/test_compositor.py"
+    ],
+    "parse_valid": true
+  },
+  "base_revisions": [
+    {
+      "file_path": "/home/ts/wt/codex-live--P192--textual/tests/test_compositor.py",
+      "source_hash": "1399598ced0f669f2205be3c543b1fd6"
+    }
+  ],
+  "deleted_file_paths": [],
+  "applied_rewrite_count": 1,
+  "changed_file_paths": [
+    "/home/ts/wt/codex-live--P192--textual/tests/test_compositor.py"
+  ],
+  "applied": true,
+  "plan_sequence_simulation": {
+    "sequence": {
+      "stages": [
+        {
+          "recipes": [
+            {
+              "recipe_id": "nested-screen-overlay-control",
+              "operations": [
+                {
+                  "operation": "ensure_import",
+                  "file_path": "/home/ts/wt/codex-live--P192--textual/tests/test_compositor.py",
+                  "rationale": "",
+                  "import_source": "from textual.widgets import Select\nfrom textual.widgets._select import SelectOverlay"
+                },
+                {
+                  "operation": "insert_before_target",
+                  "file_path": "/home/ts/wt/codex-live--P192--textual/tests/test_compositor.py",
+                  "target_qualname": "test_point_hits_follow_layer_clip_visibility_and_scene_changes",
+                  "rationale": "",
+                  "source": "async def test_select_overlay_paints_above_its_containing_screen_overlay():\n    class NestedOverlayApp(App):\n        CSS = \"\"\"\n        Screen { layers: lower upper; }\n        #workspace { overlay: screen; layer: upper; width: 32; height: 12; }\n        Select { width: 30; height: 3; }\n        #body { height: 8; }\n        \"\"\"\n\n        def compose(self):\n            yield Container(\n                Select([(\"First setting\", \"first\"), (\"Second setting\", \"second\")],\n                       value=\"first\"),\n                Static(\"Workspace body\", id=\"body\"),\n                id=\"workspace\",\n            )\n\n    app = NestedOverlayApp()\n    async with app.run_test(size=(40, 16)) as pilot:\n        await pilot.click(Select)\n        await pilot.pause()\n        select = app.query_one(Select)\n        overlay = select.query_one(SelectOverlay)\n        body = app.query_one(\"#body\")\n        # Read the committed scene before any geometry lookup can acquire it.\n        scene = app.screen._compositor._published_map\n        geometry = scene[overlay]\n        assert select.expanded\n        assert geometry.order > scene[body].order\n        x, y, _, _ = geometry.region\n        hit = app.screen._compositor.get_widget_at(x + 1, y + 1)[0]\n        assert hit is overlay or overlay in hit.ancestors\n        await pilot.press(\"down\", \"enter\")\n        assert select.value == \"second\"\n\n\n"
+                }
+              ],
+              "architecture_guards": [],
+              "reason": "",
+              "authority_claims": []
+            }
+          ],
+          "architecture_guards": []
+        }
+      ]
+    },
+    "stage_count": 1,
+    "stages": [
+      {
+        "simulation": {
+          "rewrites": [
+            {
+              "rationale": "Ensure import source exists in '/home/ts/wt/codex-live--P192--textual/tests/test_compositor.py'. Insert source adjacent to 'test_point_hits_follow_layer_clip_visibility_and_scene_changes'.",
+              "contributors": [
+                {
+                  "recipe_id": "nested-screen-overlay-control",
+                  "plan_item_declaration": "EnsureImportOperation",
+                  "plan_item_index": 0,
+                  "file_path": "/home/ts/wt/codex-live--P192--textual/tests/test_compositor.py",
+                  "line": 3,
+                  "end_line": 3,
+                  "source_hash": "a18169863b312cd8686962352c2af228"
+                },
+                {
+                  "recipe_id": "nested-screen-overlay-control",
+                  "plan_item_declaration": "EnsureImportOperation",
+                  "plan_item_index": 0,
+                  "file_path": "/home/ts/wt/codex-live--P192--textual/tests/test_compositor.py",
+                  "line": 10,
+                  "end_line": 9,
+                  "source_hash": "64550d6ffe2c0a01a14aba1eade0200c"
+                },
+                {
+                  "recipe_id": "nested-screen-overlay-control",
+                  "plan_item_declaration": "InsertBeforeTargetOperation",
+                  "plan_item_index": 1,
+                  "file_path": "/home/ts/wt/codex-live--P192--textual/tests/test_compositor.py",
+                  "line": 12,
+                  "end_line": 11,
+                  "source_hash": "64550d6ffe2c0a01a14aba1eade0200c"
+                }
+              ],
+              "qualname": "tests.test_compositor",
+              "line": 1,
+              "end_line": 369,
+              "target_id": "771ecf43eb",
+              "file_path": "/home/ts/wt/codex-live--P192--textual/tests/test_compositor.py",
+              "operation": "replace_target"
+            }
+          ],
+          "parse_validation": {
+            "backend": "ast_span",
+            "validated_file_paths": [
+              "/home/ts/wt/codex-live--P192--textual/tests/test_compositor.py"
+            ],
+            "parse_valid": true
+          },
+          "base_revisions": [
+            {
+              "file_path": "/home/ts/wt/codex-live--P192--textual/tests/test_compositor.py",
+              "source_hash": "1399598ced0f669f2205be3c543b1fd6"
+            }
+          ],
+          "deleted_file_paths": [],
+          "applied_rewrite_count": 1,
+          "changed_file_paths": [
+            "/home/ts/wt/codex-live--P192--textual/tests/test_compositor.py"
+          ]
+        },
+        "architecture_guard_report": {
+          "rules": [],
+          "violations": [],
+          "is_clean": true,
+          "violation_count": 0
+        },
+        "preflight_report": {
+          "reports": [],
+          "is_clean": true,
+          "preflight_failed": false,
+          "report_count": 0
+        },
+        "document": {
+          "recipes": [
+            {
+              "recipe_id": "nested-screen-overlay-control",
+              "operations": [
+                {
+                  "operation": "ensure_import",
+                  "file_path": "/home/ts/wt/codex-live--P192--textual/tests/test_compositor.py",
+                  "rationale": "",
+                  "import_source": "from textual.widgets import Select\nfrom textual.widgets._select import SelectOverlay"
+                },
+                {
+                  "operation": "insert_before_target",
+                  "file_path": "/home/ts/wt/codex-live--P192--textual/tests/test_compositor.py",
+                  "target_qualname": "test_point_hits_follow_layer_clip_visibility_and_scene_changes",
+                  "rationale": "",
+                  "source": "async def test_select_overlay_paints_above_its_containing_screen_overlay():\n    class NestedOverlayApp(App):\n        CSS = \"\"\"\n        Screen { layers: lower upper; }\n        #workspace { overlay: screen; layer: upper; width: 32; height: 12; }\n        Select { width: 30; height: 3; }\n        #body { height: 8; }\n        \"\"\"\n\n        def compose(self):\n            yield Container(\n                Select([(\"First setting\", \"first\"), (\"Second setting\", \"second\")],\n                       value=\"first\"),\n                Static(\"Workspace body\", id=\"body\"),\n                id=\"workspace\",\n            )\n\n    app = NestedOverlayApp()\n    async with app.run_test(size=(40, 16)) as pilot:\n        await pilot.click(Select)\n        await pilot.pause()\n        select = app.query_one(Select)\n        overlay = select.query_one(SelectOverlay)\n        body = app.query_one(\"#body\")\n        # Read the committed scene before any geometry lookup can acquire it.\n        scene = app.screen._compositor._published_map\n        geometry = scene[overlay]\n        assert select.expanded\n        assert geometry.order > scene[body].order\n        x, y, _, _ = geometry.region\n        hit = app.screen._compositor.get_widget_at(x + 1, y + 1)[0]\n        assert hit is overlay or overlay in hit.ancestors\n        await pilot.press(\"down\", \"enter\")\n        assert select.value == \"second\"\n\n\n"
+                }
+              ],
+              "architecture_guards": [],
+              "reason": "",
+              "authority_claims": []
+            }
+          ],
+          "architecture_guards": []
+        },
+        "is_clean": true
+      }
+    ],
+    "simulation": {
+      "rewrites": [
+        {
+          "rationale": "Ensure import source exists in '/home/ts/wt/codex-live--P192--textual/tests/test_compositor.py'. Insert source adjacent to 'test_point_hits_follow_layer_clip_visibility_and_scene_changes'.",
+          "contributors": [
+            {
+              "recipe_id": "nested-screen-overlay-control",
+              "plan_item_declaration": "EnsureImportOperation",
+              "plan_item_index": 0,
+              "file_path": "/home/ts/wt/codex-live--P192--textual/tests/test_compositor.py",
+              "line": 3,
+              "end_line": 3,
+              "source_hash": "a18169863b312cd8686962352c2af228"
+            },
+            {
+              "recipe_id": "nested-screen-overlay-control",
+              "plan_item_declaration": "EnsureImportOperation",
+              "plan_item_index": 0,
+              "file_path": "/home/ts/wt/codex-live--P192--textual/tests/test_compositor.py",
+              "line": 10,
+              "end_line": 9,
+              "source_hash": "64550d6ffe2c0a01a14aba1eade0200c"
+            },
+            {
+              "recipe_id": "nested-screen-overlay-control",
+              "plan_item_declaration": "InsertBeforeTargetOperation",
+              "plan_item_index": 1,
+              "file_path": "/home/ts/wt/codex-live--P192--textual/tests/test_compositor.py",
+              "line": 12,
+              "end_line": 11,
+              "source_hash": "64550d6ffe2c0a01a14aba1eade0200c"
+            }
+          ],
+          "qualname": "tests.test_compositor",
+          "line": 1,
+          "end_line": 369,
+          "target_id": "771ecf43eb",
+          "file_path": "/home/ts/wt/codex-live--P192--textual/tests/test_compositor.py",
+          "operation": "replace_target"
+        }
+      ],
+      "parse_validation": {
+        "backend": "ast_span",
+        "validated_file_paths": [
+          "/home/ts/wt/codex-live--P192--textual/tests/test_compositor.py"
+        ],
+        "parse_valid": true
+      },
+      "base_revisions": [
+        {
+          "file_path": "/home/ts/wt/codex-live--P192--textual/tests/test_compositor.py",
+          "source_hash": "1399598ced0f669f2205be3c543b1fd6"
+        }
+      ],
+      "deleted_file_paths": [],
+      "applied_rewrite_count": 1,
+      "changed_file_paths": [
+        "/home/ts/wt/codex-live--P192--textual/tests/test_compositor.py"
+      ]
+    },
+    "architecture_guard_report": {
+      "rules": [],
+      "violations": [],
+      "is_clean": true,
+      "violation_count": 0
+    },
+    "preflight_report": {
+      "reports": [],
+      "is_clean": true,
+      "preflight_failed": false,
+      "report_count": 0
+    },
+    "is_clean": true
+  }
+}
