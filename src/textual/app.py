@@ -656,6 +656,8 @@ class App(Generic[ReturnType], DOMNode):
         self._current_mode: str = self.DEFAULT_MODE
         """The current mode the app is in."""
         self._sync_available = False
+        self._supports_rectangular_scroll = False
+        """Terminal honours DECLRMM (mode 69): set by a startup DECRQM probe."""
 
         self.mouse_over: Widget | None = None
         """The widget directly under the mouse."""
@@ -4800,6 +4802,15 @@ class App(Generic[ReturnType], DOMNode):
         log.system("SynchronizedOutput mode is supported")
         if self._driver is not None and not self._driver.is_inline:
             self._sync_available = True
+
+    @on(messages.TerminalSupportsRectangularScroll)
+    def _on_terminal_supports_rectangular_scroll(
+        self, message: messages.TerminalSupportsRectangularScroll
+    ) -> None:
+        log.system("DECLRMM (rectangular scroll) is supported")
+        self._supports_rectangular_scroll = True
+        for screen in self.screen_stack:
+            screen._compositor._supports_rectangular_scroll = True
 
     def _begin_update(self) -> None:
         if self._sync_available and self._driver is not None:

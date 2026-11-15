@@ -134,3 +134,17 @@ def test_change_outside_the_clip_is_not_a_scroll():
     before = {a: _geo(Region(0, 10, 80, 3))}
     after = {a: _geo(Region(0, 8, 80, 3)), outsider: _geo(Region(0, 100, 80, 3))}
     assert _detect(before, after) is None
+
+
+# --- DECRQM capability probe: st's reply -> capability message ---
+
+def test_decrqm_mode69_reply_becomes_rectangular_scroll_message():
+    from textual._xterm_parser import XTermParser
+    from textual import messages as _messages
+    parser = XTermParser(debug=False)
+    tokens = list(parser.feed("\x1b[?69;2$y"))  # st: mode 69 recognised, reset
+    assert any(isinstance(t, _messages.TerminalSupportsRectangularScroll) for t in tokens)
+    # a "not recognised" reply (setting 0) must NOT claim support
+    parser2 = XTermParser(debug=False)
+    tokens2 = list(parser2.feed("\x1b[?69;0$y"))
+    assert not any(isinstance(t, _messages.TerminalSupportsRectangularScroll) for t in tokens2)

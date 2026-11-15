@@ -157,6 +157,12 @@ class TerminalSupportsSynchronizedOutput(Message):
     """
 
 
+class TerminalSupportsRectangularScroll(Message):
+    """Used to make the App aware that the terminal supports left/right margins
+    (DECLRMM, CSI ?69h), so the compositor may scroll a pane narrower than the screen
+    with the terminal's own scroll region instead of repainting it."""
+
+
 @rich.repr.auto
 class InBandWindowResize(Message):
     """Reports if the in-band window resize protocol is supported.
