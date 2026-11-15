@@ -33,8 +33,9 @@ from textual.widgets import Static
 # Re-recorded for the scroll blit: a single-row scroll now emits a terminal
 # scroll-region (DECSTBM + SU/SD) that moves the carried rows, then repaints only
 # the scrollbar column and the newly-exposed row, instead of re-sending the band.
-# test_scroll_blit_oracle proves this stream paints the same screen as a full redraw.
-EXPECTED_DIGEST = "d523af68e88ab4e06480f5425290ce652c5054d43396d890515681d5245b735f"
+# Recorded with DECSLRM (rectangular) scrolls enabled; test_scroll_blit_oracle proves
+# this stream paints the same screen as a full redraw through patched st's own logic.
+EXPECTED_DIGEST = "7530edeed41a99a300feeafb9109dd9b798055e158e7826bccd371257850ce2e"
 EXPECTED_UPDATES = 22
 
 WORDS = ("history", "│", "─┼─", "漢字", "scroll", "ü", "paint", "🙂", "line", "cells", "┌─┐", "compositor")
@@ -130,6 +131,7 @@ async def record_updates() -> list[str]:
     app = PaintApp()
     async with app.run_test(size=(100, 36)) as pilot:
         await pilot.pause()
+        app.screen._compositor._supports_rectangular_scroll = True
         history = app.query_one("#history")
         history.scroll_end(animate=False, immediate=True)
         await pilot.pause()
