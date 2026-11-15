@@ -796,6 +796,55 @@ class InlineUpdate(CompositorUpdate):
 
 
 @rich.repr.auto(angular=True)
+class ScrollUpdate(CompositorUpdate):
+    """A frame whose bulk moved by pure vertical scrolling.
+
+    The terminal shifts the cells already on screen with its own scroll region
+    (DECSTBM + SU/SD), so the moved content is never re-rendered or re-sent. Only
+    the cells the scroll could not carry correctly — each band's static columns
+    (scrollbars, neighbours the full-width scroll dragged along) and the rows it
+    newly exposed — are repainted, by ``fixup``. One band per container that
+    scrolled this frame; a band is only emitted when ``0 < abs(shift) < height``.
+    """
+
+    def __init__(
+        self, bands: Sequence[tuple[Region, int]], fixup: CompositorUpdate
+    ) -> None:
+        super().__init__()
+        # shift > 0: content moved up by `shift` rows (new content exposed at the
+        # band's bottom); shift < 0: moved down (exposed at the top).
+        self.bands = tuple(bands)
+        self.fixup = fixup
+
+    @staticmethod
+    def _band_sequence(band: Region, shift: int) -> str:
+        # DECSTBM margins are 1-based and inclusive; scroll, then release the margin
+        # so the fixup's absolute cursor moves are not clipped to the band.
+        top, bottom = band.y + 1, band.y + band.height
+        scroll = f"\x1b[{abs(shift)}{'S' if shift > 0 else 'T'}"
+        return f"\x1b[{top};{bottom}r{scroll}\x1b[r"
+
+    def render_segments(self, console: Console) -> str:
+        scrolls = "".join(
+            self._band_sequence(band, shift) for band, shift in self.bands if shift
+        )
+        return scrolls + self.fixup.render_segments(console)
+
+    def __rich_console__(
+        self, console: Console, options: ConsoleOptions
+    ) -> RenderResult:
+        # A Console render (snapshot, export) has no on-screen cells to scroll, so it
+        # shows only the freshly painted fixup. The live terminal path is
+        # render_segments; the compositor never routes a Console render through a
+        # ScrollUpdate (full frames compose a LayoutUpdate instead).
+        yield from self.fixup.__rich_console__(console, options)
+
+    def __rich_repr__(self) -> rich.repr.Result:
+        yield "bands", self.bands
+        yield "fixup", self.fixup
+
+
+@rich.repr.auto(angular=True)
 class ChopsUpdate(CompositorUpdate):
     """A renderable that applies updated spans to the screen."""
 
