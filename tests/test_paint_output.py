@@ -30,7 +30,11 @@ from textual.widgets import Static
 # 99) show the bar again instead of the container's background.
 # Main 3cc92d796 and P1444's head produce byte-identical updates after this
 # fixture adopts Widget.render_line's explicit PaintState argument.
-EXPECTED_DIGEST = "ce9c911c0f69f5451c03b623ff3b9e71cd293f63097044d93c4c457094160f77"
+# Re-recorded for the scroll blit: a single-row scroll now emits a terminal
+# scroll-region (DECSTBM + SU/SD) that moves the carried rows, then repaints only
+# the scrollbar column and the newly-exposed row, instead of re-sending the band.
+# test_scroll_blit_oracle proves this stream paints the same screen as a full redraw.
+EXPECTED_DIGEST = "d523af68e88ab4e06480f5425290ce652c5054d43396d890515681d5245b735f"
 EXPECTED_UPDATES = 22
 
 WORDS = ("history", "│", "─┼─", "漢字", "scroll", "ü", "paint", "🙂", "line", "cells", "┌─┐", "compositor")

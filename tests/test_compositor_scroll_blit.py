@@ -120,9 +120,11 @@ def test_shift_clearing_the_band_is_not_blittable():
 def test_edge_child_scrolling_in_is_allowed():
     a, b, newcomer = object(), object(), object()
     before = {a: _geo(Region(0, 10, 80, 3)), b: _geo(Region(0, 13, 80, 3))}
+    # content moved up 2 (shift +2) exposes the band's bottom 2 rows (23..24); the
+    # child scrolling in is visible only there.
     after = {
         a: _geo(Region(0, 8, 80, 3)), b: _geo(Region(0, 11, 80, 3)),
-        newcomer: _geo(Region(0, 22, 80, 3)),  # scrolled in at the band's bottom
+        newcomer: _geo(Region(0, 23, 80, 2)),
     }
     assert _detect(before, after) == (_CLIP, 2)
 

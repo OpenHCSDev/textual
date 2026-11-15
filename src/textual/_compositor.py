@@ -816,6 +816,15 @@ class ScrollUpdate(CompositorUpdate):
         self.bands = tuple(bands)
         self.fixup = fixup
 
+    def admit(self) -> None:
+        # The fixup owns the scene publication (it is bound over both the repainted
+        # cells and the scrolled band), so admitting this frame admits that geometry.
+        self.fixup.admit()
+        self._admitted = True
+
+    def output_geometry(self, compositor: Compositor) -> CompositorMap:
+        return self.fixup.output_geometry(compositor)
+
     @staticmethod
     def _band_sequence(band: Region, shift: int) -> str:
         # DECSTBM margins are 1-based and inclusive; scroll, then release the margin
@@ -1042,6 +1051,10 @@ class Compositor:
 
         # Regions that require an update
         self._dirty_regions: set[Region] = set()
+
+        # Bands the terminal will scroll this frame (band, shift); shift > 0 moves
+        # content up. Recorded when a reflow is a pure scroll, consumed by render_update.
+        self._scroll_bands: list[tuple[Region, int]] = []
 
         self._subtree_geometry: dict[Widget, SubtreeGeometry] = {}
         self.max_subtree_geometry_entries = max_subtree_geometry_entries
@@ -1419,41 +1432,92 @@ class Compositor:
     def _detect_scroll_bands(
         before: Mapping[Widget, MapGeometry], after: Mapping[Widget, MapGeometry],
     ) -> tuple[Region, int] | None:
-        """Recognise a geometry change that is purely one container scrolling.
+        """Recognise a geometry change whose carried content is one container scrolling.
 
-        A pure vertical scroll moves every widget that stays on screen by the same
-        ``(0, dy)`` with its clip and size unchanged; the widgets that appear or
-        disappear are the rows scrolling in or out at the band's edges, so they lie
-        inside the shared clip. Return ``(band, shift)`` — the clip the terminal can
-        scroll and the rows to shift it, ``shift > 0`` moving content up — or ``None``
-        when anything else changed, so the caller repaints normally.
+        The scrolled content is the widgets of one clip that all moved by the same
+        ``(0, dy)`` with their size unchanged — that clip is the band the terminal can
+        scroll, ``shift = -dy`` (``shift > 0`` moving content up). Everything else that
+        changed (the scrollbar in its own clip, neighbours the full-width scroll will
+        drag, rows scrolling in or out) is allowed only where the fixup will repaint it:
+        the static columns outside the band or the rows the scroll exposes. Anything
+        that changed inside the carried content means it is not a clean scroll, so
+        return ``None`` and let the caller repaint.
 
-        Conservative on purpose: a frame mixing a scroll with a resize, a horizontal
-        move, two independent scrolls, or a shift that clears the band is not blitted.
+        Conservative: a resize, no uniform group, or two independent scroll groups all
+        decline the blit.
         """
-        translations: set[tuple[int, int]] = set()
-        clips: set[Region] = set()
+        groups: dict[tuple[Region, int, int], int] = {}
         for widget in after.keys() & before.keys():
             previous, current = before[widget], after[widget]
             if previous.region == current.region:
                 continue
-            if current.region.size != previous.region.size or current.clip != previous.clip:
+            if current.region.size != previous.region.size:
                 return None
-            translations.add(
-                (current.region.x - previous.region.x, current.region.y - previous.region.y)
+            key = (
+                current.clip,
+                current.region.x - previous.region.x,
+                current.region.y - previous.region.y,
             )
-            clips.add(current.clip)
-        if len(translations) != 1 or len(clips) != 1:
+            groups[key] = groups.get(key, 0) + 1
+        scrolls = [
+            (clip, dy) for (clip, dx, dy) in groups if dx == 0 and dy != 0
+        ]
+        if len(scrolls) != 1:
             return None
-        ((dx, dy),) = translations
-        (clip,) = clips
-        if dx != 0 or dy == 0 or abs(dy) >= clip.height:
+        clip, dy = scrolls[0]
+        # No other translation may share that clip: the carried content must move as one.
+        if any(c == clip for (c, dx, dyy) in groups if (dx, dyy) != (0, dy)):
             return None
-        for widget in before.keys() ^ after.keys():
-            geometry = before.get(widget) or after[widget]
-            if not clip.overlaps(geometry.visible_region):
+        shift = -dy
+        if shift == 0 or abs(shift) >= clip.height:
+            return None
+        if shift > 0:
+            exposed = Region(clip.x, clip.y + clip.height - shift, clip.width, shift)
+        else:
+            exposed = Region(clip.x, clip.y, clip.width, -shift)
+
+        def only_residual(region: Region) -> bool:
+            # A static column (wholly left or right of the band) or a cell confined to
+            # the exposed rows is repainted by the fixup; anything else falls in the
+            # carried content and forbids the blit.
+            if region.right <= clip.x or region.x >= clip.right:
+                return True
+            within = clip.intersection(region)
+            return bool(within) and exposed.contains_region(within)
+
+        for widget in after.keys() & before.keys():
+            previous, current = before[widget], after[widget]
+            if previous.region == current.region:
+                continue
+            if current.clip == clip and (current.region.y - previous.region.y) == dy:
+                continue
+            if not (only_residual(previous.visible_region) and only_residual(current.visible_region)):
                 return None
-        return clip, -dy
+        for widget in before.keys() ^ after.keys():
+            if not only_residual((before.get(widget) or after[widget]).visible_region):
+                return None
+        return clip, shift
+
+    def _scroll_fixup_damage(self, band: Region, shift: int) -> list[Region]:
+        """The cells a terminal scroll of `band` by `shift` cannot carry correctly.
+
+        The scroll region is full terminal width, so the static columns beside the
+        scrolled content (scrollbars, docked neighbours) are dragged along and must be
+        repainted over the band's whole height; and the rows the scroll exposes — at the
+        bottom when content moved up, the top when it moved down — hold carried-in
+        rubbish and must be repainted across the content's width.
+        """
+        regions: list[Region] = []
+        if band.x > 0:
+            regions.append(Region(0, band.y, band.x, band.height))
+        right_gap = self.size.width - band.right
+        if right_gap > 0:
+            regions.append(Region(band.right, band.y, right_gap, band.height))
+        if shift > 0:
+            regions.append(Region(band.x, band.bottom - shift, band.width, shift))
+        else:
+            regions.append(Region(band.x, band.y, band.width, -shift))
+        return regions
 
     def _damage_geometry(
         self, before: Mapping[Widget, MapGeometry], after: Mapping[Widget, MapGeometry],
@@ -1468,6 +1532,30 @@ class Compositor:
         if self.size.region in self._dirty_regions:
             owner.check_idle()
             return
+        # Blit when this change carries as one scroll and nothing already dirty lands in
+        # the content the terminal will carry (a scrollbar pre-dirtying its own column is
+        # fine — that is a static column the fixup repaints anyway).
+        if not self._scroll_bands:
+            band = self._detect_scroll_bands(before, after)
+            if band is not None:
+                clip, shift = band
+                if shift > 0:
+                    carried = Region(clip.x, clip.y, clip.width, clip.height - shift)
+                else:
+                    carried = Region(clip.x, clip.y - shift, clip.width, clip.height + shift)
+                if not any(region.overlaps(carried) for region in self._dirty_regions):
+                    self._scroll_bands.append((clip, shift))
+                    for region in self._scroll_fixup_damage(clip, shift):
+                        self._damage(region)
+                    if self._dirty_regions:
+                        owner.check_idle()
+                    return
+        # Not a clean scroll (or a band already stands and this is a second change):
+        # repaint any recorded band's whole width and take the plain path.
+        if self._scroll_bands:
+            for clip, _shift in self._scroll_bands:
+                self._damage(Region(0, clip.y, self.size.width, clip.height))
+            self._scroll_bands.clear()
         for widget, geometry in after.items():
             previous = before.get(widget)
             if previous == geometry:
@@ -2358,7 +2446,20 @@ class Compositor:
         if full:
             self._dirty_regions.add(screen_region)
         if full or screen_region in self._dirty_regions:
+            self._scroll_bands.clear()
             return self.render_full_update(simplify=simplify)
+        if self._scroll_bands:
+            bands = self._scroll_bands
+            self._scroll_bands = []
+            # The whole width of each band now shows the scrolled scene, carried by the
+            # terminal; publish it so the next frame's diff knows the content moved.
+            published = {
+                Region(0, band.y, screen_region.width, band.height) for band, _ in bands
+            }
+            fixup = self.render_partial_update(also_published=published)
+            if fixup is None:
+                return None
+            return ScrollUpdate(bands, fixup)
         return self.render_partial_update()
 
     def render_inline(
@@ -2437,11 +2538,16 @@ class Compositor:
 
 
 
-    def render_partial_update(self) -> CompositorUpdate | None:
+    def render_partial_update(
+        self, also_published: AbstractSet[Region] = frozenset()
+    ) -> CompositorUpdate | None:
         """Compose damaged cells from every visible source that covers them.
 
         Widget strip caches retain reusable content. Terminal rows belong to the
-        composed scene, not to any one widget or compositing layer.
+        composed scene, not to any one widget or compositing layer. ``also_published``
+        names regions whose cells this update does not paint but which now show the
+        arranged scene anyway (a band the terminal scrolled), so their geometry is
+        published with the painted cells.
         """
         screen_region = self.size.region
         arranged, widgets, cuts = self._frame_paint()
@@ -2460,7 +2566,9 @@ class Compositor:
                 bounds=screen_region, on_render=sources.capture,
             )
         update = ChopsUpdate(chops, spans, cuts)
-        update.bind_publication(self, arranged, ready_regions, sources.sources)
+        update.bind_publication(
+            self, arranged, ready_regions | set(also_published), sources.sources
+        )
         return update
 
 
