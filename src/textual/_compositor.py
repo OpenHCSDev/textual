@@ -1415,6 +1415,46 @@ class Compositor:
             finally:
                 self._arranging = previous_arranging
 
+    @staticmethod
+    def _detect_scroll_bands(
+        before: Mapping[Widget, MapGeometry], after: Mapping[Widget, MapGeometry],
+    ) -> tuple[Region, int] | None:
+        """Recognise a geometry change that is purely one container scrolling.
+
+        A pure vertical scroll moves every widget that stays on screen by the same
+        ``(0, dy)`` with its clip and size unchanged; the widgets that appear or
+        disappear are the rows scrolling in or out at the band's edges, so they lie
+        inside the shared clip. Return ``(band, shift)`` — the clip the terminal can
+        scroll and the rows to shift it, ``shift > 0`` moving content up — or ``None``
+        when anything else changed, so the caller repaints normally.
+
+        Conservative on purpose: a frame mixing a scroll with a resize, a horizontal
+        move, two independent scrolls, or a shift that clears the band is not blitted.
+        """
+        translations: set[tuple[int, int]] = set()
+        clips: set[Region] = set()
+        for widget in after.keys() & before.keys():
+            previous, current = before[widget], after[widget]
+            if previous.region == current.region:
+                continue
+            if current.region.size != previous.region.size or current.clip != previous.clip:
+                return None
+            translations.add(
+                (current.region.x - previous.region.x, current.region.y - previous.region.y)
+            )
+            clips.add(current.clip)
+        if len(translations) != 1 or len(clips) != 1:
+            return None
+        ((dx, dy),) = translations
+        (clip,) = clips
+        if dx != 0 or dy == 0 or abs(dy) >= clip.height:
+            return None
+        for widget in before.keys() ^ after.keys():
+            geometry = before.get(widget) or after[widget]
+            if not clip.overlaps(geometry.visible_region):
+                return None
+        return clip, -dy
+
     def _damage_geometry(
         self, before: Mapping[Widget, MapGeometry], after: Mapping[Widget, MapGeometry],
         owner: Widget,
