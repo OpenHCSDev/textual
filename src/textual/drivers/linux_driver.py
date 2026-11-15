@@ -156,6 +156,11 @@ class LinuxDriver(Driver):
     def _query_in_band_window_resize(self) -> None:
         self.write("\x1b[?2048$p")
 
+    def _query_rectangular_scroll(self) -> None:
+        """Ask whether the terminal supports DECLRMM (left/right margins, mode 69),
+        which lets the compositor scroll a pane beside a sidebar without redrawing it."""
+        self.write("\x1b[?69$p")
+
     def _enable_in_band_window_resize(self) -> None:
         self.write("\x1b[?2048h")
 
@@ -303,6 +308,7 @@ class LinuxDriver(Driver):
         self._key_thread.start()
         self._request_terminal_sync_mode_support()
         self._query_in_band_window_resize()
+        self._query_rectangular_scroll()
         self._enable_bracketed_paste()
         self._disable_line_wrap()
 

@@ -331,6 +331,9 @@ class XTermParser(Parser[Message]):
                         setting_parameter = int(mode_report_match["setting_parameter"])
                         if mode_id == "2026" and setting_parameter > 0:
                             on_token(messages.TerminalSupportsSynchronizedOutput())
+                        elif mode_id == "69" and setting_parameter > 0:
+                            # DECLRMM recognised (set/reset/permanent): rectangular scroll
+                            on_token(messages.TerminalSupportsRectangularScroll())
                         elif (
                             mode_id == "2048"
                             and constants.SMOOTH_SCROLL

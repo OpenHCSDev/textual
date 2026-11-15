@@ -1647,6 +1647,10 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
             size = size.with_height(self.app._get_inline_height())
         if not size:
             return
+        # Adopt the terminal's rectangular-scroll capability once the startup probe
+        # resolves it on the app (covers screens pushed after the probe); an env opt-in
+        # stays sticky.
+        self._compositor._supports_rectangular_scroll |= self.app._supports_rectangular_scroll
         self._compositor.update_widgets(self._dirty_widgets)
         self._update_timer.pause()
         try:
