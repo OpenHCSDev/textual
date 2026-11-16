@@ -5,10 +5,11 @@ from abc import abstractmethod
 from typing import ClassVar
 
 from textual.actions import SkipAction
-from textual.binding import Binding, CommandBinding
+from formbridge.key_declarations import DeclaredKey, DownKey, LeftKey, RightKey, UndecodedKey, UpKey
+
+from textual.binding import Binding, BindingDeclaration, CommandBinding
 from textual.document._editing import EditingMode
 from textual.dom import DOMNode
-from textual.keys import BindingDeclaration, DeclaredKey, DownKey, LeftKey, RightKey, UndecodedKey, UpKey
 
 
 class NavigationCommand(BindingDeclaration["Navigation"]):

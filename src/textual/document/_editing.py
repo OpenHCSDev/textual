@@ -4,7 +4,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
-from metaclass_registry.key_declarations import InputMode, ModalInputMode
+from formbridge.key_declarations import InputMode, ModalInputMode
 
 from textual.binding import Binding, MethodBinding
 from textual.cursor_shape import CursorShape, SteadyBlock, TextEntryCursor
@@ -13,7 +13,6 @@ from textual.document._edit import Edit, InsertionPoint
 
 if TYPE_CHECKING:
     from textual.events import Key
-    from textual.keys import NavigationKey
     from textual.widgets import TextArea
 
 
@@ -23,10 +22,6 @@ class EditingFailure(RuntimeError):
 
 class EditingMode(InputMode):
     """Native text entry, with overridable document and input ownership."""
-
-    @classmethod
-    def navigation_spellings(cls, key: type[NavigationKey]) -> tuple[str, ...]:
-        return (key.key.value,)
 
     @property
     def accepts_text(self) -> bool:
@@ -166,10 +161,6 @@ class NativeTextKeys:
 
 class VimMode(EditingMode, ModalInputMode, ABC):
     """Modal binding capability, not a second implementation of Vim."""
-
-    @classmethod
-    def navigation_spellings(cls, key: type[NavigationKey]) -> tuple[str, ...]:
-        return (*super().navigation_spellings(key), key.modal)
 
     @property
     def cursor_shape(self) -> CursorShape:
