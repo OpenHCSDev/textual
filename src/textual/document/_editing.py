@@ -4,9 +4,11 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
+from metaclass_registry.key_declarations import InputMode, ModalInputMode
+
 from textual.binding import Binding, MethodBinding
 from textual.cursor_shape import CursorShape, SteadyBlock, TextEntryCursor
-from textual.document._document import EditResult, Location, Selection
+from textual.document._document import EditResult, Selection
 from textual.document._edit import Edit, InsertionPoint
 
 if TYPE_CHECKING:
@@ -19,10 +21,8 @@ class EditingFailure(RuntimeError):
     """The engine failed; preserve its displayed draft and never replay input."""
 
 
-class EditingMode:
+class EditingMode(InputMode):
     """Native text entry, with overridable document and input ownership."""
-
-    modal = False
 
     @classmethod
     def navigation_spellings(cls, key: type[NavigationKey]) -> tuple[str, ...]:
@@ -164,10 +164,8 @@ class NativeTextKeys:
         return self.key_mode().allows_application_commands
 
 
-class VimMode(EditingMode, ABC):
+class VimMode(EditingMode, ModalInputMode, ABC):
     """Modal binding capability, not a second implementation of Vim."""
-
-    modal = True
 
     @classmethod
     def navigation_spellings(cls, key: type[NavigationKey]) -> tuple[str, ...]:

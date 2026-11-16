@@ -8,10 +8,10 @@ from textual.actions import SkipAction
 from textual.binding import Binding, CommandBinding
 from textual.document._editing import EditingMode
 from textual.dom import DOMNode
-from textual.keys import DeclaredKey, DownKey, KeyDeclaration, LeftKey, RightKey, UndecodedKey, UpKey
+from textual.keys import BindingDeclaration, DeclaredKey, DownKey, LeftKey, RightKey, UndecodedKey, UpKey
 
 
-class NavigationCommand(KeyDeclaration["Navigation"]):
+class NavigationCommand(BindingDeclaration["Navigation"]):
     """A list command owns its keys; controls own the operation it requests."""
 
     keys: ClassVar[tuple[str, ...]] = ()

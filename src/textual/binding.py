@@ -29,7 +29,9 @@ import rich.repr
 
 from textual._callback import invoke, invoke_sync
 from textual.actions import SkipAction
-from textual.keys import DeclaredKey, KeyDeclaration, KeyInvocation, UndecodedKey, _character_to_key
+from metaclass_registry.key_declarations import KeyDeclaration, KeyInvocation
+
+from textual.keys import DeclaredKey, UndecodedKey, _character_to_key
 
 if TYPE_CHECKING:
     from textual.document._editing import EditingMode

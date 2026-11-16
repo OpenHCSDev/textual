@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from textual.app import App, ComposeResult
 from textual.document._editing import EditingMode
-from textual.keys import KeyInvocation, LeftKey, RightKey
+from metaclass_registry.key_declarations import KeyInvocation
+from textual.keys import LeftKey, RightKey
 from textual.widgets import Input
 
 
