@@ -32,7 +32,7 @@ from typing import (
 from weakref import WeakSet, ref
 
 from textual import Logger, events, log, messages
-from textual.abstract_hooks import AbstractHooksMeta
+from metaclass_registry import AbstractHooksMeta
 from textual._callback import invoke
 from textual._compat import cached_property
 from textual._context import NoActiveAppError, active_app, active_message_pump
