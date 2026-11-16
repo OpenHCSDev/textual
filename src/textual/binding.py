@@ -8,7 +8,6 @@ See [bindings](/guide/input#bindings) in the guide for details.
 from __future__ import annotations
 
 import dataclasses
-from abc import abstractmethod
 from dataclasses import dataclass, field
 from inspect import iscoroutinefunction
 from types import FunctionType
@@ -433,17 +432,6 @@ class SelectingMethodBinding(MethodBinding):
 
 
 NodeT = TypeVar("NodeT", bound="DOMNode", contravariant=True)
-
-
-class BindingDeclaration(KeyDeclaration[NodeT]):
-    """A key declaration whose class projects its own Textual bindings, as a DOM node's
-    key families ask it to."""
-
-    @classmethod
-    @abstractmethod
-    def bindings_for(cls, mode: type[EditingMode]) -> tuple[Binding, ...]:
-        """The declaration's defaults in one active editing mode."""
-        raise NotImplementedError
 
 
 @dataclass(frozen=True, kw_only=True)
