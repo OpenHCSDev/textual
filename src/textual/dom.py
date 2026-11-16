@@ -10,7 +10,6 @@ import re
 import threading
 from weakref import ref
 from functools import lru_cache, partial
-from dataclasses import replace
 from inspect import getfile
 from typing import (
     TYPE_CHECKING,
@@ -53,9 +52,8 @@ from textual.text_format import TextFormat
 from textual.geometry import Size
 from textual.css.tokenize import IDENTIFIER
 from textual.message_pump import MessagePump
-from textual.keys import KeyDeclaration
+from textual.keys import BindingDeclaration
 from textual.reactive import Reactive, ReactiveError, _Mutated, _StoredReactiveAccess, _watch
-from textual.style import NULL_STYLE
 from textual.timer import Timer
 from textual.walk import walk_breadth_first, walk_breadth_search_id, walk_depth_first
 from textual.worker_manager import WorkerManager
@@ -71,7 +69,6 @@ if TYPE_CHECKING:
     from textual.screen import Screen
     from textual.widget import Widget
     from textual.events import Key
-    from textual.widgets import TextArea
     from textual.worker import Worker, WorkType, ResultType
 
 from typing_extensions import Literal
@@ -529,8 +526,8 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump):
         return {}
 
     _declared_key_bindings: ClassVar[tuple[MethodBinding, ...]] = ()
-    _own_key_families: ClassVar[tuple[type[KeyDeclaration], ...]] = ()
-    key_families: ClassVar[tuple[type[KeyDeclaration], ...]] = ()
+    _own_key_families: ClassVar[tuple[type[BindingDeclaration], ...]] = ()
+    key_families: ClassVar[tuple[type[BindingDeclaration], ...]] = ()
 
     @classmethod
     def contexts(cls) -> tuple[type[DOMNode], ...]:
@@ -556,7 +553,7 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump):
                      for projected in binding.for_mode(mode))
 
     @classmethod
-    def present_binding(cls, declaration: type[KeyDeclaration], binding: Binding) -> Binding:
+    def present_binding(cls, declaration: type[BindingDeclaration], binding: Binding) -> Binding:
         return binding
 
     @classmethod
@@ -1005,7 +1002,7 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump):
         inherit_css: bool = True,
         inherit_bindings: bool = True,
         inherit_component_classes: bool = True,
-        key_families: tuple[type[KeyDeclaration], ...] = (),
+        key_families: tuple[type[BindingDeclaration], ...] = (),
     ) -> None:
         cls._own_key_families = key_families
         cls.key_families = tuple(dict.fromkeys(
