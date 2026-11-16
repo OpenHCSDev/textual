@@ -31,6 +31,7 @@ from rich.highlighter import ReprHighlighter
 from rich.text import Text
 from rich.tree import Tree
 
+from formbridge.key_declarations import KeymapClaim
 from formbridge.navigation_commands import NavigationCommand
 from metaclass_registry.descendants import Descendants
 from metaclass_registry.own_declarations import OwnDeclarations
@@ -40,7 +41,7 @@ from textual._compat import cached_property
 from textual._node_list import NodeList
 from textual._paint_state import PaintNode
 from textual._types import WatchCallbackType
-from textual.binding import Binding, BindingsMap, BindingType, CommandBinding, KeymapClaim, MethodBinding, ModeBinding
+from textual.binding import Binding, BindingsMap, BindingType, CommandBinding, MethodBinding, ModeBinding
 from textual.document._editing import EditingMode
 from textual.cache import LRUCache
 from textual.css._error_tools import friendly_list
@@ -638,7 +639,7 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump, OwnDeclarations, Descendant
 
         A function of the cached defaults it reads, so it is built once per class and mode:
         a keymap catalog asks every context for every mode it shows."""
-        return tuple(KeymapClaim.from_bindings(binding for _, binding in cls.binding_defaults(mode)))
+        return tuple(BindingsMap(binding for _, binding in cls.binding_defaults(mode)).keymap_claims())
 
     def binding_map(self, mode: type[TextEntryMode]) -> BindingsMap:
         """One projection for native declarations and external subclass bindings."""
