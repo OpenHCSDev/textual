@@ -31,6 +31,7 @@ from rich.highlighter import ReprHighlighter
 from rich.text import Text
 from rich.tree import Tree
 
+from metaclass_registry.own_declarations import OwnDeclarations
 from textual._context import active_message_pump
 from textual._compat import cached_property
 from textual._node_list import NodeList
@@ -137,7 +138,7 @@ class _ClassesDescriptor:
 
 
 @rich.repr.auto
-class DOMNode(DeclaresTheme, PaintNode, MessagePump):
+class DOMNode(DeclaresTheme, PaintNode, MessagePump, OwnDeclarations):
     """The base class for object that can be in the Textual DOM (App and Widget)"""
 
     _subtree_style_revision = 0
@@ -548,8 +549,8 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump):
 
     @classmethod
     def native_bindings(cls, mode: type[EditingMode]) -> tuple[ModeBinding, ...]:
-        return tuple(projected for base in cls.method_key_owners()
-                     for binding in base.__dict__.get("MODE_BINDINGS", ())
+        return tuple(projected
+                     for binding in cls.declared_items("MODE_BINDINGS", cls.method_key_owners())
                      for projected in binding.for_mode(mode))
 
     @classmethod
@@ -1005,10 +1006,7 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump):
         key_families: tuple[type[BindingDeclaration], ...] = (),
     ) -> None:
         cls._own_key_families = key_families
-        cls.key_families = tuple(dict.fromkeys(
-            family for base in cls.__mro__
-            for family in base.__dict__.get("_own_key_families", ())
-        ))
+        cls.key_families = cls.declared_union("_own_key_families")
         super().__init_subclass__()
 
         reactives = cls._reactives = {}
