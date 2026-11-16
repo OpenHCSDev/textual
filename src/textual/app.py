@@ -59,6 +59,7 @@ from rich.control import Control
 from rich.protocol import is_renderable
 from rich.segment import Segment, Segments
 
+from formbridge.key_declarations import TextEntryMode
 from textual import (
     Logger,
     LogGroup,
@@ -2075,7 +2076,7 @@ class App(Generic[ReturnType], DOMNode):
         """Only runtime App.bind / palette additions are mutable per application."""
         return BindingsMap()
 
-    def binding_map(self, mode: type[EditingMode]) -> BindingsMap:
+    def binding_map(self, mode: type[TextEntryMode]) -> BindingsMap:
         return BindingsMap.merge((self.binding_defaults(mode), self._bindings.project(mode)))
 
     def bind(

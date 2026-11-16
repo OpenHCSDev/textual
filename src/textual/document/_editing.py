@@ -4,9 +4,9 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
-from formbridge.key_declarations import InputMode, ModalInputMode
+from formbridge.key_declarations import ModalInputMode, TextEntryMode
 
-from textual.binding import Binding, MethodBinding
+from textual.binding import MethodBinding
 from textual.cursor_shape import CursorShape, SteadyBlock, TextEntryCursor
 from textual.document._document import EditResult, Selection
 from textual.document._edit import Edit, InsertionPoint
@@ -20,32 +20,14 @@ class EditingFailure(RuntimeError):
     """The engine failed; preserve its displayed draft and never replay input."""
 
 
-class EditingMode(InputMode):
-    """Native text entry, with overridable document and input ownership."""
-
-    @property
-    def accepts_text(self) -> bool:
-        return True
+class EditingMode(TextEntryMode):
+    """TextArea's engine for a text-entry mode, with overridable document and input
+    ownership. What the mode is (its label, whether text and commands reach past it, the
+    class its keys are declared under) is TextEntryMode's."""
 
     @property
     def cursor_shape(self) -> CursorShape:
         return TextEntryCursor()
-
-    @property
-    def label(self) -> str:
-        return ""
-
-    @property
-    def allows_application_commands(self) -> bool:
-        return False
-
-    @property
-    def allows_history_navigation(self) -> bool:
-        return self.accepts_text
-
-    @classmethod
-    def fallback_bindings(cls, binding: Binding) -> tuple[Binding, ...]:
-        return ()
 
     async def handle_key(self, editor: TextArea, event: Key) -> bool:
         return editor.edit_key(event)
@@ -53,12 +35,6 @@ class EditingMode(InputMode):
     def apply_native_binding(self, editor: TextArea, binding: MethodBinding, event: Key) -> bool:
         binding.call(editor)
         return True
-
-    @classmethod
-    def binding_mode(cls) -> type[EditingMode]:
-        """The editing class this mode's bindings are declared under: a fact of the class,
-        so asking it never builds a mode."""
-        return EditingMode
 
     def enter_text(self, editor: TextArea) -> None:
         """An application may focus an existing editor in text-entry mode."""
@@ -165,10 +141,6 @@ class VimMode(EditingMode, ModalInputMode, ABC):
     @property
     def cursor_shape(self) -> CursorShape:
         return SteadyBlock()
-
-    @classmethod
-    def fallback_bindings(cls, binding: Binding) -> tuple[Binding, ...]:
-        return (binding,)
 
     @abstractmethod
     async def handle_key(self, editor: TextArea, event: Key) -> bool:
