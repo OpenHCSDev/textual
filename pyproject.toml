@@ -52,6 +52,7 @@ rich = ">=14.2.0"
 #rich = {path="../rich", develop=true}
 typing-extensions = "^4.4.0"
 platformdirs = ">=3.6.0,<5"
+metaclass-registry = { git = "https://github.com/OpenHCSDev/metaclass-registry", branch = "main" }
 
 # start of [syntax] extras
 # Require tree-sitter >= 0.25.0 and python >= 3.10
