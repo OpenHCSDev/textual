@@ -3,13 +3,14 @@ from __future__ import annotations
 
 from enum import IntEnum
 
+from formbridge.hint_keys import HintKeyAssignment, HintLabelStyle, NextLetterHints
+
 from textual import events
 from textual._activation import Activation
 from textual._compositor import ActivationScene, FrameOverlay
 from textual._on import on
 from textual.content import Content
 from textual.geometry import Region
-from textual.hint_labels import HintLabelStyle, NextLetterHints
 from textual.widget import Widget
 
 
@@ -84,11 +85,17 @@ class HintLabel(HintOverlay):
         self.text = text
         self.target = target
 
+    @staticmethod
+    def caption(style: type[HintLabelStyle], key: str, prefix: str) -> Content:
+        """The shown part of the key, its typed characters out of the hint's reverse style."""
+        text, typed = style.shown(key, prefix)
+        return Content(text).stylize("not reverse", 0, typed)
+
     def render(self) -> Content:
-        return self.session.label_style.caption(self.text, self.session.prefix)
+        return self.caption(self.session.label_style, self.text, self.session.prefix)
 
 
-class HintSession(HintOverlay, FrameOverlay, can_focus=True):
+class HintSession(HintKeyAssignment, HintOverlay, FrameOverlay, can_focus=True):
     """Own stable keys, current-frame positions, input, focus and retirement."""
 
     DEFAULT_CSS = """
@@ -101,28 +108,11 @@ class HintSession(HintOverlay, FrameOverlay, can_focus=True):
         scrollbar-size-horizontal: 0;
     }
     """
-    alphabet = "asdfghjklqwertyuiopzxcvbnm"
-
     @classmethod
     def for_scene(cls, screen, scene: ActivationScene, click: HintClick):
         targets = sorted(scene.targets.values(), key=lambda target: (
             target.region.y, target.region.x))
         return cls(screen, targets, click, screen.hint_label_style)
-
-    @classmethod
-    def label_width(cls, count: int) -> int:
-        width = 1
-        while len(cls.alphabet) ** width < count:
-            width += 1
-        return width
-
-    @classmethod
-    def label(cls, index, width):
-        characters = []
-        for _ in range(width):
-            index, digit = divmod(index, len(cls.alphabet))
-            characters.append(cls.alphabet[digit])
-        return "".join(reversed(characters))
 
     def __init__(self, screen, targets, click: HintClick,
                  label_style: type[HintLabelStyle] = NextLetterHints):

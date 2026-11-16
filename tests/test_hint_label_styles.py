@@ -2,7 +2,7 @@
 import pytest
 
 from textual.app import App
-from textual.hint_labels import FullKeyHints, NextLetterHints
+from formbridge.hint_keys import FullKeyHints, NextLetterHints
 from textual.screen import Screen
 from textual.style import Style
 from textual.widgets import Input, Static
@@ -10,7 +10,7 @@ from textual.widgets._hints import HintLabel, HintSession
 
 
 def test_full_key_inverts_the_typed_prefix_against_the_hint_background():
-    caption = FullKeyHints.caption("asd", "as")
+    caption = HintLabel.caption(FullKeyHints, "asd", "as")
     segments = caption.render_segments(Style(reverse=True))
     assert [(segment.text, segment.style.reverse) for segment in segments] == [
         ("as", False), ("d", True),
