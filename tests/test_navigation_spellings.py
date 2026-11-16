@@ -1,11 +1,11 @@
 """Arrow identities supply modal spellings, including controls not hand-patched."""
+from formbridge.key_declarations import DownKey, NavigationKey
 from textual import widgets
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll
 from textual.document._editing import EditingMode, VimMode
 from textual.dom import DOMNode
 from textual.events import Key
-from textual.keys import DownKey, NavigationKey
 from textual.screen import Screen
 from textual.widgets import Input, TextArea, Tree
 
@@ -20,11 +20,11 @@ def test_navigation_spellings_follow_every_declared_context() -> None:
         modal = owner.binding_defaults(VimMode)
         for direction in NavigationKey.__subclasses__():
             arrows = tuple(
-                binding for binding in modal.key_to_bindings.get(direction.key.value, ())
+                binding for binding in modal.key_to_bindings.get(direction.key, ())
                 if binding.declared_key == direction()
             )
             if any(binding.declared_key == direction()
-                   for binding in standard.key_to_bindings.get(direction.key.value, ())):
+                   for binding in standard.key_to_bindings.get(direction.key, ())):
                 assert arrows, (owner, direction)
             for arrow in arrows:
                 assert arrow.with_key(direction.modal) in modal.key_to_bindings.get(direction.modal, ()), (owner, direction)

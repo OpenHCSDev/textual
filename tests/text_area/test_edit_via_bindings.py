@@ -12,8 +12,7 @@ import pytest
 from textual.app import App, ComposeResult
 from textual.document._editing import EditingMode
 from textual.events import Paste
-from metaclass_registry.key_declarations import KeyInvocation
-from textual.keys import LeftKey
+from formbridge.key_declarations import KeyInvocation, LeftKey
 from textual.widgets import TextArea
 from textual.widgets.text_area import Selection
 

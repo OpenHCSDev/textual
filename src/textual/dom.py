@@ -52,7 +52,7 @@ from textual.text_format import TextFormat
 from textual.geometry import Size
 from textual.css.tokenize import IDENTIFIER
 from textual.message_pump import MessagePump
-from textual.keys import BindingDeclaration
+from textual.binding import BindingDeclaration
 from textual.reactive import Reactive, ReactiveError, _Mutated, _StoredReactiveAccess, _watch
 from textual.timer import Timer
 from textual.walk import walk_breadth_first, walk_breadth_search_id, walk_depth_first

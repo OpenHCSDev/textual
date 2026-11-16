@@ -1,32 +1,8 @@
 from __future__ import annotations
 
 import unicodedata
-from abc import abstractmethod
-from typing import TYPE_CHECKING, ClassVar, TypeVar
 from enum import Enum
-from dataclasses import dataclass
 from functools import lru_cache
-
-if TYPE_CHECKING:
-    from textual.binding import Binding
-    from textual.document._editing import EditingMode
-    from textual.dom import DOMNode
-    from textual.events import Key
-
-from metaclass_registry.key_declarations import KeyDeclaration, KeyInvocation
-
-NodeT = TypeVar("NodeT", bound="DOMNode", contravariant=True)
-
-
-class BindingDeclaration(KeyDeclaration[NodeT]):
-    """A key declaration whose class projects its own Textual bindings, as a DOM node's
-    key families ask it to."""
-
-    @classmethod
-    @abstractmethod
-    def bindings_for(cls, mode: type[EditingMode]) -> tuple[Binding, ...]:
-        """The declaration's defaults in one active editing mode."""
-        raise NotImplementedError
 
 
 # Adapted from prompt toolkit https://github.com/prompt-toolkit/python-prompt-toolkit/blob/master/prompt_toolkit/keys.py
@@ -222,107 +198,6 @@ class Keys(str, Enum):  # type: ignore[no-redef]
     ShiftControlRight = ControlShiftRight
     ShiftControlHome = ControlShiftHome
     ShiftControlEnd = ControlShiftEnd
-
-
-@dataclass(frozen=True)
-class DeclaredKey:
-    """A decoded native input identity, distinct from its configured spelling."""
-
-    def decoded(self, key: str) -> DeclaredKey:
-        return self
-
-    def spellings(self, mode: type[EditingMode], spelling: str) -> tuple[str, ...]:
-        return (spelling,)
-
-    def invocations(self, defaults: tuple[KeyInvocation, ...]) -> tuple[KeyInvocation, ...]:
-        return defaults
-
-    def preempts(self, event: Key, target: DOMNode) -> bool:
-        return False
-
-    def input_bindings(self, spelling: str) -> tuple[tuple[str, str], ...]:
-        """Native input aliases for an external editing engine."""
-        return ()
-
-
-class UndecodedKey(DeclaredKey):
-    """Only Binding.make_bindings sees an external declaration's key spelling."""
-
-    def decoded(self, key: str) -> DeclaredKey:
-        return NavigationKey.from_key(key)
-
-
-class NavigationKey(DeclaredKey, KeyInvocation):
-    """One preference for an arrow, independent of the focused control's effect.
-
-    Bindings keep their native callable, availability and order. Only the saved
-    input identity is shared: configuring Up must not mean configuring TextArea,
-    a table, a tree and every future arrow control separately.
-    """
-
-    key: ClassVar[Keys]
-    modal: ClassVar[str]
-    _by_key: ClassVar[dict[str, type[NavigationKey]]] = {}
-
-    def __init_subclass__(cls, *, key: Keys, modal: str, **kwargs: object) -> None:
-        super().__init_subclass__(**kwargs)
-        cls.key = key
-        cls.modal = modal
-        cls._by_key[key.value] = cls
-
-    @classmethod
-    def from_key(cls, key: str) -> DeclaredKey:
-        """Decode a declared native key once, before any preference changes it."""
-        try:
-            declaration = cls._by_key[key]
-        except KeyError:
-            return DeclaredKey()
-        return declaration()
-
-    def invocations(self, defaults: tuple[KeyInvocation, ...]) -> tuple[KeyInvocation, ...]:
-        return (self,)
-
-    def spellings(self, mode: type[EditingMode], spelling: str) -> tuple[str, ...]:
-        return mode.navigation_spellings(type(self))
-
-    def preempts(self, event: Key, target: DOMNode) -> bool:
-        """Arrow aliases precede search, never the target's literal text input."""
-        return event.is_printable and not target.takes_typed_text
-
-    def key_identity(self) -> str:
-        return self.qualified(type(self))
-
-    def input_bindings(self, spelling: str) -> tuple[tuple[str, str], ...]:
-        return ((spelling, self.key.value),)
-
-    def key_title(self) -> str:
-        return f"Cursor {self.key.value}"
-
-    def key_summary(self) -> str:
-        return f"Use these keys wherever the focused control handles {self.key.value}."
-
-    def key_system(self) -> bool:
-        return False
-
-    def visible_for_focus(self, focused: bool) -> bool:
-        """Global arrow preferences remain editable even from a non-arrow focus."""
-        return True
-
-
-class UpKey(NavigationKey, key=Keys.Up, modal="k"):
-    pass
-
-
-class DownKey(NavigationKey, key=Keys.Down, modal="j"):
-    pass
-
-
-class LeftKey(NavigationKey, key=Keys.Left, modal="h"):
-    pass
-
-
-class RightKey(NavigationKey, key=Keys.Right, modal="l"):
-    pass
 
 
 # Unicode db contains some obscure names

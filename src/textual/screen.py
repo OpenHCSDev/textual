@@ -545,9 +545,10 @@ class Screen(HintHost, Generic[ScreenResultType], Widget):
         second delivery. Native editor bindings forward it to their mode owner;
         ordinary controls execute their own declared action.
         """
+        printable_outside_text = event.is_printable and not target.takes_typed_text
         for node, bindings in self._modal_binding_chain:
             for binding in bindings.key_to_bindings.get(event.key, ()):
-                if binding.declared_key.preempts(event, target):
+                if binding.declared_key.preempts(printable_outside_text):
                     if await binding.run_before_text(self.app, node, event, target):
                         return True
         return False
