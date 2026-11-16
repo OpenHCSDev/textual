@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from itertools import islice
 from typing import TYPE_CHECKING, Callable
 
+from formbridge.activation import ContextEffect, PrimaryEffect
+
 from textual import events
 from textual._callback import invoke
 from functools import partial
@@ -127,26 +129,19 @@ class StyleTarget(Activation):
             await widget.app.dispatch_style_action(self.handler, event, widget)
 
 
-class PrimaryActivation:
-    """A widget declares its existing primary effect; discovery is shared."""
+class PrimaryActivation(PrimaryEffect):
+    """A widget's primary effect is found at its published click cell; discovery is shared."""
 
     def primary_activation_targets(self, region):
         return (CallbackTarget(self, region, self.primary_activation),)
 
-    @property
-    @abstractmethod
-    def primary_activation(self) -> Callable: ...
 
-
-class ContextActivation:
-    """A widget declares its contextual effect at the published click offset."""
+class ContextActivation(ContextEffect):
+    """A widget's contextual effect is found at the published click offset."""
 
     def context_activation_targets(self, region):
         return (CallbackTarget(self, region, self.context_activation,
                                arguments=(region.offset,)),)
-
-    @abstractmethod
-    def context_activation(self, offset) -> None: ...
 
 
 class FocusActivation(PrimaryActivation):
