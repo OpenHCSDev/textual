@@ -7,6 +7,8 @@ from enum import Enum
 from functools import cache, partial
 from typing import ClassVar, Protocol, Self, overload
 
+from metaclass_registry.descendants import Descendants
+
 from textual.css._declaration import NativeProperty, ValueBuilder
 from textual.css._style_properties import StyleProperty
 from textual.css.model import Declaration
@@ -108,7 +110,7 @@ class NativeDeclaration(Declaration):
         )
 
 
-class Component(Enum):
+class Component(Descendants, Enum):
     """A widget's styled parts. Members are the parts; each part's CSS component
     class name is derived here, once, from the declaring widget's prefix."""
 
@@ -126,14 +128,8 @@ class Component(Enum):
     @cache
     def named(css_name: str) -> "Component | None":
         """The declared part a stylesheet component class names, if any."""
-        pending: list[type[Component]] = [Component]
-        while pending:
-            parts = pending.pop()
-            pending.extend(parts.__subclasses__())
-            for part in parts:
-                if part.css_name == css_name:
-                    return part
-        return None
+        return next((part for parts in Component.descendants() for part in parts
+                     if part.css_name == css_name), None)
 
 
 class DeclaresTheme:

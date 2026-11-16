@@ -15,7 +15,7 @@ def test_navigation_spellings_follow_every_declared_context() -> None:
     for name in widgets.__all__:
         getattr(widgets, name)
     checked = 0
-    for owner in DOMNode.contexts():
+    for owner in DOMNode.descendants():
         standard = owner.binding_defaults(TextEntryMode)
         modal = owner.binding_defaults(VimMode)
         for direction in NavigationKey.__subclasses__():
