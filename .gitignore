@@ -134,3 +134,6 @@ sandbox/
 
 # Snapshot tests output
 #__snapshots__/
+
+# Scratch output from local check scripts; never committed.
+.artifacts/
