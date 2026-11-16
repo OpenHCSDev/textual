@@ -11,7 +11,8 @@ from textual import _widget_navigation
 from textual.containers import VerticalScroll
 from textual.events import Click, Mount
 from textual.message import Message
-from textual.navigation import ActivateSelection, MovesCursor, MovesHorizontalCursor, SelectCursor
+from formbridge.navigation_commands import ActivateSelection, SelectCursor
+from textual.navigation import MovesCursor, MovesHorizontalCursor
 from textual.reactive import reactive, var
 from textual.widgets._radio_button import RadioButton
 from textual._on import on

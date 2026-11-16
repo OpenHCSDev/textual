@@ -14,7 +14,8 @@ from textual._immutable_sequence_view import ImmutableSequenceView
 from textual._loop import loop_last
 from textual._segment_tools import line_pad
 from textual.binding import MethodBinding
-from textual.navigation import MovesCursor, SelectCursor
+from formbridge.navigation_commands import SelectCursor
+from textual.navigation import MovesCursor
 from textual.cache import LRUCache
 from textual.geometry import Region, Size, clamp
 from textual.message import Message

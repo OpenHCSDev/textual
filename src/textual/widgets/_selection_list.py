@@ -11,7 +11,7 @@ from rich.style import Style
 from typing_extensions import Self
 
 from textual import events
-from textual.navigation import ActivateSelection
+from formbridge.navigation_commands import ActivateSelection
 from textual.content import Content, ContentText
 from textual.messages import Message
 from textual._paint_state import PaintState

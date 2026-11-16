@@ -31,13 +31,14 @@ from rich.highlighter import ReprHighlighter
 from rich.text import Text
 from rich.tree import Tree
 
+from formbridge.navigation_commands import NavigationCommand
 from metaclass_registry.own_declarations import OwnDeclarations
 from textual._context import active_message_pump
 from textual._compat import cached_property
 from textual._node_list import NodeList
 from textual._paint_state import PaintNode
 from textual._types import WatchCallbackType
-from textual.binding import Binding, BindingsMap, BindingType, KeymapClaim, MethodBinding, ModeBinding
+from textual.binding import Binding, BindingsMap, BindingType, CommandBinding, KeymapClaim, MethodBinding, ModeBinding
 from textual.document._editing import EditingMode
 from textual.cache import LRUCache
 from textual.css._error_tools import friendly_list
@@ -53,7 +54,6 @@ from textual.text_format import TextFormat
 from textual.geometry import Size
 from textual.css.tokenize import IDENTIFIER
 from textual.message_pump import MessagePump
-from textual.binding import BindingDeclaration
 from textual.reactive import Reactive, ReactiveError, _Mutated, _StoredReactiveAccess, _watch
 from textual.timer import Timer
 from textual.walk import walk_breadth_first, walk_breadth_search_id, walk_depth_first
@@ -527,8 +527,8 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump, OwnDeclarations):
         return {}
 
     _declared_key_bindings: ClassVar[tuple[MethodBinding, ...]] = ()
-    _own_key_families: ClassVar[tuple[type[BindingDeclaration], ...]] = ()
-    key_families: ClassVar[tuple[type[BindingDeclaration], ...]] = ()
+    _own_key_families: ClassVar[tuple[type[NavigationCommand], ...]] = ()
+    key_families: ClassVar[tuple[type[NavigationCommand], ...]] = ()
 
     @classmethod
     def contexts(cls) -> tuple[type[DOMNode], ...]:
@@ -554,8 +554,22 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump, OwnDeclarations):
                      for projected in binding.for_mode(mode))
 
     @classmethod
-    def present_binding(cls, declaration: type[BindingDeclaration], binding: Binding) -> Binding:
+    def present_binding(cls, declaration: type[NavigationCommand], binding: Binding) -> Binding:
         return binding
+
+    @staticmethod
+    def navigation_bindings(declaration: type[NavigationCommand], mode: type[EditingMode]) -> tuple[Binding, ...]:
+        """A navigation command's default keys as Textual bindings in one active editing mode."""
+        if not declaration.keys:
+            return ()
+        command = declaration()
+        return tuple(
+            CommandBinding(key=key, action=command, description=declaration.title,
+                           available=declaration.available, mode=EditingMode,
+                           id=declaration.binding_id(mode), show=False,
+                           declared_key=declaration.declared_key)
+            for key in declaration.keys
+        )
 
     @classmethod
     def declared_bindings(cls, mode: type[EditingMode]) -> tuple[Binding, ...]:
@@ -563,7 +577,7 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump, OwnDeclarations):
             *(cls.present_binding(declaration, binding)
               for family in cls.key_families
               for declaration in family.declarations()
-              for binding in declaration.bindings_for(mode)),
+              for binding in cls.navigation_bindings(declaration, mode)),
             *cls.native_bindings(mode),
             *cls.method_bindings(mode),
         )
@@ -1003,7 +1017,7 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump, OwnDeclarations):
         inherit_css: bool = True,
         inherit_bindings: bool = True,
         inherit_component_classes: bool = True,
-        key_families: tuple[type[BindingDeclaration], ...] = (),
+        key_families: tuple[type[NavigationCommand], ...] = (),
     ) -> None:
         cls._own_key_families = key_families
         cls.key_families = cls.declared_union("_own_key_families")

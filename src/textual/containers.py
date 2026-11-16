@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from textual.layouts.vertical import VerticalLayout
 from textual.layout import Layout
-from textual.navigation import ScrollCommand
+from formbridge.navigation_commands import ScrollCommand
 from textual.layouts.grid import GridLayout
 from textual.layouts.horizontal import HorizontalLayout
 from textual.reactive import reactive

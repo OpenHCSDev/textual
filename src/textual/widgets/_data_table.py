@@ -34,7 +34,8 @@ from textual.color import Color
 from textual.coordinate import Coordinate
 from textual.geometry import Region, Size, Spacing, clamp
 from textual.message import Message
-from textual.navigation import MovesCursor, MovesHorizontalCursor, PageDown, PageUp, SelectCursor
+from formbridge.navigation_commands import PageDown, PageUp, SelectCursor
+from textual.navigation import MovesCursor, MovesHorizontalCursor
 from textual.reactive import Reactive
 from textual.render import measure
 from textual.renderables.styled import Styled

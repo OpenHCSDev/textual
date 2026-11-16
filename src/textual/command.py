@@ -46,10 +46,15 @@ from textual.content import Content
 from textual.events import Click, Mount
 from textual.fuzzy import Matcher
 from textual.message import Message
-from textual.navigation import (
-    FirstNavigation, LastNavigation, Navigation, NavigationCommand,
-    PageDown, PageUp, VerticalCursorCommand,
+from formbridge.navigation_commands import (
+    FirstNavigation,
+    LastNavigation,
+    NavigationCommand,
+    PageDown,
+    PageUp,
+    VerticalCursorCommand,
 )
+from textual.navigation import Navigation
 from textual.reactive import var
 from textual.screen import Screen, SystemModalScreen
 from textual.style import Style

@@ -14,7 +14,8 @@ from textual.binding import MethodBinding
 from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
 from textual.message import Message
-from textual.navigation import ActivateSelection, MovesCursor, NavigationCommand, SelectCursor
+from formbridge.navigation_commands import ActivateSelection, NavigationCommand, SelectCursor
+from textual.navigation import MovesCursor
 from textual.reactive import reactive, var
 from textual.timer import Timer
 from textual.widgets import Static
