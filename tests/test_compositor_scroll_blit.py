@@ -136,6 +136,35 @@ def test_change_outside_the_clip_is_not_a_scroll():
     assert _detect(before, after) is None
 
 
+# --- a resize invalidates a pending scroll blit ---
+
+
+def test_resize_drops_a_pending_scroll_blit():
+    # A band was detected against the old size; applying its terminal scroll region after a
+    # resize shifts the wrong rows and leaves a torn frame the optimistic `published` commit
+    # then trusts forever. A size change drops the bands and repaints the whole new screen.
+    compositor = Compositor()
+    compositor.size = Size(80, 24)
+    compositor._scroll_bands = [(Region(0, 5, 80, 10), 2)]
+    compositor._dirty_regions = {Region(0, 0, 10, 1)}
+    compositor._resize(Size(100, 30))
+    assert compositor.size == Size(100, 30)
+    assert compositor._scroll_bands == []
+    assert compositor._dirty_regions == {Region(0, 0, 100, 30)}
+
+
+def test_same_size_reflow_keeps_a_pending_scroll_blit():
+    # Only a real size change invalidates: a same-size reflow keeps the pending band so
+    # scroll-blit still fires. Clearing on every reflow would defeat the optimization.
+    compositor = Compositor()
+    compositor.size = Size(80, 24)
+    band = (Region(0, 5, 80, 10), 2)
+    compositor._scroll_bands = [band]
+    compositor._dirty_regions = {Region(0, 0, 10, 1)}
+    compositor._resize(Size(80, 24))
+    assert compositor._scroll_bands == [band]
+
+
 # --- DECRQM capability probe: st's reply -> capability message ---
 
 def test_decrqm_mode69_reply_becomes_rectangular_scroll_message():

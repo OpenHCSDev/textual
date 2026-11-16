@@ -1126,7 +1126,20 @@ class Compositor:
             self._dirty_regions.add(on_screen)
 
     def _resize(self, size: Size) -> None:
-        """Change the screen size, dropping marks for cells that no longer exist."""
+        """Change the screen size, dropping marks for cells that no longer exist.
+
+        A real size change invalidates any pending scroll blit. A band was detected
+        against the previous size; applying its terminal scroll region (DECSTBM/DECSLRM)
+        after the resize would shift the wrong rows and leave a torn frame that the
+        optimistic ``published`` commit then treats as correct forever. So on a size
+        change the bands are dropped and the whole new screen is repainted -- the model
+        never carries a blit whose geometry no longer matches the terminal. Same-size
+        reflows keep the ordinary damage path so scroll-blit is preserved."""
+        if size != self.size:
+            self.size = size
+            self._scroll_bands.clear()
+            self._dirty_regions = {size.region}
+            return
         self.size = size
         marked, self._dirty_regions = self._dirty_regions, set()
         for region in marked:
