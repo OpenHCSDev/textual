@@ -2,15 +2,12 @@
 from __future__ import annotations
 
 from enum import IntEnum
-from typing import ClassVar
 
 from textual import events
 from textual._activation import Activation
 from textual._compositor import ActivationScene, FrameOverlay
 from textual._on import on
-from textual.binding import ModeBinding
 from textual.content import Content
-from textual.document._editing import VimMode
 from textual.geometry import Region
 from textual.hint_labels import HintLabelStyle, NextLetterHints
 from textual.widget import Widget
@@ -50,13 +47,6 @@ class HintHost:
         scene = self._compositor.activation_scene(click, excluded)
         if scene.targets:
             await HintSession.for_scene(self, scene, click).mount_on(self)
-
-    MODE_BINDINGS: ClassVar[tuple[ModeBinding, ...]] = (
-        ModeBinding("f", action_show_hints, HintClick.LEFT.description,
-                    mode=VimMode, show=False),
-        ModeBinding("ctrl+f", action_show_context_hints, HintClick.RIGHT.description,
-                    mode=VimMode, show=False),
-    )
 
     def dismiss_hints(self, *, restore=True) -> None:
         for session in self.query_children(HintSession):
