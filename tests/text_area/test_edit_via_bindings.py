@@ -10,9 +10,9 @@ Note that more extensive testing for editing is done at the Document level.
 import pytest
 
 from textual.app import App, ComposeResult
-from textual.document._editing import EditingMode
+
 from textual.events import Paste
-from formbridge.key_declarations import KeyInvocation, LeftKey
+from formbridge.key_declarations import KeyInvocation, LeftKey, TextEntryMode
 from textual.widgets import TextArea
 from textual.widgets.text_area import Selection
 
@@ -647,7 +647,7 @@ async def test_printable_arrow_alias_types_only_where_text_is_taken(
         text_area.load_text("ab")
         text_area.read_only = read_only
         text_area.cursor_location = (0, 1) if read_only else (0, 0)
-        app.set_keymap({KeyInvocation.in_mode(KeyInvocation.qualified(LeftKey), EditingMode): "left,h"})
+        app.set_keymap({KeyInvocation.in_mode(KeyInvocation.qualified(LeftKey), TextEntryMode): "left,h"})
         await pilot.press("h")
         await pilot.pause()
         assert text_area.text == expected_text

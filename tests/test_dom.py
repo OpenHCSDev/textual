@@ -1,8 +1,8 @@
 import pytest
 
+from formbridge.key_declarations import TextEntryMode
 from textual.css.errors import StyleValueError
 from textual.dom import BadIdentifier, DOMNode
-from textual.document._editing import EditingMode
 
 
 def test_display_default():
@@ -97,11 +97,11 @@ def test_inherited_bindings():
     class E(D):
         BINDINGS = [("e", "e", "e")]
 
-    assert list(A.binding_defaults(EditingMode).key_to_bindings.keys()) == ["a"]
-    assert list(B.binding_defaults(EditingMode).key_to_bindings.keys()) == ["a", "b"]
-    assert list(C.binding_defaults(EditingMode).key_to_bindings.keys()) == ["c"]
-    assert not list(D.binding_defaults(EditingMode).key_to_bindings.keys())
-    assert list(E.binding_defaults(EditingMode).key_to_bindings.keys()) == ["e"]
+    assert list(A.binding_defaults(TextEntryMode).key_to_bindings.keys()) == ["a"]
+    assert list(B.binding_defaults(TextEntryMode).key_to_bindings.keys()) == ["a", "b"]
+    assert list(C.binding_defaults(TextEntryMode).key_to_bindings.keys()) == ["c"]
+    assert not list(D.binding_defaults(TextEntryMode).key_to_bindings.keys())
+    assert list(E.binding_defaults(TextEntryMode).key_to_bindings.keys()) == ["e"]
 
 
 def test__get_default_css():

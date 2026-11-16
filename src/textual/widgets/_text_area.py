@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from formbridge.key_declarations import TextEntryMode
 from textual._activation import FocusActivation
 
 import dataclasses
@@ -169,7 +170,7 @@ class TextArea(FocusActivation, EditableInput, ScrollView):
         return self.editing_mode.label
 
     @property
-    def binding_mode(self) -> type[EditingMode]:
+    def binding_mode(self) -> type[TextEntryMode]:
         return self.editing_mode.binding_mode()
 
     @property

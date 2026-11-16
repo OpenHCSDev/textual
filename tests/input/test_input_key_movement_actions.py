@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from textual.app import App, ComposeResult
-from textual.document._editing import EditingMode
-from formbridge.key_declarations import KeyInvocation, LeftKey, RightKey
+
+from formbridge.key_declarations import KeyInvocation, LeftKey, RightKey, TextEntryMode
 from textual.widgets import Input
 
 
@@ -32,8 +32,8 @@ async def test_input_printable_arrow_aliases_remain_text() -> None:
         editor = app.query_one("#empty", Input)
         editor.focus()
         app.set_keymap({
-            KeyInvocation.in_mode(KeyInvocation.qualified(LeftKey), EditingMode): "left,h",
-            KeyInvocation.in_mode(KeyInvocation.qualified(RightKey), EditingMode): "right,l",
+            KeyInvocation.in_mode(KeyInvocation.qualified(LeftKey), TextEntryMode): "left,h",
+            KeyInvocation.in_mode(KeyInvocation.qualified(RightKey), TextEntryMode): "right,l",
         })
         await pilot.press(*"hello")
         assert editor.value == "hello"

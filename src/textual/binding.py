@@ -29,12 +29,19 @@ import rich.repr
 
 from textual._callback import invoke, invoke_sync
 from textual.actions import SkipAction
-from formbridge.key_declarations import DeclaredKey, KeyDeclaration, KeyInvocation, UndecodedKey
+from formbridge.key_declarations import (
+    DeclaredKey,
+    KeyDeclaration,
+    KeyInvocation,
+    KeyPreference,
+    SharedKeyPreference,
+    TextEntryMode,
+    UndecodedKey,
+)
 
 from textual.keys import _character_to_key
 
 if TYPE_CHECKING:
-    from textual.document._editing import EditingMode
     from typing_extensions import TypeAlias
 
     from textual.app import App
@@ -75,7 +82,7 @@ class InvalidBinding(Exception):
 
 
 @dataclass(frozen=True)
-class Binding:
+class Binding(KeyPreference):
     """The configuration of a key binding."""
 
     key: str
@@ -123,23 +130,7 @@ class Binding:
     declared_key: DeclaredKey = field(default=UndecodedKey(), kw_only=True, repr=False)
     """The original native key identity; remapping changes key, never this fact."""
 
-    def command_invocations(self) -> tuple[KeyInvocation, ...]:
-        """Named external actions expose no nominal command."""
-        return ()
-
-    def invocations(self) -> tuple[KeyInvocation, ...]:
-        return self.declared_key.invocations(self.command_invocations())
-
-    def shared_identity(self, mode: type[EditingMode]) -> str | None:
-        """The arrow preference this binding's key shares in the mode, if its key is an arrow."""
-        return next((invocation.binding_identity(mode) for invocation in self.invocations()), self.id)
-
-    def preference_identity(self, mode: type[EditingMode]) -> str | None:
-        """A named action keeps the id its author declared; without one it joins its arrow's
-        shared preference, so a keymap for that id replaces every key the author listed."""
-        return self.id if self.id is not None else self.shared_identity(mode)
-
-    def for_mode(self, mode: type[EditingMode]) -> tuple[Self, ...]:
+    def for_mode(self, mode: type[TextEntryMode]) -> tuple[Self, ...]:
         """Give native arrows their shared preference identity in the actual mode."""
         identity = self.preference_identity(mode)
         return tuple(
@@ -288,14 +279,14 @@ class CallBinding(Binding):
 
 
 @dataclass(frozen=True, kw_only=True)
-class ModeBinding(CallBinding, KeyInvocation):
+class ModeBinding(SharedKeyPreference, CallBinding, KeyInvocation):
     """A native callable whose key belongs to a nominal editing capability.
 
     The declaring class keeps the method and its key together. Applications
     choose which native declarations they expose through their own projection.
     """
 
-    mode: type[EditingMode]
+    mode: type[TextEntryMode]
 
     @property
     def invocation(self) -> KeyInvocation:
@@ -303,10 +294,6 @@ class ModeBinding(CallBinding, KeyInvocation):
 
     def command_invocations(self) -> tuple[KeyInvocation, ...]:
         return (self.invocation,)
-
-    def preference_identity(self, mode: type[EditingMode]) -> str | None:
-        """Native commands on an arrow always share its preference, whatever id they carry."""
-        return self.shared_identity(mode)
 
     def key_identity(self) -> str:
         return self.qualified(self.action)
@@ -320,7 +307,7 @@ class ModeBinding(CallBinding, KeyInvocation):
     def key_system(self) -> bool:
         return self.system
 
-    def for_mode(self, mode: type[EditingMode]) -> tuple[ModeBinding, ...]:
+    def for_mode(self, mode: type[TextEntryMode]) -> tuple[ModeBinding, ...]:
         """Expose a native callable only in its declared capability's active modes."""
         if self.mode not in mode.__mro__:
             return ()
@@ -353,14 +340,12 @@ class MethodBinding(ModeBinding):
         priority: bool = False, available: Callable[[DOMNode], bool | None] = _always,
         show: bool = False,
     ) -> Callable[[Callable[..., object]], MethodBinding]:
-        from textual.document._editing import EditingMode
-
         def declared(method: Callable[..., object]) -> MethodBinding:
             if not isinstance(method, FunctionType):
                 raise TypeError("Native method declarations require a Python function")
             if iscoroutinefunction(method):
                 raise TypeError("Pre-text editor methods must be synchronous")
-            return cls(key=",".join(keys), action=method, mode=EditingMode,
+            return cls(key=",".join(keys), action=method, mode=TextEntryMode,
                        description=description or method.__name__.removeprefix("action_").replace("_", " ").capitalize(),
                        tooltip=method.__doc__ or "", show=show, selecting=selecting,
                        priority=priority, available=available)
@@ -557,7 +542,7 @@ class BindingsMap:
                 keys.setdefault(key, []).extend(key_bindings)
         return BindingsMap.from_keys(keys)
 
-    def project(self, mode: type[EditingMode], declarations: Iterable[BindingType] = ()) -> BindingsMap:
+    def project(self, mode: type[TextEntryMode], declarations: Iterable[BindingType] = ()) -> BindingsMap:
         """Raw and nominal declarations use the same native mode projection."""
         keys: dict[str, list[Binding]] = {}
         for binding in (*[binding for _, binding in self], *Binding.make_bindings(declarations)):

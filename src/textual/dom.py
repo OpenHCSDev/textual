@@ -33,6 +33,7 @@ from rich.tree import Tree
 
 from formbridge.navigation_commands import NavigationCommand
 from metaclass_registry.own_declarations import OwnDeclarations
+from formbridge.key_declarations import TextEntryMode
 from textual._context import active_message_pump
 from textual._compat import cached_property
 from textual._node_list import NodeList
@@ -155,7 +156,7 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump, OwnDeclarations):
         return self.key_mode().label
 
     @property
-    def binding_mode(self) -> type[EditingMode]:
+    def binding_mode(self) -> type[TextEntryMode]:
         """The canonical editing mode used to project this node's bindings."""
         return self.key_mode.binding_mode()
 
@@ -548,7 +549,7 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump, OwnDeclarations):
         return ()
 
     @classmethod
-    def native_bindings(cls, mode: type[EditingMode]) -> tuple[ModeBinding, ...]:
+    def native_bindings(cls, mode: type[TextEntryMode]) -> tuple[ModeBinding, ...]:
         return tuple(projected
                      for binding in cls.declared_items("MODE_BINDINGS", cls.method_key_owners())
                      for projected in binding.for_mode(mode))
@@ -558,21 +559,21 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump, OwnDeclarations):
         return binding
 
     @staticmethod
-    def navigation_bindings(declaration: type[NavigationCommand], mode: type[EditingMode]) -> tuple[Binding, ...]:
+    def navigation_bindings(declaration: type[NavigationCommand], mode: type[TextEntryMode]) -> tuple[Binding, ...]:
         """A navigation command's default keys as Textual bindings in one active editing mode."""
         if not declaration.keys:
             return ()
         command = declaration()
         return tuple(
             CommandBinding(key=key, action=command, description=declaration.title,
-                           available=declaration.available, mode=EditingMode,
+                           available=declaration.available, mode=TextEntryMode,
                            id=declaration.binding_id(mode), show=False,
                            declared_key=declaration.declared_key)
             for key in declaration.keys
         )
 
     @classmethod
-    def declared_bindings(cls, mode: type[EditingMode]) -> tuple[Binding, ...]:
+    def declared_bindings(cls, mode: type[TextEntryMode]) -> tuple[Binding, ...]:
         return (
             *(cls.present_binding(declaration, binding)
               for family in cls.key_families
@@ -583,14 +584,14 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump, OwnDeclarations):
         )
 
     @classmethod
-    def method_bindings(cls, mode: type[EditingMode]) -> tuple[Binding, ...]:
+    def method_bindings(cls, mode: type[TextEntryMode]) -> tuple[Binding, ...]:
         """Keys each class in the MRO declares on its own methods."""
         return tuple(projected for base in cls._dom_bases()
                      for binding in base._declared_key_bindings
                      for projected in binding.for_mode(mode))
 
     @classmethod
-    def class_bindings(cls, mode: type[EditingMode]) -> dict[str, list[Binding]]:
+    def class_bindings(cls, mode: type[TextEntryMode]) -> dict[str, list[Binding]]:
         """Each class's own keys replace its ancestors' bindings for those keys.
 
         A class writes a key either in BINDINGS or by declaring it on a method; both are
@@ -622,7 +623,7 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump, OwnDeclarations):
 
     @classmethod
     @lru_cache(maxsize=None)
-    def _binding_defaults(cls, mode: type[EditingMode]) -> tuple[tuple[str, tuple[Binding, ...]], ...]:
+    def _binding_defaults(cls, mode: type[TextEntryMode]) -> tuple[tuple[str, tuple[Binding, ...]], ...]:
         """Cache immutable projections, never a caller's mutable remapping table."""
         keys = {key: list(bindings) for key, bindings in cls.class_bindings(mode).items()}
         # A method's key was placed, or replaced, with its class above; the families follow.
@@ -635,7 +636,7 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump, OwnDeclarations):
         return tuple((key, tuple(bindings)) for key, bindings in keys.items())
 
     @classmethod
-    def binding_defaults(cls, mode: type[EditingMode]) -> BindingsMap:
+    def binding_defaults(cls, mode: type[TextEntryMode]) -> BindingsMap:
         """Catalogs and dispatch receive their own map over the same frozen bindings."""
         return BindingsMap.from_keys({
             key: list(bindings) for key, bindings in cls._binding_defaults(mode)
@@ -643,14 +644,14 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump, OwnDeclarations):
 
     @classmethod
     @lru_cache(maxsize=None)
-    def keymap_claims(cls, mode: type[EditingMode]) -> tuple[KeymapClaim, ...]:
+    def keymap_claims(cls, mode: type[TextEntryMode]) -> tuple[KeymapClaim, ...]:
         """A native scope exposes its declared invocations without constructing controls.
 
         A function of the cached defaults it reads, so it is built once per class and mode:
         a keymap catalog asks every context for every mode it shows."""
         return tuple(KeymapClaim.from_bindings(binding for _, binding in cls.binding_defaults(mode)))
 
-    def binding_map(self, mode: type[EditingMode]) -> BindingsMap:
+    def binding_map(self, mode: type[TextEntryMode]) -> BindingsMap:
         """One projection for native declarations and external subclass bindings."""
         return self.binding_defaults(mode)
 

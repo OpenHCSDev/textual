@@ -1,5 +1,5 @@
 """Arrow identities supply modal spellings, including controls not hand-patched."""
-from formbridge.key_declarations import DownKey, NavigationKey
+from formbridge.key_declarations import DownKey, NavigationKey, TextEntryMode
 from textual import widgets
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll
@@ -16,7 +16,7 @@ def test_navigation_spellings_follow_every_declared_context() -> None:
         getattr(widgets, name)
     checked = 0
     for owner in DOMNode.contexts():
-        standard = owner.binding_defaults(EditingMode)
+        standard = owner.binding_defaults(TextEntryMode)
         modal = owner.binding_defaults(VimMode)
         for direction in NavigationKey.__subclasses__():
             arrows = tuple(
@@ -42,7 +42,7 @@ class VimProfile(VimMode):
     """A modal scope for native controls, without starting an external editor."""
 
     @classmethod
-    def binding_mode(cls) -> type[EditingMode]:
+    def binding_mode(cls) -> type[TextEntryMode]:
         return VimMode
 
     async def handle_key(self, editor: TextArea, event: Key) -> bool:
@@ -83,7 +83,7 @@ async def test_modal_tree_input_and_arrow_remap() -> None:
         entry.focus()
         await pilot.press("h", "j", "k", "l")
         assert entry.value == "hjkl"
-        assert entry.binding_mode is EditingMode
+        assert entry.binding_mode is TextEntryMode
         assert app.query_one(VerticalScroll).scroll_y == 0
         tree.focus()
         await pilot.pause()
