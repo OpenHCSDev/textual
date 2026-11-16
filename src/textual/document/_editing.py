@@ -119,22 +119,6 @@ class EditingMode(TextEntryMode):
             editor.move_cursor(result.end_location)
 
 
-class NativeTextKeys:
-    """A control whose printable keys are text, whatever its screen's keyboard profile."""
-
-    @property
-    def takes_typed_text(self) -> bool:
-        return True
-
-    @property
-    def key_mode(self) -> type[EditingMode]:
-        return EditingMode
-
-    @property
-    def allows_application_commands(self) -> bool:
-        return self.key_mode().allows_application_commands
-
-
 class VimMode(EditingMode, ModalInputMode, ABC):
     """Modal binding capability, not a second implementation of Vim."""
 

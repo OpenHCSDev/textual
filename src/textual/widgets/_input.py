@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 from textual.binding import Binding, BindingType, MethodBinding
 from textual.css._error_tools import friendly_list
 from textual.css.native import Component
-from textual.document._editing import NativeTextKeys
+from formbridge.key_declarations import NativeTextKeys
 from textual.events import Blur, Focus, Mount
 from textual.geometry import Offset, Region, Size, clamp
 from textual.cursor_shape import CursorShape, TextEntryCursor
