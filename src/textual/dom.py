@@ -31,18 +31,16 @@ from rich.highlighter import ReprHighlighter
 from rich.text import Text
 from rich.tree import Tree
 
-from formbridge.key_declarations import KeymapClaim
+from formbridge.key_declarations import KeymapClaim, TextEntryMode
 from formbridge.navigation_commands import NavigationCommand
 from metaclass_registry.descendants import Descendants
 from metaclass_registry.own_declarations import OwnDeclarations
-from formbridge.key_declarations import TextEntryMode
 from textual._context import active_message_pump
 from textual._compat import cached_property
 from textual._node_list import NodeList
 from textual._paint_state import PaintNode
 from textual._types import WatchCallbackType
 from textual.binding import Binding, BindingsMap, BindingType, CommandBinding, MethodBinding, ModeBinding
-from textual.document._editing import EditingMode
 from textual.cache import LRUCache
 from textual.css._error_tools import friendly_list
 from textual.css.constants import VALID_DISPLAY, VALID_VISIBILITY
@@ -148,7 +146,7 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump, OwnDeclarations, Descendant
     _geometry_revision = 0
 
     @property
-    def key_mode(self) -> type[EditingMode]:
+    def key_mode(self) -> type[TextEntryMode]:
         """Ordinary controls use their screen's declared keyboard scope."""
         return self.screen.key_mode
 
@@ -1137,12 +1135,7 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump, OwnDeclarations, Descendant
     @lru_cache(maxsize=None)
     def theme_states(cls) -> tuple[ThemeState, ...]:
         """Every look this class's state selects, in MRO order."""
-        return tuple(
-            state
-            for owner in reversed(cls.__mro__)
-            for state in vars(owner).values()
-            if isinstance(state, ThemeState)
-        )
+        return tuple(cls.declared_of(ThemeState, reversed(cls.__mro__)))
 
     def native_declarations(self) -> tuple[NativeDeclaration, ...]:
         """The class's own declarations, then each current look's; providers may extend it."""
@@ -1168,8 +1161,8 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump, OwnDeclarations, Descendant
     def declared_components(cls) -> Mapping[Component, tuple[NativeDeclaration, ...]]:
         """Every class's own component declarations, base first, so the most derived wins."""
         declared: dict[Component, tuple[NativeDeclaration, ...]] = {}
-        for owner in reversed(cls.__mro__):
-            for part, declarations in vars(owner).get("native_components", {}).items():
+        for _, components in cls.own_declarations("native_components", reversed(cls.__mro__)):
+            for part, declarations in components.items():
                 declared[part] = (*declared.get(part, ()), *declarations)
         return declared
 

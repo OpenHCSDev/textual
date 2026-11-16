@@ -8,6 +8,7 @@ from functools import cache, partial
 from typing import ClassVar, Protocol, Self, overload
 
 from metaclass_registry.descendants import Descendants
+from metaclass_registry.own_declarations import OwnDeclarations
 
 from textual.css._declaration import NativeProperty, ValueBuilder
 from textual.css._style_properties import StyleProperty
@@ -132,7 +133,7 @@ class Component(Descendants, Enum):
                      if part.css_name == css_name), None)
 
 
-class DeclaresTheme:
+class DeclaresTheme(OwnDeclarations):
     """Owns native theme declarations: each class declares its own, the MRO composes them."""
 
     native_theme: ClassVar[tuple[NativeDeclaration, ...]] = ()
@@ -141,11 +142,7 @@ class DeclaresTheme:
     @cache
     def declared_theme(cls) -> tuple[NativeDeclaration, ...]:
         """Every class's own declarations, base first, so the most derived wins."""
-        return tuple(
-            declaration
-            for owner in reversed(cls.__mro__)
-            for declaration in vars(owner).get("native_theme", ())
-        )
+        return tuple(cls.declared_items("native_theme", reversed(cls.__mro__)))
 
 
 class ThemedNode(Protocol):
