@@ -32,6 +32,7 @@ from rich.text import Text
 from rich.tree import Tree
 
 from formbridge.navigation_commands import NavigationCommand
+from metaclass_registry.descendants import Descendants
 from metaclass_registry.own_declarations import OwnDeclarations
 from formbridge.key_declarations import TextEntryMode
 from textual._context import active_message_pump
@@ -139,7 +140,7 @@ class _ClassesDescriptor:
 
 
 @rich.repr.auto
-class DOMNode(DeclaresTheme, PaintNode, MessagePump, OwnDeclarations):
+class DOMNode(DeclaresTheme, PaintNode, MessagePump, OwnDeclarations, Descendants):
     """The base class for object that can be in the Textual DOM (App and Widget)"""
 
     _subtree_style_revision = 0
@@ -530,18 +531,6 @@ class DOMNode(DeclaresTheme, PaintNode, MessagePump, OwnDeclarations):
     _declared_key_bindings: ClassVar[tuple[MethodBinding, ...]] = ()
     _own_key_families: ClassVar[tuple[type[NavigationCommand], ...]] = ()
     key_families: ClassVar[tuple[type[NavigationCommand], ...]] = ()
-
-    @classmethod
-    def contexts(cls) -> tuple[type[DOMNode], ...]:
-        """Native and application declarations share the actual node hierarchy."""
-        pending = [cls]
-        found: dict[type[DOMNode], None] = {}
-        while pending:
-            owner = pending.pop()
-            if owner not in found:
-                found[owner] = None
-                pending.extend(reversed(owner.__subclasses__()))
-        return tuple(found)
 
     @classmethod
     def method_key_owners(cls) -> tuple[type, ...]:
