@@ -2204,8 +2204,15 @@ TextArea {
     @property
     def cursor_shape(self) -> CursorShape:
         """The editing mode's shape while the cursor is usable and on screen."""
-        if self._has_cursor and self.scrollable_content_region.contains_point(
-            self.cursor_screen_offset
+        content = self.scrollable_content_region
+        return self.cursor_shape_in(content, content)
+
+    def cursor_shape_in(
+        self, content_region: Region, visible_region: Region
+    ) -> CursorShape:
+        """The editing mode's cursor within the supplied frame's visible content."""
+        if self._has_cursor and content_region.intersection(visible_region).contains_point(
+            self.cursor_offset_in(content_region)
         ):
             return self.editing_mode.cursor_shape
         return CellCursor()

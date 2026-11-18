@@ -4,6 +4,7 @@ from textual import errors
 from textual._compositor import Compositor
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll
+from textual.cursor_shape import CellCursor
 from textual.screen import Screen
 from textual.widgets import Button, Static, TextArea
 
@@ -44,6 +45,34 @@ class ReaderScreen(Screen):
 class ReaderApp(App):
     def get_default_screen(self):
         return ReaderScreen()
+
+
+async def test_terminal_cursor_reads_published_geometry_without_arranging():
+    app = ReaderApp()
+
+    async def drive(pilot):
+        await pilot.pause()
+        screen = app.screen
+        compositor = screen._compositor
+        editor = screen.query_one("#editor", TextArea)
+        history = screen.query_one("#history", VerticalScroll)
+        history.scroll_to(y=0, immediate=True, animate=False)
+        screen.set_focus(editor, scroll_visible=False)
+        screen._refresh_layout(app.size, scroll=True)
+        assert editor not in compositor._visible_map
+        compositor.arrangements.clear()
+
+        for _ in range(10):
+            app.cursor_position
+            app._cursor_shape_change()
+            app.keyboard_input_region
+        assert not compositor.arrangements
+        assert app.cursor_shape == CellCursor()
+        assert editor.text == "original draft"
+        app.exit()
+
+    await asyncio.wait_for(app.run_async(headless=True, size=(40, 8), auto_pilot=drive), 10)
+    assert app._exception is None
 
 
 async def test_disabled_editor_batches_offscreen_focus_order():

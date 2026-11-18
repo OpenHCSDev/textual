@@ -2184,6 +2184,16 @@ class Widget(ScrollsView):
         """
         return None
 
+    def cursor_shape_in(
+        self, content_region: Region, visible_region: Region
+    ) -> CursorShape:
+        """Cursor appearance in a placed scene, without acquiring geometry.
+
+        Content keeps its original origin; visibility clips the cursor rather
+        than moving it. Widgets with position-dependent cursors override this.
+        """
+        return self.cursor_shape
+
     @property
     def cursor_shape(self) -> CursorShape:
         """How the terminal shows this widget's text cursor while it has focus."""
