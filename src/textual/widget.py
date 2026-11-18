@@ -3826,9 +3826,11 @@ class Widget(ScrollsView):
         )
 
         if geometry.stable_gutter:
-            # Reserve the declared gutter even while the scrollbar is hidden.
-            show_vertical_scrollbar = True
+            # Reserve the declared gutter even while the scrollbar is hidden. A gutter
+            # declared 0 cells wide reserves nothing: splitting at -0 is splitting at 0,
+            # which would leave the content no columns at all.
             scrollbar_size_vertical = geometry.vertical_scrollbar_size
+            show_vertical_scrollbar = bool(scrollbar_size_vertical)
 
         if show_horizontal_scrollbar and show_vertical_scrollbar:
             region, _, _, _ = region.split(
