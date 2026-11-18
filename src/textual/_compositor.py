@@ -968,6 +968,7 @@ class ExposedSpans:
         self.remaining: dict[int, dict[int, int]] = {}
         for y, x, end in ChopsUpdate._span_cuts(spans, cuts, bounds.y):
             self.remaining.setdefault(y - bounds.y, {})[x] = end
+        self._rows = tuple(sorted(self.remaining))
 
     def take(self, y: int, x: int) -> bool:
         """Claim a cut once; a lower widget cannot paint over its owner."""
@@ -988,29 +989,37 @@ class ExposedSpans:
                 self.take(y, x)
 
     def regions(self, region: Region) -> Iterable[Region]:
-        """Request exposed chop spans, coalesced across adjacent rows.
+        """Request pending cuts inside this rectangle, coalescing adjacent rows.
 
-        Parent backgrounds often have narrow margins beside foreground
-        children. Dividing their whole width materializes and discards the
-        covered segments. Resolve exposure before asking widgets to paint.
+        The original damage rows and scene cuts bound each query. Claims only
+        delete pending cuts, so the row index remains valid for this frame.
         """
         first, last = region.column_span
+        top, bottom = region.y - self.bounds.y, region.bottom - self.bounds.y
+        rows = self._rows[bisect_left(self._rows, top):bisect_left(self._rows, bottom)]
         runs: dict[tuple[int, int], int] = {}
-        for y in region.line_range:
-            row = y - self.bounds.y
+        end_y = region.y
+        for row in rows:
+            y = row + self.bounds.y
+            if y != end_y:
+                for (left, right), start_y in runs.items():
+                    yield Region(left, start_y, right - left, end_y - start_y)
+                runs.clear()
+            pending = self.remaining.get(row, {})
+            cuts = self.cuts[row]
             spans: set[tuple[int, int]] = set()
             start_x = None
             end_x = first
-            # _regions_to_spans supplies ordered damage; deleting painted
-            # cells preserves that order. Covered cuts are never revisited.
-            for x, end in self.remaining.get(row, {}).items():
-                if first <= x < last:
-                    if start_x is not None and x != end_x:
-                        spans.add((start_x, end_x))
-                        start_x = None
-                    if start_x is None:
-                        start_x = x
-                    end_x = end
+            for x in cuts[bisect_left(cuts, first):bisect_left(cuts, last)]:
+                end = pending.get(x)
+                if end is None:
+                    continue
+                if start_x is not None and x != end_x:
+                    spans.add((start_x, end_x))
+                    start_x = None
+                if start_x is None:
+                    start_x = x
+                end_x = end
             if start_x is not None:
                 spans.add((start_x, end_x))
             for span in tuple(runs):
@@ -1020,8 +1029,9 @@ class ExposedSpans:
                     yield Region(left, start_y, right - left, y - start_y)
             for span in spans:
                 runs.setdefault(span, y)
+            end_y = y + 1
         for (left, right), start_y in runs.items():
-            yield Region(left, start_y, right - left, region.bottom - start_y)
+            yield Region(left, start_y, right - left, end_y - start_y)
 
 
 @rich.repr.auto(angular=True)
