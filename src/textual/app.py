@@ -1047,8 +1047,16 @@ class App(Generic[ReturnType], DOMNode):
     @property
     def cursor_shape(self) -> CursorShape:
         """How the terminal shows the focused widget's text cursor."""
-        focused = self.screen.focused
-        return CellCursor() if focused is None else focused.cursor_shape
+        screen = self.screen
+        focused = screen.focused
+        if focused is not None:
+            geometry = screen._compositor._published_map.get(focused)
+            if geometry is not None:
+                return focused.cursor_shape_in(
+                    geometry.content_region,
+                    geometry.visible_region.intersection(screen.outer_size.region),
+                )
+        return CellCursor()
 
     def _input_region_in(self, placements: CompositorMap) -> Region:
         """Read focused content from one scene; never reuse a previous cursor point."""

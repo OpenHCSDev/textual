@@ -2,6 +2,8 @@ import pytest
 
 from textual.app import App, ComposeResult
 from textual.document._editing import EditingMode
+from textual.cursor_shape import CellCursor, TextEntryCursor
+from textual.geometry import Region
 from textual.widget import Widget
 from textual.widgets import Input, TextArea
 
@@ -16,6 +18,14 @@ class CursorShapeApp(App[None]):
 
 HIDDEN_DEFAULT = "\x1b[0 q\x1b[?25l"
 TERMINAL_BAR = "\x1b[5 q\x1b[?25h"
+
+
+@pytest.mark.parametrize("visible", [Region(10, 20, 8, 3), Region(12, 20, 6, 3)])
+def test_placed_cursor_is_clipped_without_moving_its_origin(visible: Region) -> None:
+    editor = TextArea("hello")
+    content = Region(10, 20, 8, 3)
+    expected = TextEntryCursor() if visible.contains_point(editor.cursor_offset_in(content)) else CellCursor()
+    assert editor.cursor_shape_in(content, visible) == expected
 
 
 async def test_editing_mode_sets_terminal_cursor_shape() -> None:
