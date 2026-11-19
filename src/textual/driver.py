@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import threading
+import webbrowser
 from abc import ABC, abstractmethod
 from concurrent.futures import Future
 from contextlib import contextmanager
@@ -285,9 +286,12 @@ class Driver(ABC):
                 This is only relevant when running via the WebDriver,
                 and is ignored when called while running through the terminal.
         """
-        import webbrowser
-
-        webbrowser.open(url)
+        # A foreground browser may wait until its window closes. Neither the
+        # event loop nor application exit owns that external window's lifetime.
+        threading.Thread(
+            target=webbrowser.open, args=(url,), daemon=True,
+            name="textual-browser",
+        ).start()
 
     def deliver_binary(
         self,

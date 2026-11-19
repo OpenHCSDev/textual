@@ -68,6 +68,46 @@ async def test_driver_keeps_native_priority_bindings_focus_and_paste_routing():
         assert app.query_one("#second", Input).value == "bc"
 
 
+async def test_browser_open_does_not_hold_ui_or_application_exit(monkeypatch):
+    entered = threading.Event()
+    release = threading.Event()
+    finished = threading.Event()
+    calls = []
+    owner = threading.get_ident()
+
+    def browser(url):
+        calls.append((url, threading.get_ident(), threading.current_thread().daemon))
+        entered.set()
+        try:
+            release.wait(3)
+        finally:
+            finished.set()
+        return True
+
+    monkeypatch.setattr("webbrowser.open", browser)
+
+    class BrowserApp(App):
+        def compose(self):
+            yield Input()
+
+    app = BrowserApp()
+    try:
+        async with app.run_test() as pilot:
+            app.open_url("https://example.invalid/requested-link", new_tab=False)
+            assert await asyncio.to_thread(entered.wait, 1)
+            await pilot.press("x")
+            assert app.query_one(Input).value == "x"
+            assert not finished.is_set()
+        # An opener in the default executor would keep asyncio.run waiting;
+        # this independent daemon does not belong to the app's worker set.
+        assert not finished.is_set()
+        assert calls == [("https://example.invalid/requested-link", calls[0][1], True)]
+        assert calls[0][1] != owner
+    finally:
+        release.set()
+        assert await asyncio.to_thread(finished.wait, 1)
+
+
 async def test_driver_mouse_down_up_click():
     """Mouse down and up should issue a click."""
 
