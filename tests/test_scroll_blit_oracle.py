@@ -20,7 +20,23 @@ pytestmark = pytest.mark.skipif(
 
 from textual._compositor import run_steps
 from textual.containers import VerticalScroll
+from textual.widgets import Static
 from tests.test_paint_output import PageView, PaintApp
+
+
+class FixedViewportChrome(Static):
+    """Chrome owned by a scrolling container but fixed to its viewport."""
+
+    DEFAULT_CSS = """
+    FixedViewportChrome {
+        dock: top;
+        overlay: screen;
+        layer: overlay;
+        width: 32;
+        height: 2;
+        background: #502060;
+    }
+    """
 
 
 def _st_grid(width: int, height: int, chunks: list[str]) -> list[str]:
@@ -38,6 +54,8 @@ async def _updates_and_full() -> tuple[list[str], str, int, int]:
         # The terminal (patched st) honours DECSLRM, so sub-width panes may blit.
         app.screen._compositor._supports_rectangular_scroll = True
         history = app.query_one("#history", VerticalScroll)
+        await history.mount(FixedViewportChrome("fixed viewport\nchrome", id="fixed-chrome"))
+        await pilot.pause()
         history.scroll_end(animate=False, immediate=True)
         await pilot.pause()
         for _ in range(6):

@@ -35,6 +35,8 @@ class MapGeometry(NamedTuple):
     """Acquired native owner ancestry, nearest first, independent of later DOM writes."""
     gutter: Spacing
     """The actual content inset acquired with this placement, not current styles."""
+    fixed: bool
+    """Whether this placement is fixed to its scrolling parent's viewport."""
 
     @property
     def content_region(self) -> Region:
@@ -44,10 +46,12 @@ class MapGeometry(NamedTuple):
     @classmethod
     def from_widget(cls, widget: Widget, region: Region, order: tuple,
                     clip: Region, virtual_size: Size, container_size: Size,
-                    virtual_region: Region, dock_gutter: Spacing) -> MapGeometry:
+                    virtual_region: Region, dock_gutter: Spacing,
+                    fixed: bool = False) -> MapGeometry:
         """Acquire content inset and ancestry at the original placement producer."""
         return cls(region, order, clip, virtual_size, container_size,
-                   virtual_region, dock_gutter, tuple(widget.walk_ancestors()), widget.gutter)
+                   virtual_region, dock_gutter, tuple(widget.walk_ancestors()), widget.gutter,
+                   fixed)
 
     def with_ancestors(self, widget: Widget, root: Widget,
                        ancestors: tuple[DOMNode, ...]) -> MapGeometry:

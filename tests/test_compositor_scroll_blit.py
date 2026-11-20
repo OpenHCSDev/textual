@@ -62,11 +62,11 @@ from textual.map_geometry import MapGeometry
 _CLIP = Region(0, 5, 80, 20)  # rows 5..24, height 20
 
 
-def _geo(region: Region, clip: Region = _CLIP) -> MapGeometry:
+def _geo(region: Region, clip: Region = _CLIP, *, fixed: bool = False) -> MapGeometry:
     return MapGeometry(
         region=region, order=(), clip=clip, virtual_size=Size(80, 100),
         container_size=Size(80, 20), virtual_region=region, dock_gutter=Spacing(),
-        ancestors=(), gutter=Spacing(),
+        ancestors=(), gutter=Spacing(), fixed=fixed,
     )
 
 
@@ -134,6 +134,35 @@ def test_change_outside_the_clip_is_not_a_scroll():
     before = {a: _geo(Region(0, 10, 80, 3))}
     after = {a: _geo(Region(0, 8, 80, 3)), outsider: _geo(Region(0, 100, 80, 3))}
     assert _detect(before, after) is None
+
+
+def test_scroll_repaints_fixed_placement_inside_carried_band():
+    """The terminal moves every cell in the band, including fixed viewport chrome.
+
+    Its geometry does not move, so the compositor must repaint that region after the
+    terminal scroll rather than waiting for a geometry change that will never happen.
+    """
+    moving, fixed = object(), object()
+    before = {
+        moving: _geo(Region(0, 10, 80, 3)),
+        fixed: _geo(Region(0, 5, 80, 1), fixed=True),
+    }
+    after = {
+        moving: _geo(Region(0, 8, 80, 3)),
+        fixed: _geo(Region(0, 5, 80, 1), fixed=True),
+    }
+
+    class Owner:
+        def check_idle(self) -> None:
+            pass
+
+    compositor = Compositor()
+    compositor.size = Size(80, 30)
+    compositor._damage_geometry(before, after, Owner())
+
+    assert compositor._scroll_bands == [(_CLIP, 2)]
+    assert Region(0, 5, 80, 1) in compositor._dirty_regions
+    assert Region(0, 23, 80, 2) in compositor._dirty_regions
 
 
 # --- a resize invalidates a pending scroll blit ---

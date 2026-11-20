@@ -182,17 +182,18 @@ class SubtreeGeometryKey(NamedTuple):
     visible_only: bool
     scroll_offset: Offset
     inherited_layers: tuple
+    fixed: bool
 
     @classmethod
     def from_widget(cls, widget: Widget, virtual_region: Region, region: Region,
                     order: tuple, layer_order: int, clip: Region, visible: bool,
                     dock_gutter: Spacing, screen_size: Size, visible_only: bool,
-                    inherited_layers: tuple) -> SubtreeGeometryKey:
+                    inherited_layers: tuple, fixed: bool) -> SubtreeGeometryKey:
         """Bind original placement inputs to the widget's current native source."""
         return cls(widget._geometry_revision, widget._nodes._updates,
                    virtual_region, region, order,
                    layer_order, clip, visible, dock_gutter, screen_size,
-                   visible_only, widget.scroll_offset, inherited_layers)
+                   visible_only, widget.scroll_offset, inherited_layers, fixed)
 
     def covers(self, requested: SubtreeGeometryKey) -> bool:
         """A complete acquisition also supplies its requested viewport."""
@@ -328,12 +329,14 @@ class SubtreeMapGeometry(NamedTuple):
         offset = current.region.offset - original.region.offset
         order = original.project_order(self.geometry.order, current)
         virtual_region = current.virtual_region if root else self.geometry.virtual_region
+        fixed = current.fixed if root else self.geometry.fixed
         if (not offset and clip.region == self.geometry.clip
-                and order == self.geometry.order and virtual_region == self.geometry.virtual_region):
+                and order == self.geometry.order and virtual_region == self.geometry.virtual_region
+                and fixed == self.geometry.fixed):
             return self.geometry, clip
         return self.geometry._replace(
             region=self.geometry.region + offset, clip=clip.region,
-            order=order, virtual_region=virtual_region,
+            order=order, virtual_region=virtual_region, fixed=fixed,
         ), clip
 
 
@@ -1594,8 +1597,14 @@ class Compositor:
                         self._scroll_bands.append((band, shift))
                         dy = -shift
                         # Repaint what the scroll cannot carry: the exposed rows, and every
-                        # changed/new/gone widget that is not a carried member of the band.
+                        # fixed placement the terminal moved despite its unchanged geometry,
+                        # plus every changed/new/gone widget that is not a carried member.
                         self._damage(self._scroll_exposed(band, shift))
+                        for geometry in after.values():
+                            if geometry.fixed:
+                                fixed_region = geometry.visible_region.intersection(band)
+                                if fixed_region:
+                                    self._damage(fixed_region)
                         for widget in after.keys() & before.keys():
                             previous, current = before[widget], after[widget]
                             if previous.region == current.region:
@@ -1769,6 +1778,7 @@ class Compositor:
             dock_gutter: Spacing,
             complete: bool,
             inherited_layers: Mapping[str, int] | None,
+            fixed: bool,
             source: SubtreeGeometry | None = None,
             _MapGeometry: type[MapGeometry] = MapGeometry,
         ) -> None:
@@ -1876,7 +1886,7 @@ class Compositor:
 
                     # Add all the widgets
                     for (sub_widget, sub_region, widget_region, widget_order,
-                         child_layer_order, child_clip) in self._place_children(
+                         child_layer_order, child_clip, child_fixed) in self._place_children(
                             placements, len(arrange_result.placements),
                             container_region, widget.scroll_offset,
                             order, layer_order, sub_clip, no_clip, layers_to_index,
@@ -1893,6 +1903,7 @@ class Compositor:
                                 arrange_result.scroll_spacing,
                                 complete,
                                 inherited_layers,
+                                child_fixed,
                                 source.child_source(sub_widget._render_widget) if source is not None else None,
                             )
                 else:
@@ -1934,6 +1945,7 @@ class Compositor:
                         container_size,
                         virtual_region,
                         dock_gutter,
+                        fixed,
                     ), clip)
 
             elif visible:
@@ -1947,10 +1959,11 @@ class Compositor:
                     container_size,
                     virtual_region,
                     dock_gutter,
+                    fixed,
                 ), clip)
 
         def add_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter, complete,
-                       inherited_layers, source=None):
+                       inherited_layers, fixed, source=None):
             nonlocal map, widgets, invisible_widgets, capturing_source
             if deadline is not None and deadline.passed():
                 # The arrangement stays in progress while it is paused, so a
@@ -1965,7 +1978,7 @@ class Compositor:
             if source is None and not demand.cache_subtree(
                     widget, self.max_subtree_geometry_entries, capturing_source):
                 yield from arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
-                               complete, inherited_layers, source)  # noqa: F821 -- closure cleared after traversal
+                               complete, inherited_layers, fixed, source)  # noqa: F821 -- closure cleared after traversal
                 return
             retains_source = widget.CACHE_SUBTREE_GEOMETRY
             resource_type = widget.subtree_geometry_resource(visible_only=visible_only)
@@ -1977,7 +1990,7 @@ class Compositor:
             key = SubtreeGeometryKey.from_widget(widget,
                    virtual_region, region, order, layer_order, clip.region, visible, dock_gutter,
                    size, visible_only and not complete,
-                   tuple(inherited_layers.items()) if inherited_layers is not None else ())
+                   tuple(inherited_layers.items()) if inherited_layers is not None else (), fixed)
             resource = self._subtree_geometry.get(widget, source) if retains_source else source
             require_complete = widget in retained_paths and not complete
             matches = resource is not None and resource.matches(key, require_complete=require_complete)
@@ -1986,12 +1999,12 @@ class Compositor:
             # a partial arrangement whose key leaves that request out.
             if require_complete and not matches:
                 yield from arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
-                               complete, inherited_layers, resource)  # noqa: F821 -- closure cleared after traversal
+                               complete, inherited_layers, fixed, resource)  # noqa: F821 -- closure cleared after traversal
                 return
             if not matches and not demand.capture_subtrees:
                 yield from arrange_widget(
                     widget, virtual_region, region, order, layer_order, clip, visible,
-                    dock_gutter, enclosing_complete, inherited_layers, resource)
+                    dock_gutter, enclosing_complete, inherited_layers, fixed, resource)
                 return
             if not matches:
                 # Capture complete source geometry before its viewport publication.
@@ -2004,7 +2017,7 @@ class Compositor:
                 capturing_source = True
                 try:
                     yield from arrange_widget(widget, virtual_region, region, order, layer_order, clip, visible, dock_gutter,
-                                   complete, inherited_layers, resource)  # noqa: F821 -- closure cleared after traversal
+                                   complete, inherited_layers, fixed, resource)  # noqa: F821 -- closure cleared after traversal
                     geometry = map
                     added_widgets, added_invisible = frozenset(widgets), frozenset(invisible_widgets)
                 finally:
@@ -2043,6 +2056,7 @@ class Compositor:
                 root_geometry.dock_gutter,
                 False,
                 root_layer_order,
+                root_geometry.fixed,
             )
         finally:
             self._arranging = previous_arranging
@@ -2075,7 +2089,7 @@ class Compositor:
             # containing screen overlay. Keep that nesting in the paint order.
             yield (child, region, child_region,
                    ((order[0][0] + 1, 0, 0),) + child_order[-1:] if overlay else child_order, child_layer_order,
-                   no_clip if overlay else sub_clip)
+                   no_clip if overlay else sub_clip, fixed)
 
     @property
     def layers(self) -> list[tuple[Widget, MapGeometry]]:
