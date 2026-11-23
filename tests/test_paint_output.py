@@ -35,7 +35,11 @@ from textual.widgets import Static
 # the scrollbar column and the newly-exposed row, instead of re-sending the band.
 # Recorded with DECSLRM (rectangular) scrolls enabled; test_scroll_blit_oracle proves
 # this stream paints the same screen as a full redraw through patched st's own logic.
-EXPECTED_DIGEST = "7530edeed41a99a300feeafb9109dd9b798055e158e7826bccd371257850ce2e"
+# Re-recorded after fixing scroll-blit fixup for stationary/non-carried overlays
+# overlapping the blitted band (`#overlay` here; StickyHeader and JumpBar/BackToBottom
+# in Toad): the previous stream left `#overlay`'s blitted ghost cells unpainted on
+# intermediate scroll steps (masked at the end by `scroll_home` + `refresh`).
+EXPECTED_DIGEST = "1cbb6ae5e421806a48df17d59f6ab720e29ab4e61cc6009c0bd497dbfdd96fbb"
 EXPECTED_UPDATES = 22
 
 WORDS = ("history", "│", "─┼─", "漢字", "scroll", "ü", "paint", "🙂", "line", "cells", "┌─┐", "compositor")
