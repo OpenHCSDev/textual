@@ -1596,27 +1596,51 @@ class Compositor:
                     if not any(region.overlaps(carried) for region in self._dirty_regions):
                         self._scroll_bands.append((band, shift))
                         dy = -shift
-                        # Repaint what the scroll cannot carry: the exposed rows, and every
-                        # fixed placement the terminal moved despite its unchanged geometry,
-                        # plus every changed/new/gone widget that is not a carried member.
-                        self._damage(self._scroll_exposed(band, shift))
-                        for geometry in after.values():
-                            if geometry.fixed:
-                                fixed_region = geometry.visible_region.intersection(band)
-                                if fixed_region:
-                                    self._damage(fixed_region)
+                        carried_widgets: set[Widget] = set()
+                        carried_ancestors: set[Widget] = set()
                         for widget in after.keys() & before.keys():
                             previous, current = before[widget], after[widget]
-                            if previous.region == current.region:
-                                continue
-                            if ((current.clip.y, current.clip.height) == (band.y, band.height)
+                            if (previous.region != current.region
+                                    and (current.clip.y, current.clip.height) == (band.y, band.height)
                                     and current.region.x == previous.region.x
                                     and current.region.y - previous.region.y == dy):
-                                continue  # carried by the terminal scroll
-                            self._damage(previous.visible_region)
-                            self._damage(current.visible_region)
-                        for widget in before.keys() ^ after.keys():
-                            self._damage((before.get(widget) or after[widget]).visible_region)
+                                carried_widgets.add(widget)
+                                carried_ancestors.update(current.ancestors)
+                        # Any pre-existing dirty edge cells inside `band` would be carried
+                        # stale into `carried` by the blit; repaint where they land too.
+                        for dirty in tuple(self._dirty_regions):
+                            stale = dirty.intersection(band)
+                            if stale:
+                                carried_stale = stale.translate((0, dy)).intersection(band)
+                                if carried_stale:
+                                    self._damage(carried_stale)
+                        # Repaint what the scroll cannot carry: the exposed rows, plus every
+                        # non-carried widget overlapping the band (stationary overlays, fixed
+                        # chrome, children of invisible fixed containers like BackToBottom, and
+                        # changed/new/gone widgets) — both where the terminal blit carried its
+                        # old cells (`old_hit + dy`) and where it draws now.
+                        self._damage(self._scroll_exposed(band, shift))
+                        excluded = carried_widgets | carried_ancestors
+                        for widget in (before.keys() | after.keys()) - excluded:
+                            previous = before.get(widget)
+                            current = after.get(widget)
+                            if previous is not None:
+                                old_hit = previous.visible_region.intersection(band)
+                                if old_hit:
+                                    ghost = old_hit.translate((0, dy)).intersection(band)
+                                    if ghost:
+                                        self._damage(ghost)
+                            if current is not None:
+                                new_hit = current.visible_region.intersection(band)
+                                if new_hit:
+                                    self._damage(new_hit)
+                            if previous is None:
+                                self._damage(current.visible_region)
+                            elif current is None:
+                                self._damage(previous.visible_region)
+                            elif previous.region != current.region:
+                                self._damage(previous.visible_region)
+                                self._damage(current.visible_region)
                         if self._dirty_regions:
                             owner.check_idle()
                         return

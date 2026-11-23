@@ -165,6 +165,221 @@ def test_scroll_repaints_fixed_placement_inside_carried_band():
     assert Region(0, 23, 80, 2) in compositor._dirty_regions
 
 
+def test_scroll_damages_carried_ghost_of_top_and_bottom_overlays_and_non_fixed_overlay_children():
+    """Scrolling up carries a top overlay down by +dy; scrolling down carries a bottom
+    overlay (including a visible child of an invisible docked container, whose own `fixed`
+    is False) up by -|dy|. Both the overlay's own region and the carried ghost region must
+    be damaged, including when the overlay disappears on that scroll step."""
+
+    class Owner:
+        def check_idle(self) -> None:
+            pass
+
+    # 1. Scroll UP (dy = +2, shift = -2) with a top sticky header at y=5..6:
+    #    terminal blit copies y=5 -> y=7; BOTH y=5 (pinned spot) and y=7 (ghost) must be damaged.
+    moving, header = object(), object()
+    before = {
+        moving: _geo(Region(0, 8, 80, 3)),
+        header: _geo(Region(0, 5, 80, 1), fixed=True),
+    }
+    after = {
+        moving: _geo(Region(0, 10, 80, 3)),
+        header: _geo(Region(0, 5, 80, 1), fixed=True),
+    }
+    compositor = Compositor()
+    compositor.size = Size(80, 30)
+    compositor._damage_geometry(before, after, Owner())
+    assert compositor._scroll_bands == [(_CLIP, -2)]
+    assert Region(0, 5, 80, 1) in compositor._dirty_regions
+    assert Region(0, 7, 80, 1) in compositor._dirty_regions
+
+    # 2. Scroll DOWN (dy = -3, shift = +3) with a bottom button child (fixed=False!) at y=22..25:
+    #    terminal blit copies y=22..25 -> y=19..22; BOTH y=22..25 and y=19..22 must be damaged.
+    button = object()
+    before = {
+        moving: _geo(Region(0, 10, 80, 3)),
+        button: _geo(Region(25, 22, 30, 3), fixed=False),
+    }
+    after = {
+        moving: _geo(Region(0, 7, 80, 3)),
+        button: _geo(Region(25, 22, 30, 3), fixed=False),
+    }
+    compositor = Compositor()
+    compositor.size = Size(80, 30)
+    compositor._damage_geometry(before, after, Owner())
+    assert compositor._scroll_bands == [(_CLIP, 3)]
+    assert Region(25, 22, 30, 3) in compositor._dirty_regions
+    assert Region(25, 19, 30, 3) in compositor._dirty_regions
+
+    # 3. Same bottom button disappearing when scrolling down by 3 to the bottom:
+    #    the button is absent from `after`, yet the blit still copied its old cells to y=19..22.
+    compositor = Compositor()
+    compositor.size = Size(80, 30)
+    compositor._damage_geometry(before, {moving: _geo(Region(0, 7, 80, 3))}, Owner())
+    assert compositor._scroll_bands == [(_CLIP, 3)]
+    assert Region(25, 22, 30, 3) in compositor._dirty_regions
+    assert Region(25, 19, 30, 3) in compositor._dirty_regions
+
+
+def test_real_app_scroll_blit_with_top_and_bottom_overlays_never_smears_cells():
+    """End-to-end Textual app with a docked top StickyHeader-style overlay AND a docked bottom
+    invisible JumpBar holding a visible BackToBottom child: simulate DECSTBM/DECSLRM scroll
+    blits and assert every single scroll step matches a full redraw cell-for-cell."""
+    import asyncio
+    import re
+    from textual._compositor import run_steps
+    from textual.containers import Center, VerticalScroll
+    from textual.widgets import Static
+    from tests.test_paint_output import PaintApp
+
+    class TopPin(Static):
+        DEFAULT_CSS = """
+        TopPin {
+            dock: top;
+            overlay: screen;
+            layer: overlay;
+            width: 32;
+            height: 1;
+            background: #502060;
+        }
+        """
+
+    class BottomBar(Center):
+        DEFAULT_CSS = """
+        BottomBar {
+            dock: bottom;
+            overlay: screen;
+            layer: overlay;
+            height: 3;
+            width: 100%;
+            visibility: hidden;
+        }
+        """
+
+    class BottomButton(Static):
+        DEFAULT_CSS = """
+        BottomButton {
+            width: auto;
+            height: auto;
+            visibility: visible;
+            background: #204060;
+        }
+        """
+
+    # Minimal VT100/DECSLRM screen grid simulator covering every sequence Textual emits here.
+    csi = re.compile(r"\x1b\[(\??)([0-9;]*)([A-Za-z])")
+
+    class Grid:
+        def __init__(self, width: int, height: int) -> None:
+            self.w, self.h = width, height
+            self.cells = [[" "] * width for _ in range(height)]
+            self.x = self.y = 0
+            self.top, self.bottom = 0, height - 1
+            self.left, self.right = 0, width - 1
+            self.lrmm = False
+
+        def feed(self, text: str) -> None:
+            pos = 0
+            for match in csi.finditer(text):
+                self._put(text[pos:match.start()])
+                pos = match.end()
+                priv, params_str, cmd = match.groups()
+                params = [int(p) if p else 0 for p in params_str.split(";")] if params_str else []
+                if priv == "?" and cmd == "h" and 69 in params:
+                    self.lrmm = True
+                elif priv == "?" and cmd == "l" and 69 in params:
+                    self.lrmm = False
+                    self.left, self.right = 0, self.w - 1
+                elif priv == "" and cmd == "r":
+                    self.top = (params[0] - 1) if len(params) >= 1 and params[0] else 0
+                    self.bottom = (params[1] - 1) if len(params) >= 2 and params[1] else self.h - 1
+                elif priv == "" and cmd == "s" and self.lrmm:
+                    self.left = (params[0] - 1) if len(params) >= 1 and params[0] else 0
+                    self.right = (params[1] - 1) if len(params) >= 2 and params[1] else self.w - 1
+                elif priv == "" and cmd in ("H", "f"):
+                    self.y = max(0, min(self.h - 1, (params[0] if len(params) >= 1 and params[0] else 1) - 1))
+                    self.x = max(0, min(self.w - 1, (params[1] if len(params) >= 2 and params[1] else 1) - 1))
+                elif priv == "" and cmd == "S":
+                    n = params[0] if params and params[0] else 1
+                    for row in range(self.top, self.bottom + 1):
+                        src = row + n
+                        for col in range(self.left, self.right + 1):
+                            self.cells[row][col] = self.cells[src][col] if src <= self.bottom else " "
+                elif priv == "" and cmd == "T":
+                    n = params[0] if params and params[0] else 1
+                    for row in range(self.bottom, self.top - 1, -1):
+                        src = row - n
+                        for col in range(self.left, self.right + 1):
+                            self.cells[row][col] = self.cells[src][col] if src >= self.top else " "
+            self._put(text[pos:])
+
+        def _put(self, chunk: str) -> None:
+            from rich.cells import cell_len
+            for ch in chunk:
+                if ch in ("\r", "\n"):
+                    continue
+                width = cell_len(ch)
+                if width <= 0:
+                    continue
+                if 0 <= self.y < self.h and 0 <= self.x < self.w:
+                    self.cells[self.y][self.x] = ch
+                    if width == 2 and self.x + 1 < self.w:
+                        self.cells[self.y][self.x + 1] = ""
+                self.x += width
+
+        def lines(self) -> list[str]:
+            return ["".join(row) for row in self.cells]
+
+    async def verify() -> None:
+        app = PaintApp()
+        async with app.run_test(size=(100, 36)) as pilot:
+            await pilot.pause()
+            app.screen._compositor._supports_rectangular_scroll = True
+            history = app.query_one("#history", VerticalScroll)
+            top_pin = TopPin("PINNED HEADER")
+            bottom_bar = BottomBar(BottomButton("Back to bottom\nEscape"))
+            await history.mount(top_pin)
+            await history.mount(bottom_bar)
+            await pilot.pause()
+            history.scroll_to(y=40, animate=False, immediate=True)
+            await pilot.pause()
+
+            grid = Grid(100, 36)
+            cursor = 0
+
+            def assert_matches(label: str) -> None:
+                nonlocal cursor
+                for chunk in app.updates[cursor:]:
+                    grid.feed(chunk)
+                cursor = len(app.updates)
+                full = run_steps(app.screen._compositor.render_update(full=True)).render_segments(app.console)
+                expected = Grid(100, 36)
+                expected.feed(full)
+                assert grid.lines() == expected.lines(), f"grid diverged at {label}"
+
+            assert_matches("initial")
+            blits = 0
+            # Scroll up (carries TopPin down) AND scroll down (carries BottomButton up).
+            for step, delta in enumerate((-2, -3, -1, 2, 3, 1, -4, 4)):
+                before_len = len(app.updates)
+                history.scroll_to(y=history.scroll_y + delta, animate=False)
+                await pilot.pause()
+                blits += sum(1 for u in app.updates[before_len:] if "\x1b[?69h" in u)
+                assert_matches(f"step {step} delta={delta}")
+            # Hiding TopPin on scroll-up and BottomBar on scroll-down must also erase blitted ghosts.
+            top_pin.display = False
+            history.scroll_to(y=history.scroll_y - 2, animate=False)
+            await pilot.pause()
+            assert_matches("hide top_pin while scrolling up")
+            bottom_bar.display = False
+            history.scroll_to(y=history.scroll_y + 3, animate=False)
+            await pilot.pause()
+            assert_matches("hide bottom_bar while scrolling down")
+            assert blits > 0, "expected DECSLRM scroll blits to fire"
+
+    asyncio.run(verify())
+
+
 # --- a resize invalidates a pending scroll blit ---
 
 
